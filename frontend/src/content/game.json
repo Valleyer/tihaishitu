@@ -1,0 +1,100 @@
+{
+  "title": "题海仕途",
+  "dynasty": "大周",
+  "era": "景和",
+  "startYear": 23,
+  "volume": "第一卷 · 寒门求学",
+  "titleBackground": "/art/academy.png",
+  "tagline": "起于青灯黄卷，终向万里山河。",
+  "prologue": [
+    "大周的春天来得很迟。",
+    "你背着几册旧书，走进青溪县。",
+    "“来者何人？”门内的先生抬眼问道。"
+  ],
+  "initialJournal": "景和二十三年，你带着旧书与家人的嘱托来到青溪。无功名，无门第。眼前只有一扇半开的书塾门。",
+  "initialJournalTitle": "负笈青溪",
+  "origins": [
+    {
+      "name": "寒门读书人",
+      "coins": 24
+    },
+    {
+      "name": "乡间耕读",
+      "coins": 30
+    },
+    {
+      "name": "小城抄书人",
+      "coins": 24
+    }
+  ],
+  "road": [
+    "寒门求学",
+    "科举入仕",
+    "朝堂风云",
+    "逐鹿天下"
+  ],
+  "defaultWeights": {
+    "408": 7,
+    "数学一": 7,
+    "政治": 3,
+    "英语一": 3
+  },
+  "subjectTasks": {
+    "408": "机务辨析",
+    "数学一": "算学考校",
+    "政治": "经义问答",
+    "英语一": "译学摘录"
+  },
+  "defaultTask": "案头考校",
+  "calendar": {
+    "normal": 8,
+    "slow": 12,
+    "daysPerYear": 360,
+    "seasons": [
+      "春",
+      "夏",
+      "秋",
+      "冬"
+    ],
+    "times": [
+      "卯时 · 晨课",
+      "午后 · 研习",
+      "酉时 · 温书",
+      "亥时 · 夜读"
+    ]
+  },
+  "growth": {
+    "correctBase": 1,
+    "difficultyDivisor": 2,
+    "highFrequencyThreshold": 4,
+    "highFrequencyBonus": 1,
+    "maxGain": 8,
+    "wrongGain": 1,
+    "reputationEvery": 12,
+    "trustGain": 1,
+    "trustLossOnRepeatedWrong": 1,
+    "relationshipMax": 100
+  },
+  "review": {
+    "normalGap": 20,
+    "wrongGap": 5,
+    "firstWrongMin": 5,
+    "firstWrongMax": 15,
+    "repeatWrongMin": 3,
+    "repeatWrongMax": 8,
+    "duePriority": 0.45,
+    "masteredBaseGap": 10,
+    "masteredMaxGap": 300
+  },
+  "limits": {
+    "questionsPerBank": 10000,
+    "noteLength": 4000
+  },
+  "titleSeal": "周",
+  "titleEyebrow": "寒门一卷 · 万里前程",
+  "titleDialogue": [
+    "“你尚无功名，来此所求为何？”",
+    "一段人生，从落笔的这一刻开始。"
+  ],
+  "footer": "你的前程，一题一题答。"
+}

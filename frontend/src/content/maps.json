@@ -1,0 +1,58 @@
+{
+  "locations": [
+    {
+      "id": "old-school",
+      "name": "青溪县 · 旧书塾",
+      "description": "青溪城外旧塾，寒门求学的起点。",
+      "background": "/art/academy.png",
+      "position": "50% 50%",
+      "x": 15,
+      "y": 68
+    },
+    {
+      "id": "east-hall",
+      "name": "青溪书院 · 东斋",
+      "description": "同窗相识，书卷相传。",
+      "background": "/art/academy.png",
+      "position": "70% 50%",
+      "x": 37,
+      "y": 51
+    },
+    {
+      "id": "library",
+      "name": "青溪书院 · 藏书楼",
+      "description": "整理旧卷、积累学识的地方。",
+      "background": "/art/academy.png",
+      "position": "90% 50%",
+      "x": 58,
+      "y": 30
+    },
+    {
+      "id": "county-office",
+      "name": "青溪县 · 县衙侧房",
+      "description": "无官身，只在侧房核对旧文书。",
+      "background": "/art/academy.png",
+      "position": "65% 40%",
+      "x": 78,
+      "y": 47
+    },
+    {
+      "id": "exam-street",
+      "name": "青溪书院 · 试院前巷",
+      "description": "榜尚未开，先静心备考。",
+      "background": "/art/academy.png",
+      "position": "30% 50%",
+      "x": 65,
+      "y": 73
+    },
+    {
+      "id": "night-study",
+      "name": "青溪书院 · 夜读斋",
+      "description": "长线修习与旧案重审。",
+      "background": "/art/academy.png",
+      "position": "85% 65%",
+      "x": 34,
+      "y": 23
+    }
+  ]
+}

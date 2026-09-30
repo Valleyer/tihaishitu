@@ -1,0 +1,51 @@
+{
+  "name": "入门三题型示例",
+  "questions": [
+    {
+      "id": "demo-single",
+      "subject": "数学一",
+      "chapter": "基础",
+      "type": "single_choice",
+      "question": "2 + 3 = ?",
+      "options": {
+        "A": "4",
+        "B": "5",
+        "C": "6"
+      },
+      "answer": "B",
+      "explanation": "2 + 3 = 5。",
+      "difficulty": 1,
+      "frequency": 3
+    },
+    {
+      "id": "demo-multi",
+      "subject": "数学一",
+      "chapter": "基础",
+      "type": "multiple_choice",
+      "question": "以下哪些是偶数？",
+      "options": {
+        "A": "2",
+        "B": "3",
+        "C": "4"
+      },
+      "answer": [
+        "A",
+        "C"
+      ],
+      "explanation": "2 和 4 可被 2 整除。",
+      "difficulty": 1,
+      "frequency": 3
+    },
+    {
+      "id": "demo-judge",
+      "subject": "数学一",
+      "chapter": "基础",
+      "type": "true_false",
+      "question": "1 等于 2。",
+      "answer": false,
+      "explanation": "两者不相等。",
+      "difficulty": 1,
+      "frequency": 3
+    }
+  ]
+}

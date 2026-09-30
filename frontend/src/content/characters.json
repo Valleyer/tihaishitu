@@ -1,0 +1,32 @@
+[
+  {
+    "id": "lu",
+    "name": "陆承明",
+    "role": "青溪书院 · 教习",
+    "description": "不喜浮辞，惜才而不轻许。总在卷尾留一两字。",
+    "affinity": 0,
+    "trust": 0,
+    "met": true,
+    "portrait": "tutor"
+  },
+  {
+    "id": "gu",
+    "name": "顾怀安",
+    "role": "同窗 · 府城顾氏",
+    "description": "消息灵通，衣着整洁。比起高谈阔论，更留意谁肯把事情做完。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "friend"
+  },
+  {
+    "id": "shen",
+    "name": "沈砚",
+    "role": "青溪县衙 · 书吏",
+    "description": "出身寒门，善理账目。谨慎寡言，做事总留一份底稿。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "clerk"
+  }
+]

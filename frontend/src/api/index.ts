@@ -1,3 +1,6 @@
+/**
+ * 在 local 与 http 实现之间切换。界面不感知存储方式，后续对接 Java 只需保持 GameApi 契约。
+ */
 import type { GameApi } from "../domain/types";
 import { httpApi } from "./http";
 import { createLocalApi } from "./local/store";

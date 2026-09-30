@@ -1,0 +1,26 @@
+{
+  "sheet": "/art/portraits.png",
+  "columns": 5,
+  "portraits": {
+    "playerMale": {
+      "column": 0,
+      "label": "寒门男书生"
+    },
+    "tutor": {
+      "column": 1,
+      "label": "陆承明"
+    },
+    "friend": {
+      "column": 2,
+      "label": "顾怀安"
+    },
+    "clerk": {
+      "column": 3,
+      "label": "沈砚"
+    },
+    "playerFemale": {
+      "column": 4,
+      "label": "寒门女书生"
+    }
+  }
+}

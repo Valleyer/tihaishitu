@@ -1,0 +1,157 @@
+[
+  {
+    "id": "lamp",
+    "at": 8,
+    "title": "一盏余灯",
+    "text": "陆承明：“灯油还剩半盏。你若愿意，便留下温书；我这里也有些散卷，需要人分一分。”",
+    "options": [
+      {
+        "id": "study",
+        "text": "留下温习，补齐今日疑处",
+        "hint": "学识 +3",
+        "effects": {
+          "knowledge": 3
+        }
+      },
+      {
+        "id": "sort",
+        "text": "替先生整理课卷",
+        "hint": "陆承明信任 +2",
+        "effects": {
+          "trust": {
+            "lu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "陆承明",
+    "npcId": "lu"
+  },
+  {
+    "id": "classmate",
+    "at": 28,
+    "title": "顾怀安的迟疑",
+    "text": "顾怀安：“家里催我回府城，可这份卷子还没有核完……你说，我该怎样才好？”",
+    "options": [
+      {
+        "id": "help",
+        "text": "接过卷子，约好回来时再谈",
+        "hint": "顾怀安好感 +3，留下共同经历",
+        "effects": {
+          "affinity": {
+            "gu": 3
+          },
+          "flags": [
+            "help-gu"
+          ]
+        }
+      },
+      {
+        "id": "stay",
+        "text": "劝他先回信，课业各自慢慢补",
+        "hint": "顾怀安信任 +2",
+        "effects": {
+          "trust": {
+            "gu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id": "clerk",
+    "at": 72,
+    "title": "借册单上的名字",
+    "text": "沈砚：“县衙有几册旧抄本，想找个细心人帮忙。不是举荐，也没有官身，你可愿意试试？”",
+    "options": [
+      {
+        "id": "accept",
+        "text": "应下此事，约好散学后前往",
+        "hint": "沈砚信任 +3，留下经手记录",
+        "effects": {
+          "trust": {
+            "shen": 3
+          },
+          "flags": [
+            "clerk-helper"
+          ]
+        }
+      },
+      {
+        "id": "defer",
+        "text": "先顾课业，答应核对书院的副本",
+        "hint": "学识 +3，沈砚好感 +1",
+        "effects": {
+          "knowledge": 3,
+          "affinity": {
+            "shen": 1
+          }
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
+    "id": "payment",
+    "at": 128,
+    "title": "纸袋里的铜钱",
+    "text": "沈砚：“不算俸禄，是替人抄卷的工钱。收着吧，纸笔也得花钱。”",
+    "options": [
+      {
+        "id": "keep",
+        "text": "收下，添些纸笔",
+        "hint": "铜钱 +20",
+        "effects": {
+          "coins": 20
+        }
+      },
+      {
+        "id": "share",
+        "text": "买些纸，分给书院同窗",
+        "hint": "声望 +2，顾怀安好感 +2",
+        "effects": {
+          "reputation": 2,
+          "affinity": {
+            "gu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
+    "id": "promise",
+    "at": 220,
+    "title": "灯下之约",
+    "text": "顾怀安：“无论以后身在何处，都别忘了这间旧书斋。来，在这卷尾留个名字？”",
+    "options": [
+      {
+        "id": "sign",
+        "text": "落下姓名，与同窗共勉",
+        "hint": "顾怀安信任 +3，留下灯下之约",
+        "effects": {
+          "trust": {
+            "gu": 3
+          },
+          "flags": [
+            "lamp-promise"
+          ]
+        }
+      },
+      {
+        "id": "quiet",
+        "text": "将纸收好，默默继续温书",
+        "hint": "学识 +5",
+        "effects": {
+          "knowledge": 5
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  }
+]

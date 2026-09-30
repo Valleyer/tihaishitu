@@ -1,0 +1,156 @@
+/**
+ * 存档与题库写入前的结构检查。导入备份只接受当前版本格式。
+ * 不直接覆盖旧人生；题库和人物引用完整后，交由本地 API 创建独立副本。
+ */
+import type { Bank, Game, NewGame, Question } from "../domain/types";
+import { normalizeQuestion } from "./QuestionBankManager";
+import { chapterDesign, characterDesign, gameDesign } from "../content";
+export function validateConfig(value: NewGame, banks: Bank[]): NewGame {
+  if (
+    !value ||
+    typeof value.name !== "string" ||
+    !value.name.trim() ||
+    value.name.trim().length > 12
+  )
+    throw new Error("姓名请填写 1–12 个字。");
+  if (
+    !Array.isArray(value.bankIds) ||
+    !value.bankIds.length ||
+    value.bankIds.some((id) => !banks.some((b) => b.id === id && b.enabled))
+  )
+    throw new Error("请选用至少一部已启用的文集。");
+  if (
+    !["slow", "normal"].includes(value.pace) ||
+    !["gentle", "standard"].includes(value.difficulty)
+  )
+    throw new Error("开局设置无效。");
+  const weights = value.weights || {};
+  if (
+    Object.values(weights).some((w) => !Number.isFinite(w) || w < 0 || w > 100)
+  )
+    throw new Error("科目权重应在 0–100 之间。");
+  return {
+    ...value,
+    name: value.name.trim(),
+    weights: { ...weights },
+    bankIds: [...new Set(value.bankIds)],
+  };
+}
+export function validateBank(bank: Bank): Bank {
+  if (
+    !bank ||
+    typeof bank.id !== "string" ||
+    !bank.id ||
+    ["__proto__", "constructor", "prototype"].includes(bank.id) ||
+    !bank.name?.trim()
+  )
+    throw new Error("题库名称或标识无效。");
+  if (!Number.isFinite(bank.weight) || bank.weight < 0 || bank.weight > 100)
+    throw new Error("题库权重须在 0–100 之间。");
+  if (
+    !Array.isArray(bank.questions) ||
+    bank.questions.length > gameDesign.limits.questionsPerBank
+  )
+    throw new Error(
+      "题库最多支持 " + gameDesign.limits.questionsPerBank + " 道题。",
+    );
+  const questions = bank.questions.map(normalizeQuestion);
+  if (new Set(questions.map((q) => q.id)).size !== questions.length)
+    throw new Error("题目 id 不可重复。");
+  return {
+    ...bank,
+    name: bank.name.trim(),
+    questions,
+    enabled: Boolean(bank.enabled),
+  };
+}
+export interface Backup {
+  format: "tihaishitu-v2";
+  game: Game;
+  banks: Bank[];
+  snapshot: Question | null;
+}
+export function parseBackup(text: string): Backup {
+  if (text.length > 20_000_000)
+    throw new Error("存档文件超过 20 MB，请检查文件。");
+  const data = JSON.parse(text.replace(/^\uFEFF/, "")) as Backup;
+  if (
+    data.format !== "tihaishitu-v2" ||
+    !data.game ||
+    !Array.isArray(data.banks)
+  )
+    throw new Error("不是本版本的存档文件。");
+  const game = data.game;
+  const finite = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  if (
+    game.version !== 2 ||
+    !Array.isArray(game.records) ||
+    !Array.isArray(game.npcs) ||
+    !Array.isArray(game.journal) ||
+    !Array.isArray(game.flags) ||
+    !game.notes ||
+    !game.learning ||
+    !game.player ||
+    !Number.isInteger(game.chapter) ||
+    game.chapter < 0 ||
+    game.chapter >= chapterDesign.length
+  )
+    throw new Error("存档结构不完整。");
+  if (
+    !finite(game.player.knowledge) ||
+    !finite(game.player.coins) ||
+    !finite(game.player.reputation) ||
+    game.records.some(
+      (r) =>
+        !r.question ||
+        typeof r.correct !== "boolean" ||
+        !Number.isFinite(Date.parse(r.at)),
+    )
+  )
+    throw new Error("存档学习记录或人物数据损坏。");
+  if (
+    characterDesign.some(
+      (character) =>
+        !game.npcs.some(
+          (n) => n.id === character.id && finite(n.trust) && finite(n.affinity),
+        ),
+    )
+  )
+    throw new Error("存档人物关系数据损坏。");
+  if (
+    Object.values(game.learning).some(
+      (r) =>
+        !finite(r.attempts) ||
+        !finite(r.dueAt) ||
+        !finite(r.lastIndex) ||
+        !finite(r.wrong) ||
+        !finite(r.streak) ||
+        !Array.isArray(r.wrongAnswers),
+    )
+  )
+    throw new Error("存档复习数据损坏。");
+  data.banks = data.banks.map(validateBank);
+  game.config = validateConfig(
+    game.config,
+    data.banks.map((bank) => ({ ...bank, enabled: true })),
+  );
+  game.records.forEach((r) => normalizeQuestion(r.question, 0));
+  if (game.attempt) {
+    if (
+      !data.snapshot ||
+      game.attempt.question?.id !== data.snapshot.id ||
+      !game.attempt.id ||
+      !game.attempt.scene?.text ||
+      !game.npcs.some((n) => n.id === game.attempt!.scene.npcId)
+    )
+      throw new Error("存档中的当前课业损坏。");
+    data.snapshot = normalizeQuestion(data.snapshot, 0);
+    if (
+      game.attempt.result &&
+      ![true, false, null].includes(game.attempt.result.correct)
+    )
+      throw new Error("作答结果无效。");
+  }
+  return data;
+}
