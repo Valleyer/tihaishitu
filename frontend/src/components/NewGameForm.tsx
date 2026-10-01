@@ -1,6 +1,4 @@
-/**
- * 新人生分两步填写，减少小屏一次展示的表单量；出身和科目默认权重来自 game.json。
- */
+/** 新人生只留姓名、性别与文集；刷题数量完全由玩家当下决定。 */
 import { useState } from "react";
 import type { Bank, NewGame } from "../domain/types";
 import { gameDesign } from "../content";
@@ -13,7 +11,6 @@ export function NewGameForm({
   start: (config: NewGame) => void;
   busy: boolean;
 }) {
-  const [step, setStep] = useState(0);
   const [config, setConfig] = useState<NewGame>({
     name: "折叶",
     gender: "男",
@@ -34,111 +31,35 @@ export function NewGameForm({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (step === 0) setStep(1);
-        else start(config);
+        start(config);
       }}
       className="new-game-form"
     >
-      <div className="form-steps">
-        <span className={step === 0 ? "active" : ""}>一 · 留名</span>
-        <i />
-        <span className={step === 1 ? "active" : ""}>二 · 选卷</span>
-      </div>
-      {step === 0 ? (
-        <>
-          <div className="prologue compact-prologue">
-            <span>
-              {gameDesign.era}
-              {gameDesign.startYear}年 · 春
-            </span>
-            <p>{gameDesign.prologue.at(-1)}</p>
-          </div>
-          <div className="form-grid">
-            <label>
-              姓名
-              <input
-                required
-                maxLength={12}
-                value={config.name}
-                onChange={(e) => setConfig({ ...config, name: e.target.value })}
-              />
-            </label>
-            <label>
-              性别
-              <select
-                value={config.gender}
-                onChange={(e) =>
-                  setConfig({ ...config, gender: e.target.value })
-                }
-              >
-                <option>男</option>
-                <option>女</option>
-                <option>不设定</option>
-              </select>
-            </label>
-            <label>
-              出身
-              <select
-                value={config.origin}
-                onChange={(e) =>
-                  setConfig({ ...config, origin: e.target.value })
-                }
-              >
-                {gameDesign.origins.map((origin) => (
-                  <option key={origin.name}>{origin.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              人生节奏
-              <select
-                value={config.pace}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    pace: e.target.value as NewGame["pace"],
-                  })
-                }
-              >
-                <option value="normal">
-                  从容 · 每 {gameDesign.calendar.normal} 题一日
-                </option>
-                <option value="slow">
-                  细读 · 每 {gameDesign.calendar.slow} 题一日
-                </option>
-              </select>
-            </label>
-            <label>
-              处世难度
-              <select
-                value={config.difficulty}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    difficulty: e.target.value as NewGame["difficulty"],
-                  })
-                }
-              >
-                <option value="gentle">宽和 · 失误不减信任</option>
-                <option value="standard">持重 · 重复失误轻减信任</option>
-              </select>
-            </label>
-          </div>
-          <p className="hint">
-            无功名，无官职，无显赫门第。你的一切，都从这一卷开始。
-          </p>
-          <button
-            className="gold-button full"
-            disabled={busy || !config.name.trim()}
+      <div className="form-grid">
+        <label>
+          姓名
+          <input
+            required
+            maxLength={12}
+            value={config.name}
+            onChange={(e) => setConfig({ ...config, name: e.target.value })}
+          />
+        </label>
+        <label>
+          性别
+          <select
+            value={config.gender}
+            onChange={(e) => setConfig({ ...config, gender: e.target.value })}
           >
-            收好姓名，挑选书卷 →
-          </button>
-        </>
-      ) : (
-        <>
-          <h3 className="section-title">
-            随身书卷<small>选择这段人生要修习的内容</small>
-          </h3>
+            <option>男</option>
+            <option>女</option>
+            <option>不设定</option>
+          </select>
+        </label>
+      </div>
+      <h3 className="section-title">
+        随身书卷<small>只决定抽题范围，想刷多少由你随时决定</small>
+      </h3>
           <div className="bank-choices">
             {banks
               .filter((b) => b.enabled)
@@ -189,21 +110,14 @@ export function NewGameForm({
             ))}
           </div>
           <p className="hint">
-            数字为科目抽取比重；0 为暂不修习。题库可在入世后随时更换。
+            数字只表示科目抽取比重；0 为暂不修习。系统不设置每日题量或刷题目标，只记录实际学习。
           </p>
-          <div className="toolbar">
-            <button type="button" onClick={() => setStep(0)}>
-              ← 返回留名
-            </button>
-            <button
-              className="gold-button"
-              disabled={busy || !config.bankIds.length}
-            >
-              落下姓名，启程入世 →
-            </button>
-          </div>
-        </>
-      )}
+      <button
+        className="gold-button full"
+        disabled={busy || !config.name.trim() || !config.bankIds.length}
+      >
+        落下姓名，启程入世 →
+      </button>
     </form>
   );
 }

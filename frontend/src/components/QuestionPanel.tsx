@@ -8,6 +8,7 @@ import type { Answer, Attempt } from "../domain/types";
 import { typeNames } from "../engine/QuestionBankManager";
 import { displayAnswer } from "../engine/OptionShuffler";
 import { Modal } from "./Modal";
+import { RichText } from "./RichText";
 export function QuestionPanel({
   nextLabel = "继续此生 →",
   allowReview = true,
@@ -38,8 +39,7 @@ export function QuestionPanel({
   const [answer, setAnswer] = useState<Answer>(""),
     [recheck, setRecheck] = useState(false),
     [expanded, setExpanded] = useState<string | null>(null);
-  const [textPage, setTextPage] = useState(0),
-    [optionPage, setOptionPage] = useState(0);
+  const [optionPage, setOptionPage] = useState(0);
   const [small, setSmall] = useState(
     window.innerWidth < 720 || window.innerHeight < 600,
   );
@@ -54,9 +54,6 @@ export function QuestionPanel({
     ready =
       typeof answer === "boolean" ||
       (Array.isArray(answer) ? answer.length > 0 : !!answer);
-  const chunkSize = small ? 100 : 220,
-    chars = Array.from(q.question),
-    pages = Math.max(1, Math.ceil(chars.length / chunkSize));
   const entries = Object.entries(q.options),
     perPage = small ? 3 : 6,
     optionPages = Math.ceil(entries.length / perPage);
@@ -99,20 +96,17 @@ export function QuestionPanel({
             )}
           </div>
           <div className="explanation-block">
-            <p>
-              {result!.explanation.length > 160
-                ? result!.explanation.slice(0, 160) + "…"
-                : result!.explanation}
-            </p>
-            {result!.explanation.length > 160 && (
-              <button
-                className="text-button"
-                onClick={() => setExpanded(result!.explanation)}
-              >
-                查看完整解析
-              </button>
-            )}
+            <RichText>{result!.explanation}</RichText>
           </div>
+          <details className="knowledge-explanation">
+            <summary>查看本题知识点解析</summary>
+            {q.knowledgePoints.map((point) => (
+              <section key={point.id}>
+                <h3>{point.name}</h3>
+                <RichText>{point.explanation || point.description}</RichText>
+              </section>
+            ))}
+          </details>
           <div className="changes">
             {result!.changes.map((change) => (
               <span key={change.label}>
@@ -135,34 +129,24 @@ export function QuestionPanel({
               {"◆".repeat(q.frequency)} {q.tags.join(" · ")}
             </span>
           </p>
+          <div className="knowledge-ribbon">
+            <span>本题考查</span>
+            {q.knowledgePoints.map((point) => (
+              <button
+                type="button"
+                key={point.id}
+                onClick={() =>
+                  setExpanded(
+                    `### ${point.name}\n\n${point.explanation || point.description}`,
+                  )
+                }
+              >
+                {point.name}
+              </button>
+            ))}
+          </div>
           <div className="question-prompt-area">
-            <h2 className="question-text">
-              {chars
-                .slice(
-                  Math.min(textPage, pages - 1) * chunkSize,
-                  (Math.min(textPage, pages - 1) + 1) * chunkSize,
-                )
-                .join("")}
-            </h2>
-            {pages > 1 && (
-              <div className="pager">
-                <button
-                  disabled={textPage === 0}
-                  onClick={() => setTextPage((p) => p - 1)}
-                >
-                  上一段
-                </button>
-                <span>
-                  题干 {textPage + 1}/{pages}
-                </span>
-                <button
-                  disabled={textPage >= pages - 1}
-                  onClick={() => setTextPage((p) => p + 1)}
-                >
-                  下一段
-                </button>
-              </div>
-            )}
+            <RichText className="question-text">{q.question}</RichText>
           </div>
           <fieldset
             className={"answers " + (entries.length > 2 ? "two-columns" : "")}
@@ -212,24 +196,7 @@ export function QuestionPanel({
                       }}
                     />
                     <span className="answer-letter">{label}</span>
-                    <span>
-                      {text.length > (small ? 45 : 90)
-                        ? text.slice(0, small ? 45 : 90) + "…"
-                        : text}
-                    </span>
-                    {text.length > (small ? 45 : 90) && (
-                      <button
-                        type="button"
-                        className="option-expand"
-                        aria-label={"展开选项 " + label}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setExpanded(label + " · " + text);
-                        }}
-                      >
-                        展开
-                      </button>
-                    )}
+                    <RichText inline>{text}</RichText>
                     {right && <span className="answer-mark">✓</span>}
                   </label>
                 );
@@ -304,7 +271,7 @@ export function QuestionPanel({
       </div>
       {expanded && (
         <Modal title="展开卷文" close={() => setExpanded(null)}>
-          <p className="expanded-text">{expanded}</p>
+          <RichText className="expanded-text">{expanded}</RichText>
         </Modal>
       )}
     </article>

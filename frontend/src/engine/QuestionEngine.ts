@@ -3,8 +3,12 @@
  * 科目权重为零会彻底排除；题库太小时放宽间隔，否则会无题可做。
  * 这里只决定抽哪题；选项洗牌在发卷时进行，不能改变题目原始答案。
  */
-import type { Bank, Game, Question } from "../domain/types";
-import { questionKey } from "./QuestionBankManager";
+import type { Bank, Game, KnowledgePoint, Question } from "../domain/types";
+import {
+  hydrateBankKnowledge,
+  knowledgePointKey,
+  questionKey,
+} from "./QuestionBankManager";
 import { gameDesign } from "../content";
 import { isLearningMastered } from "./SpacedRepetitionEngine";
 export function eligibleQuestions(
@@ -16,8 +20,9 @@ export function eligibleQuestions(
     .filter(
       (b) => b.enabled && b.weight > 0 && game.config.bankIds.includes(b.id),
     )
-    .flatMap((bank) =>
-      bank.questions
+    .flatMap((bank) => {
+      const hydrated = hydrateBankKnowledge(bank);
+      return hydrated.questions
         .filter((q) => {
           const id = questionKey(bank.id, q.id);
           return (
@@ -29,8 +34,90 @@ export function eligibleQuestions(
             (includeMastered || !isLearningMastered(game.learning[id]))
           );
         })
-        .map((q) => ({ ...q, id: questionKey(bank.id, q.id) })),
+        .map((q) => ({
+          ...q,
+          id: questionKey(bank.id, q.id),
+          knowledgePointIds: q.knowledgePointIds.map((id) =>
+            knowledgePointKey(hydrated.id, id),
+          ),
+        }));
+    });
+}
+
+export function resolveKnowledgePoints(
+  banks: Bank[],
+  ids: string[],
+): KnowledgePoint[] {
+  return ids.flatMap((key) => {
+    const [bankId, pointId] = key.split("::");
+    const point = banks
+      .find((bank) => bank.id === bankId)
+      ?.knowledgePoints.find((candidate) => candidate.id === pointId);
+    return point ? [{ ...point, id: key }] : [];
+  });
+}
+
+/** 从可用题目反推知识点池，确保一轮内不会用同一知识点重复占分。 */
+export function planKnowledgePoints(
+  game: Game,
+  banks: Bank[],
+  count: number,
+  reviewOnly = false,
+  random = Math.random,
+): string[] {
+  let questions = eligibleQuestions(game, banks);
+  if (reviewOnly)
+    questions = questions.filter((question) =>
+      game.records.some(
+        (record) =>
+          !record.correct && record.question.id === question.id,
+      ),
     );
+  const ids = [...new Set(questions.flatMap((q) => q.knowledgePointIds))];
+  if (ids.length < count)
+    throw new Error(
+      `当前启用文集只有 ${ids.length} 个可用知识点，本次活动需要 ${count} 个。请在藏书阁补充或启用知识点。`,
+    );
+  // Fisher–Yates 只改变本轮顺序，不修改题库原数组。
+  for (let index = ids.length - 1; index > 0; index--) {
+    const target = Math.floor(random() * (index + 1));
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+  }
+  return ids.slice(0, count);
+}
+
+/**
+ * 知识点首题兼顾既有复习权重；诊断训练优先未出现、难度更低的同知识点题。
+ * 当题库暂时只有一道同类题时允许重做，避免行程被数据规模卡死。
+ */
+export function drawQuestionForKnowledgePoint(
+  game: Game,
+  banks: Bank[],
+  pointId: string,
+  training: boolean,
+  seen: string[],
+  random = Math.random,
+): Question {
+  const all = eligibleQuestions(game, banks, true).filter((question) =>
+    question.knowledgePointIds.includes(pointId),
+  );
+  if (!all.length) throw new Error("当前知识点没有可用题目，请检查藏书阁配置。");
+  const unseen = all.filter((question) => !seen.includes(question.id));
+  const pool = unseen.length ? unseen : all;
+  if (training) {
+    const minDifficulty = Math.min(...pool.map((question) => question.difficulty));
+    const easier = pool.filter(
+      (question) => question.difficulty === minDifficulty,
+    );
+    return easier[Math.floor(random() * easier.length)];
+  }
+  return pick(
+    pool,
+    (question) =>
+      [0.6, 0.8, 1, 1.4, 2][question.frequency - 1] *
+      (banks.find((bank) => question.id.startsWith(bank.id + "::"))?.weight || 1),
+    random,
+  );
 }
 function pick<T>(
   items: T[],

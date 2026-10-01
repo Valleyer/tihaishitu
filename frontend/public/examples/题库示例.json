@@ -1,51 +1,94 @@
 {
-  "name": "入门三题型示例",
+  "name": "入门知识点示例",
+  "description": "演示细分知识点、三种题型以及 Markdown 与 LaTeX 题面。",
+  "knowledgePoints": [
+    {
+      "id": "integer-parity",
+      "name": "整数奇偶性的判定",
+      "subject": "数学",
+      "category": "整数基础",
+      "description": "根据整数能否被 2 整除判断其奇偶性。",
+      "explanation": "若整数 $n=2k$，则 $n$ 为**偶数**；若 $n=2k+1$，则 $n$ 为**奇数**。",
+      "prerequisites": [],
+      "tags": ["整数", "奇偶性"]
+    },
+    {
+      "id": "integer-addition",
+      "name": "整数加法的直接计算",
+      "subject": "数学",
+      "category": "整数基础",
+      "description": "正确计算两个整数的和。",
+      "explanation": "同号相加保留符号，异号相加比较绝对值。正整数相加可直接合并计数单位。",
+      "prerequisites": [],
+      "tags": ["整数", "加法"]
+    }
+  ],
   "questions": [
     {
       "id": "demo-single",
-      "subject": "数学一",
-      "chapter": "基础",
+      "subject": "数学",
+      "category": "整数基础",
+      "chapter": "整数运算",
       "type": "single_choice",
-      "question": "2 + 3 = ?",
+      "question": "计算 $2+3$ 的值。",
       "options": {
-        "A": "4",
-        "B": "5",
-        "C": "6"
+        "A": "$4$",
+        "B": "$5$",
+        "C": "$6$"
       },
       "answer": "B",
-      "explanation": "2 + 3 = 5。",
+      "explanation": "把 2 个单位和 3 个单位合并，共有 $2+3=5$ 个单位，故选 **B**。",
+      "aliases": [],
+      "keywords": ["整数加法"],
       "difficulty": 1,
-      "frequency": 3
+      "frequency": 3,
+      "tags": ["诊断题"],
+      "knowledgePointIds": ["integer-addition"],
+      "enabled": true
     },
     {
       "id": "demo-multi",
-      "subject": "数学一",
-      "chapter": "基础",
+      "subject": "数学",
+      "category": "整数基础",
+      "chapter": "整数性质",
       "type": "multiple_choice",
-      "question": "以下哪些是偶数？",
+      "question": "下列哪些整数能写成 $2k$（$k\\in\\mathbb Z$）的形式？",
       "options": {
-        "A": "2",
-        "B": "3",
-        "C": "4"
+        "A": "$2$",
+        "B": "$3$",
+        "C": "$4$",
+        "D": "$7$"
       },
-      "answer": [
-        "A",
-        "C"
-      ],
-      "explanation": "2 和 4 可被 2 整除。",
+      "answer": ["A", "C"],
+      "explanation": "$2=2\\times1$，$4=2\\times2$，二者均能被 2 整除。$3$ 与 $7$ 是奇数。",
+      "aliases": [],
+      "keywords": ["偶数", "二的倍数"],
       "difficulty": 1,
-      "frequency": 3
+      "frequency": 3,
+      "tags": ["诊断题"],
+      "knowledgePointIds": ["integer-parity"],
+      "enabled": true
     },
     {
       "id": "demo-judge",
-      "subject": "数学一",
-      "chapter": "基础",
+      "subject": "数学",
+      "category": "整数基础",
+      "chapter": "整数性质",
       "type": "true_false",
-      "question": "1 等于 2。",
-      "answer": false,
-      "explanation": "两者不相等。",
-      "difficulty": 1,
-      "frequency": 3
+      "question": "任意两个奇数之和都是偶数。",
+      "options": {
+        "true": "正确",
+        "false": "错误"
+      },
+      "answer": true,
+      "explanation": "设两个奇数为 $2a+1$ 与 $2b+1$，则它们的和为 $$2a+1+2b+1=2(a+b+1),$$ 因此仍是 2 的整数倍。",
+      "aliases": [],
+      "keywords": ["奇数之和"],
+      "difficulty": 2,
+      "frequency": 3,
+      "tags": ["性质判断"],
+      "knowledgePointIds": ["integer-parity"],
+      "enabled": true
     }
   ]
 }

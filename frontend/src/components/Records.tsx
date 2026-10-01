@@ -11,6 +11,7 @@ import {
   learningErrorRate,
 } from "../engine/SpacedRepetitionEngine";
 import { Portrait } from "./Portrait";
+import { RichText } from "./RichText";
 export function People({ game }: { game: Game }) {
   return (
     <div className="people-list">
@@ -124,7 +125,7 @@ export function Reviews({
                 {question.subject} · 累计作答 {record.attempts} 次 · 错误{" "}
                 {record.wrong} 次 · 错误率 {learningErrorRate(record)}%
               </small>
-              <h3>{question.question}</h3>
+              <RichText className="review-question">{question.question}</RichText>
               <details>
                 <summary>展开旧卷与解析</summary>
                 <p>
@@ -136,7 +137,7 @@ export function Reviews({
                 <p>
                   标准答案：{displayAnswer(question.answer, question.options)}
                 </p>
-                <p>{question.explanation}</p>
+                <RichText>{question.explanation}</RichText>
               </details>
               <div className="hint">
                 已复习 {record.reviewCount} 次 · 最近作答{" "}

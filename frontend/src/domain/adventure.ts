@@ -88,7 +88,15 @@ export interface ActivityRun {
   id: string;
   definition: Activity;
   answered: number;
+  /** 首次答对的知识点数；训练题答对只推进进度，不重复计分。 */
   correct: number;
+  /** 本轮抽取的不同知识点，数量等于普通 5 / 主线 10。 */
+  knowledgePointIds: string[];
+  knowledgePointIndex: number;
+  /** 首题答错后留在当前知识点，持续抽取低难度同类题。 */
+  training: boolean;
+  trainingAnswered: number;
+  seenQuestionIds: string[];
   status: "active" | "settled";
   score: number;
   grade: string;

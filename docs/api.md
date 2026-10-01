@@ -54,7 +54,15 @@ API_PROXY_TARGET=http://localhost:8080
 ~~~
 
 pace 为 normal / slow；difficulty 为 gentle / standard。
-Bootstrap 为 {saves, banks, activeId, legacyNotice}；saves 中每项为 {id,name,title,total,updatedAt}。
+Bootstrap 为 `{saves, banks, questionCatalog, activeId, legacyNotice}`；saves 中每项为 `{id,name,title,total,updatedAt}`。
+
+`questionCatalog` 用于切换本地编辑题库与上线后的服务器统一题库：
+
+~~~json
+{"source":"server","canEdit":false,"revision":"2026-10-01.3"}
+~~~
+
+生产环境普通用户应返回 `source=server, canEdit=false`。前端仍可浏览文集、题目与知识点，但会隐藏导入、改名、删题等写操作。题库管理交给独立的后台管理权限；游戏客户端无需为每个用户保存一份题库。
 
 Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习状态、札记、批注、事件、当前课卷。时间统一用 ISO 字符串。
 
@@ -66,12 +74,17 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 
 单选 answer 是原始键字符串，多选是原始键数组，判断是布尔值。屏幕字母由前端按照 options 的顺序生成，不能按显示字母重新解释提交值。
 
-PublicQuestion 不含 answer、aliases、keywords、explanation；批卷后的 Result 再返回 standard、explanation、correct、story、changes。
+题干、选项、题目解析与知识点解析均使用 Markdown + LaTeX；服务端只保存和返回原文，不返回预渲染 HTML。前端通过安全的 Markdown 与 KaTeX 组件渲染。
+
+`Bank.knowledgePoints` 是文集内的知识点目录；`Question.knowledgePointIds` 必须引用其中 1–3 个知识点。PublicQuestion 不含 answer、aliases、keywords、explanation，但会附带本题对应的 `knowledgePoints`，用于题面提示与知识点解析；批卷后的 Result 再返回 standard、explanation、correct、story、changes。
 当前协议以 options 对象的插入顺序表示显示顺序，键只用 A–F 或 true/false。Java 应使用保序映射（例如 LinkedHashMap）输出洗牌后的选项；不能随意按键排序。
 
 ## 后端实现应保持的行为
 
 - 每次发卷生成新 attemptId，保存题目与答案快照；重新读取同一课卷不再洗牌。
+- 普通活动开始时冻结 5 个互不相同的知识点，主线活动冻结 10 个；一轮内不能用同一知识点重复占分。
+- 每个知识点首题决定该点得分。首题答错后继续返回该知识点的低难度题，答对后才推进；训练题不补回首题失分。
+- ActivityRun 返回 knowledgePointIds、knowledgePointIndex、training、trainingAnswered 与 seenQuestionIds，客户端只负责展示，不自行推断进度。
 - 同一 attemptId 重复提交不重复奖励。已换题时旧答题请求返回明确错误。
 - next 的旧 attemptId 重试返回当前进度，不连续跳题。
 - 未判完题、未处理际遇时不允许跳过。
@@ -81,7 +94,7 @@ PublicQuestion 不含 answer、aliases、keywords、explanation；批卷后的 R
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
 - selfAssessment 是早期兼容字段，新三题型不再使用；后端可以只实现客观题流程。
 
-本地模式完整题库在浏览器可见，是单机体验。若将来加入考试排名，题库答案访问控制、身份认证、事务和防重复都需要在后端实现。
+本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
 
 
 ## V2—V5 新增探索接口

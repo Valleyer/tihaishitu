@@ -207,6 +207,11 @@ export function beginRun(game: Game, id: string) {
     definition: structuredClone(activity),
     answered: 0,
     correct: 0,
+    knowledgePointIds: [],
+    knowledgePointIndex: 0,
+    training: false,
+    trainingAnswered: 0,
+    seenQuestionIds: [],
     status: "active",
     score: 0,
     grade: "",
@@ -217,15 +222,33 @@ export function beginRun(game: Game, id: string) {
   // 兼容旧际遇：先在世界中回应，不让它中途截断一轮挑战。
   if (game.event) throw new Error("请先在世界中回应尚未结束的际遇。");
 }
-export function settleRunAnswer(game: Game, correct: boolean) {
+export function settleRunAnswer(
+  game: Game,
+  correct: boolean,
+  questionId: string,
+) {
   const state = game.adventure!,
     run = state.run;
   if (!run || run.status !== "active")
     throw new Error("当前没有正在进行的活动。");
   run.answered++;
-  if (correct) run.correct++;
-  if (run.answered < run.definition.rounds) return;
-  run.score = Math.round((run.correct / run.definition.rounds) * 100);
+  run.seenQuestionIds.push(questionId);
+  if (run.training) {
+    run.trainingAnswered++;
+    if (correct) {
+      run.training = false;
+      run.knowledgePointIndex++;
+    }
+  } else if (correct) {
+    run.correct++;
+    run.knowledgePointIndex++;
+  } else {
+    // 首题失分后不跳过：进入同知识点训练，直到真正答对再继续。
+    run.training = true;
+    run.trainingAnswered++;
+  }
+  if (run.knowledgePointIndex < run.knowledgePointIds.length) return;
+  run.score = Math.round((run.correct / run.knowledgePointIds.length) * 100);
   const tiers = [...run.definition.tiers].sort(
     (a, b) => a.minScore - b.minScore,
   );

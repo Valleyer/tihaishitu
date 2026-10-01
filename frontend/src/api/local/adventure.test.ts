@@ -23,9 +23,11 @@ function setup() {
   return { api: createLocalApi(storage), storage };
 }
 async function play(api: GameApi, game: Game, correctCount: number) {
-  const run = game.adventure!.run!,
-    bankList = (await api.bootstrap()).banks;
-  for (let index = 0; index < run.definition.rounds; index++) {
+  const bankList = (await api.bootstrap()).banks;
+  let safety = 0;
+  while (game.adventure!.run!.status === "active") {
+    if (++safety > 100) throw new Error("知识点训练没有在预期次数内结束");
+    const run = game.adventure!.run!;
     const question = game.attempt!.question,
       [bankId, id] = question.id.split("::");
     const original = bankList
@@ -41,9 +43,13 @@ async function play(api: GameApi, game: Game, correctCount: number) {
           : Object.keys(original.options).find((k) => k !== original.answer)!;
     game = await api.answer(game.id, {
       attemptId: game.attempt!.id,
-      answer: index < correctCount ? original.answer : wrong,
+      // 首题按目标成绩作答；诊断训练题答对后才能进入下一知识点。
+      answer:
+        run.training || run.knowledgePointIndex < correctCount
+          ? original.answer
+          : wrong,
     });
-    if (index < run.definition.rounds - 1)
+    if (game.adventure!.run!.status === "active")
       game = await api.next(game.id, game.attempt!.id);
   }
   return game;

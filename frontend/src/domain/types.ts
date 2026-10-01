@@ -6,12 +6,29 @@
  */
 export type QuestionType = "single_choice" | "multiple_choice" | "true_false";
 export type Answer = string | string[] | boolean;
+/**
+ * 知识点是比章节更细的教学单位。一道题关联 1–3 个知识点；名称应具体到
+ * “无条件极值的极值点判定”这类可以单独诊断、单独训练的能力。
+ */
+export interface KnowledgePoint {
+  id: string;
+  name: string;
+  subject: string;
+  category: string;
+  description: string;
+  /** 支持 Markdown + LaTeX，用于题面上的“查看知识点解析”。 */
+  explanation: string;
+  parentId?: string;
+  prerequisites: string[];
+  tags: string[];
+}
 export interface Question {
   id: string;
   subject: string;
   category: string;
   chapter: string;
   type: QuestionType;
+  /** Markdown + LaTeX；后端按原文返回，前端负责安全渲染。 */
   question: string;
   options: Record<string, string>;
   answer: Answer;
@@ -21,6 +38,7 @@ export interface Question {
   difficulty: number;
   frequency: number;
   tags: string[];
+  knowledgePointIds: string[];
   enabled: boolean;
 }
 export type PublicQuestion = Omit<
@@ -31,6 +49,7 @@ export interface Bank {
   id: string;
   name: string;
   description: string;
+  knowledgePoints: KnowledgePoint[];
   questions: Question[];
   enabled: boolean;
   weight: number;
@@ -91,7 +110,7 @@ export interface Result {
 }
 export interface Attempt {
   id: string;
-  question: PublicQuestion;
+  question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
   scene: Scene;
   result: Result | null;
   review: boolean;
@@ -161,6 +180,12 @@ export interface SaveSummary {
 export interface Bootstrap {
   saves: SaveSummary[];
   banks: Bank[];
+  /** 上线后由后端声明为 server/readonly，普通用户不再各自维护题库。 */
+  questionCatalog: {
+    source: "local" | "server";
+    canEdit: boolean;
+    revision?: string;
+  };
   activeId: string | null;
   legacyNotice: boolean;
 }

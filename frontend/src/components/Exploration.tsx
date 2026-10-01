@@ -20,6 +20,7 @@ import {
   requirementIssues,
 } from "../engine/AdventureEngine";
 import { Portrait } from "./Portrait";
+import { RichText } from "./RichText";
 
 export function WorldHub({
   game,
@@ -108,11 +109,11 @@ export function WorldHub({
               <p>
                 {state.run.status === "settled"
                   ? "此行战果已记下，来看看所得。"
-                  : "已经历 " +
-                    state.run.answered +
+                  : "已掌握 " +
+                    state.run.knowledgePointIndex +
                     "/" +
                     state.run.definition.rounds +
-                    " 页，随时可接着走。"}
+                    " 个知识点，随时可接着走。"}
               </p>
             </div>
             <button className="gold-button" onClick={resume}>
@@ -242,7 +243,7 @@ export function ActivityDetail({
   return (
     <div className="activity-detail">
       <small>
-        {adventureDesign.rankNames[activity.kind]} · {activity.rounds} 题 ·{" "}
+        {adventureDesign.rankNames[activity.kind]} · {activity.rounds} 个知识点 ·{" "}
         {activity.passScore} 分达标
       </small>
       <h2>{activity.name}</h2>
@@ -724,7 +725,8 @@ export function Outcome({
       </h2>
       <blockquote>{run.response}</blockquote>
       <p>
-        本轮答对 {run.correct} / {run.definition.rounds} 题 · 最高成绩{" "}
+        首次答对 {run.correct} / {run.definition.rounds} 个知识点 · 诊断训练{" "}
+        {run.trainingAnswered} 题 · 最高成绩{" "}
         {game.adventure!.best[run.definition.id]} 分
       </p>
       <div className="loot-list">
@@ -737,7 +739,7 @@ export function Outcome({
       {game.attempt?.result && (
         <details>
           <summary>回看最后一页解析</summary>
-          <p>{game.attempt.result.explanation}</p>
+          <RichText>{game.attempt.result.explanation}</RichText>
         </details>
       )}
       <button className="gold-button" disabled={busy} onClick={finish}>

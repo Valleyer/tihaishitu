@@ -3,8 +3,14 @@
  * 导入先完整解析再保存，发现非法题型或答案时整份拒绝，避免半份题库落库。
  * JSON 选择题使用 A–F 原始键；判断题自动生成 true/false 两个选项。
  */
-import type { Bank, Question, QuestionType } from "../domain/types";
-import { gameDesign } from "../content";
+import type {
+  Bank,
+  KnowledgePoint,
+  Question,
+  QuestionType,
+} from "../domain/types";
+// 直接读取限制配置，避免内容入口在为内置文集补知识点时形成循环依赖。
+import gameDesign from "../content/game.json";
 export const typeNames: Record<QuestionType, string> = {
   single_choice: "单选",
   multiple_choice: "多选",
@@ -33,6 +39,73 @@ function bool(value: unknown, fallback: boolean) {
   if ([false, "false", "FALSE", "0", 0, "错误", "错"].includes(value as string))
     return false;
   throw new Error("布尔值必须为 true / false");
+}
+
+function stableId(text: string) {
+  let hash = 2166136261;
+  for (const char of text) {
+    hash ^= char.codePointAt(0)!;
+    hash = Math.imul(hash, 16777619);
+  }
+  return "kp-" + (hash >>> 0).toString(36);
+}
+
+export function normalizeKnowledgePoint(
+  value: unknown,
+  index: number,
+): KnowledgePoint {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("知识点必须为对象");
+  const point = value as Record<string, unknown>;
+  const name = String(point.name || "").trim();
+  if (!name || name.length > 60) throw new Error("知识点名称须为 1–60 个字");
+  return {
+    id: String(point.id || "knowledge-point-" + (index + 1)),
+    name,
+    subject: String(point.subject || "自修"),
+    category: String(point.category || "通识"),
+    description: String(point.description || "用于定位这一类题的核心能力。"),
+    explanation: String(
+      point.explanation || point.description || "请结合本知识点的例题复习。",
+    ),
+    parentId: point.parentId ? String(point.parentId) : undefined,
+    prerequisites: list(point.prerequisites),
+    tags: list(point.tags),
+  };
+}
+
+/**
+ * 老题库没有独立知识点时，按“科目 + 分类 + 章节”生成稳定的兼容知识点。
+ * 新题库应显式配置更细的 knowledgePoints 与 knowledgePointIds。
+ */
+export function hydrateBankKnowledge(bank: Bank): Bank {
+  const questions = bank.questions.map((question) => ({
+    ...question,
+    knowledgePointIds: [...(question.knowledgePointIds || [])],
+  }));
+  const points = (bank.knowledgePoints || []).map(normalizeKnowledgePoint);
+  const known = new Set(points.map((point) => point.id));
+  for (const question of questions) {
+    if (!question.knowledgePointIds.length) {
+      const seed = [question.subject, question.category, question.chapter].join("|");
+      const id = stableId(seed);
+      question.knowledgePointIds = [id];
+      if (!known.has(id)) {
+        points.push({
+          id,
+          name: question.chapter,
+          subject: question.subject,
+          category: question.category,
+          description: `旧题库自动归入“${question.chapter}”。可在藏书阁中改成更细的知识点。`,
+          explanation: `先辨认“${question.chapter}”所用定义、条件与常见变形，再结合本章例题逐步复核。`,
+          prerequisites: [],
+          tags: ["兼容知识点"],
+        });
+        known.add(id);
+      }
+    }
+  }
+  return { ...bank, knowledgePoints: points, questions };
 }
 export function normalizeQuestion(value: unknown, index: number): Question {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -102,6 +175,10 @@ export function normalizeQuestion(value: unknown, index: number): Question {
     difficulty: rating(q.difficulty, 3),
     frequency: rating(q.frequency, 3),
     tags: list(q.tags),
+    knowledgePointIds: list(q.knowledgePointIds || q.knowledge_points).slice(
+      0,
+      3,
+    ),
     enabled: bool(q.enabled, true),
   };
 }
@@ -171,14 +248,17 @@ export function parseBank(
   });
   if (new Set(questions.map((q) => q.id)).size !== questions.length)
     throw new Error("题目 id 重复，请先修改后再导入");
-  return {
+  return hydrateBankKnowledge({
     id: crypto.randomUUID(),
     name: name.trim() || data.name || "自编文集",
     description: "自定义题库",
+    knowledgePoints: Array.isArray(data.knowledgePoints)
+      ? data.knowledgePoints.map(normalizeKnowledgePoint)
+      : [],
     questions,
     enabled: true,
     weight: 1,
-  };
+  });
 }
 export function exportCSV(bank: Bank) {
   const headers = [
@@ -199,6 +279,7 @@ export function exportCSV(bank: Bank) {
     "answer",
     "explanation",
     "tags",
+    "knowledgePointIds",
     "aliases",
     "keywords",
     "enabled",
@@ -227,3 +308,5 @@ export function exportCSV(bank: Bank) {
 }
 export const questionKey = (bankId: string, questionId: string) =>
   bankId + "::" + questionId;
+export const knowledgePointKey = (bankId: string, pointId: string) =>
+  bankId + "::" + pointId;

@@ -5,7 +5,11 @@ import { hydrateLearning } from "./SpacedRepetitionEngine";
  * 不直接覆盖旧人生；题库和人物引用完整后，交由本地 API 创建独立副本。
  */
 import type { Bank, Game, NewGame, Question } from "../domain/types";
-import { normalizeQuestion } from "./QuestionBankManager";
+import {
+  hydrateBankKnowledge,
+  normalizeKnowledgePoint,
+  normalizeQuestion,
+} from "./QuestionBankManager";
 import { chapterDesign, characterDesign, gameDesign } from "../content";
 export function validateConfig(value: NewGame, banks: Bank[]): NewGame {
   if (
@@ -56,15 +60,47 @@ export function validateBank(bank: Bank): Bank {
     throw new Error(
       "题库最多支持 " + gameDesign.limits.questionsPerBank + " 道题。",
     );
+  const knowledgePoints = (bank.knowledgePoints || []).map(
+    normalizeKnowledgePoint,
+  );
+  if (new Set(knowledgePoints.map((point) => point.id)).size !== knowledgePoints.length)
+    throw new Error("知识点 id 不可重复。");
+  const declaredPointIds = new Set(knowledgePoints.map((point) => point.id));
+  for (const point of knowledgePoints) {
+    if (point.parentId && !declaredPointIds.has(point.parentId))
+      throw new Error(
+        `知识点“${point.name}”引用了不存在的上位知识点“${point.parentId}”。`,
+      );
+    if (point.prerequisites.includes(point.id))
+      throw new Error(`知识点“${point.name}”不能把自身设为前置知识点。`);
+    const missing = point.prerequisites.find((id) => !declaredPointIds.has(id));
+    if (missing)
+      throw new Error(
+        `知识点“${point.name}”引用了不存在的前置知识点“${missing}”。`,
+      );
+  }
   const questions = bank.questions.map(normalizeQuestion);
   if (new Set(questions.map((q) => q.id)).size !== questions.length)
     throw new Error("题目 id 不可重复。");
-  return {
+  const normalized = hydrateBankKnowledge({
     ...bank,
     name: bank.name.trim(),
+    knowledgePoints,
     questions,
     enabled: Boolean(bank.enabled),
-  };
+  });
+  const pointIds = new Set(normalized.knowledgePoints.map((point) => point.id));
+  for (const question of normalized.questions) {
+    if (
+      question.knowledgePointIds.length < 1 ||
+      question.knowledgePointIds.length > 3 ||
+      question.knowledgePointIds.some((id) => !pointIds.has(id))
+    )
+      throw new Error(
+        `题目“${question.id}”须关联 1–3 个文集中已有的知识点。`,
+      );
+  }
+  return normalized;
 }
 export interface Backup {
   format: "tihaishitu-v2";

@@ -75,6 +75,8 @@ events.forEach((e) => {
   });
 });
 for (const bank of banks) {
+  const points = bank.knowledgePoints || [];
+  if (points.length) unique(points, bank.id + " knowledge-points");
   unique(bank.questions, bank.id);
   for (const q of bank.questions) {
     check(
@@ -107,6 +109,20 @@ for (const bank of banks) {
         q.difficulty <= 5,
       q.id + " 难度和频率应为 1–5",
     );
+    if (points.length) {
+      check(
+        Array.isArray(q.knowledgePointIds) &&
+          q.knowledgePointIds.length >= 1 &&
+          q.knowledgePointIds.length <= 3,
+        q.id + " 应关联 1–3 个知识点",
+      );
+      check(
+        (q.knowledgePointIds || []).every((id) =>
+          points.some((point) => point.id === id),
+        ),
+        q.id + " 引用了不存在的知识点",
+      );
+    }
   }
 }
 check(

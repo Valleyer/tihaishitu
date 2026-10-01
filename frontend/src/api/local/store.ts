@@ -25,7 +25,12 @@ import type {
 } from "../../domain/types";
 import { seedBanks } from "./questions";
 import { assertAnswer, validateAnswer } from "../../engine/AnswerValidator";
-import { drawQuestion } from "../../engine/QuestionEngine";
+import {
+  drawQuestion,
+  drawQuestionForKnowledgePoint,
+  planKnowledgePoints,
+  resolveKnowledgePoints,
+} from "../../engine/QuestionEngine";
 import { makeScene, initialNpcs } from "../../engine/StoryEngine";
 import { settleProgress } from "../../engine/ProgressionSystem";
 import {
@@ -39,6 +44,7 @@ import {
   validateConfig,
 } from "../../engine/SaveSystem";
 import { shuffleQuestion } from "../../engine/OptionShuffler";
+import { hydrateBankKnowledge } from "../../engine/QuestionBankManager";
 import { gameDesign, chapterDesign } from "../../content";
 export const STORAGE_KEY = "tihaishitu:world:v2";
 interface Database {
@@ -111,6 +117,7 @@ export function createLocalApi(
         ...structuredClone(seedBanks.filter((bank) => !overrides.has(bank.id))),
         ...data.banks.filter((bank) => overrides.has(bank.id)),
       ];
+      data.banks = data.banks.map(hydrateBankKnowledge);
       // 早期判断题由界面生成按钮，没有存 options；升级时补齐，保留题目与标准答案。
       for (const bank of data.banks)
         for (const question of bank.questions) {
@@ -137,6 +144,42 @@ export function createLocalApi(
       for (const game of Object.values(data.saves)) {
         hydrateAdventure(game);
         hydrateLearning(game);
+        const run = game.adventure!.run;
+        if (run && !Array.isArray(run.knowledgePointIds)) {
+          // 旧版按“题数”进行中的行程无法无损换算为知识点关卡；仅重置本轮，
+          // 历史答题、奖励、错题与人物关系均保留。
+          run.answered = 0;
+          run.correct = 0;
+          run.knowledgePointIndex = 0;
+          run.training = false;
+          run.trainingAnswered = 0;
+          run.seenQuestionIds = [];
+          if (run.status === "active") {
+            try {
+              run.knowledgePointIds = planKnowledgePoints(
+                game,
+                data.banks,
+                run.definition.rounds,
+                Boolean(run.definition.reviewOnly),
+              );
+              game.attempt = null;
+              delete data.snapshots[game.id];
+              nextAttempt(data, game, Boolean(run.definition.reviewOnly));
+            } catch {
+              game.adventure!.run = null;
+              game.attempt = null;
+            }
+          } else {
+            run.knowledgePointIds = [];
+            run.knowledgePointIndex = run.definition.rounds;
+          }
+        }
+        if (game.attempt && !Array.isArray(game.attempt.question.knowledgePoints)) {
+          const snapshot = data.snapshots[game.id];
+          game.attempt.question.knowledgePoints = snapshot
+            ? resolveKnowledgePoints(data.banks, snapshot.knowledgePointIds || [])
+            : [];
+        }
         if (!game.attempt) delete data.snapshots[game.id];
       }
       return data;
@@ -169,7 +212,17 @@ export function createLocalApi(
   }
   // 发卷时洗牌并冻结题目；重试答题或刷新页面不重复洗牌。
   function nextAttempt(db: Database, game: Game, review = false) {
-    const drawn = drawQuestion(game, db.banks, review);
+    const run = game.adventure?.run;
+    const pointId = run?.knowledgePointIds[run.knowledgePointIndex];
+    const drawn = pointId
+      ? drawQuestionForKnowledgePoint(
+          game,
+          db.banks,
+          pointId,
+          run.training,
+          run.seenQuestionIds,
+        )
+      : drawQuestion(game, db.banks, review);
     const previous = game.records.findLast(
       (record) => record.question.id === drawn.id,
     );
@@ -203,7 +256,13 @@ export function createLocalApi(
     }
     game.attempt = {
       id: crypto.randomUUID(),
-      question,
+      question: {
+        ...question,
+        knowledgePoints: resolveKnowledgePoints(
+          db.banks,
+          full.knowledgePointIds,
+        ),
+      },
       scene,
       result: null,
       review: review || (game.learning[full.id]?.wrong ?? 0) > 0,
@@ -221,6 +280,12 @@ export function createLocalApi(
       const db = read(),
         game = get(db, id);
       beginRun(game, activityId);
+      game.adventure!.run!.knowledgePointIds = planKnowledgePoints(
+        game,
+        db.banks,
+        game.adventure!.run!.definition.rounds,
+        Boolean(game.adventure!.run!.definition.reviewOnly),
+      );
       nextAttempt(db, game, game.adventure!.run!.definition.reviewOnly);
       return persist(db, game);
     },
@@ -299,6 +364,11 @@ export function createLocalApi(
           }))
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
         banks: db.banks,
+        questionCatalog: {
+          source: "local",
+          canEdit: true,
+          revision: "builtin-v1",
+        },
         activeId: db.activeId,
         legacyNotice: Boolean(storage.getItem("tihaishitu:save:v1")),
       };
@@ -416,7 +486,7 @@ export function createLocalApi(
         ? attempt.scene.success
         : attempt.scene.failure;
       // 好感与信任只在整轮共读达标后发放，单题不再增减人物关系。
-      settleRunAnswer(game, correct);
+      settleRunAnswer(game, correct, full.id);
       game.journal.push({
         id: crypto.randomUUID(),
         day: game.records.length,

@@ -9,6 +9,7 @@ import {
   parseBank,
   exportCSV,
 } from "../../engine/QuestionBankManager";
+import { validateBank } from "../../engine/SaveSystem";
 import { shuffleQuestion, displayAnswer } from "../../engine/OptionShuffler";
 import type { NewGame } from "../../domain/types";
 const config: NewGame = {
@@ -69,14 +70,20 @@ describe("核心答题与存档", () => {
   it("判断题 false 可以提交并判为正确", async () => {
     const { api, storage } = setup();
     const bank = parseBank(
-      JSON.stringify([
-        {
-          id: "false",
+      JSON.stringify({
+        knowledgePoints: Array.from({ length: 5 }, (_, index) => ({
+          id: "point-" + index,
+          name: "判断知识点 " + index,
+        })),
+        questions: Array.from({ length: 5 }, (_, index) => ({
+          id: index === 0 ? "false" : "true-" + index,
           type: "true_false",
-          question: "1 等于 2。",
+          question:
+            index === 0 ? "1 等于 2。" : `${index} 等于 ${index + 1}。`,
           answer: false,
-        },
-      ]),
+          knowledgePointIds: ["point-" + index],
+        })),
+      }),
       "json",
       "判断卷",
     );
@@ -167,5 +174,40 @@ describe("题库入口", () => {
     expect(() =>
       parseBank('question,answer\n"unclosed,a', "csv", "无效"),
     ).toThrow("闭合");
+  });
+  it("保留细分知识点与公式，并拒绝失效的知识点关系", () => {
+    const bank = parseBank(
+      JSON.stringify({
+        name: "极值专题",
+        knowledgePoints: [
+          {
+            id: "stationary-point",
+            name: "驻点的必要条件判定",
+            explanation: "由 $f'(x_0)=0$ 检查驻点。",
+          },
+        ],
+        questions: [
+          {
+            id: "q-extreme",
+            type: "true_false",
+            question: "若 $f'(x_0)=0$，则 $x_0$ 一定是极值点。",
+            answer: false,
+            knowledgePointIds: ["stationary-point"],
+          },
+        ],
+      }),
+      "json",
+      "极值专题",
+    );
+    expect(bank.questions[0].question).toContain("$f'(x_0)=0$");
+    expect(validateBank(bank).knowledgePoints[0].id).toBe("stationary-point");
+    expect(() =>
+      validateBank({
+        ...bank,
+        knowledgePoints: [
+          { ...bank.knowledgePoints[0], prerequisites: ["missing-point"] },
+        ],
+      }),
+    ).toThrow("不存在的前置知识点");
   });
 });

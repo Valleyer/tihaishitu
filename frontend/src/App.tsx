@@ -29,6 +29,7 @@ import { Journal, Reviews, Statistics } from "./components/Records";
 import { ChapterGate } from "./components/ChapterGate";
 import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
+import { RichText } from "./components/RichText";
 import { isLearningMastered } from "./engine/SpacedRepetitionEngine";
 import "./App.css";
 import "./screen-fit.css";
@@ -384,7 +385,6 @@ function App() {
                 </div>
                 <h1>{game.player.name}</h1>
                 <div className="identity-badge">{game.player.title}</div>
-                <p className="origin-line">{game.player.origin}</p>
                 <dl className="attributes">
                   <div>
                     <dt>学识</dt>
@@ -460,11 +460,12 @@ function App() {
                       <div className="challenge-toolbar">
                         <span>
                           {activityRun.definition.name} ·{" "}
-                          {Math.min(
-                            activityRun.answered + (attempt.result ? 0 : 1),
+                          知识点 {Math.min(
+                            activityRun.knowledgePointIndex + 1,
                             activityRun.definition.rounds,
-                          )}{" "}
-                          / {activityRun.definition.rounds} 页
+                          )}
+                          /{activityRun.definition.rounds}
+                          {activityRun.training ? " · 诊断训练中" : " · 首次考核"}
                         </span>
                         <div>
                           <button onClick={() => setActivityOpen(false)}>
@@ -629,6 +630,7 @@ function App() {
           {panel === "library" && data && (
             <Library
               banks={data.banks}
+              editable={data.questionCatalog?.canEdit ?? false}
               busy={busy}
               save={changeBank}
               remove={deleteBank}
@@ -866,7 +868,7 @@ function App() {
           )}
           {game && attempt && panel === "notes" && (
             <>
-              <p className="hint">{attempt.question.question}</p>
+              <RichText className="hint">{attempt.question.question}</RichText>
               <textarea
                 aria-label="卷边批注"
                 maxLength={gameDesign.limits.noteLength}

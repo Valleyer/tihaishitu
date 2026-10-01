@@ -26,6 +26,7 @@ import type {
   Rewards,
   WorldLocation,
 } from "../domain/adventure";
+import { hydrateBankKnowledge } from "../engine/QuestionBankManager";
 
 /**
  * 普通活动统一为五题两档；科举正试统一为十题全对取中。
@@ -145,7 +146,9 @@ export const eventDesign = eventData as (Omit<ChoiceEvent, "options"> & {
 })[];
 export const mapDesign = mapData as unknown as { locations: WorldLocation[] };
 export const portraitDesign = portraitData;
-export const bankDesign = bankData as unknown as Bank[];
+export const bankDesign = (bankData as unknown as Bank[]).map(
+  hydrateBankKnowledge,
+);
 export const locationFor = (chapter: number) =>
   mapDesign.locations.find(
     (location) => location.id === chapterDesign[chapter].locationId,

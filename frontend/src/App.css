@@ -652,6 +652,108 @@
   color: #283b30;
   margin: 0 0 22px;
 }
+.rich-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rich-text > :first-child {
+  margin-top: 0;
+}
+.rich-text > :last-child {
+  margin-bottom: 0;
+}
+.rich-text p {
+  margin: 0.55em 0;
+}
+.rich-text strong {
+  color: #765f32;
+}
+.rich-text blockquote {
+  margin: 12px 0;
+  padding: 9px 13px;
+  border-left: 3px solid #a58d59;
+  background: #e4dec8;
+  color: #5d674f;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 10px 0;
+  padding-left: 24px;
+}
+.rich-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 0.88em;
+}
+.rich-text th,
+.rich-text td {
+  border: 1px solid #b7af8c;
+  padding: 7px 9px;
+  text-align: center;
+}
+.rich-text code:not(.katex *) {
+  padding: 2px 5px;
+  background: #ded8bd;
+  color: #765a31;
+}
+.rich-text .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 2px;
+  margin: 0.65em 0;
+}
+.rich-inline,
+.rich-inline > p {
+  display: inline;
+  margin: 0;
+}
+.question-prompt-area {
+  max-height: 34vh;
+  overflow-y: auto;
+  padding: 4px 10px 4px 0;
+}
+.knowledge-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: -8px 0 16px;
+  padding: 9px 11px;
+  border: 1px solid #baae8366;
+  background: #e5dfc9;
+  font-size: 10px;
+  color: #777b62;
+}
+.knowledge-ribbon > span {
+  letter-spacing: 2px;
+}
+.knowledge-ribbon button {
+  padding: 4px 8px;
+  border-color: #a99564;
+  background: #f2ecd9;
+  color: #735e35;
+  font-size: 10px;
+}
+.knowledge-explanation {
+  margin-top: 13px;
+  border-top: 1px solid #b7b08e;
+  padding-top: 11px;
+  color: #59684f;
+}
+.knowledge-explanation summary {
+  cursor: pointer;
+  color: #876f3e;
+  font-size: 11px;
+}
+.knowledge-explanation section {
+  padding: 10px 0 3px;
+}
+.knowledge-explanation h3 {
+  margin: 0 0 7px;
+  font: 15px SimSun, serif;
+  color: #4c6246;
+}
 .answers {
   display: grid;
   gap: 10px;
@@ -667,6 +769,10 @@
   font-size: 13px;
   cursor: pointer;
   min-height: 49px;
+}
+.answer-option .rich-inline {
+  flex: 1;
+  min-width: 0;
 }
 .answer-option:hover {
   background: #faf7ee;
@@ -1293,6 +1399,76 @@
   border-bottom: 1px solid #b6b29466;
   margin: 20px 0;
 }
+.library-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0;
+  border-bottom: 1px solid #b7b091;
+}
+.catalog-notice {
+  padding: 11px 14px;
+  border: 1px solid #aa9a69;
+  background: #dfd8bb;
+  color: #685f42;
+  font-size: 11px;
+}
+.library-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent !important;
+  padding: 9px 13px;
+}
+.library-tabs button.selected {
+  border-bottom-color: #8b7445;
+  color: #765e30;
+}
+.knowledge-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid #b8b194;
+}
+.knowledge-picker legend {
+  padding: 0 7px;
+  color: #716a50;
+  font-size: 11px;
+}
+.knowledge-picker label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  background: #e2dfc9;
+}
+.knowledge-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.knowledge-list article {
+  padding: 15px;
+  border: 1px solid #b8b292;
+  background: #dfddc7;
+}
+.knowledge-list h3 {
+  margin: 8px 0;
+  color: #4f6547;
+  font: 17px SimSun, serif;
+}
+.knowledge-list p {
+  min-height: 3.6em;
+  color: #777b64;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.row-knowledge {
+  display: block;
+  margin-top: 5px;
+  color: #927a49;
+  font-size: 9px;
+}
 .bank-settings > label:first-child {
   flex: 1;
 }
@@ -1359,6 +1535,24 @@
 }
 .question-editor .gold-button {
   margin-top: 15px;
+}
+.editor-preview {
+  margin: -4px 0 18px;
+  padding: 14px;
+  border: 1px dashed #aaa581;
+  background: #e4e0ca;
+  color: #43543e;
+}
+.editor-preview > small {
+  display: block;
+  margin-bottom: 10px;
+  color: #8b7950;
+  letter-spacing: 2px;
+}
+.review-question {
+  font: 17px/1.8 SimSun, serif;
+  color: #4f6346;
+  margin: 12px 0;
 }
 .save-row {
   border-top: 1px solid #bdb89b;

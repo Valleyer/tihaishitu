@@ -3,22 +3,31 @@
  * 浏览器修改优先于内置配置；已发出的题面由快照保护，新内容在下一次抽到时生效。
  */
 import { useState } from "react";
-import type { Bank, Question, QuestionType } from "../domain/types";
+import type {
+  Bank,
+  KnowledgePoint,
+  Question,
+  QuestionType,
+} from "../domain/types";
 import {
   exportCSV,
+  normalizeKnowledgePoint,
   normalizeQuestion,
   parseBank,
   typeNames,
 } from "../engine/QuestionBankManager";
 import { download } from "../utils/download";
+import { RichText } from "./RichText";
 export function Library({
   banks,
+  editable,
   busy,
   save,
   remove,
   report,
 }: {
   banks: Bank[];
+  editable: boolean;
   busy: boolean;
   save: (bank: Bank) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -33,11 +42,15 @@ export function Library({
     [chapter, setChapter] = useState("");
   const [checked, setChecked] = useState<string[]>([]);
   const [editing, setEditing] = useState<Question | null>(null);
+  const [editingPoint, setEditingPoint] = useState<KnowledgePoint | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [pointIsNew, setPointIsNew] = useState(false);
+  const [view, setView] = useState<"questions" | "knowledge">("questions");
   const [importing, setImporting] = useState(false),
     [importText, setImportText] = useState(""),
     [format, setFormat] = useState<"json" | "csv">("json"),
     [name, setName] = useState("自编文集");
+  const [bankName, setBankName] = useState(bank?.name || "");
   const subjects = [...new Set(bank?.questions.map((q) => q.subject) || [])],
     tags = [...new Set(bank?.questions.flatMap((q) => q.tags) || [])],
     chapters = [...new Set(bank?.questions.map((q) => q.chapter) || [])];
@@ -82,6 +95,28 @@ export function Library({
       report((error as Error).message);
     }
   }
+  async function saveKnowledgePoint() {
+    if (!editingPoint || !bank) return;
+    try {
+      const point = normalizeKnowledgePoint(editingPoint, 0);
+      if (
+        pointIsNew &&
+        bank.knowledgePoints.some((old) => old.id === point.id)
+      )
+        throw new Error("知识点标识已存在");
+      await save({
+        ...bank,
+        knowledgePoints: pointIsNew
+          ? [...bank.knowledgePoints, point]
+          : bank.knowledgePoints.map((old) =>
+              old.id === point.id ? point : old,
+            ),
+      });
+      setEditingPoint(null);
+    } catch (error) {
+      report((error as Error).message);
+    }
+  }
   const fresh = () =>
     normalizeQuestion(
       {
@@ -92,8 +127,111 @@ export function Library({
         question: "请填写题干",
         options: { A: "选项一", B: "选项二" },
         answer: "A",
+        knowledgePointIds: bank?.knowledgePoints[0]
+          ? [bank.knowledgePoints[0].id]
+          : [],
       },
       0,
+    );
+  const freshPoint = (): KnowledgePoint => ({
+    id: crypto.randomUUID(),
+    name: "新的细分知识点",
+    subject: subjects[0] || "自修",
+    category: "基础概念",
+    description: "说明这个知识点具体考查什么。",
+    explanation: "写下定义、判定步骤、常见误区与一个简短例子。支持 Markdown 与 LaTeX。",
+    prerequisites: [],
+    tags: [],
+  });
+  const exampleBank = (): Pick<
+    Bank,
+    "name" | "description" | "knowledgePoints" | "questions"
+  > => {
+    const point = freshPoint();
+    return {
+      name: "示例文集",
+      description: "包含细分知识点、Markdown 与 LaTeX 题面的导入示例。",
+      knowledgePoints: [point],
+      questions: [
+        {
+          ...fresh(),
+          question: "若 $f'(x_0)=0$，则 $x_0$ 称为函数 $f$ 的什么点？",
+          knowledgePointIds: [point.id],
+        },
+      ],
+    };
+  };
+  if (editingPoint)
+    return (
+      <div className="question-editor">
+        <button className="text-button" onClick={() => setEditingPoint(null)}>
+          ← 返回知识点目录
+        </button>
+        <h3>{pointIsNew ? "添一则知识点" : "修订知识点"}</h3>
+        <div className="form-grid">
+          <label>
+            知识点名称
+            <input
+              value={editingPoint.name}
+              onChange={(event) =>
+                setEditingPoint({ ...editingPoint, name: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            科目
+            <input
+              value={editingPoint.subject}
+              onChange={(event) =>
+                setEditingPoint({ ...editingPoint, subject: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            分类
+            <input
+              value={editingPoint.category}
+              onChange={(event) =>
+                setEditingPoint({ ...editingPoint, category: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            前置知识点（标识用分号分隔）
+            <input
+              value={editingPoint.prerequisites.join(";")}
+              onChange={(event) =>
+                setEditingPoint({
+                  ...editingPoint,
+                  prerequisites: event.target.value.split(";").filter(Boolean),
+                })
+              }
+            />
+          </label>
+        </div>
+        <label>
+          能力说明
+          <textarea
+            value={editingPoint.description}
+            onChange={(event) =>
+              setEditingPoint({ ...editingPoint, description: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          知识点解析（Markdown + LaTeX）
+          <textarea
+            rows={8}
+            value={editingPoint.explanation}
+            onChange={(event) =>
+              setEditingPoint({ ...editingPoint, explanation: event.target.value })
+            }
+          />
+        </label>
+        <button className="gold-button" disabled={busy} onClick={() => void saveKnowledgePoint()}>
+          保存知识点
+        </button>
+      </div>
     );
   if (editing)
     return (
@@ -179,6 +317,30 @@ export function Library({
             />
           </label>
         </div>
+        <fieldset className="knowledge-picker">
+          <legend>关联知识点（至少 1 个，最多 3 个）</legend>
+          {bank?.knowledgePoints.map((point) => {
+            const checked = editing.knowledgePointIds.includes(point.id);
+            return (
+              <label key={point.id}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={!checked && editing.knowledgePointIds.length >= 3}
+                  onChange={(event) =>
+                    setEditing({
+                      ...editing,
+                      knowledgePointIds: event.target.checked
+                        ? [...editing.knowledgePointIds, point.id]
+                        : editing.knowledgePointIds.filter((id) => id !== point.id),
+                    })
+                  }
+                />
+                <span>{point.name}</span>
+              </label>
+            );
+          })}
+        </fieldset>
         <label>
           题干
           <textarea
@@ -188,6 +350,10 @@ export function Library({
             }
           />
         </label>
+        <div className="editor-preview">
+          <small>题面预览</small>
+          <RichText>{editing.question}</RichText>
+        </div>
         {editing.type.includes("choice") && (
           <div className="form-grid">
             {["A", "B", "C", "D", "E", "F"].map((key) => (
@@ -279,6 +445,10 @@ export function Library({
           value={selected}
           onChange={(e) => {
             setSelected(e.target.value);
+            setBankName(
+              banks.find((candidate) => candidate.id === e.target.value)?.name ||
+                "",
+            );
             setChecked([]);
             setSubject("");
             setTag("");
@@ -291,20 +461,21 @@ export function Library({
             </option>
           ))}
         </select>
-        <button
+        {editable && <button
           onClick={() => {
             setImporting(!importing);
           }}
         >
           导入 JSON / CSV
-        </button>
-        <button
+        </button>}
+        {editable && <button
           disabled={busy}
           onClick={async () => {
             const next: Bank = {
               id: crypto.randomUUID(),
               name: "未命名文集",
               description: "自编课卷",
+              knowledgePoints: [],
               questions: [],
               enabled: true,
               weight: 1,
@@ -318,8 +489,13 @@ export function Library({
           }}
         >
           新建文集
-        </button>
+        </button>}
       </div>
+      {!editable && (
+        <p className="catalog-notice">
+          题库由服务器统一维护。你可以浏览题目与知识点，内容更新会随服务器版本自动生效。
+        </p>
+      )}
       {importing && (
         <section className="inset">
           <h3>收录外来书卷</h3>
@@ -378,7 +554,7 @@ export function Library({
               onClick={() =>
                 download(
                   "题库示例.json",
-                  JSON.stringify({ questions: [fresh()] }, null, 2),
+                  JSON.stringify(exampleBank(), null, 2),
                 )
               }
             >
@@ -394,16 +570,19 @@ export function Library({
             <label>
               文集名称
               <input
-                key={bank.id + "name"}
-                defaultValue={bank.name}
-                onBlur={(e) => {
-                  if (e.target.value !== bank.name)
-                    void save({ ...bank, name: e.target.value }).catch(
-                      () => {},
-                    );
-                }}
+                value={bankName}
+                disabled={!editable}
+                onChange={(event) => setBankName(event.target.value)}
               />
             </label>
+            <button
+              disabled={!editable || busy || !bankName.trim() || bankName.trim() === bank.name}
+              onClick={() =>
+                void save({ ...bank, name: bankName.trim() }).catch(() => {})
+              }
+            >
+              保存名称
+            </button>
             <label>
               抽取权重
               <input
@@ -412,6 +591,7 @@ export function Library({
                 min={0}
                 max={100}
                 defaultValue={bank.weight}
+                disabled={!editable}
                 onBlur={(e) => {
                   if (Number(e.target.value) !== bank.weight)
                     void save({
@@ -425,7 +605,7 @@ export function Library({
               <input
                 type="checkbox"
                 checked={bank.enabled}
-                disabled={busy}
+                disabled={!editable || busy}
                 onChange={(e) =>
                   void save({ ...bank, enabled: e.target.checked }).catch(
                     () => {},
@@ -435,6 +615,72 @@ export function Library({
               启用文集
             </label>
           </div>
+          <div className="library-tabs" role="tablist">
+            <button
+              className={view === "questions" ? "selected" : ""}
+              onClick={() => setView("questions")}
+            >
+              题目 · {bank.questions.length}
+            </button>
+            <button
+              className={view === "knowledge" ? "selected" : ""}
+              onClick={() => setView("knowledge")}
+            >
+              知识点 · {bank.knowledgePoints.length}
+            </button>
+          </div>
+          {view === "knowledge" ? (
+            <>
+              {editable && <div className="toolbar compact">
+                <button
+                  onClick={() => {
+                    setEditingPoint(freshPoint());
+                    setPointIsNew(true);
+                  }}
+                >
+                  ＋ 添知识点
+                </button>
+              </div>}
+              <div className="knowledge-list">
+                {bank.knowledgePoints.map((point) => {
+                  const count = bank.questions.filter((question) =>
+                    question.knowledgePointIds.includes(point.id),
+                  ).length;
+                  return (
+                    <article key={point.id}>
+                      <small>{point.subject} · {point.category} · 关联 {count} 题</small>
+                      <h3>{point.name}</h3>
+                      <p>{point.description}</p>
+                      {editable && <button
+                        onClick={() => {
+                          setEditingPoint(point);
+                          setPointIsNew(false);
+                        }}
+                      >
+                        修订知识点
+                      </button>}
+                      {editable && <button
+                        className="text-button danger"
+                        disabled={busy || count > 0}
+                        title={count > 0 ? "请先解除题目关联" : "删除知识点"}
+                        onClick={() =>
+                          void save({
+                            ...bank,
+                            knowledgePoints: bank.knowledgePoints.filter(
+                              (old) => old.id !== point.id,
+                            ),
+                          }).catch(() => {})
+                        }
+                      >
+                        删除
+                      </button>}
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+          <>
           <div className="toolbar">
             <input
               aria-label="搜索题目"
@@ -473,7 +719,7 @@ export function Library({
               ))}
             </select>
           </div>
-          <div className="toolbar compact">
+          {editable && <div className="toolbar compact">
             <button
               onClick={() => {
                 setEditing(fresh());
@@ -530,7 +776,7 @@ export function Library({
             >
               删除文集
             </button>
-          </div>
+          </div>}
           <p className="hint">
             共 {questions.length} 题 · 已选 {checked.length}{" "}
             题。修订只影响下一次抽题，当前卷面保持原样。
@@ -558,17 +804,23 @@ export function Library({
                     {q.subject} · {typeNames[q.type]} · {q.chapter}
                     {!q.enabled ? " · 已停用" : ""}
                   </small>
-                  <p>{q.question}</p>
+                  <span className="row-knowledge">
+                    {q.knowledgePointIds
+                      .map((id) => bank.knowledgePoints.find((point) => point.id === id)?.name)
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  <RichText>{q.question}</RichText>
                 </div>
-                <button
+                {editable && <button
                   onClick={() => {
                     setEditing(q);
                     setIsNew(false);
                   }}
                 >
                   修订
-                </button>
-                <button
+                </button>}
+                {editable && <button
                   className="text-button danger"
                   disabled={busy}
                   onClick={() => {
@@ -584,7 +836,7 @@ export function Library({
                   }}
                 >
                   删
-                </button>
+                </button>}
               </div>
             ))}
           </div>
@@ -606,6 +858,8 @@ export function Library({
                 下一页
               </button>
             </div>
+          )}
+          </>
           )}
         </>
       )}
