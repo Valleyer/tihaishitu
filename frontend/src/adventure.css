@@ -1272,3 +1272,237 @@
   font-size: 9px;
   color: #8aa17e;
 }
+
+/*
+ * 弹窗统一对比度契约：浅色纸面只使用下面四组深色文字；深色卡片使用 ivory。
+ * 新增弹窗组件应优先复用这些变量，避免把主世界的浅绿文字直接放到纸面上。
+ */
+.modal .modal-body {
+  --paper-text: #29382d;
+  --paper-muted: #4d5e4e;
+  --paper-soft: #637260;
+  --paper-accent: #76551f;
+  --paper-border: #a99d79;
+  --ink-panel: #263d31;
+  --ink-text: #f0e5c7;
+  --ink-muted: #b9c7b1;
+  color: var(--paper-text);
+}
+.modal .hint,
+.modal .activity-detail > p,
+.modal .exam-panel > header p {
+  color: var(--paper-muted);
+}
+.modal .activity-detail > small,
+.modal .exam-panel > header small {
+  color: #586c54;
+}
+.modal .activity-detail > h2,
+.modal .exam-panel > header h2 {
+  color: var(--paper-text);
+}
+
+/* 读书书架：使用纸面卡片和深色正文，不沿用主世界的暗色卡片文字。 */
+.modal .activity-shelf > button {
+  background: #e2dbc5 !important;
+  border-color: var(--paper-border) !important;
+  color: var(--paper-text) !important;
+}
+.modal .activity-shelf > button:hover:not(:disabled),
+.modal .activity-shelf > button:focus-visible {
+  background: #d8cfb5 !important;
+  border-color: #856d3d !important;
+  filter: none;
+}
+.modal .activity-shelf small {
+  color: var(--paper-soft);
+}
+.modal .activity-shelf h3 {
+  color: var(--paper-accent);
+}
+.modal .activity-shelf p {
+  color: var(--paper-muted);
+}
+.modal .activity-shelf span {
+  color: #685529;
+}
+
+/* 行程详情与奖励档位。 */
+.modal .invitation {
+  background: var(--ink-panel);
+  border-color: #526b57;
+}
+.modal .invitation blockquote {
+  color: var(--ink-text);
+}
+.modal .invitation blockquote > b {
+  color: var(--ink-muted);
+}
+.modal .reward-tiers > div {
+  background: #e4ddc9;
+  border-color: var(--paper-border);
+}
+.modal .reward-tiers strong {
+  color: #805d20;
+}
+.modal .reward-tiers strong small {
+  color: #4f684e;
+}
+.modal .reward-tiers span {
+  color: #435342;
+}
+.modal .reward-tiers em {
+  color: #865b1f;
+  font-weight: 600;
+}
+
+/* 故人录：人物说明与对白均保持清晰，未解锁按钮仍能读懂条件。 */
+.modal .companion-tabs button {
+  background: #ded7c0 !important;
+  border-color: var(--paper-border) !important;
+  color: #334734 !important;
+}
+.modal .companion-tabs .selected {
+  background: #30483a !important;
+  border-color: #6d805e !important;
+  color: #f1e4c1 !important;
+}
+.modal .companion-copy > small,
+.modal .companion-copy > p {
+  color: var(--paper-muted);
+}
+.modal .companion-copy h2 {
+  color: var(--paper-text);
+}
+.modal .companion-copy blockquote {
+  padding: 13px 16px;
+  background: var(--ink-panel);
+  border-left: 2px solid #a58b52;
+  color: var(--ink-text);
+}
+.modal .bond-meter,
+.modal .bond-meter small {
+  color: var(--paper-muted);
+}
+.modal .conversation-options button {
+  background: #e0d9c2 !important;
+  border-color: var(--paper-border) !important;
+  color: #314332 !important;
+}
+.modal .conversation-options small {
+  color: #596a56;
+}
+.modal .conversation-options .gold-button {
+  background: #b89b60 !important;
+  color: #17241c !important;
+}
+.modal .bond-gifts article {
+  border-top-color: var(--paper-border);
+}
+.modal .bond-gifts b {
+  color: #6e521f;
+}
+.modal .bond-gifts small,
+.modal .bond-gifts p,
+.modal .visit-reminder {
+  color: var(--paper-muted);
+}
+
+/* 舆图标记必须盖过弹窗的通用按钮规则，锁定状态也要能读清名称。 */
+.modal .modal-body .interactive-map .map-location {
+  background: #173027e8 !important;
+  border-color: #a7935f99 !important;
+  color: #eadcb5 !important;
+}
+.modal .modal-body .interactive-map .map-location:hover,
+.modal .modal-body .interactive-map .map-location:focus-visible {
+  background: #284639f2 !important;
+  border-color: #d0b66f !important;
+}
+.modal .modal-body .interactive-map .map-location.active {
+  background: #3d513ff2 !important;
+  border-color: #e1c276 !important;
+}
+.modal .modal-body .interactive-map .map-location.future {
+  opacity: 0.72;
+}
+.modal .modal-body .interactive-map .map-location b {
+  color: #f0dfb4;
+}
+.modal .modal-body .interactive-map .map-location small {
+  color: #c4cfb8;
+}
+
+/* 行囊：纸面标题用深墨，深色属性和物品卡使用浅字。 */
+.modal .inventory-top b {
+  color: var(--paper-text);
+}
+.modal .inventory-top span {
+  color: #6f5628;
+}
+.modal .attribute-strip > span,
+.modal .item-card {
+  background: var(--ink-panel);
+  border-color: #536a56;
+}
+.modal .attribute-strip > span {
+  color: #d7d7ae;
+}
+.modal .attribute-strip b,
+.modal .item-card h3,
+.modal .item-symbol {
+  color: #ead28f;
+}
+.modal .attribute-strip small,
+.modal .item-card small,
+.modal .item-card p,
+.modal .item-card em {
+  color: var(--ink-muted);
+}
+
+/* 札记、空状态与常用纸面说明。 */
+.modal .timeline article small {
+  color: var(--paper-soft);
+}
+.modal .timeline article h3,
+.modal .empty-state h3 {
+  color: #40533f;
+}
+.modal .timeline article p,
+.modal .empty-state p,
+.modal .person-card p,
+.modal .person-card small,
+.modal .review-entry details,
+.modal .subject-row {
+  color: var(--paper-muted);
+}
+.modal .empty-state > span {
+  color: #5f705c;
+  border-color: var(--paper-border);
+}
+.modal .review-entry > small,
+.modal .review-entry .hint,
+.modal .stat-grid small,
+.modal .subject-row small {
+  color: var(--paper-soft);
+}
+.modal .text-button {
+  color: #4c603f;
+}
+
+/* 禁用态用实色区分，不能靠把整块透明到难以阅读。 */
+.modal button:disabled {
+  opacity: 1;
+}
+.modal button:not(.gold-button):not(.icon-button):disabled {
+  background: #d9d4c0 !important;
+  border-color: #b7ad8c !important;
+  color: #676f5e !important;
+}
+.modal button:not(.gold-button):not(.icon-button):disabled small {
+  color: #737b68 !important;
+}
+.modal .gold-button:disabled {
+  opacity: 0.68;
+  color: #263229;
+}
