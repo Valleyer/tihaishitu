@@ -139,6 +139,14 @@
     "symbol": "义"
   },
   {
+    "id": "qingxi-notes",
+    "name": "青溪故人笺",
+    "description": "送药、晒书、守夜与灯市旧事写成的薄册。四位故人各留一句，记下你在功名之外做成的事。",
+    "kind": "keepsake",
+    "rarity": "珍品",
+    "symbol": "笺"
+  },
+  {
     "id": "river-chart",
     "name": "青溪河防图",
     "description": "通行帖打开内库，五关读通旧卷后方可得见。装备后筹算 +6、悟性 +2。",

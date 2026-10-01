@@ -1,6 +1,6 @@
 /**
- * 本地立绘图集：按 portraits.json 的列号裁切；多个角色可以引用同一张立绘。
- * 人物身份、关系取自存档；立绘映射取配置，换图无需修改剧情代码。
+ * 本地独立头像：人物只保存 portrait 键，实际图片与取景位置均由 portraits.json 配置。
+ * 头像在人物卡、对话框和主角侧栏中复用；替换美术无需修改组件代码。
  */
 import { characterDesign, portraitDesign } from "../content";
 export function Portrait({
@@ -25,11 +25,9 @@ export function Portrait({
       role="img"
       aria-label={entry.label}
       style={{
-        backgroundImage: "url(" + portraitDesign.sheet + ")",
-        backgroundSize: portraitDesign.columns * 100 + "% 100%",
-        backgroundPosition:
-          (entry.column / Math.max(1, portraitDesign.columns - 1)) * 100 +
-          "% center",
+        backgroundImage: "url(" + entry.src + ")",
+        backgroundSize: "cover",
+        backgroundPosition: entry.position,
       }}
     />
   );

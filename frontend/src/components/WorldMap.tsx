@@ -1,4 +1,4 @@
-/** 可点击舆图：先查看地点、人物和门槛，再通过 API 移动，锁定地点也可查看解锁目标。 */
+/** 可点击地图：先查看地点、人物和门槛，再通过 API 移动，锁定地点也可查看解锁目标。 */
 import { useState } from "react";
 import { activities, mapDesign } from "../content";
 import type { Game } from "../domain/types";

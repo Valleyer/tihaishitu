@@ -58,14 +58,14 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   exam: "青溪县试",
   new: "落笔入世",
   library: "藏书阁",
-  saves: "人生存牍",
+  saves: "人生存档",
   notes: "卷边批注",
   journal: "人生札记",
   people: "故人录",
   review: "疑难卷宗",
   stats: "修业簿",
   display: "游戏设置",
-  map: "青溪县舆图",
+  map: "青溪县地图",
   story: "此间前情",
   event: "一念之间",
 };
@@ -74,12 +74,11 @@ const dock = [
   { id: "exam", icon: "榜", label: "县试" },
   { id: "journal", icon: "▤", label: "札记" },
   { id: "people", icon: "人", label: "故人" },
-  { id: "map", icon: "图", label: "舆图" },
   { id: "library", icon: "册", label: "藏书阁" },
   { id: "review", icon: "卷", label: "旧案" },
   { id: "stats", icon: "业", label: "修业" },
   { id: "bag", icon: "囊", label: "行囊" },
-  { id: "saves", icon: "牍", label: "存牍" },
+  { id: "saves", icon: "档", label: "存档" },
 ] as const;
 function App() {
   const [data, setData] = useState<Bootstrap | null>(null),
@@ -241,9 +240,11 @@ function App() {
   const finish = () =>
     void run(async () => {
       if (!game || !activityRun) return;
-      setGame(await api.finishActivity(game.id, activityRun.id));
+      const updated = await api.finishActivity(game.id, activityRun.id);
+      setGame(updated);
       setActivityOpen(false);
       setSettlement(false);
+      if (updated.event) setPanel("event");
     });
   const warning = (
     <div className="error-banner" role="alert">
@@ -310,7 +311,7 @@ function App() {
               )}
               <div>
                 <button disabled={!data} onClick={() => show("saves")}>
-                  读取存牍
+                  读取存档
                 </button>
                 <i>·</i>
                 <button disabled={!data} onClick={() => show("library")}>
@@ -354,7 +355,7 @@ function App() {
             </div>
             <div className="world-status">
               <i />
-              {busy ? "落墨中…" : "已存牍"}
+              {busy ? "落墨中…" : "已存档"}
               {settingsButton}
               <button
                 onClick={() => {
@@ -664,7 +665,7 @@ function App() {
                   新的一生
                 </button>
                 <label className="file-button">
-                  导入存牍
+                  导入存档
                   <input
                     type="file"
                     accept=".json"
@@ -690,7 +691,7 @@ function App() {
                 <div className="empty-state">
                   <span>牍</span>
                   <h3>前尘尚未落笔</h3>
-                  <p>开始新的一生，存牍会自动记录际遇。</p>
+                  <p>开始新的一生，存档会自动记录际遇。</p>
                 </div>
               )}
               {data.saves.slice(savePage * 3, savePage * 3 + 3).map((save) => (
@@ -714,7 +715,7 @@ function App() {
                       onClick={() =>
                         void run(async () => {
                           download(
-                            save.name + "-存牍.json",
+                            save.name + "-存档.json",
                             await api.exportSave(save.id),
                           );
                           setNotice("存档已导出");

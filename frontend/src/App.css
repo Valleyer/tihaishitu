@@ -999,9 +999,6 @@
   border-color: transparent;
   border-right-color: #65705444;
 }
-.game-dock button:last-child {
-  border-right: 0;
-}
 .game-dock button > span {
   display: grid;
   place-items: center;

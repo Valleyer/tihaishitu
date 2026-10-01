@@ -201,16 +201,13 @@ locations 每项包含 id、name、description、background、position、x、y�
 - position：CSS 背景取景位置，例如 70% 50%。
 - x、y：地图点的百分比坐标，建议保持在 10–90，避免贴边。
 - 当前地图是地点进度展示，点击地图不会传送或跳章。
-- 可以为多个地点复用 academy.png，也可为每个地点替换不同背景。
+- 当前七个地点各自使用 `public/art/locations/` 下的独立背景；图片文件名、建议尺寸与完整生成提示词统一登记在 `docs/map-background-assets.md`。
 
 ### portraits.json
 
-当前使用一张横向等宽五列图集 /art/portraits.png。columns=5，column 从 0 开始：
-0 男书生、1 先生、2 同窗、3 文书、4 女书生。
+当前使用 `public/art/portraits/` 下的六张独立方形头像。每项包含 `src`、`label` 与 `position`；替换图片后通常保持文件名不变，只需在必要时调整 `position`。
 
-人物图集通过背景定位切片，无需拆成五个文件。若更换图集，保证各列同宽、人物完整位于自己的列内；修改 columns 与各 column。列号应小于 columns。
-playerMale、playerFemale 是玩家默认键，请保留。人物 portrait 可重复引用已有键。
-素材生成提示词和替换说明见 art-assets.md。
+`playerMale`、`playerFemale` 是玩家默认键，请保留。NPC 头像键为 `lu`、`gu`、`shen`、`lin`，人物仍可重复引用已有键。所有图片的尺寸、路径、生成提示词和替换要求统一登记在 `docs/map-background-assets.md`。
 
 ## 九、题库：三种题型与正确答案
 

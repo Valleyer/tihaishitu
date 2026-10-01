@@ -41,6 +41,8 @@ export interface RewardTier {
 export interface Activity {
   id: string;
   kind: "study" | "companion" | "dungeon" | "story" | "exam";
+  /** 主支线标签只影响世界中的任务提示；科举规则仍由 exam 类型决定。 */
+  quest?: "main" | "side";
   name: string;
   subtitle: string;
   description: string;

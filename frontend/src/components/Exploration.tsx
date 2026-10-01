@@ -44,7 +44,7 @@ export function WorldHub({
     location =
       mapDesign.locations.find((l) => l.id === state.locationId) ||
       mapDesign.locations[0];
-  // 正试与落榜温卷由“县试”面板管理，避免像普通副本一样在街头随手点开。
+  // 科举正试由“县试”面板管理，避免像普通副本一样在街头随手点开。
   const examActivityIds = new Set(
     exams.flatMap((e) => [e.activityId, e.preparationActivityId]),
   );
@@ -74,7 +74,7 @@ export function WorldHub({
           <p>{location.ambience}</p>
         </div>
         <button className="scene-map-button" onClick={map}>
-          展开舆图 ↗
+          展开地图 ↗
         </button>
         <div className="resident-row">
           {location.npcs.map((id) => {
@@ -132,7 +132,11 @@ export function WorldHub({
                   onClick={() => inspect(activity.id)}
                 >
                   <small>
-                    {activity.kind === "story" ? "✦ 此间故事" : "◇ 副本试炼"}
+                    {activity.quest === "main"
+                      ? "✦ 主线任务"
+                      : activity.kind === "story"
+                        ? "✦ 支线任务"
+                        : "◇ 挑战副本"}
                     {done ? " · 已完成" : ""}
                   </small>
                   <h3>{activity.name}</h3>
@@ -178,26 +182,6 @@ export function WorldHub({
             故事尚未说完：{game.event.title} →
           </button>
         )}
-        <div className="world-shortcuts">
-          <button onClick={study}>
-            <b>书</b>
-            <span>
-              读书修身<small>悟性 · 辞采 · 筹算</small>
-            </span>
-          </button>
-          <button onClick={()=>people()}>
-            <b>人</b>
-            <span>
-              访友共读<small>交情 · 话题 · 心意</small>
-            </span>
-          </button>
-          <button onClick={map}>
-            <b>行</b>
-            <span>
-              出门游历<small>故事 · 试炼 · 珍藏</small>
-            </span>
-          </button>
-        </div>
       </div>
     </section>
   );
@@ -213,7 +197,7 @@ export function ActivityShelf({
   return (
     <>
       <p className="hint">
-        点一盏灯，选一卷想读的书。每轮三题；学识随作答积累，达标后额外获得属性与银两。
+        点一盏灯，选一卷想读的书。每轮五题；学识随作答积累，六十分获得基础奖励，满分获得完美奖励。
       </p>
       <div className="activity-shelf">
         {activities
@@ -275,7 +259,7 @@ export function ActivityDetail({
         </blockquote>
       </div>
       <div className="reward-tiers">
-        {activity.tiers.map((t) => (
+        {activity.tiers.filter((t) => t.minScore >= 60).map((t) => (
           <div key={t.minScore}>
             <strong>
               {t.minScore} 分<small>{t.label}</small>
@@ -294,9 +278,6 @@ export function ActivityDetail({
           </div>
         ))}
       </div>
-      <p className="hint">
-        按本轮正确率计分，多选全对才计正确。首次奖励不会重复发放；专属物品可在以后提高成绩时补领。
-      </p>
       {issues.length > 0 && (
         <div className="gate-reasons">
           尚需：{issues.join("；")}
@@ -357,7 +338,7 @@ export function ExamPanel({
   const statusName = {
     unregistered: "尚未报名",
     registered: "候场应试",
-    preparing: "落榜温卷",
+    preparing: "候场重试",
     passed: "红榜取中",
   }[record.status];
   const action = () => {
@@ -365,8 +346,7 @@ export function ExamPanel({
       if (game.adventure!.locationId === "prefecture-road")
         inspect("prefecture-departure");
       else travel("prefecture-road");
-    } else if (record.status === "preparing")
-      inspect(exam.preparationActivityId);
+    } else if (record.status === "preparing") inspect(exam.activityId);
     else if (record.status === "registered") inspect(exam.activityId);
     else if (missing.length) {
       // 报名差距在点击查验时集中提示，不把一长串数值常驻在面板上。
@@ -380,7 +360,7 @@ export function ExamPanel({
         ? "展开府城新篇"
         : "沿驿路赴府"
       : record.status === "preparing"
-        ? "与先生复盘落卷"
+        ? "再次入号，应试十题"
         : record.status === "registered"
           ? "点名入号，应试十题"
           : missing.length
@@ -414,13 +394,13 @@ export function ExamPanel({
         </article>
         <article className={record.status === "passed" ? "done" : ""}>
           <b>叁 · 十题定榜</b>
-          <p>七十分取中 · 已应试 {record.attempts} 次 · 最高 {record.best || "—"} 分</p>
+          <p>十题全对取中 · 已应试 {record.attempts} 次 · 最高 {record.best || "—"} 分</p>
         </article>
       </div>
       <button className="gold-button full" disabled={busy || !!game.adventure!.run} onClick={action}>
         {actionText} →
       </button>
-      <p className="hint">报名不立刻发卷。落榜不会重复扣报名银，完成三题复盘后即可再次应试。</p>
+      <p className="hint">报名不立刻发卷。未能全对只记录错题，不扣奖励、不重复收报名银，可直接再次应试。</p>
     </div>
   );
 }
@@ -469,13 +449,24 @@ export function NpcPanel({
               setLine(0);
             }}
           >
-            {game.npcs.find((n) => n.id === c.npcId)?.name}
+            <span className="companion-tab-face">
+              <Portrait variant={c.npcId} />
+            </span>
+            <span>
+              <b>{game.npcs.find((n) => n.id === c.npcId)?.name}</b>
+              <small>
+                {c.locationId === game.adventure!.locationId
+                  ? "此刻在此"
+                  : "异地可访"}
+              </small>
+            </span>
           </button>
         ))}
       </div>
       <div className="companion-stage">
         <div className="companion-portrait">
           <Portrait variant={npc.id} />
+          <span>{npc.name}</span>
         </div>
         <div className="companion-copy">
           <small>{npc.role}</small>
@@ -784,14 +775,15 @@ export function WorldGoals({
   return (
     <section className="objective-panel framed">
       <div className="panel-label">
-        想要的生活<span>心愿</span>
+        {record.status !== "passed" ? "主线任务" : "支线任务"}
+        <span>{record.status !== "passed" ? "科举" : "游历"}</span>
       </div>
       {record.status !== "passed" ? (
         <>
-          <h2>{record.status === "unregistered" ? "报名青溪县试" : record.status === "registered" ? "入号应试" : "重温落卷"}</h2>
+          <h2>{record.status === "unregistered" ? "报名青溪县试" : "入号应试"}</h2>
           <p>{exam.dialogues[record.status]}</p>
           <div className="goal-treasure">榜</div>
-          <p>十题定榜 · 七十分取中 · 身份与府城路线待解锁</p>
+          <p>十题定榜 · 全对取中 · 身份与府城路线待解锁</p>
           <button className="text-button" onClick={openExam}>查看县试进度 →</button>
         </>
       ) : target && treasure ? (

@@ -49,6 +49,9 @@ export function hydrateAdventure(game: Game) {
   game.adventure.exams ??= {};
   for (const exam of exams)
     game.adventure.exams[exam.id] ??= blankExamRecord();
+  // 旧版落榜要求先温卷；新版主线考试不惩罚，名帖保留并可直接重试。
+  for (const record of Object.values(game.adventure.exams))
+    if (record.status === "preparing") record.status = "registered";
   for (const character of characterDesign)
     if (!game.npcs.some((n) => n.id === character.id))
       game.npcs.push(structuredClone(character));
@@ -252,7 +255,8 @@ export function settleRunAnswer(game: Game, correct: boolean) {
     record.attempts++;
     record.lastScore = run.score;
     record.best = Math.max(record.best, run.score);
-    record.status = run.score >= run.definition.passScore ? "passed" : "preparing";
+    record.status =
+      run.score >= run.definition.passScore ? "passed" : "registered";
   }
   const preparation = exams.find(
     (e) => e.preparationActivityId === run.definition.id,

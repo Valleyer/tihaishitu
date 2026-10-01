@@ -496,24 +496,79 @@
 }
 .companion-tabs button {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  text-align: left;
+  padding: 7px;
   background: #1d352c;
   border-color: #607d5c55;
   font-size: 12px;
+}
+.companion-tabs button > span:last-child {
+  min-width: 0;
+}
+.companion-tabs button b,
+.companion-tabs button small {
+  display: block;
+}
+.companion-tabs button b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.companion-tabs button small {
+  margin-top: 3px;
+  font-size: 8px;
+  color: #91a68d;
+}
+.companion-tab-face {
+  width: 34px;
+  height: 40px;
+  flex: 0 0 34px;
+  overflow: hidden;
+  border: 1px solid #aa986455;
+}
+.companion-tab-face .portrait {
+  min-height: 100%;
 }
 .companion-tabs .selected {
   background: #b3a36b;
   color: #15251c;
 }
+.companion-tabs .selected small {
+  color: #314934;
+}
 .companion-stage {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 22px;
+  grid-template-columns: 230px 1fr;
+  gap: 26px;
 }
 .companion-portrait {
-  min-height: 225px;
-  max-height: 260px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  align-self: start;
   overflow: hidden;
   border: 1px solid #bfaa6355;
+  background: #1b3029;
+  box-shadow: inset 0 0 0 5px #10241d, 0 12px 30px #07161144;
+}
+.companion-portrait > .portrait {
+  min-height: 100%;
+}
+.companion-portrait > span {
+  position: absolute;
+  right: 9px;
+  bottom: 12px;
+  padding: 7px 5px;
+  writing-mode: vertical-rl;
+  letter-spacing: 3px;
+  color: #f1dfac;
+  background: #10231dd9;
+  border: 1px solid #bda36b88;
+  font: 12px SimSun, serif;
 }
 .companion-copy > small {
   font-size: 10px;
@@ -1162,12 +1217,12 @@
     font-size: 11px;
   }
   .companion-stage {
-    grid-template-columns: 95px 1fr;
+    grid-template-columns: minmax(105px, 28%) 1fr;
     gap: 13px;
   }
   .companion-portrait {
-    min-height: 200px;
-    max-height: 230px;
+    min-height: 0;
+    max-height: none;
   }
   .companion-copy h2 {
     font-size: 24px;
@@ -1388,6 +1443,26 @@
   color: #865b1f;
   font-weight: 600;
 }
+.modal .gate-reasons {
+  background: #e1d5b6;
+  border: 1px solid #b6a274;
+  color: #60451f;
+  font-weight: 600;
+}
+.modal .gate-reasons button {
+  display: inline-block;
+  margin-top: 9px;
+  padding: 8px 12px !important;
+  background: #344d3e !important;
+  border: 1px solid #657b67 !important;
+  color: #f0e4c3 !important;
+  font-weight: 600;
+}
+.modal .gate-reasons button:hover,
+.modal .gate-reasons button:focus-visible {
+  background: #42604d !important;
+  color: #fff2cf !important;
+}
 
 /* 故人录：人物说明与对白均保持清晰，未解锁按钮仍能读懂条件。 */
 .modal .companion-tabs button {
@@ -1403,6 +1478,22 @@
 .modal .companion-copy > small,
 .modal .companion-copy > p {
   color: var(--paper-muted);
+}
+.modal .companion-tabs button {
+  background: #d8d0b7 !important;
+  border-color: var(--paper-border) !important;
+  color: #344738 !important;
+}
+.modal .companion-tabs button small {
+  color: #64715f;
+}
+.modal .companion-tabs .selected {
+  background: #314b3d !important;
+  border-color: #8f7a4d !important;
+  color: #f0dfb1 !important;
+}
+.modal .companion-tabs .selected small {
+  color: #c4d1bd;
 }
 .modal .companion-copy h2 {
   color: var(--paper-text);
@@ -1462,7 +1553,7 @@
   color: var(--paper-muted);
 }
 
-/* 舆图标记必须盖过弹窗的通用按钮规则，锁定状态也要能读清名称。 */
+/* 地图标记必须盖过弹窗的通用按钮规则，锁定状态也要能读清名称。 */
 .modal .modal-body .interactive-map .map-location {
   background: #173027e8 !important;
   border-color: #a7935f99 !important;
@@ -1557,6 +1648,8 @@
   color: #737b68 !important;
 }
 .modal .gold-button:disabled {
-  opacity: 0.68;
-  color: #263229;
+  opacity: 1;
+  background: #c8b98f;
+  border-color: #aa9a72;
+  color: #4c554b;
 }

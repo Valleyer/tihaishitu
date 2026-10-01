@@ -5,6 +5,13 @@
     "name": "银两",
     "unit": "两"
   },
+  "answerRules": {
+    "ordinaryRounds": 5,
+    "ordinaryPassScore": 60,
+    "perfectScore": 100,
+    "mainRounds": 10,
+    "mainPassScore": 100
+  },
   "attributes": [
     {
       "id": "insight",
@@ -31,7 +38,7 @@
     "study": "案头修习",
     "companion": "故人邀约",
     "dungeon": "秘境试炼",
-    "story": "此间故事",
+    "story": "支线任务",
     "exam": "科举正试"
   }
 }

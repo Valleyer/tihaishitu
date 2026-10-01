@@ -32,7 +32,7 @@ import {
   hydrateLearning,
   recordLearning,
 } from "../../engine/SpacedRepetitionEngine";
-import { applyChoice } from "../../engine/EventEngine";
+import { applyChoice, pendingEvent } from "../../engine/EventEngine";
 import {
   parseBackup,
   validateBank,
@@ -234,6 +234,8 @@ export function createLocalApi(
       game.adventure!.run = null;
       game.attempt = null;
       delete db.snapshots[id];
+      // 一轮行动结束后才推进城中际遇，避免答题途中被弹窗截断。
+      game.event ??= pendingEvent(game);
       return persist(db, game);
     },
     async abandonActivity(id, runId) {

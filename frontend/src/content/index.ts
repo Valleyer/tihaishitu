@@ -21,9 +21,99 @@ import type {
   Companion,
   Exam,
   Item,
+  Rewards,
   WorldLocation,
 } from "../domain/adventure";
-export const activities = activityData as unknown as Activity[];
+
+/**
+ * 普通活动统一为五题两档；科举正试统一为十题全对取中。
+ * 配置中旧有的 80 分首次奖励合并到完美档，避免升级后丢失专属物品。
+ * 0 分档只保留失败对白供结算使用，界面不会把它展示成奖励档。
+ */
+function mergeRewards(values: (Rewards | undefined)[]): Rewards | undefined {
+  const merged: Rewards = {};
+  for (const reward of values) {
+    if (!reward) continue;
+    for (const key of ["knowledge", "coins", "reputation"] as const)
+      if (reward[key]) merged[key] = (merged[key] || 0) + reward[key]!;
+    for (const key of ["attributes", "affinity", "trust", "items"] as const)
+      for (const [id, amount] of Object.entries(reward[key] || {})) {
+        merged[key] ??= {};
+        merged[key]![id] = (merged[key]![id] || 0) + amount;
+      }
+    if (reward.flags)
+      merged.flags = [...new Set([...(merged.flags || []), ...reward.flags])];
+    if (reward.title) merged.title = reward.title;
+  }
+  return Object.keys(merged).length ? merged : undefined;
+}
+function normalizeActivity(activity: Activity): Activity {
+  // 所有玩法共用这里的全局答题规格。内容作者只需在 adventure.json 改一次，
+  // 人物共读、副本、支线与后续科举主线便会保持一致。
+  const rules = adventureData.answerRules;
+  const tiers = [...activity.tiers].sort((a, b) => a.minScore - b.minScore),
+    zero = tiers.find((tier) => tier.minScore === 0) || tiers[0],
+    positive = tiers.filter((tier) => tier.minScore > 0),
+    base = tiers.find((tier) => tier.minScore === 60) || positive[0] || zero,
+    perfect = tiers.find((tier) => tier.minScore === 100) || positive.at(-1) || base,
+    perfectFirst = mergeRewards(
+      tiers.filter((tier) => tier.minScore > 60).map((tier) => tier.firstRewards),
+    ),
+    mainFirst = mergeRewards(
+      // 主线现在只有“全对”一个成功档，旧及格档中的身份、道具和开放标记也要一并迁入。
+      tiers.filter((tier) => tier.minScore > 0).map((tier) => tier.firstRewards),
+    );
+  if (activity.kind === "exam" || activity.quest === "main")
+    return {
+      ...activity,
+      quest: "main",
+      rounds: rules.mainRounds,
+      passScore: rules.mainPassScore,
+      tiers: [
+        {
+          ...zero,
+          minScore: 0,
+          label: "未取中",
+          rewards: {},
+          firstRewards: undefined,
+        },
+        {
+          ...perfect,
+          minScore: rules.mainPassScore,
+          label: activity.kind === "exam" ? "全对取中" : "全对完成",
+          firstRewards: mainFirst,
+        },
+      ],
+    };
+  return {
+    ...activity,
+    rounds: rules.ordinaryRounds,
+    passScore: rules.ordinaryPassScore,
+    tiers: [
+      {
+        ...zero,
+        minScore: 0,
+        label: "未过关",
+        rewards: {},
+        firstRewards: undefined,
+      },
+      {
+        ...base,
+        minScore: rules.ordinaryPassScore,
+        label: "基础过关",
+      },
+      {
+        ...perfect,
+        minScore: rules.perfectScore,
+        label: "完美过关",
+        firstRewards: perfectFirst,
+      },
+    ],
+  };
+}
+export const activities = (activityData as unknown as Activity[]).map(
+  normalizeActivity,
+);
 export const companions = companionData as unknown as Companion[];
 export const items = itemData as unknown as Item[];
 export const adventureDesign = adventureData;

@@ -119,7 +119,8 @@ check(
 );
 for (const path of [
   game.titleBackground,
-  portraits.sheet,
+  // 新版头像是独立方图，不再依赖旧版横向图集。
+  ...Object.values(portraits.portraits).map((portrait) => portrait.src),
   ...maps.locations.map((l) => l.background),
 ]) {
   check(path.startsWith("/art/"), "素材请放在 public/art 内：" + path);

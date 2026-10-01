@@ -1,5 +1,39 @@
 [
   {
+    "id": "medicine-errand",
+    "at": 4,
+    "title": "廊下的药香",
+    "text": "药铺的小徒弟在塾门外探头：‘陆先生的咳疾又犯了，可他总说课没讲完。掌柜让我把药交给一个肯劝他歇一歇的人。’",
+    "options": [
+      {
+        "id": "deliver",
+        "text": "接过药包，当面盯着先生服下",
+        "hint": "陆承明信任 +2，开启送药支线",
+        "effects": {
+          "trust": {
+            "lu": 2
+          },
+          "flags": [
+            "medicine-entrusted"
+          ]
+        }
+      },
+      {
+        "id": "ask-clearly",
+        "text": "先向药童问清煎法与禁忌，再送进门",
+        "hint": "学识 +2，开启送药支线",
+        "effects": {
+          "knowledge": 2,
+          "flags": [
+            "medicine-entrusted"
+          ]
+        }
+      }
+    ],
+    "speaker": "药铺学徒",
+    "npcId": "lu"
+  },
+  {
     "id": "lamp",
     "at": 8,
     "title": "一盏余灯",
@@ -28,6 +62,42 @@
     "npcId": "lu"
   },
   {
+    "id": "river-bookcase",
+    "at": 18,
+    "title": "桥下的书箱",
+    "text": "一阵急雨冲开车绳，顾怀安从府城带来的书箱翻进浅河。纸页已经吸水，他站在桥边，第一次没了平日的从容。",
+    "options": [
+      {
+        "id": "wade",
+        "text": "挽起衣摆下水，先把散开的书逐本捞回",
+        "hint": "顾怀安好感 +2，开启晒书支线",
+        "effects": {
+          "affinity": {
+            "gu": 2
+          },
+          "flags": [
+            "book-box-found"
+          ]
+        }
+      },
+      {
+        "id": "rope",
+        "text": "借来船绳拦在下游，再按目录清点",
+        "hint": "顾怀安信任 +2，开启晒书支线",
+        "effects": {
+          "trust": {
+            "gu": 2
+          },
+          "flags": [
+            "book-box-found"
+          ]
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
     "id": "classmate",
     "at": 28,
     "title": "顾怀安的迟疑",
@@ -54,6 +124,35 @@
           "trust": {
             "gu": 2
           }
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id": "anonymous-note",
+    "at": 48,
+    "title": "卷边没有落款的批注",
+    "text": "藏书楼归还的旧卷里多了一行小字：‘若只记得答案，下一次仍会在同一处跌倒。’顾怀安认得这不是先生的笔迹。",
+    "options": [
+      {
+        "id": "keep",
+        "text": "把这句话抄进自己的疑难册，不追问是谁",
+        "hint": "悟性增长，学识 +3",
+        "effects": {
+          "knowledge": 3
+        }
+      },
+      {
+        "id": "reply",
+        "text": "在下方写下自己的理解，把书放回原处",
+        "hint": "声望 +1，留下无名书友的回应",
+        "effects": {
+          "reputation": 1,
+          "flags": [
+            "answered-margin-note"
+          ]
         }
       }
     ],
@@ -95,6 +194,42 @@
     "npcId": "shen"
   },
   {
+    "id": "warehouse-watch",
+    "at": 96,
+    "title": "县仓熄灯之后",
+    "text": "沈砚在侧房门口等你：‘今夜有人会来改一页旧账。我没有官身调人，只缺一个见过原册、也肯把话说实的人。’",
+    "options": [
+      {
+        "id": "stay",
+        "text": "留在侧房守到三更，把原册逐页封好",
+        "hint": "沈砚信任 +3，开启守夜支线",
+        "effects": {
+          "trust": {
+            "shen": 3
+          },
+          "flags": [
+            "warehouse-clue"
+          ]
+        }
+      },
+      {
+        "id": "copy",
+        "text": "先誊出关键页，分别交给书院与县仓留底",
+        "hint": "沈砚好感 +2，开启守夜支线",
+        "effects": {
+          "affinity": {
+            "shen": 2
+          },
+          "flags": [
+            "warehouse-clue"
+          ]
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
     "id": "payment",
     "at": 128,
     "title": "纸袋里的铜钱",
@@ -122,6 +257,74 @@
     ],
     "speaker": "沈砚",
     "npcId": "shen"
+  },
+  {
+    "id": "lantern-dispute",
+    "at": 156,
+    "title": "灯谜摊前的一场争执",
+    "text": "灯市上，两家商户都说最后一盏彩灯归自己。林知微展开两张字据：‘吵声再大也不能多出一盏灯。你替我看日期，我来问落款。’",
+    "options": [
+      {
+        "id": "compare",
+        "text": "把两张字据按日期和印记逐项对照",
+        "hint": "林知微信任 +2，开启灯市支线",
+        "effects": {
+          "trust": {
+            "lin": 2
+          },
+          "flags": [
+            "lantern-clue"
+          ]
+        }
+      },
+      {
+        "id": "listen",
+        "text": "先让双方各自说完，再指出前后矛盾",
+        "hint": "林知微好感 +2，开启灯市支线",
+        "effects": {
+          "affinity": {
+            "lin": 2
+          },
+          "flags": [
+            "lantern-clue"
+          ]
+        }
+      }
+    ],
+    "speaker": "林知微",
+    "npcId": "lin"
+  },
+  {
+    "id": "exam-eve",
+    "at": 188,
+    "title": "县试前夜，四封短笺",
+    "text": "案上并排放着四张笺：先生叫你早睡，顾怀安约你同路，沈砚抄来报名章程，林知微只写了‘别替榜上的自己答题’。窗外更鼓已过二更。",
+    "options": [
+      {
+        "id": "rest",
+        "text": "合上书卷，把明日要带的东西逐一收好",
+        "hint": "声望 +2，记住临场亦需从容",
+        "effects": {
+          "reputation": 2,
+          "flags": [
+            "exam-eve-rest"
+          ]
+        }
+      },
+      {
+        "id": "one-page",
+        "text": "只重看最没有把握的一页，随后熄灯",
+        "hint": "学识 +5，不再无休止熬夜",
+        "effects": {
+          "knowledge": 5,
+          "flags": [
+            "exam-eve-review"
+          ]
+        }
+      }
+    ],
+    "speaker": "你",
+    "npcId": "lu"
   },
   {
     "id": "promise",
