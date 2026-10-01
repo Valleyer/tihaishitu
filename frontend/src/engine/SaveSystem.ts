@@ -1,4 +1,5 @@
 import { hydrateAdventure } from "./AdventureEngine";
+import { hydrateLearning } from "./SpacedRepetitionEngine";
 /**
  * 存档与题库写入前的结构检查。导入备份只接受当前版本格式。
  * 不直接覆盖旧人生；题库和人物引用完整后，交由本地 API 创建独立副本。
@@ -128,10 +129,13 @@ export function parseBackup(text: string): Backup {
         !finite(r.lastIndex) ||
         !finite(r.wrong) ||
         !finite(r.streak) ||
+        (r.errorRate !== undefined &&
+          (!finite(r.errorRate) || r.errorRate > 100)) ||
         !Array.isArray(r.wrongAnswers),
     )
   )
     throw new Error("存档复习数据损坏。");
+  hydrateLearning(game);
   data.banks = data.banks.map(validateBank);
   game.config = validateConfig(
     game.config,

@@ -29,6 +29,7 @@ import { Journal, Reviews, Statistics } from "./components/Records";
 import { ChapterGate } from "./components/ChapterGate";
 import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
+import { isLearningMastered } from "./engine/SpacedRepetitionEngine";
 import "./App.css";
 import "./screen-fit.css";
 import "./adventure.css";
@@ -136,7 +137,7 @@ function App() {
     setError(message);
     window.setTimeout(
       () => setError((current) => (current === message ? "" : current)),
-      4200,
+      2000,
     );
   }
   async function changeBank(bank: Bank) {
@@ -598,7 +599,9 @@ function App() {
                 <span>{item.icon}</span>
                 <b>{item.label}</b>
                 {item.id === "review" &&
-                  Object.values(game.learning).some((r) => r.wrong > 0) && (
+                  Object.values(game.learning).some(
+                    (r) => r.wrong > 0 && !isLearningMastered(r),
+                  ) && (
                     <i />
                   )}
               </button>
@@ -795,7 +798,7 @@ function App() {
               inspect={inspect}
               travel={travel}
               register={register}
-              report={setError}
+              report={reportTemporary}
             />
           )}
           {game && panel === "activity" && (

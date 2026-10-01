@@ -105,9 +105,12 @@ export interface StudyRecord {
   review: boolean;
 }
 export interface Learning {
+  /** 累计作答次数、答对数与答错数用于判断该题是否已经掌握。 */
   attempts: number;
   correct: number;
   wrong: number;
+  /** 0–100 的累计错误率；旧存档读取时会自动补算。 */
+  errorRate?: number;
   streak: number;
   lastIndex: number;
   dueAt: number;

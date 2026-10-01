@@ -84,7 +84,21 @@
     "repeatWrongMax": 8,
     "duePriority": 0.45,
     "masteredBaseGap": 10,
-    "masteredMaxGap": 300
+    "masteredMaxGap": 300,
+    "masteryRules": [
+      {
+        "attempts": 3,
+        "maxWrong": 0
+      },
+      {
+        "attempts": 5,
+        "maxWrong": 1
+      },
+      {
+        "attempts": 10,
+        "maxWrong": 3
+      }
+    ]
   },
   "limits": {
     "questionsPerBank": 10000,

@@ -6,6 +6,10 @@ import type { Game } from "../domain/types";
 import { displayAnswer } from "../engine/OptionShuffler";
 import { gameDesign } from "../content";
 import { statistics } from "../engine/StatisticsSystem";
+import {
+  isLearningMastered,
+  learningErrorRate,
+} from "../engine/SpacedRepetitionEngine";
 import { Portrait } from "./Portrait";
 export function People({ game }: { game: Game }) {
   return (
@@ -85,7 +89,7 @@ export function Reviews({
   busy: boolean;
 }) {
   const mistakes = Object.entries(game.learning)
-    .filter(([, r]) => r.wrong > 0)
+    .filter(([, r]) => r.wrong > 0 && !isLearningMastered(r))
     .sort((a, b) => b[1].wrong - a[1].wrong);
   return (
     <>
@@ -117,9 +121,8 @@ export function Reviews({
           return (
             <article className="review-entry" key={id}>
               <small>
-                {question.subject} · 累计错 {record.wrong} 次 · 连续答对{" "}
-                {record.streak} 次 ·{" "}
-                {record.streak >= 3 ? "渐已掌握" : "待复核"}
+                {question.subject} · 累计作答 {record.attempts} 次 · 错误{" "}
+                {record.wrong} 次 · 错误率 {learningErrorRate(record)}%
               </small>
               <h3>{question.question}</h3>
               <details>

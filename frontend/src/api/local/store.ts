@@ -28,7 +28,10 @@ import { assertAnswer, validateAnswer } from "../../engine/AnswerValidator";
 import { drawQuestion } from "../../engine/QuestionEngine";
 import { makeScene, initialNpcs } from "../../engine/StoryEngine";
 import { settleProgress } from "../../engine/ProgressionSystem";
-import { recordLearning } from "../../engine/SpacedRepetitionEngine";
+import {
+  hydrateLearning,
+  recordLearning,
+} from "../../engine/SpacedRepetitionEngine";
 import { applyChoice } from "../../engine/EventEngine";
 import {
   parseBackup,
@@ -133,6 +136,7 @@ export function createLocalApi(
       }
       for (const game of Object.values(data.saves)) {
         hydrateAdventure(game);
+        hydrateLearning(game);
         if (!game.attempt) delete data.snapshots[game.id];
       }
       return data;

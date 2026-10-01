@@ -85,6 +85,9 @@ defaultWeights 是比例，不要求加起来等于 100。例如数学一 7、40
 | repeatWrongMin、repeatWrongMax | 再次答错后的范围 |
 | duePriority | 到期错题优先抽取概率，0–1 |
 | masteredBaseGap、masteredMaxGap | 连续答对后复习间隔的基础值和封顶值 |
+| masteryRules | 题目停止抽取的掌握档位；attempts 是累计作答次数，maxWrong 是最多累计错误次数 |
+
+默认掌握档位为 3 次全对、5 次最多错 1 次、10 次最多错 3 次。达到任一档位后，该题不再进入普通抽题或旧案重审。可以直接修改 `masteryRules`，也可以增删档位；旧存档会按当前配置重新判断。
 
 到期表示进入优先队列，不代表第 N 次必然出现。题太少时允许放宽间隔，避免无法继续游戏。频率、薄弱章节、连续答对和距离上次作答的时间也影响题目抽取；算法在 QuestionEngine.ts 中有注释。
 

@@ -83,7 +83,7 @@ hydrateAdventure 升级旧存档并补入新增人物。parseBackup 验证新探
 - editedBankIds：浏览器覆盖的题库 id，删除也留标记，防止默认配置自动恢复已删库。
 - choiceVersion：旧题型迁移标记。
 - Game.flags：章节介绍已读、事件已完成、共同经历等。
-- Game.learning：按 题库id::题目id 存复习记录。
+- Game.learning：按 题库id::题目id 保存每题累计作答、答对、答错、错误率及复习记录；旧存档读取时自动补算错误率。
 - Game.revision：每次保存递增；当前没有多标签并发冲突处理。
 
 旧原型键 tihaishitu:save:v1 保留；三题型升级前可备份到 tihaishitu:before-choice-update。

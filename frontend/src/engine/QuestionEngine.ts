@@ -6,21 +6,29 @@
 import type { Bank, Game, Question } from "../domain/types";
 import { questionKey } from "./QuestionBankManager";
 import { gameDesign } from "../content";
-export function eligibleQuestions(game: Game, banks: Bank[]): Question[] {
+import { isLearningMastered } from "./SpacedRepetitionEngine";
+export function eligibleQuestions(
+  game: Game,
+  banks: Bank[],
+  includeMastered = false,
+): Question[] {
   return banks
     .filter(
       (b) => b.enabled && b.weight > 0 && game.config.bankIds.includes(b.id),
     )
     .flatMap((bank) =>
       bank.questions
-        .filter(
-          (q) =>
+        .filter((q) => {
+          const id = questionKey(bank.id, q.id);
+          return (
             ["single_choice", "multiple_choice", "true_false"].includes(
               q.type,
             ) &&
             q.enabled &&
-            (game.config.weights[q.subject] ?? 1) > 0,
-        )
+            (game.config.weights[q.subject] ?? 1) > 0 &&
+            (includeMastered || !isLearningMastered(game.learning[id]))
+          );
+        })
         .map((q) => ({ ...q, id: questionKey(bank.id, q.id) })),
     );
 }
@@ -44,10 +52,15 @@ export function drawQuestion(
   random = Math.random,
 ): Question {
   const all = eligibleQuestions(game, banks);
-  if (!all.length)
+  if (!all.length) {
+    if (eligibleQuestions(game, banks, true).length)
+      throw new Error(
+        "当前文集中的题目均已达到掌握标准，请在藏书阁启用新的文集。",
+      );
     throw new Error(
       "没有可用题目。请在藏书阁启用至少一个含有效题目的文集，并确认抽取权重大于零。",
     );
+  }
   const total = game.records.length;
   let pool = reviewOnly
     ? all.filter((q) => (game.learning[q.id]?.wrong ?? 0) > 0)
@@ -93,7 +106,7 @@ export function drawQuestion(
       const bank = banks.find((b) => q.id.startsWith(b.id + "::"));
       const frequency = [0.6, 0.8, 1, 1.4, 2][q.frequency - 1];
       const wrong = record ? Math.min(5, 1 + record.wrong) : 1;
-      const mastered = !record
+      const retentionWeight = !record
         ? 1
         : record.streak >= 5
           ? 0.3
@@ -112,7 +125,7 @@ export function drawQuestion(
       return (
         frequency *
         wrong *
-        mastered *
+        retentionWeight *
         forgotten *
         weakness *
         (bank?.weight ?? 1)
