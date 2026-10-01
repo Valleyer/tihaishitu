@@ -782,11 +782,8 @@ export function WorldGoals({
         <>
           <h2>{record.status === "unregistered" ? "报名青溪县试" : "入号应试"}</h2>
           <p>{exam.dialogues[record.status]}</p>
-          <div className="goal-treasure">榜</div>
-          <p>十题定榜 · 全对取中 · 身份与府城路线待解锁</p>
           <button className="main-quest-button" onClick={openExam}>
-            <small>主线重要剧情</small>
-            查看县试进度 →
+            查看县试进度
           </button>
         </>
       ) : target && treasure ? (

@@ -139,6 +139,13 @@ const activities = read("activities"),
 unique(activities, "activities");
 unique(items, "items");
 unique(exams, "exams");
+for (const location of maps.locations) {
+  const nameParts = location.name.split(" · ");
+  check(
+    nameParts.length === 2 && nameParts.every(Boolean),
+    `地点名称必须使用“大地图名 · 小地点名”格式：${location.id}`,
+  );
+}
 const attrIds = adventure.attributes.map((a) => a.id),
   npcIds = characters.map((n) => n.id),
   itemIds = items.map((i) => i.id),

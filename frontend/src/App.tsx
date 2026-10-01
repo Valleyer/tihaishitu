@@ -544,17 +544,21 @@ function App() {
               <WorldGoals game={game} inspect={inspect} openExam={() => show("exam")} />
               <section className="recent-panel framed">
                 <div className="panel-label">
-                  最新札记
-                  <button onClick={() => show("journal")}>打开札记 →</button>
+                  每日札记<span>今日</span>
                 </div>
-                <button className="recent-brief" onClick={() => show("journal")}>
-                  <span>记</span>
-                  <span>
-                    <b>{game.journal.at(-1)?.title || "尚无札记"}</b>
-                    <small>
-                      {game.journal.at(-1)?.text || "今日尚未留下新的记事。"}
-                    </small>
-                  </span>
+                <div className="daily-journal-entry">
+                  <small>{game.journal.length ? "最新一页" : "等待落笔"}</small>
+                  <h3>{game.journal.at(-1)?.title || "今日尚无新记"}</h3>
+                  <p>
+                    {game.journal.at(-1)?.text ||
+                      "行程、人物与重要选择会记在这里，随时可以翻看过去的札记。"}
+                  </p>
+                </div>
+                <button
+                  className="journal-history-button"
+                  onClick={() => show("journal")}
+                >
+                  查看历史札记
                 </button>
               </section>
             </aside>

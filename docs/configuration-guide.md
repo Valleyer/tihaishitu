@@ -197,6 +197,7 @@ flags 可被 scenes.memories 使用，暂不支持任意脚本或动态表达式
 
 locations 每项包含 id、name、description、background、position、x、y。
 
+- name：统一使用“大地图名 · 小地点名”，例如 `青溪县 · 旧书塾`、`青溪县 · 东斋`。地图节点只显示点号后的短名；以后新增任何地点也必须沿用此格式。
 - background：本地图片路径，/art/青溪.jpg 对应 frontend/public/art/青溪.jpg。
 - position：CSS 背景取景位置，例如 70% 50%。
 - x、y：地图点的百分比坐标，建议保持在 10–90，避免贴边。

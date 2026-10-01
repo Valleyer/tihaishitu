@@ -16,7 +16,7 @@
     },
     {
       "id": "east-hall",
-      "name": "青溪书院 · 东斋",
+      "name": "青溪县 · 东斋",
       "description": "同窗相识，书卷相传。",
       "background": "/art/locations/east-hall.jpg",
       "position": "50% 50%",
@@ -30,7 +30,7 @@
     },
     {
       "id": "library",
-      "name": "青溪书院 · 藏书楼",
+      "name": "青溪县 · 藏书楼",
       "description": "整理旧卷、积累学识的地方。",
       "background": "/art/locations/library.jpg",
       "position": "50% 50%",
@@ -64,7 +64,7 @@
     },
     {
       "id": "exam-street",
-      "name": "青溪书院 · 试院前巷",
+      "name": "青溪县 · 试院前巷",
       "description": "榜尚未开，先静心备考。",
       "background": "/art/locations/exam-street.jpg",
       "position": "50% 50%",
@@ -82,7 +82,7 @@
     },
     {
       "id": "night-study",
-      "name": "青溪书院 · 夜读斋",
+      "name": "青溪县 · 夜读斋",
       "description": "长线修习与旧案重审。",
       "background": "/art/locations/night-study.jpg",
       "position": "50% 50%",
@@ -96,7 +96,7 @@
     },
     {
       "id": "prefecture-road",
-      "name": "青溪驿路 · 通往府城",
+      "name": "青溪县 · 清溪驿路",
       "description": "县试取中后开放，下一场功名在山路尽头。",
       "background": "/art/locations/prefecture-road.jpg",
       "position": "50% 50%",
