@@ -15,9 +15,11 @@ import activityData from "./activities.json";
 import companionData from "./companions.json";
 import itemData from "./items.json";
 import adventureData from "./adventure.json";
+import examData from "./exams.json";
 import type {
   Activity,
   Companion,
+  Exam,
   Item,
   WorldLocation,
 } from "../domain/adventure";
@@ -25,6 +27,7 @@ export const activities = activityData as unknown as Activity[];
 export const companions = companionData as unknown as Companion[];
 export const items = itemData as unknown as Item[];
 export const adventureDesign = adventureData;
+export const exams = examData as unknown as Exam[];
 import type { Bank, ChoiceEvent, Npc } from "../domain/types";
 export const gameDesign = gameData;
 export const chapterDesign = chapterData;

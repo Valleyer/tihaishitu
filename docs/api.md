@@ -100,6 +100,7 @@ HTTP 实现必须返回已迁移的探索数据，UI 不负责猜测缺失字段
 | POST | /games/{id}/items/use | {itemId} |
 | POST | /games/{id}/items/buy | {itemId} |
 | POST | /games/{id}/bonds | {npcId,milestone} |
+| POST | /games/{id}/exams/register | {examId} |
 
 创建人生现在返回 attempt=null、adventure.run=null，默认进入世界。
 开始活动后才发卷；有未结束 run 时拒绝开始其他活动或移动。暂停仅为 UI 隐藏，不调用 abandon。
@@ -111,3 +112,11 @@ items/buy 校验可售价格和余额；没有 price 的副本专属物品禁止
 travel 校验地点属性条件，遇到满足前置的新故事时填写 adventure.encounter。
 
 活动完整定义在开始时冻结进 run.definition。配置修改影响下一轮，后端也应保持这项承诺。
+
+## V6 县试事务
+
+报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程、报名资格和银两充足。只允许从 `unregistered` 进入 `registered`，扣费、状态与札记必须一次保存。
+
+开始 `kind=exam` 的活动前校验对应考试为 `registered`。最后一题判卷时，在同一事务内更新 attempts、lastScore、best 与状态；及格进入 `passed`，未及格进入 `preparing`。落榜备考活动达标后恢复 `registered`，不再次扣费。活动中途放下不改变考试状态。
+
+HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。`Game.adventure.exams` 与活动首次奖励记账一并返回，重复提交同一答题请求不得重复发取中帖或身份奖励。

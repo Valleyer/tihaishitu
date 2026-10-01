@@ -167,6 +167,8 @@ export interface AnswerInput {
   selfAssessment?: boolean;
 }
 export interface GameApi {
+  /** 报名只登记资格并扣费，不会立刻发卷。 */
+  registerExam(id: string, examId: string): Promise<Game>;
   beginActivity(id: string, activityId: string): Promise<Game>;
   finishActivity(id: string, runId: string): Promise<Game>;
   abandonActivity(id: string, runId: string): Promise<Game>;

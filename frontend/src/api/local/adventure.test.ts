@@ -113,3 +113,44 @@ it("旧人生保留历史与关系并回到世界；探索进度随备份保留"
   expect(restored.adventure!.locationId).toBe("east-hall");
   expect(restored.adventure!.visited).toContain("east-hall");
 });
+it("县试报名、落榜温卷、重考取中形成完整闭环", async () => {
+  const { api, storage } = setup();
+  let game = await api.createGame(config);
+  // 只准备考试门槛，避免测试重复模拟日常刷题；正式应试仍走真实发题与判分。
+  const db = JSON.parse(storage.getItem(STORAGE_KEY)!);
+  db.saves[game.id].player.knowledge = 35;
+  db.saves[game.id].player.reputation = 3;
+  db.saves[game.id].adventure.attributes = {
+    insight: 6,
+    eloquence: 4,
+    craft: 4,
+  };
+  storage.setItem(STORAGE_KEY, JSON.stringify(db));
+  game = await api.getGame(game.id);
+  game = await api.travel(game.id, "exam-street");
+  const coins = game.player.coins;
+  game = await api.registerExam(game.id, "county-exam");
+  expect(game.player.coins).toBe(coins - 12);
+  expect(game.adventure!.exams["county-exam"].status).toBe("registered");
+
+  game = await api.beginActivity(game.id, "county-exam-paper");
+  game = await play(api, game, 6);
+  expect(game.adventure!.exams["county-exam"].status).toBe("preparing");
+  game = await api.finishActivity(game.id, game.adventure!.run!.id);
+  await expect(
+    api.beginActivity(game.id, "county-exam-paper"),
+  ).rejects.toThrow("应试资格");
+
+  game = await api.beginActivity(game.id, "county-exam-prep");
+  game = await play(api, game, 2);
+  game = await api.finishActivity(game.id, game.adventure!.run!.id);
+  expect(game.adventure!.exams["county-exam"].status).toBe("registered");
+
+  game = await api.beginActivity(game.id, "county-exam-paper");
+  game = await play(api, game, 7);
+  expect(game.adventure!.exams["county-exam"].status).toBe("passed");
+  expect(game.player.title).toBe("县试取中");
+  expect(game.flags).toContain("county-exam-passed");
+  expect(game.adventure!.inventory["county-pass-note"]).toBe(1);
+  expect(game.adventure!.exams["county-exam"].attempts).toBe(2);
+});

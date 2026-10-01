@@ -7,6 +7,7 @@ import {
   changeItem,
   purchase,
   claimRelationship,
+  registerExam as registerForExam,
 } from "../../engine/AdventureEngine";
 /**
  * 本地版 GameApi：浏览器 localStorage 是唯一持久化来源。
@@ -206,6 +207,12 @@ export function createLocalApi(
     db.snapshots[game.id] = full;
   }
   return {
+    async registerExam(id, examId) {
+      const db = read(),
+        game = get(db, id);
+      registerForExam(game, examId);
+      return persist(db, game);
+    },
     async beginActivity(id, activityId) {
       const db = read(),
         game = get(db, id);

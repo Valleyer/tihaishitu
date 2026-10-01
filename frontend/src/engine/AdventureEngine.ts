@@ -13,13 +13,21 @@ import {
   items,
   mapDesign,
   gameDesign,
+  exams,
 } from "../content";
+
+const blankExamRecord = () => ({
+  status: "unregistered" as const,
+  attempts: 0,
+  best: 0,
+  lastScore: 0,
+});
 
 export function hydrateAdventure(game: Game) {
   if (!game.adventure) {
     // 老版的未交课卷退出；历史答题、关系、钱和章节全部保留。默认回到世界，不再自动发卷。
     game.adventure = {
-      version: 5,
+      version: 6,
       locationId: adventureDesign.startLocation,
       visited: [adventureDesign.startLocation],
       attributes: {},
@@ -32,9 +40,15 @@ export function hydrateAdventure(game: Game) {
       seenEncounters: [],
       encounter: null,
       run: null,
+      exams: {},
     };
     game.attempt = null;
   }
+  // V5 存档原地补齐县试字段；玩家已有的关系、物品、成绩和行程全部保留。
+  game.adventure.version = 6;
+  game.adventure.exams ??= {};
+  for (const exam of exams)
+    game.adventure.exams[exam.id] ??= blankExamRecord();
   for (const character of characterDesign)
     if (!game.npcs.some((n) => n.id === character.id))
       game.npcs.push(structuredClone(character));
@@ -103,6 +117,7 @@ export function activityIssues(game: Game, activity: Activity) {
 /** 奖励预览和实际结算共用同一套字段，不根据文案猜奖励。 */
 export function rewardLines(reward: Rewards): string[] {
   const lines: string[] = [];
+  if (reward.title) lines.push("身份 · " + reward.title);
   for (const [key, label] of [
     ["knowledge", "学识"],
     ["coins", adventureDesign.currency.name],
@@ -143,13 +158,43 @@ export function grantRewards(game: Game, reward: Rewards): string[] {
   for (const [id, value] of Object.entries(reward.items || {}))
     state.inventory[id] = (state.inventory[id] || 0) + value;
   game.flags = [...new Set([...game.flags, ...(reward.flags || [])])];
+  if (reward.title) game.player.title = reward.title;
   return rewardLines(reward);
+}
+/** 报名只扣一次银两；落榜完成备考后直接恢复应试资格。 */
+export function registerExam(game: Game, id: string) {
+  const exam = exams.find((e) => e.id === id);
+  if (!exam) throw new Error("这场考试尚未开放。");
+  const state = game.adventure!, record = state.exams[id];
+  if (state.run) throw new Error("请先结束眼前的行程。");
+  if (state.locationId !== exam.locationId) throw new Error("请先到试院前巷报名。");
+  if (record.status !== "unregistered")
+    throw new Error(record.status === "passed" ? "你已经取中。" : "名帖已经递入试院。");
+  const issues = requirementIssues(game, exam.requirements);
+  if (issues.length) throw new Error(issues.join("；"));
+  if (game.player.coins < exam.fee)
+    throw new Error("报名需银两 " + exam.fee + " 两，眼下还差 " + (exam.fee - game.player.coins) + " 两。");
+  game.player.coins -= exam.fee;
+  record.status = "registered";
+  game.journal.push({
+    id: crypto.randomUUID(),
+    day: game.records.length,
+    kind: "milestone",
+    title: exam.name + " · 投递名帖",
+    text: "名帖与报名银一并递入试院。三日后点名，你已在应试名册之中。",
+  });
 }
 export function beginRun(game: Game, id: string) {
   const activity = activities.find((a) => a.id === id);
   if (!activity) throw new Error("这项活动暂不可用。");
   if (game.adventure!.run)
     throw new Error("还有一段未结束的行程，请先继续或收起。");
+  const exam = exams.find((e) => e.activityId === id);
+  if (exam && game.adventure!.exams[exam.id].status !== "registered")
+    throw new Error("须先取得本场应试资格。落榜后需完成温卷再来。");
+  const preparation = exams.find((e) => e.preparationActivityId === id);
+  if (preparation && game.adventure!.exams[preparation.id].status !== "preparing")
+    throw new Error("眼下无需闭门温卷，先去试院看看吧。");
   const issues = activityIssues(game, activity);
   if (issues.length) throw new Error(issues.join("；"));
   if (activity.locationId && game.adventure!.locationId !== activity.locationId)
@@ -200,6 +245,26 @@ export function settleRunAnswer(game: Game, correct: boolean) {
   if (run.score >= run.definition.passScore)
     state.clears[run.definition.id] =
       (state.clears[run.definition.id] || 0) + 1;
+  // 考试结算在普通活动奖励之后落档，确保揭榜、身份和奖励是一次事务。
+  const exam = exams.find((e) => e.activityId === run.definition.id);
+  if (exam) {
+    const record = state.exams[exam.id];
+    record.attempts++;
+    record.lastScore = run.score;
+    record.best = Math.max(record.best, run.score);
+    record.status = run.score >= run.definition.passScore ? "passed" : "preparing";
+  }
+  const preparation = exams.find(
+    (e) => e.preparationActivityId === run.definition.id,
+  );
+  if (
+    preparation &&
+    run.score >= run.definition.passScore &&
+    state.exams[preparation.id].status === "preparing"
+  ) {
+    state.exams[preparation.id].status = "registered";
+    run.response += " 名帖仍在册中，明日便可再入试院。";
+  }
   run.status = "settled";
   game.journal.push({
     id: crypto.randomUUID(),

@@ -303,6 +303,90 @@
   line-height: 1.8;
   color: #b7bda2;
 }
+
+/* 县试面板沿用纸卷和朱榜意象，报名阶段只展示进度，不提前露出题目。 */
+.exam-panel {
+  display: grid;
+  gap: 18px;
+}
+.exam-panel > header {
+  text-align: center;
+  padding: 4px 8%;
+}
+.exam-panel > header small {
+  color: var(--gold);
+  letter-spacing: 0.18em;
+}
+.exam-panel > header h2 {
+  margin: 8px 0;
+  font-size: 30px;
+  font-weight: 500;
+}
+.exam-panel > header p,
+.exam-status p,
+.exam-steps p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.exam-status {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 22px;
+  border: 1px solid #90774766;
+  background: linear-gradient(100deg, #182a26, #10211f);
+}
+.exam-status > span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  border: 2px solid #b75d42;
+  color: #e6c98b;
+  font-size: 29px;
+}
+.exam-status h3 {
+  margin: 3px 0;
+  color: #e7cd91;
+  font-weight: 500;
+}
+.exam-status.passed {
+  border-color: #b45f46aa;
+  box-shadow: inset 4px 0 #a34f3a;
+}
+.exam-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.exam-steps article {
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #f0e7cf0d;
+}
+.exam-steps article.done {
+  border-color: #8ca47c88;
+  background: #55745417;
+}
+.exam-steps b {
+  color: #d9bf83;
+  font-weight: 500;
+}
+.exam-panel > .hint {
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .exam-steps {
+    grid-template-columns: 1fr;
+  }
+  .exam-steps article {
+    min-height: auto;
+  }
+}
 .invitation {
   display: flex;
   align-items: center;

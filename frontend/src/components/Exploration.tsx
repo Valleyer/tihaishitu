@@ -8,6 +8,7 @@ import {
   activities,
   adventureDesign,
   companions,
+  exams,
   items,
   mapDesign,
 } from "../content";
@@ -16,6 +17,7 @@ import {
   attributeName,
   effectiveAttribute,
   rewardLines,
+  requirementIssues,
 } from "../engine/AdventureEngine";
 import { Portrait } from "./Portrait";
 
@@ -42,8 +44,15 @@ export function WorldHub({
     location =
       mapDesign.locations.find((l) => l.id === state.locationId) ||
       mapDesign.locations[0];
+  // 正试与落榜温卷由“县试”面板管理，避免像普通副本一样在街头随手点开。
+  const examActivityIds = new Set(
+    exams.flatMap((e) => [e.activityId, e.preparationActivityId]),
+  );
   const local = activities.filter(
-    (a) => a.locationId === location.id && a.kind !== "companion",
+    (a) =>
+      a.locationId === location.id &&
+      a.kind !== "companion" &&
+      !examActivityIds.has(a.id),
   );
   const [page, setPage] = useState(0),
     current = Math.min(page, Math.max(0, Math.ceil(local.length / 2) - 1));
@@ -309,9 +318,106 @@ export function ActivityDetail({
             ? "点灯，展开这一卷"
             : activity.kind === "companion"
               ? "坐下，与他一道读"
+              : activity.kind === "exam"
+                ? "点名入号，开始应试"
               : "应下此事，进入挑战"}{" "}
         →
       </button>
+    </div>
+  );
+}
+
+/** 县试是世界进阶入口：先看资格，再报名，最后才进入答题。 */
+export function ExamPanel({
+  game,
+  busy,
+  inspect,
+  travel,
+  study,
+  register,
+}: {
+  game: Game;
+  busy: boolean;
+  inspect: (id: string) => void;
+  travel: (id: string) => void;
+  study: () => void;
+  register: (id: string) => void;
+}) {
+  const exam = exams[0],
+    record = game.adventure!.exams[exam.id],
+    issues = requirementIssues(game, exam.requirements),
+    atExam = game.adventure!.locationId === exam.locationId,
+    shortOfMoney = game.player.coins < exam.fee;
+  const statusName = {
+    unregistered: "尚未报名",
+    registered: "候场应试",
+    preparing: "落榜温卷",
+    passed: "红榜取中",
+  }[record.status];
+  const action = () => {
+    if (record.status === "passed") {
+      if (game.adventure!.locationId === "prefecture-road")
+        inspect("prefecture-departure");
+      else travel("prefecture-road");
+    } else if (record.status === "preparing")
+      inspect(exam.preparationActivityId);
+    else if (record.status === "registered") inspect(exam.activityId);
+    else if (!atExam) travel(exam.locationId);
+    else if (issues.length || shortOfMoney) study();
+    else register(exam.id);
+  };
+  const actionText =
+    record.status === "passed"
+      ? game.adventure!.locationId === "prefecture-road"
+        ? "展开府城新篇"
+        : "沿驿路赴府"
+      : record.status === "preparing"
+        ? "与先生复盘落卷"
+        : record.status === "registered"
+          ? "点名入号，应试十题"
+          : !atExam
+            ? "前往试院报名"
+            : issues.length || shortOfMoney
+              ? "先去读书筹备"
+              : "缴银递帖，正式报名";
+  return (
+    <div className="exam-panel">
+      <header>
+        <small>{exam.subtitle}</small>
+        <h2>{exam.name}</h2>
+        <p>{exam.description}</p>
+      </header>
+      <div className={"exam-status " + record.status}>
+        <span>榜</span>
+        <div>
+          <small>当前进度</small>
+          <h3>{statusName}</h3>
+          <p>{exam.dialogues[record.status]}</p>
+        </div>
+      </div>
+      <div className="exam-steps">
+        <article className={record.status !== "unregistered" ? "done" : ""}>
+          <b>壹 · 验明资格</b>
+          <p>{issues.length ? issues.join("；") : "学识、声名与三门本领均已验明"}</p>
+        </article>
+        <article className={record.status !== "unregistered" ? "done" : ""}>
+          <b>贰 · 递帖报名</b>
+          <p>报名银 {exam.fee} 两 · 当前 {game.player.coins} 两</p>
+        </article>
+        <article className={record.status === "passed" ? "done" : ""}>
+          <b>叁 · 十题定榜</b>
+          <p>七十分取中 · 已应试 {record.attempts} 次 · 最高 {record.best || "—"} 分</p>
+        </article>
+      </div>
+      {record.status === "unregistered" && (issues.length > 0 || shortOfMoney) && (
+        <div className="gate-reasons">
+          尚需：{[...issues, ...(shortOfMoney ? ["银两 " + game.player.coins + "/" + exam.fee] : [])].join("；")}
+        </div>
+      )}
+      <button className="gold-button full" disabled={busy || !!game.adventure!.run} onClick={action}>
+        {actionText} →
+      </button>
+      <p className="hint">报名不立刻发卷。落榜不会重复扣报名银，完成三题复盘后即可再次应试。</p>
     </div>
   );
 }
@@ -598,7 +704,11 @@ export function Outcome({
         <span>分 · {run.grade}</span>
       </div>
       <h2>
-        {run.score >= run.definition.passScore
+        {run.definition.kind === "exam"
+          ? run.score >= run.definition.passScore
+            ? "红榜有名，功名初成"
+            : "榜上无名，收卷再读"
+          : run.score >= run.definition.passScore
           ? "有所获，亦有所长"
           : "今日未竟，来日再试"}
       </h2>
@@ -632,10 +742,13 @@ export function Outcome({
 export function WorldGoals({
   game,
   inspect,
+  openExam,
 }: {
   game: Game;
   inspect: (id: string) => void;
+  openExam: () => void;
 }) {
+  const exam = exams[0], record = game.adventure!.exams[exam.id];
   const target = activities
     .filter((a) => a.kind === "dungeon")
     .find((a) =>
@@ -654,7 +767,15 @@ export function WorldGoals({
       <div className="panel-label">
         想要的生活<span>心愿</span>
       </div>
-      {target && treasure ? (
+      {record.status !== "passed" ? (
+        <>
+          <h2>{record.status === "unregistered" ? "报名青溪县试" : record.status === "registered" ? "入号应试" : "重温落卷"}</h2>
+          <p>{exam.dialogues[record.status]}</p>
+          <div className="goal-treasure">榜</div>
+          <p>十题定榜 · 七十分取中 · 身份与府城路线待解锁</p>
+          <button className="text-button" onClick={openExam}>查看县试进度 →</button>
+        </>
+      ) : target && treasure ? (
         <>
           <h2>{treasure.name}</h2>
           <p>{treasure.description}</p>

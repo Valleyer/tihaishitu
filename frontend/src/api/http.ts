@@ -31,6 +31,8 @@ async function request<T>(
 }
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
 export const httpApi: GameApi = {
+  registerExam: (id, examId) =>
+    request(gamePath(id) + "/exams/register", "POST", { examId }),
   beginActivity: (id, activityId) =>
     request(gamePath(id) + "/activities", "POST", { activityId }),
   finishActivity: (id, runId) =>

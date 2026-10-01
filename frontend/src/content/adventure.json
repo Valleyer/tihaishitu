@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "startLocation": "old-school",
   "currency": {
     "name": "银两",
@@ -31,6 +31,7 @@
     "study": "案头修习",
     "companion": "故人邀约",
     "dungeon": "秘境试炼",
-    "story": "此间故事"
+    "story": "此间故事",
+    "exam": "科举正试"
   }
 }

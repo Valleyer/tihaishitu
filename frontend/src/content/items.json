@@ -150,5 +150,33 @@
       "craft": 6,
       "insight": 2
     }
+  },
+  {
+    "id": "county-pass-note",
+    "name": "县试取中帖",
+    "description": "青溪县试取中凭证。朱印落在姓名旁，从此可以赴府应试。",
+    "kind": "keepsake",
+    "rarity": "功名",
+    "symbol": "中"
+  },
+  {
+    "id": "red-list-flower",
+    "name": "红榜簪花",
+    "description": "县试名列前茅时所得的簪花，装备后辞采 +3、声名自在人心。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "花",
+    "slot": "charm",
+    "bonuses": {
+      "eloquence": 3
+    }
+  },
+  {
+    "id": "prefecture-document",
+    "name": "府试投牒",
+    "description": "抵达府城后领到的下一场应试文书，也是仕途新篇的起点。",
+    "kind": "keepsake",
+    "rarity": "功名",
+    "symbol": "牒"
   }
 ]

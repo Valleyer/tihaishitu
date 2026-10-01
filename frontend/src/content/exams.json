@@ -1,0 +1,27 @@
+[
+  {
+    "id": "county-exam",
+    "name": "青溪县试",
+    "subtitle": "童试第一关 · 十题定榜",
+    "description": "县中开科，先验名帖，再入号舍。取中之后，你才真正踏上科举仕途。",
+    "locationId": "exam-street",
+    "activityId": "county-exam-paper",
+    "preparationActivityId": "county-exam-prep",
+    "fee": 12,
+    "requirements": {
+      "knowledge": 35,
+      "reputation": 3,
+      "attributes": {
+        "insight": 6,
+        "eloquence": 4,
+        "craft": 4
+      }
+    },
+    "dialogues": {
+      "unregistered": "试院门前新贴了告示。书吏逐项核验学识、声名与三门本领，合格者缴十二两报名银，方可递入名帖。",
+      "registered": "名帖已在册中。铜锣三响后入号舍，十题一卷，七十分取中。",
+      "preparing": "此番未能取中，名帖仍在。回到试院前巷温完一卷，便可再次应试，不必重缴报名银。",
+      "passed": "红榜上已经有了你的名字。县试取中帖收入行囊，通往府城的驿路也向你开放。"
+    }
+  }
+]

@@ -989,5 +989,178 @@
         "dialogue": "“青溪的水脉都在此图上。来日，它能救许多人。”"
       }
     ]
+  },
+  {
+    "id": "county-exam-prep",
+    "kind": "story",
+    "name": "重温落卷",
+    "subtitle": "落榜备考 · 三题复盘",
+    "description": "陆先生没有安慰你，只把落卷放回案头。错在何处，便从何处重新读起。",
+    "invitation": "“榜上少一个名字，不等于路已断。三页读明白，明日再去。”",
+    "npcId": "lu",
+    "locationId": "exam-street",
+    "rounds": 3,
+    "passScore": 60,
+    "repeatable": true,
+    "requirements": {},
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "仍有疑处",
+        "rewards": {},
+        "dialogue": "“急着再进号舍，只会把旧错再写一遍。”"
+      },
+      {
+        "minScore": 60,
+        "label": "整卷再起",
+        "rewards": {
+          "attributes": {
+            "insight": 1
+          }
+        },
+        "dialogue": "“这一回，你知道自己为何错了。”"
+      },
+      {
+        "minScore": 100,
+        "label": "烂熟于心",
+        "rewards": {
+          "attributes": {
+            "insight": 2
+          },
+          "reputation": 1
+        },
+        "dialogue": "“去吧。别想着雪耻，只管把会的写明白。”"
+      }
+    ]
+  },
+  {
+    "id": "county-exam-paper",
+    "kind": "exam",
+    "name": "青溪县试正卷",
+    "subtitle": "正式科举 · 十题定榜",
+    "description": "号舍落锁，案上只余一卷。十道题后揭榜，七十分取中；若落榜，须先复盘落卷再来。",
+    "invitation": "“青溪县试，应考者入号。卷上只写真才实学，旁的都带不进去。”",
+    "npcId": "shen",
+    "locationId": "exam-street",
+    "rounds": 10,
+    "passScore": 70,
+    "repeatable": false,
+    "requirements": {},
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "榜上无名",
+        "rewards": {},
+        "dialogue": "红榜从头看到尾，没有你的名字。陆先生只说：把落卷带回来。"
+      },
+      {
+        "minScore": 70,
+        "label": "取中",
+        "rewards": {
+          "reputation": 8,
+          "coins": 20
+        },
+        "firstRewards": {
+          "title": "县试取中",
+          "items": {
+            "county-pass-note": 1
+          },
+          "flags": [
+            "county-exam-passed"
+          ]
+        },
+        "dialogue": "红榜贴出，你的名字正在其上。从今日起，青溪不再只称你一介布衣。"
+      },
+      {
+        "minScore": 90,
+        "label": "名列前茅",
+        "rewards": {
+          "reputation": 12,
+          "coins": 30,
+          "attributes": {
+            "eloquence": 2
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "red-list-flower": 1
+          }
+        },
+        "dialogue": "唱名时，你在前列。试院外有人替你簪上一朵红花，满街都认得这位青溪新秀。"
+      },
+      {
+        "minScore": 100,
+        "label": "案首",
+        "rewards": {
+          "reputation": 18,
+          "coins": 45,
+          "attributes": {
+            "insight": 3,
+            "eloquence": 2,
+            "craft": 2
+          }
+        },
+        "firstRewards": {
+          "title": "青溪县试案首"
+        },
+        "dialogue": "第一声唱名便是你。县令亲笔圈下案首二字，府城赴考的文书今夜便会送来。"
+      }
+    ]
+  },
+  {
+    "id": "prefecture-departure",
+    "kind": "story",
+    "name": "驿路赴府",
+    "subtitle": "取中后续 · 府试在前",
+    "description": "县试只是第一关。收好取中帖，沿驿路去府城投递下一场名帖。",
+    "invitation": "“青溪的榜已经揭了。前面还有府试、院试，也有比功名更大的天地。”",
+    "npcId": "gu",
+    "locationId": "prefecture-road",
+    "rounds": 5,
+    "passScore": 60,
+    "repeatable": false,
+    "requirements": {
+      "flags": [
+        "county-exam-passed"
+      ]
+    },
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "暂歇驿亭",
+        "rewards": {},
+        "dialogue": "雨阻驿道，先把府试章程再读一遍。"
+      },
+      {
+        "minScore": 60,
+        "label": "抵达府城",
+        "rewards": {
+          "coins": 20,
+          "reputation": 3
+        },
+        "firstRewards": {
+          "title": "府试赴考生",
+          "items": {
+            "prefecture-document": 1
+          },
+          "flags": [
+            "prefecture-road-opened"
+          ]
+        },
+        "dialogue": "城门在暮色里打开。你递上取中帖，领到了府试投牒。"
+      },
+      {
+        "minScore": 100,
+        "label": "意气入城",
+        "rewards": {
+          "coins": 30,
+          "reputation": 5,
+          "attributes": {
+            "craft": 2
+          }
+        },
+        "dialogue": "一路所见都成了新见识。府城很大，而你的路才刚刚开始。"
+      }
+    ]
   }
 ]

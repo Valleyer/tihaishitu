@@ -93,6 +93,22 @@
       },
       "npcs": [],
       "ambience": "夜色深了，青溪仍有一处灯不灭。你可以在这里静读，也可以回去访友。"
+    },
+    {
+      "id": "prefecture-road",
+      "name": "青溪驿路 · 通往府城",
+      "description": "县试取中后开放，下一场功名在山路尽头。",
+      "background": "/art/academy.png",
+      "position": "15% 45%",
+      "x": 89,
+      "y": 18,
+      "requirements": {
+        "flags": [
+          "county-exam-passed"
+        ]
+      },
+      "npcs": [],
+      "ambience": "驿铃沿山道渐远。青溪在身后缩成一片灯火，府城的轮廓尚在云外。"
     }
   ]
 }

@@ -129,18 +129,25 @@ for (const path of [
   );
 }
 
-// V2—V5：配置引用在构建时一次检查，避免手改后进入副本才发现漏写奖励或人物。
+// V2—V6：配置引用在构建时一次检查，避免手改后进入副本才发现漏写奖励或人物。
 const activities = read("activities"),
   items = read("items"),
   companions = read("companions"),
+  exams = read("exams"),
   adventure = read("adventure");
 unique(activities, "activities");
 unique(items, "items");
+unique(exams, "exams");
 const attrIds = adventure.attributes.map((a) => a.id),
   npcIds = characters.map((n) => n.id),
   itemIds = items.map((i) => i.id),
   locIds = maps.locations.map((l) => l.id);
 const checkReward = (reward, source) => {
+  if (reward.title !== undefined)
+    check(
+      typeof reward.title === "string" && reward.title.length > 0,
+      source + " 身份称号不能为空",
+    );
   for (const key of ["knowledge", "coins", "reputation"])
     if (reward[key] !== undefined)
       check(
@@ -181,7 +188,7 @@ const checkGate = (gate, source) => {
 check(locIds.includes(adventure.startLocation), "初始地图不存在");
 for (const a of activities) {
   check(
-    ["study", "companion", "dungeon", "story"].includes(a.kind),
+    ["study", "companion", "dungeon", "story", "exam"].includes(a.kind),
     a.id + " 活动类型无效",
   );
   check(
@@ -205,6 +212,24 @@ for (const a of activities) {
     checkReward(tier.rewards, a.id);
     if (tier.firstRewards) checkReward(tier.firstRewards, a.id);
   }
+}
+for (const exam of exams) {
+  check(locIds.includes(exam.locationId), exam.id + " 报名地点不存在");
+  check(
+    activities.some((a) => a.id === exam.activityId && a.kind === "exam"),
+    exam.id + " 正试活动无效",
+  );
+  check(
+    activities.some((a) => a.id === exam.preparationActivityId),
+    exam.id + " 落榜备考活动无效",
+  );
+  check(Number.isFinite(exam.fee) && exam.fee >= 0, exam.id + " 报名费无效");
+  checkGate(exam.requirements, exam.id);
+  for (const status of ["unregistered", "registered", "preparing", "passed"])
+    check(
+      typeof exam.dialogues?.[status] === "string" && exam.dialogues[status].length > 0,
+      exam.id + " 缺少状态对白 " + status,
+    );
 }
 for (const c of companions) {
   check(
@@ -234,7 +259,7 @@ for (const l of maps.locations) {
 console.log(
   "探索内容：" +
     activities.length +
-    " 项活动 / " +
+    " 项活动 / " + exams.length + " 场科举 / " +
     items.length +
     " 件物品 / " +
     companions.length +

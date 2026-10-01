@@ -1,4 +1,4 @@
-/** V2—V5 的探索契约。所有奖励、门槛和轮数由配置定义，存档记录实际进度。 */
+/** V2—V6 的探索契约。所有奖励、门槛和轮数由配置定义，存档记录实际进度。 */
 export interface Requirements {
   knowledge?: number;
   reputation?: number;
@@ -28,6 +28,8 @@ export interface Rewards {
   trust?: Record<string, number>;
   items?: Record<string, number>;
   flags?: string[];
+  /** 身份称号属于一次性进阶奖励，例如县试取中。 */
+  title?: string;
 }
 export interface RewardTier {
   minScore: number;
@@ -38,7 +40,7 @@ export interface RewardTier {
 }
 export interface Activity {
   id: string;
-  kind: "study" | "companion" | "dungeon" | "story";
+  kind: "study" | "companion" | "dungeon" | "story" | "exam";
   name: string;
   subtitle: string;
   description: string;
@@ -52,6 +54,34 @@ export interface Activity {
   tiers: RewardTier[];
   reviewOnly?: boolean;
 }
+export type ExamStatus = "unregistered" | "registered" | "preparing" | "passed";
+export interface ExamRecord {
+  status: ExamStatus;
+  attempts: number;
+  best: number;
+  lastScore: number;
+}
+/**
+ * 科举本身也走活动答题，但报名、落榜与重考由独立状态机管理。
+ * 以后增加府试、院试，只需继续追加 exams.json 配置和活动，无需改存档结构。
+ */
+export interface Exam {
+  id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  locationId: string;
+  activityId: string;
+  preparationActivityId: string;
+  fee: number;
+  requirements: Requirements;
+  dialogues: {
+    unregistered: string;
+    registered: string;
+    preparing: string;
+    passed: string;
+  };
+}
 export interface ActivityRun {
   id: string;
   definition: Activity;
@@ -64,7 +94,7 @@ export interface ActivityRun {
   response: string;
 }
 export interface Adventure {
-  version: 5;
+  version: 6;
   locationId: string;
   visited: string[];
   attributes: Record<string, number>;
@@ -77,6 +107,7 @@ export interface Adventure {
   seenEncounters: string[];
   encounter: string | null;
   run: ActivityRun | null;
+  exams: Record<string, ExamRecord>;
 }
 export interface Item {
   id: string;

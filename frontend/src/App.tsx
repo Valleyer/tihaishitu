@@ -6,6 +6,7 @@ import {
   Inventory,
   Outcome,
   WorldGoals,
+  ExamPanel,
 } from "./components/Exploration";
 import { effectiveAttribute } from "./engine/AdventureEngine";
 /**
@@ -36,6 +37,7 @@ type Panel =
   | "study"
   | "activity"
   | "bag"
+  | "exam"
   | "new"
   | "library"
   | "saves"
@@ -54,6 +56,7 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   study: "点灯读书",
   activity: "一段行程",
   bag: "随身珍藏",
+  exam: "青溪县试",
   new: "落笔入世",
   library: "藏书阁",
   saves: "人生存牍",
@@ -70,6 +73,7 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
 };
 const dock = [
   { id: "study", icon: "书", label: "读书" },
+  { id: "exam", icon: "榜", label: "县试" },
   { id: "journal", icon: "▤", label: "札记" },
   { id: "people", icon: "人", label: "故人" },
   { id: "map", icon: "图", label: "舆图" },
@@ -218,6 +222,12 @@ function App() {
       setSettlement(false);
       setActivityOpen(true);
       setPanel(null);
+    });
+  const register = (id: string) =>
+    void run(async () => {
+      if (!game) return;
+      setGame(await api.registerExam(game.id, id));
+      setNotice("名帖已递入试院");
     });
   const resume = () => {
     setActivityOpen(true);
@@ -383,8 +393,12 @@ function App() {
                     </dd>
                   </div>
                   <div>
-                    <dt>官职</dt>
-                    <dd className="subdued">尚未入仕</dd>
+                    <dt>功名</dt>
+                    <dd className="subdued">
+                      {game.adventure!.exams["county-exam"]?.status === "passed"
+                        ? "县试取中"
+                        : "尚未取中"}
+                    </dd>
                   </div>
                 </dl>
                 <div className="player-talents">
@@ -523,7 +537,7 @@ function App() {
               )}
             </main>
             <aside className="affairs-column">
-              <WorldGoals game={game} inspect={inspect} />
+              <WorldGoals game={game} inspect={inspect} openExam={() => show("exam")} />
               <section className="relations-panel framed">
                 <div className="panel-label">
                   此间故人<button onClick={() => meet()}>展开 →</button>
@@ -764,6 +778,16 @@ function App() {
           )}
           {game && panel === "study" && (
             <ActivityShelf game={game} inspect={inspect} />
+          )}
+          {game && panel === "exam" && (
+            <ExamPanel
+              game={game}
+              busy={busy}
+              inspect={inspect}
+              travel={travel}
+              study={() => show("study")}
+              register={register}
+            />
           )}
           {game && panel === "activity" && (
             <ActivityDetail
