@@ -26,7 +26,6 @@ import { QuestionPanel } from "./components/QuestionPanel";
 import { Library } from "./components/Library";
 import { download } from "./utils/download";
 import { Journal, Reviews, Statistics } from "./components/Records";
-import { Settings } from "./components/Settings";
 import { ChapterGate } from "./components/ChapterGate";
 import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
@@ -46,7 +45,6 @@ type Panel =
   | "people"
   | "review"
   | "stats"
-  | "settings"
   | "display"
   | "map"
   | "story"
@@ -65,7 +63,6 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   people: "故人录",
   review: "疑难卷宗",
   stats: "修业簿",
-  settings: "随身行囊",
   display: "游戏设置",
   map: "青溪县舆图",
   story: "此间前情",
@@ -81,7 +78,6 @@ const dock = [
   { id: "review", icon: "卷", label: "旧案" },
   { id: "stats", icon: "业", label: "修业" },
   { id: "bag", icon: "囊", label: "行囊" },
-  { id: "settings", icon: "选", label: "配卷" },
   { id: "saves", icon: "牍", label: "存牍" },
 ] as const;
 function App() {
@@ -134,6 +130,14 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+  /** 临时条件提示自动收起；若期间出现了新的错误，不会被旧计时器误清除。 */
+  function reportTemporary(message: string) {
+    setError(message);
+    window.setTimeout(
+      () => setError((current) => (current === message ? "" : current)),
+      4200,
+    );
   }
   async function changeBank(bank: Bank) {
     setBusy(true);
@@ -643,7 +647,7 @@ function App() {
               busy={busy}
               save={changeBank}
               remove={deleteBank}
-              report={setError}
+              report={reportTemporary}
             />
           )}
           {panel === "saves" && data && (
@@ -834,20 +838,6 @@ function App() {
             />
           )}
           {game && panel === "stats" && <Statistics game={game} />}
-          {game && panel === "settings" && data && (
-            <Settings
-              game={game}
-              banks={data.banks}
-              busy={busy}
-              save={(ids, weights) =>
-                void run(async () => {
-                  setGame(await api.configure(game.id, ids, weights));
-                  setPanel(null);
-                  setNotice("行囊已更新，下页生效");
-                })
-              }
-            />
-          )}
           {game && attempt && panel === "story" && (
             <div className="story-recap">
               <Portrait variant={attempt.scene.npcId} />

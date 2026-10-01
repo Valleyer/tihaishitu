@@ -539,6 +539,39 @@
     SimSun,
     serif;
 }
+.dialogue-box {
+  margin-top: 18px;
+}
+.dialogue-box > small {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.dialogue-box blockquote {
+  animation: dialogue-in 0.18s ease-out;
+}
+.dialogue-continue {
+  width: 100%;
+  margin-top: 8px;
+  text-align: center;
+}
+.dialogue-end {
+  display: block;
+  margin-top: 9px;
+  font-size: 10px;
+  text-align: right;
+}
+@keyframes dialogue-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .bond-meter {
   display: flex;
   align-items: center;
@@ -1375,10 +1408,31 @@
   color: var(--paper-text);
 }
 .modal .companion-copy blockquote {
+  padding: 0;
+  margin: 8px 0 0;
+  background: transparent;
+  border: 0;
+  color: var(--ink-text);
+}
+.modal .dialogue-box {
   padding: 13px 16px;
   background: var(--ink-panel);
   border-left: 2px solid #a58b52;
-  color: var(--ink-text);
+}
+.modal .dialogue-box > small,
+.modal .dialogue-end {
+  color: #b8c8b2;
+}
+.modal .dialogue-continue {
+  background: #cfbd8d !important;
+  border-color: #e2ce98 !important;
+  color: #243126 !important;
+  font-weight: 600;
+}
+.modal .dialogue-continue:hover:not(:disabled),
+.modal .dialogue-continue:focus-visible {
+  background: #dfcc98 !important;
+  border-color: #f0dca7 !important;
 }
 .modal .bond-meter,
 .modal .bond-meter small {

@@ -486,10 +486,26 @@ export function NpcPanel({
             <meter min={0} max={100} value={npc.affinity} />
             <small>信任 {npc.trust}</small>
           </div>
-          <blockquote>{topic ? topic.lines[line] : greeting}</blockquote>
-          {topic && line < topic.lines.length - 1 && (
-            <button onClick={() => setLine(line + 1)}>听下去 →</button>
-          )}
+          <div className="dialogue-box">
+            <small>
+              {topic
+                ? "正在聊 · " + (line + 1) + "/" + topic.lines.length
+                : "此刻问候"}
+            </small>
+            <blockquote key={(topic?.id || "greeting") + line} aria-live="polite">
+              {topic ? topic.lines[line] : greeting}
+            </blockquote>
+            {topic && line < topic.lines.length - 1 ? (
+              <button
+                className="dialogue-continue"
+                onClick={() => setLine((current) => current + 1)}
+              >
+                继续听他说 · 下一句 {line + 2}/{topic.lines.length} →
+              </button>
+            ) : topic ? (
+              <span className="dialogue-end">此话题已说完 · 可选择下方其他话题</span>
+            ) : null}
+          </div>
         </div>
       </div>
       {!here ? (

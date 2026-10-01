@@ -46,7 +46,7 @@ export function drawQuestion(
   const all = eligibleQuestions(game, banks);
   if (!all.length)
     throw new Error(
-      "没有可用题目。请在藏书阁启用题库，并在行囊中选择至少一个题库和有效科目权重。",
+      "没有可用题目。请在藏书阁启用至少一个含有效题目的文集，并确认抽取权重大于零。",
     );
   const total = game.records.length;
   let pool = reviewOnly
