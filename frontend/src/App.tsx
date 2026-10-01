@@ -82,6 +82,7 @@ function App() {
   const [data, setData] = useState<Bootstrap | null>(null),
     [game, setGame] = useState<Game | null>(null),
     [panel, setPanel] = useState<Panel>(null);
+  const [clock, setClock] = useState(() => new Date());
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -106,6 +107,11 @@ function App() {
     return () => {
       active = false;
     };
+  }, []);
+  useEffect(() => {
+    // 分钟级刷新足以覆盖日期与十二时辰变化，也避免无意义的每秒重绘。
+    const timer = window.setInterval(() => setClock(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
     if (!notice) return;
@@ -189,7 +195,7 @@ function App() {
       setNote(game.notes[game.attempt.question.id] || "");
   }
   const chapter = game ? chapters[game.chapter] : null,
-    date = game ? calendar(game) : null,
+    date = game ? calendar(clock) : null,
     attempt = game?.attempt;
   const opening =
     game &&
@@ -348,8 +354,7 @@ function App() {
               {gameDesign.title}
             </button>
             <div className="world-date">
-              {gameDesign.dynasty} <b>·</b> {date!.label}
-              <span>{date!.time}</span>
+              {date!.label}{date!.time}
             </div>
             <div className="world-status">
               <i />
@@ -542,23 +547,30 @@ function App() {
             </main>
             <aside className="affairs-column">
               <WorldGoals game={game} inspect={inspect} openExam={() => show("exam")} />
-              <section className="recent-panel framed">
+              <section className="life-journal-panel framed">
                 <div className="panel-label">
-                  每日札记<span>今日</span>
-                </div>
-                <div className="daily-journal-entry">
-                  <small>{game.journal.length ? "最新一页" : "等待落笔"}</small>
-                  <h3>{game.journal.at(-1)?.title || "今日尚无新记"}</h3>
-                  <p>
-                    {game.journal.at(-1)?.text ||
-                      "行程、人物与重要选择会记在这里，随时可以翻看过去的札记。"}
-                  </p>
+                  人生札记<span>案头</span>
                 </div>
                 <button
                   className="journal-history-button"
                   onClick={() => show("journal")}
                 >
-                  查看历史札记
+                  <span>
+                    <b>历史札记</b>
+                    <small>已收录 {game.journal.length} 篇</small>
+                  </span>
+                  <strong>查看全部</strong>
+                </button>
+                <button
+                  className="journal-today-button"
+                  onClick={() => show("journal")}
+                >
+                  <small>今日札记</small>
+                  <b>{game.journal.at(-1)?.title || "今日尚无新记"}</b>
+                  <span>
+                    {game.journal.at(-1)?.text ||
+                      "今日尚未留下新的记录，之后的行程会写在这里。"}
+                  </span>
                 </button>
               </section>
             </aside>

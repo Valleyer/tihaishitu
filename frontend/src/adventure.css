@@ -813,12 +813,61 @@
   color: #55714e;
 }
 
-/* 右栏札记收成一张紧凑卡片，避免在较矮窗口里只露出半截。 */
-.recent-panel {
+/* 人生札记固定占据右栏第二格；即使今日无记录，也保留两个明确入口。 */
+.life-journal-panel {
   flex: 0 0 auto;
   min-height: 0;
   overflow: hidden;
   padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+/* 宽屏右栏固定上下各占一半，内容多少不再改变两张卡片的外框高度。 */
+.affairs-column > .objective-panel,
+.affairs-column > .life-journal-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.journal-today-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid #81764e66;
+  background: #1c302a;
+  text-align: left;
+}
+.journal-today-button small,
+.journal-today-button b,
+.journal-today-button span {
+  display: block;
+}
+.journal-today-button small {
+  color: #9dac91;
+  font-size: 8px;
+  letter-spacing: 2px;
+}
+.journal-today-button b {
+  margin: 7px 0 5px;
+  color: #d3c294;
+  font: 13px SimSun, serif;
+  letter-spacing: 1px;
+}
+.journal-today-button span {
+  color: #8fa08e;
+  font-size: 9px;
+  line-height: 1.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.journal-today-button:hover:not(:disabled),
+.journal-today-button:focus-visible {
+  background: #294138;
+  border-color: #baa05f;
+  filter: none;
 }
 .recent-panel .recent-brief {
   width: 100%;
@@ -900,12 +949,35 @@
   width: 100%;
   margin-top: 12px;
   padding: 9px 12px;
+  flex: 0 0 auto;
   background: #263a31;
   border: 1px solid #99845477;
   color: #d4c49a;
-  font: 10px SimSun, serif;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+.journal-history-button span,
+.journal-history-button b,
+.journal-history-button small {
+  display: block;
+}
+.journal-history-button b {
+  color: #d4c49a;
+  font: 11px SimSun, serif;
   letter-spacing: 2px;
-  text-align: center;
+}
+.journal-history-button small {
+  margin-top: 4px;
+  color: #839382;
+  font-size: 8px;
+}
+.journal-history-button strong {
+  color: #c6a965;
+  font: 9px SimSun, serif;
+  white-space: nowrap;
 }
 .journal-history-button:hover:not(:disabled),
 .journal-history-button:focus-visible {

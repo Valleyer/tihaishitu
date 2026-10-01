@@ -1,0 +1,40 @@
+[
+  {
+    "id": "bamboo-token",
+    "name": "东斋竹棋",
+    "description": "顾怀安从残局中取出的一枚竹制棋子。装备后筹算 +2、辞采 +1。",
+    "kind": "equipment",
+    "rarity": "雅物",
+    "symbol": "棋",
+    "slot": "hand",
+    "bonuses": {"craft": 2, "eloquence": 1}
+  },
+  {
+    "id": "archive-thread",
+    "name": "旧册青线",
+    "description": "从失落书目上拆下的青色装订线，记着一位被除名藏书人的暗记。",
+    "kind": "keepsake",
+    "rarity": "珍品",
+    "symbol": "线"
+  },
+  {
+    "id": "night-lamp",
+    "name": "五更铜灯",
+    "description": "夜读斋旧灯，灯座曾藏着无名来信。装备后悟性 +4、辞采 +2。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "灯",
+    "slot": "desk",
+    "bonuses": {"insight": 4, "eloquence": 2}
+  },
+  {
+    "id": "relay-bell",
+    "name": "清溪驿铃",
+    "description": "寻回驿马后留下的铜铃，雨夜里声音格外清亮。装备后筹算 +3。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "铃",
+    "slot": "charm",
+    "bonuses": {"craft": 3}
+  }
+]

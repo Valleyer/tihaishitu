@@ -13,23 +13,47 @@ import {
 } from "../content";
 export const initialNpcs = () => structuredClone(characterDesign);
 export const chapters = chapterDesign;
-export function calendar(game: Game) {
-  const settings = gameDesign.calendar;
-  const day = Math.floor(game.records.length / settings[game.config.pace]);
-  const seasonDays = settings.daysPerYear / settings.seasons.length;
+/**
+ * 顶部纪年直接取玩家本机时间：公历年份减 2000 作为景和年号，
+ * 月日使用中文写法，小时按传统十二时辰（每个时辰两小时）换算。
+ */
+export function calendar(now = new Date()) {
+  const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"],
+    chineseNumber = (value: number) => {
+      if (value < 10) return digits[value];
+      if (value === 10) return "十";
+      if (value < 20) return "十" + digits[value - 10];
+      return (
+        digits[Math.floor(value / 10)] +
+        "十" +
+        (value % 10 ? digits[value % 10] : "")
+      );
+    },
+    earthlyBranches = [
+      "子",
+      "丑",
+      "寅",
+      "卯",
+      "辰",
+      "巳",
+      "午",
+      "未",
+      "申",
+      "酉",
+      "戌",
+      "亥",
+    ],
+    branchIndex = Math.floor(((now.getHours() + 1) % 24) / 2);
   return {
-    day: day + 1,
     label:
       gameDesign.era +
-      (gameDesign.startYear + Math.floor(day / settings.daysPerYear)) +
-      "年 · " +
-      settings.seasons[Math.floor(day / seasonDays) % settings.seasons.length] +
-      " · 第" +
-      (Math.floor(day % seasonDays) + 1) +
+      (now.getFullYear() - 2000) +
+      "年" +
+      chineseNumber(now.getMonth() + 1) +
+      "月" +
+      chineseNumber(now.getDate()) +
       "日",
-    time: settings.times[
-      Math.floor(game.records.length / 2) % settings.times.length
-    ],
+    time: earthlyBranches[branchIndex] + "时",
   };
 }
 export function makeScene(

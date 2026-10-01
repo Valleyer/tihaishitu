@@ -131,8 +131,8 @@ for (const path of [
 }
 
 // V2—V6：配置引用在构建时一次检查，避免手改后进入副本才发现漏写奖励或人物。
-const activities = read("activities"),
-  items = read("items"),
+const activities = [...read("activities"), ...read("activities-v7")],
+  items = [...read("items"), ...read("items-v7")],
   companions = read("companions"),
   exams = read("exams"),
   adventure = read("adventure");

@@ -12,8 +12,10 @@ import mapData from "./maps.json";
 import portraitData from "./portraits.json";
 import bankData from "./question-banks.json";
 import activityData from "./activities.json";
+import activityV7Data from "./activities-v7.json";
 import companionData from "./companions.json";
 import itemData from "./items.json";
+import itemV7Data from "./items-v7.json";
 import adventureData from "./adventure.json";
 import examData from "./exams.json";
 import type {
@@ -111,11 +113,15 @@ function normalizeActivity(activity: Activity): Activity {
     ],
   };
 }
-export const activities = (activityData as unknown as Activity[]).map(
-  normalizeActivity,
-);
+export const activities = [
+  ...(activityData as unknown as Activity[]),
+  ...(activityV7Data as unknown as Activity[]),
+].map(normalizeActivity);
 export const companions = companionData as unknown as Companion[];
-export const items = itemData as unknown as Item[];
+export const items = [
+  ...(itemData as unknown as Item[]),
+  ...(itemV7Data as unknown as Item[]),
+];
 export const adventureDesign = adventureData;
 export const exams = examData as unknown as Exam[];
 import type { Bank, ChoiceEvent, Npc } from "../domain/types";
