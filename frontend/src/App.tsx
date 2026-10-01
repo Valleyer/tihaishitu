@@ -71,8 +71,6 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
 };
 const dock = [
   { id: "study", icon: "书", label: "读书" },
-  { id: "exam", icon: "榜", label: "县试" },
-  { id: "journal", icon: "▤", label: "札记" },
   { id: "people", icon: "人", label: "故人" },
   { id: "library", icon: "册", label: "藏书阁" },
   { id: "review", icon: "卷", label: "旧案" },
@@ -544,51 +542,18 @@ function App() {
             </main>
             <aside className="affairs-column">
               <WorldGoals game={game} inspect={inspect} openExam={() => show("exam")} />
-              <section className="relations-panel framed">
-                <div className="panel-label">
-                  此间故人<button onClick={() => meet()}>展开 →</button>
-                </div>
-                {game.npcs
-                  .filter((n) => n.met)
-                  .map((n) => (
-                    <button
-                      className={
-                        "relation-mini " +
-                        (attempt?.scene.npcId === n.id ? "present" : "")
-                      }
-                      key={n.id}
-                      onClick={() => show("people")}
-                    >
-                      <span className="mini-portrait">
-                        <Portrait variant={n.id} />
-                      </span>
-                      <span>
-                        <b>{n.name}</b>
-                        <small>
-                          {n.trust >= 20
-                            ? "已有信任"
-                            : n.trust >= 5
-                              ? "渐有来往"
-                              : "初识"}
-                        </small>
-                      </span>
-                      <span className="trust-count">
-                        {n.trust}
-                        <small>信任</small>
-                      </span>
-                    </button>
-                  ))}
-              </section>
               <section className="recent-panel framed">
                 <div className="panel-label">
-                  新近记事
-                  <button onClick={() => show("journal")}>展开 →</button>
+                  最新札记
+                  <button onClick={() => show("journal")}>打开札记 →</button>
                 </div>
                 <button className="recent-brief" onClick={() => show("journal")}>
                   <span>记</span>
                   <span>
-                    <b>{game.journal.at(-1)?.title}</b>
-                    <small>{game.journal.at(-1)?.text}</small>
+                    <b>{game.journal.at(-1)?.title || "尚无札记"}</b>
+                    <small>
+                      {game.journal.at(-1)?.text || "今日尚未留下新的记事。"}
+                    </small>
                   </span>
                 </button>
               </section>
