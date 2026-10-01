@@ -32,6 +32,13 @@ function setup() {
   return { api: createLocalApi(storage), storage };
 }
 describe("核心答题与存档", () => {
+  it("没有选择文集也能进入世界", async () => {
+    const { api } = setup();
+    const game = await api.createGame({ ...config, bankIds: [] });
+    expect(game.player.name).toBe("测试书生");
+    expect(game.config.bankIds).toEqual([]);
+    expect(game.attempt).toBeNull();
+  });
   it("判题只结算一次，刷新保持结果；修订题库不改变已发出的卷", async () => {
     const { api, storage } = setup();
     const game = await api.beginActivity(

@@ -54,6 +54,7 @@ API_PROXY_TARGET=http://localhost:8080
 ~~~
 
 pace 为 normal / slow；difficulty 为 gentle / standard。
+新建人生界面不再要求玩家选择文集或题量；客户端自动接入当前可用文集。`bankIds` 允许为空，因此没有可用文集时仍可进入世界，待题库接入后再参与答题活动。
 Bootstrap 为 `{saves, banks, questionCatalog, activeId, legacyNotice}`；saves 中每项为 `{id,name,title,total,updatedAt}`。
 
 `questionCatalog` 用于切换本地编辑题库与上线后的服务器统一题库：

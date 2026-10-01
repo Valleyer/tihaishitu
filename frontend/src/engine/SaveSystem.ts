@@ -21,10 +21,9 @@ export function validateConfig(value: NewGame, banks: Bank[]): NewGame {
     throw new Error("姓名请填写 1–12 个字。");
   if (
     !Array.isArray(value.bankIds) ||
-    !value.bankIds.length ||
     value.bankIds.some((id) => !banks.some((b) => b.id === id && b.enabled))
   )
-    throw new Error("请选用至少一部已启用的文集。");
+    throw new Error("所用文集中包含已停用或不存在的项目。");
   if (
     !["slow", "normal"].includes(value.pace) ||
     !["gentle", "standard"].includes(value.difficulty)
