@@ -1,0 +1,1050 @@
+/* V2—V5 世界界面：默认风景与行动，进入活动后才展卷。所有主页面保持视口内布局。 */
+.exploration-hub {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #6c725044;
+  background: #152b27;
+}
+.world-scene {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  background-size: cover;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 26px 28px;
+}
+.scene-heading {
+  position: relative;
+  max-width: 76%;
+  text-shadow: 0 2px 18px #061511;
+}
+.scene-heading small {
+  color: #d2c18d;
+  font-size: 10px;
+  letter-spacing: 3px;
+}
+.scene-heading h1 {
+  font:
+    clamp(28px, 3.4vw, 48px) SimSun,
+    serif;
+  color: #f0e3bb;
+  letter-spacing: 7px;
+  margin: 12px 0;
+}
+.scene-heading p {
+  color: #d0d0b7;
+  line-height: 1.8;
+  font-size: 13px;
+  margin: 0 0 16px;
+  max-width: 540px;
+}
+.scene-map-button {
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  background: #142925bb;
+  border: 1px solid #9c986b;
+  color: #dacc9d;
+  font-size: 10px;
+}
+.resident-row {
+  display: flex;
+  gap: 12px;
+}
+.resident-row button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #162f28ba;
+  border: 1px solid #c8b88955;
+  padding: 7px 14px 7px 7px;
+  text-align: left;
+}
+.resident-face {
+  width: 36px;
+  height: 44px;
+  overflow: hidden;
+}
+.resident-row span > small {
+  display: block;
+  margin-top: 6px;
+  font-size: 9px;
+  color: #9caa8f;
+}
+.world-choices {
+  padding: 17px 22px 13px;
+  flex-shrink: 0;
+}
+.world-section-title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #dcc697;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+.world-section-title small {
+  font-size: 9px;
+  color: #8fa08d;
+  letter-spacing: 0;
+}
+.world-section-title button {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  font-size: 10px;
+  padding: 0;
+  color: #b6bd99;
+}
+.opportunity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.opportunity {
+  text-align: left;
+  min-width: 0;
+  background: linear-gradient(120deg, #34423670, #172d28);
+  border: 1px solid #b5a57244;
+  padding: 14px 16px;
+  color: #d7c99e;
+}
+.opportunity:hover {
+  border-color: #c7ad72;
+  transform: translateY(-1px);
+}
+.opportunity > small {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #bdaa7a;
+}
+.opportunity h3 {
+  font:
+    18px SimSun,
+    serif;
+  letter-spacing: 2px;
+  margin: 9px 0;
+}
+.opportunity p {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #a5b5a2;
+  margin: 0 0 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.opportunity > span {
+  font-size: 9px;
+  color: #c8b989;
+}
+.opportunity.completed {
+  opacity: 0.55;
+}
+.world-shortcuts {
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid #a6b08b22;
+  margin-top: 15px;
+  padding-top: 12px;
+}
+.world-shortcuts > button {
+  flex: 1;
+  background: none;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  text-align: left;
+  color: #b4bd9e;
+}
+.world-shortcuts b {
+  font:
+    25px SimSun,
+    serif;
+  color: #bda978;
+}
+.world-shortcuts span {
+  font:
+    12px SimSun,
+    serif;
+}
+.world-shortcuts small {
+  display: block;
+  font-size: 8px;
+  margin-top: 5px;
+  letter-spacing: 0;
+  color: #789080;
+}
+.resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #a4985820;
+  padding: 16px;
+  border: 1px solid #a4926355;
+}
+.resume-banner b {
+  color: #dcc392;
+}
+.resume-banner p {
+  font-size: 11px;
+  color: #9dad98;
+}
+.resume-banner button {
+  font-size: 12px;
+  padding: 10px 16px;
+}
+.player-talents {
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid #83917133;
+  padding: 12px 0;
+  margin-top: 8px;
+}
+.player-talents span {
+  flex: 1;
+  color: #92a589;
+  font-size: 10px;
+  text-align: center;
+}
+.player-talents b {
+  display: block;
+  color: #dbca96;
+  font-size: 19px;
+  font-weight: 400;
+  margin-top: 7px;
+}
+.character-sheet .portrait-stage {
+  max-height: 32%;
+  min-height: 80px;
+}
+.character-sheet .attributes > div {
+  margin: 9px 0;
+}
+.character-sheet .mini-road {
+  font-size: 9px;
+  padding-top: 10px;
+}
+.challenge-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 4px;
+  color: #b7bd99;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.challenge-toolbar div {
+  display: flex;
+  gap: 8px;
+}
+.challenge-toolbar button {
+  font-size: 10px;
+  padding: 5px 9px;
+  background: transparent;
+}
+.activity-shelf {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.activity-shelf > button {
+  text-align: left;
+  background: #20362d;
+  border-color: #a6a36b44;
+  padding: 20px;
+}
+.activity-shelf small {
+  font-size: 10px;
+  color: #a4ad8d;
+}
+.activity-shelf h3 {
+  font:
+    23px SimSun,
+    serif;
+  color: #d8c492;
+  margin: 12px 0;
+}
+.activity-shelf p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #9eaf99;
+}
+.activity-shelf span {
+  font-size: 11px;
+  color: #c4b68c;
+  line-height: 1.8;
+}
+.activity-detail > small {
+  color: #adba96;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.activity-detail > h2 {
+  font:
+    30px SimSun,
+    serif;
+  letter-spacing: 3px;
+  margin: 12px 0;
+}
+.activity-detail > p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #b7bda2;
+}
+.invitation {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #304334;
+  border: 1px solid #75876555;
+  margin: 14px 0;
+}
+.invitation-face {
+  width: 52px;
+  height: 65px;
+  flex-shrink: 0;
+}
+.invitation blockquote {
+  margin: 0;
+  font:
+    16px/1.9 KaiTi,
+    SimSun,
+    serif;
+  color: #e0d6b4;
+}
+.invitation blockquote > b {
+  display: block;
+  font:
+    11px SimSun,
+    serif;
+  color: #a6b593;
+  margin-bottom: 7px;
+}
+.reward-tiers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.reward-tiers > div {
+  display: flex;
+  gap: 12px;
+  border: 1px solid #70865c55;
+  padding: 12px;
+}
+.reward-tiers strong {
+  white-space: nowrap;
+  color: #d4bc83;
+  font-weight: 400;
+  font-size: 17px;
+}
+.reward-tiers strong small {
+  display: block;
+  font-size: 10px;
+  margin-top: 6px;
+  color: #9dae8f;
+}
+.reward-tiers span {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #b4bf9f;
+}
+.reward-tiers em {
+  display: block;
+  font-style: normal;
+  color: #dbc290;
+}
+.gate-reasons {
+  background: #a4804320;
+  padding: 12px;
+  color: #d9b776;
+  font-size: 12px;
+  margin: 12px 0;
+  line-height: 1.8;
+}
+.gate-reasons button {
+  display: block;
+  background: none;
+  border: 0;
+  padding: 8px 0 0;
+  font-size: 11px;
+  color: #d1c492;
+}
+.companion-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.companion-tabs button {
+  flex: 1;
+  background: #1d352c;
+  border-color: #607d5c55;
+  font-size: 12px;
+}
+.companion-tabs .selected {
+  background: #b3a36b;
+  color: #15251c;
+}
+.companion-stage {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 22px;
+}
+.companion-portrait {
+  min-height: 225px;
+  max-height: 260px;
+  overflow: hidden;
+  border: 1px solid #bfaa6355;
+}
+.companion-copy > small {
+  font-size: 10px;
+  color: #a3b497;
+}
+.companion-copy h2 {
+  font:
+    28px SimSun,
+    serif;
+  letter-spacing: 4px;
+  margin: 9px 0 12px;
+}
+.companion-copy > p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #a0b298;
+}
+.companion-copy blockquote {
+  margin: 18px 0 10px;
+  color: #dfd4b1;
+  font:
+    17px/1.8 KaiTi,
+    SimSun,
+    serif;
+}
+.bond-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #c6bc95;
+}
+.bond-meter meter {
+  flex: 1;
+  min-width: 50px;
+}
+.bond-meter small {
+  color: #9aac90;
+}
+.conversation-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 18px;
+}
+.conversation-options button {
+  text-align: left;
+  padding: 13px;
+  font-size: 12px;
+  background: #2a402f;
+  border-color: #78906344;
+}
+.conversation-options small {
+  display: block;
+  font-size: 9px;
+  color: #9bb18f;
+  margin-top: 5px;
+}
+.conversation-options .gold-button {
+  grid-column: 1/-1;
+  text-align: center;
+  background: #b5a06b;
+  color: #16261d;
+}
+.bond-gifts {
+  margin-top: 16px;
+}
+.bond-gifts article {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid #78946633;
+}
+.bond-gifts b {
+  font-size: 13px;
+  color: #cbbb8c;
+}
+.bond-gifts small {
+  display: block;
+  font-size: 10px;
+  color: #90a785;
+  margin-top: 7px;
+}
+.bond-gifts p {
+  font-size: 12px;
+  color: #d0c09d;
+}
+.bond-gifts button {
+  white-space: nowrap;
+  font-size: 10px;
+}
+.visit-reminder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #a2b594;
+}
+.visit-reminder button {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.interactive-map .map-location {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px;
+  color: #c5b788;
+  min-width: 90px;
+}
+.interactive-map .map-location:hover {
+  color: #eee1b4;
+}
+.interactive-map {
+  height: 300px;
+  min-height: 220px;
+}
+.map-destination {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-top: 18px;
+}
+.map-destination > div:first-child {
+  flex: 1;
+}
+.map-destination h3 {
+  font:
+    23px SimSun,
+    serif;
+  color: #d8c799;
+  margin: 9px 0;
+}
+.map-destination p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #a7b99b;
+}
+.map-destination small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #829c7b;
+}
+.map-destination button {
+  font-size: 12px;
+}
+.inventory-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.inventory-top b {
+  font:
+    21px SimSun,
+    serif;
+}
+.inventory-top span {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #c6b98e;
+}
+.inventory-top button {
+  font-size: 11px;
+}
+.attribute-strip {
+  display: flex;
+  gap: 15px;
+  margin: 18px 0;
+}
+.attribute-strip > span {
+  flex: 1;
+  background: #293e2e;
+  padding: 12px;
+  text-align: center;
+  color: #b6b98f;
+  font-size: 12px;
+}
+.attribute-strip b {
+  font-size: 24px;
+  display: block;
+  margin: 8px 0;
+  color: #d9c68e;
+}
+.attribute-strip small {
+  font-size: 8px;
+  color: #8ca67e;
+}
+.inventory-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.item-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid #a4976144;
+  padding: 16px;
+  background: #243c2d;
+}
+.item-symbol {
+  font:
+    30px/50px KaiTi,
+    serif;
+  text-align: center;
+  width: 46px;
+  flex-shrink: 0;
+  border: 1px solid #a28e5655;
+  color: #ceb77b;
+  background: #bda36912;
+}
+.item-card h3 {
+  font:
+    18px SimSun,
+    serif;
+  color: #d5c393;
+  margin: 7px 0;
+}
+.item-card small {
+  font-size: 9px;
+  color: #98ad8d;
+}
+.item-card p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #a9b69b;
+}
+.item-card em {
+  display: block;
+  font:
+    10px SimSun,
+    serif;
+  color: #b9c49d;
+  margin: 10px 0;
+}
+.item-card button {
+  font-size: 10px;
+  padding: 6px 12px;
+}
+.activity-outcome {
+  flex: 1;
+  min-height: 0;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at top, #40503a, #162e25 75%);
+  border: 1px solid #a4995d66;
+  gap: 12px;
+}
+.activity-outcome > small {
+  color: #90a784;
+  font-size: 10px;
+}
+.outcome-score {
+  font:
+    70px/1.1 Georgia,
+    serif;
+  color: #d7bd79;
+}
+.outcome-score span {
+  display: block;
+  font:
+    12px SimSun,
+    serif;
+  margin-top: 9px;
+  letter-spacing: 3px;
+}
+.activity-outcome h2 {
+  font:
+    27px SimSun,
+    serif;
+  color: #ddc995;
+  letter-spacing: 3px;
+  margin: 6px 0;
+}
+.activity-outcome blockquote {
+  font:
+    16px/1.8 KaiTi,
+    serif;
+  margin: 5px 0;
+  color: #c4c9a5;
+}
+.activity-outcome > p {
+  font-size: 11px;
+  color: #93ac88;
+}
+.loot-list {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+.loot-list span {
+  border: 1px solid #bcab6255;
+  padding: 10px 13px;
+  color: #dac087;
+  font-size: 12px;
+  background: #a7934020;
+}
+.activity-outcome details {
+  font-size: 11px;
+  color: #a2b994;
+}
+.activity-outcome details p {
+  max-height: 90px;
+  overflow: auto;
+}
+.activity-outcome > .gold-button {
+  margin-top: 12px;
+}
+.legacy-encounter {
+  width: 100%;
+  margin-top: 10px;
+  font-size: 11px;
+}
+.quiet-place {
+  grid-column: 1/-1;
+  color: #bcc9a6;
+  font-size: 12px;
+}
+.game-dock {
+  gap: 0;
+}
+.game-dock > button {
+  min-width: 0;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+@media (max-width: 1100px) {
+  .world-scene {
+    padding: 20px;
+  }
+  .world-choices {
+    padding: 14px;
+  }
+  .scene-heading h1 {
+    font-size: 32px;
+  }
+  .scene-heading p {
+    font-size: 11px;
+  }
+  .opportunity {
+    padding: 11px;
+  }
+  .opportunity h3 {
+    font-size: 16px;
+  }
+  .game-dock > button {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .world-shortcuts small {
+    display: none;
+  }
+}
+@media (max-height: 760px) {
+  .world-scene {
+    min-height: 140px;
+    padding: 18px 22px;
+  }
+  .scene-heading h1 {
+    font-size: 29px;
+    margin: 8px 0;
+  }
+  .scene-heading p {
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+  .resident-face {
+    height: 32px;
+    width: 26px;
+  }
+  .world-choices {
+    padding: 12px 16px;
+  }
+  .opportunity {
+    padding: 10px 12px;
+  }
+  .opportunity h3 {
+    font-size: 16px;
+    margin: 7px 0;
+  }
+  .opportunity p {
+    font-size: 10px;
+    margin-bottom: 7px;
+  }
+  .world-shortcuts {
+    margin-top: 10px;
+    padding-top: 9px;
+  }
+  .world-shortcuts small {
+    display: none;
+  }
+  .activity-outcome {
+    padding: 18px;
+    gap: 6px;
+  }
+  .outcome-score {
+    font-size: 54px;
+  }
+}
+@media (max-width: 720px) {
+  .scene-heading {
+    max-width: 100%;
+  }
+  .scene-heading small {
+    font-size: 8px;
+  }
+  .scene-heading h1 {
+    font-size: 30px;
+  }
+  .scene-heading p {
+    font-size: 11px;
+  }
+  .scene-map-button {
+    top: 10px;
+    right: 10px;
+    font-size: 9px;
+    padding: 5px;
+  }
+  .world-section-title {
+    font-size: 12px;
+    margin-bottom: 9px;
+  }
+  .world-section-title small {
+    display: none;
+  }
+  .world-choices {
+    padding: 12px;
+  }
+  .opportunity-grid {
+    gap: 8px;
+  }
+  .opportunity {
+    padding: 10px;
+  }
+  .opportunity h3 {
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .opportunity > small {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .opportunity p {
+    font-size: 10px;
+  }
+  .opportunity > span {
+    font-size: 9px;
+  }
+  .world-shortcuts {
+    gap: 8px;
+  }
+  .world-shortcuts b {
+    font-size: 20px;
+  }
+  .world-shortcuts span {
+    font-size: 10px;
+  }
+  .game-dock > button {
+    padding: 6px 2px;
+    flex: 1;
+    min-width: 0;
+  }
+  .game-dock > button span {
+    font-size: 17px;
+  }
+  .game-dock > button b {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .game-dock {
+    padding: 4px;
+    display: flex;
+  }
+  .activity-shelf {
+    gap: 9px;
+  }
+  .activity-shelf > button {
+    padding: 13px;
+  }
+  .activity-shelf h3 {
+    font-size: 19px;
+  }
+  .activity-shelf p {
+    font-size: 11px;
+  }
+  .companion-stage {
+    grid-template-columns: 95px 1fr;
+    gap: 13px;
+  }
+  .companion-portrait {
+    min-height: 200px;
+    max-height: 230px;
+  }
+  .companion-copy h2 {
+    font-size: 24px;
+  }
+  .companion-copy blockquote {
+    font-size: 15px;
+  }
+  .companion-copy > p {
+    font-size: 11px;
+  }
+  .companion-tabs {
+    gap: 5px;
+  }
+  .companion-tabs button {
+    padding: 7px 4px;
+    font-size: 10px;
+  }
+  .bond-meter {
+    flex-wrap: wrap;
+    font-size: 10px;
+    gap: 6px;
+  }
+  .reward-tiers {
+    grid-template-columns: 1fr;
+  }
+  .reward-tiers > div {
+    padding: 9px;
+  }
+  .inventory-grid {
+    grid-template-columns: 1fr;
+  }
+  .item-card {
+    padding: 12px;
+  }
+  .map-destination {
+    display: block;
+  }
+  .interactive-map {
+    height: 260px;
+    min-height: 0;
+  }
+  .interactive-map .map-location {
+    min-width: 60px;
+    font-size: 10px;
+    padding: 5px;
+  }
+  .interactive-map .map-location b {
+    font-size: 11px;
+  }
+  .activity-outcome h2 {
+    font-size: 23px;
+  }
+  .activity-outcome blockquote {
+    font-size: 14px;
+  }
+  .challenge-toolbar {
+    font-size: 10px;
+  }
+  .challenge-toolbar button {
+    font-size: 9px;
+    padding: 5px;
+  }
+  .world-scene {
+    min-height: 150px;
+  }
+}
+@media (max-height: 580px) {
+  .scene-heading p,
+  .resident-row,
+  .world-shortcuts {
+    display: none;
+  }
+  .world-scene {
+    min-height: 70px;
+    padding: 10px 16px;
+  }
+  .scene-heading h1 {
+    font-size: 24px;
+    margin: 5px 0;
+  }
+  .scene-heading small {
+    font-size: 8px;
+  }
+  .world-choices {
+    padding: 9px 12px;
+  }
+  .opportunity p {
+    display: none;
+  }
+  .opportunity h3 {
+    margin: 5px 0;
+  }
+  .world-section-title {
+    margin-bottom: 6px;
+  }
+  .world-section-title small {
+    display: none;
+  }
+  .challenge-toolbar {
+    padding: 6px 2px;
+  }
+  .activity-outcome {
+    gap: 4px;
+  }
+  .activity-outcome .outcome-score {
+    font-size: 36px;
+  }
+  .activity-outcome h2 {
+    font-size: 20px;
+  }
+  .loot-list span {
+    padding: 6px;
+  }
+  .activity-outcome > .gold-button {
+    margin-top: 3px;
+  }
+}
+
+.goal-treasure {
+  font:
+    42px/70px KaiTi,
+    serif;
+  color: #c6ad6c;
+  text-align: center;
+  border: 1px solid #b8a36a33;
+  background: #b49b4410;
+  margin: 10px 0;
+}
+.world-collection {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #82966344;
+  padding-top: 12px;
+  margin-top: 14px;
+  font-size: 9px;
+  color: #8aa17e;
+}

@@ -11,6 +11,20 @@ import eventData from "./events.json";
 import mapData from "./maps.json";
 import portraitData from "./portraits.json";
 import bankData from "./question-banks.json";
+import activityData from "./activities.json";
+import companionData from "./companions.json";
+import itemData from "./items.json";
+import adventureData from "./adventure.json";
+import type {
+  Activity,
+  Companion,
+  Item,
+  WorldLocation,
+} from "../domain/adventure";
+export const activities = activityData as unknown as Activity[];
+export const companions = companionData as unknown as Companion[];
+export const items = itemData as unknown as Item[];
+export const adventureDesign = adventureData;
 import type { Bank, ChoiceEvent, Npc } from "../domain/types";
 export const gameDesign = gameData;
 export const chapterDesign = chapterData;
@@ -30,7 +44,7 @@ export const eventDesign = eventData as (Omit<ChoiceEvent, "options"> & {
   npcId: string;
   options: (ChoiceEvent["options"][number] & { effects: EventEffects })[];
 })[];
-export const mapDesign = mapData;
+export const mapDesign = mapData as unknown as { locations: WorldLocation[] };
 export const portraitDesign = portraitData;
 export const bankDesign = bankData as unknown as Bank[];
 export const locationFor = (chapter: number) =>

@@ -1,3 +1,13 @@
+import {
+  hydrateAdventure,
+  beginRun,
+  settleRunAnswer,
+  travelTo,
+  interact,
+  changeItem,
+  purchase,
+  claimRelationship,
+} from "../../engine/AdventureEngine";
 /**
  * 本地版 GameApi：浏览器 localStorage 是唯一持久化来源。
  * 每次操作读取独立数据，完成判题、成长、剧情结算后一次写回；失败时不提交半套状态。
@@ -18,7 +28,7 @@ import { drawQuestion } from "../../engine/QuestionEngine";
 import { makeScene, initialNpcs } from "../../engine/StoryEngine";
 import { settleProgress } from "../../engine/ProgressionSystem";
 import { recordLearning } from "../../engine/SpacedRepetitionEngine";
-import { applyChoice, pendingEvent } from "../../engine/EventEngine";
+import { applyChoice } from "../../engine/EventEngine";
 import {
   parseBackup,
   validateBank,
@@ -98,19 +108,31 @@ export function createLocalApi(
         ...data.banks.filter((bank) => overrides.has(bank.id)),
       ];
       // 早期判断题由界面生成按钮，没有存 options；升级时补齐，保留题目与标准答案。
-      for (const bank of data.banks) for (const question of bank.questions) {
-        if (question.type === "true_false") question.options = { true: "正确", false: "错误" };
-      }
+      for (const bank of data.banks)
+        for (const question of bank.questions) {
+          if (question.type === "true_false")
+            question.options = { true: "正确", false: "错误" };
+        }
       for (const game of Object.values(data.saves)) {
         const question = game.attempt?.question;
-        if (question?.type === "true_false" && Object.keys(question.options).length < 2) {
+        if (
+          question?.type === "true_false" &&
+          Object.keys(question.options).length < 2
+        ) {
           const snapshot = data.snapshots[game.id];
           if (snapshot) {
-            const full = shuffleQuestion({ ...snapshot, options: { true: "正确", false: "错误" } });
+            const full = shuffleQuestion({
+              ...snapshot,
+              options: { true: "正确", false: "错误" },
+            });
             data.snapshots[game.id] = full;
             question.options = { ...full.options };
           }
         }
+      }
+      for (const game of Object.values(data.saves)) {
+        hydrateAdventure(game);
+        if (!game.attempt) delete data.snapshots[game.id];
       }
       return data;
     } catch {
@@ -162,7 +184,18 @@ export function createLocalApi(
       full,
       review || (game.learning[full.id]?.wrong ?? 0) > 0,
     );
-    game.npcs.find((n) => n.id === scene.npcId)!.met = true;
+    const activity = game.adventure?.run?.definition;
+    if (activity) {
+      scene.task = activity.name;
+      scene.title = activity.name;
+      const npc = game.npcs.find((n) => n.id === activity.npcId);
+      if (npc) {
+        npc.met = true;
+        scene.npcId = npc.id;
+        scene.speaker = npc.name;
+        scene.role = npc.role;
+      }
+    }
     game.attempt = {
       id: crypto.randomUUID(),
       question,
@@ -173,6 +206,73 @@ export function createLocalApi(
     db.snapshots[game.id] = full;
   }
   return {
+    async beginActivity(id, activityId) {
+      const db = read(),
+        game = get(db, id);
+      beginRun(game, activityId);
+      nextAttempt(db, game, game.adventure!.run!.definition.reviewOnly);
+      return persist(db, game);
+    },
+    async finishActivity(id, runId) {
+      const db = read(),
+        game = get(db, id),
+        run = game.adventure!.run;
+      if (!run) return structuredClone(game);
+      if (run.id !== runId || run.status !== "settled")
+        throw new Error("这段行程尚未结算。");
+      game.adventure!.run = null;
+      game.attempt = null;
+      delete db.snapshots[id];
+      return persist(db, game);
+    },
+    async abandonActivity(id, runId) {
+      const db = read(),
+        game = get(db, id),
+        run = game.adventure!.run;
+      if (!run) return structuredClone(game);
+      if (run.id !== runId) throw new Error("行程已变化。");
+      // 中途退出保留已答题目的学识与错题记录，但不发整轮奖励。
+      game.adventure!.run = null;
+      game.attempt = null;
+      delete db.snapshots[id];
+      return persist(db, game);
+    },
+    async travel(id, locationId) {
+      const db = read(),
+        game = get(db, id);
+      travelTo(game, locationId);
+      return persist(db, game);
+    },
+    async talk(id, npcId, topicId) {
+      const db = read(),
+        game = get(db, id);
+      interact(game, npcId, topicId);
+      return persist(db, game);
+    },
+    async dismissEncounter(id) {
+      const db = read(),
+        game = get(db, id);
+      game.adventure!.encounter = null;
+      return persist(db, game);
+    },
+    async useItem(id, itemId) {
+      const db = read(),
+        game = get(db, id);
+      changeItem(game, itemId);
+      return persist(db, game);
+    },
+    async buyItem(id, itemId) {
+      const db = read(),
+        game = get(db, id);
+      purchase(game, itemId);
+      return persist(db, game);
+    },
+    async claimBond(id, npcId, milestone) {
+      const db = read(),
+        game = get(db, id);
+      claimRelationship(game, npcId, milestone);
+      return persist(db, game);
+    },
     async bootstrap(): Promise<Bootstrap> {
       const db = read();
       return {
@@ -230,7 +330,7 @@ export function createLocalApi(
         notes: {},
         chapter: 0,
       };
-      nextAttempt(db, game);
+      hydrateAdventure(game);
       return persist(db, game);
     },
     async getGame(id) {
@@ -257,6 +357,8 @@ export function createLocalApi(
         throw new Error("课卷已更新，请重新载入存档。");
       if (attempt.result && attempt.result.correct !== null)
         return structuredClone(game);
+      if (game.adventure?.run?.status !== "active")
+        throw new Error("请先进入一项读书或挑战活动。");
       const full = db.snapshots[id];
       if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
       if (game.event) throw new Error("请先回应眼前的际遇。");
@@ -300,25 +402,8 @@ export function createLocalApi(
       attempt.result.story = correct
         ? attempt.scene.success
         : attempt.scene.failure;
-      // 宽和模式保留信任；常规模式仅在同题再次答错时按配置扣除信任。
-      if (
-        !correct &&
-        game.config.difficulty === "standard" &&
-        game.learning[full.id].wrong > 1
-      ) {
-        const npc = game.npcs.find((n) => n.id === attempt.scene.npcId)!;
-        const before = npc.trust;
-        npc.trust = Math.max(
-          0,
-          before - gameDesign.growth.trustLossOnRepeatedWrong,
-        );
-        if (before !== npc.trust)
-          attempt.result.changes.push({
-            label: npc.name + " · 信任",
-            before,
-            after: npc.trust,
-          });
-      }
+      // 好感与信任只在整轮共读达标后发放，单题不再增减人物关系。
+      settleRunAnswer(game, correct);
       game.journal.push({
         id: crypto.randomUUID(),
         day: game.records.length,
@@ -326,7 +411,7 @@ export function createLocalApi(
         text: attempt.result.story,
         kind: "story",
       });
-      game.event = pendingEvent(game);
+
       return persist(db, game);
     },
     async next(id, attemptId, reviewOnly = false) {
@@ -340,7 +425,13 @@ export function createLocalApi(
         (!game.attempt.result || game.attempt.result.correct === null)
       )
         throw new Error("请先完成当前课业。");
-      nextAttempt(db, game, reviewOnly);
+      if (game.adventure?.run?.status !== "active")
+        throw new Error("这一轮已经结束，请查看战果。");
+      nextAttempt(
+        db,
+        game,
+        game.adventure.run.definition.reviewOnly || reviewOnly,
+      );
       return persist(db, game);
     },
     async choose(id, eventId, choiceId) {

@@ -28,5 +28,15 @@
     "trust": 0,
     "met": false,
     "portrait": "clerk"
+  },
+  {
+    "id": "lin",
+    "name": "林知微",
+    "role": "青溪才女 · 听雨阁常客",
+    "description": "善辩而不咄咄逼人，读诗也读账册，愿与真正的知音同行。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "playerFemale"
   }
 ]

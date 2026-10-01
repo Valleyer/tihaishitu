@@ -128,6 +128,118 @@ for (const path of [
     "素材不存在：" + path,
   );
 }
+
+// V2—V5：配置引用在构建时一次检查，避免手改后进入副本才发现漏写奖励或人物。
+const activities = read("activities"),
+  items = read("items"),
+  companions = read("companions"),
+  adventure = read("adventure");
+unique(activities, "activities");
+unique(items, "items");
+const attrIds = adventure.attributes.map((a) => a.id),
+  npcIds = characters.map((n) => n.id),
+  itemIds = items.map((i) => i.id),
+  locIds = maps.locations.map((l) => l.id);
+const checkReward = (reward, source) => {
+  for (const key of ["knowledge", "coins", "reputation"])
+    if (reward[key] !== undefined)
+      check(
+        Number.isFinite(reward[key]) && reward[key] >= 0,
+        source + " 奖励 " + key + " 必须非负",
+      );
+  for (const [id, value] of Object.entries(reward.attributes || {}))
+    check(
+      attrIds.includes(id) && Number.isFinite(value) && value >= 0,
+      source + " 属性奖励无效：" + id,
+    );
+  for (const [id, value] of Object.entries(reward.items || {}))
+    check(
+      itemIds.includes(id) && Number.isInteger(value) && value > 0,
+      source + " 道具奖励无效：" + id,
+    );
+  for (const key of ["affinity", "trust"])
+    for (const [id, value] of Object.entries(reward[key] || {}))
+      check(
+        npcIds.includes(id) && Number.isFinite(value) && value >= 0,
+        source + " 关系奖励无效：" + id,
+      );
+};
+const checkGate = (gate, source) => {
+  for (const id of gate.items || [])
+    check(itemIds.includes(id), source + " 门槛道具不存在：" + id);
+  for (const [id, min] of Object.entries(gate.attributes || {}))
+    check(
+      attrIds.includes(id) && Number.isFinite(min) && min >= 0,
+      source + " 属性门槛无效：" + id,
+    );
+  for (const [id, min] of Object.entries(gate.affinity || {}))
+    check(
+      npcIds.includes(id) && Number.isFinite(min) && min >= 0,
+      source + " 好感门槛无效：" + id,
+    );
+};
+check(locIds.includes(adventure.startLocation), "初始地图不存在");
+for (const a of activities) {
+  check(
+    ["study", "companion", "dungeon", "story"].includes(a.kind),
+    a.id + " 活动类型无效",
+  );
+  check(
+    Number.isInteger(a.rounds) && a.rounds > 0 && a.rounds <= 50,
+    a.id + " 轮数须为 1–50",
+  );
+  check(a.passScore >= 0 && a.passScore <= 100, a.id + " 通关分数无效");
+  check(!a.locationId || locIds.includes(a.locationId), a.id + " 地点不存在");
+  check(!a.npcId || npcIds.includes(a.npcId), a.id + " 人物不存在");
+  checkGate(a.requirements, a.id);
+  check(
+    a.tiers.length > 0 && a.tiers.some((t) => t.minScore === 0),
+    a.id + " 需要 0 分兜底档",
+  );
+  check(
+    new Set(a.tiers.map((t) => t.minScore)).size === a.tiers.length,
+    a.id + " 评分档不能重复",
+  );
+  for (const tier of a.tiers) {
+    check(tier.minScore >= 0 && tier.minScore <= 100, a.id + " 评分档无效");
+    checkReward(tier.rewards, a.id);
+    if (tier.firstRewards) checkReward(tier.firstRewards, a.id);
+  }
+}
+for (const c of companions) {
+  check(
+    npcIds.includes(c.npcId) && locIds.includes(c.locationId),
+    "人物互动引用不存在",
+  );
+  for (const id of c.activities)
+    check(
+      activities.some((a) => a.id === id && a.npcId === c.npcId),
+      "共读活动引用无效：" + id,
+    );
+  for (const t of c.topics) check(t.lines.length > 0, "人物话题不能为空");
+  for (const m of c.milestones) checkReward(m.reward, c.npcId);
+}
+for (const item of items) {
+  if (item.kind === "equipment") {
+    check(!!item.slot, item.id + " 装备缺少部位");
+    for (const [id, n] of Object.entries(item.bonuses || {}))
+      check(attrIds.includes(id) && n >= 0, item.id + " 装备属性无效");
+  }
+  if (item.use) checkReward(item.use, item.id);
+}
+for (const l of maps.locations) {
+  checkGate(l.requirements, l.id);
+  for (const id of l.npcs) check(npcIds.includes(id), l.id + " 人物不存在");
+}
+console.log(
+  "探索内容：" +
+    activities.length +
+    " 项活动 / " +
+    items.length +
+    " 件物品 / " +
+    companions.length +
+    " 位可交互人物",
+);
 if (errors.length) {
   console.error("配置检查失败：\n" + errors.map((e) => " - " + e).join("\n"));
   process.exitCode = 1;

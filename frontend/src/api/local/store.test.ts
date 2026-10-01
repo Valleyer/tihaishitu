@@ -33,7 +33,10 @@ function setup() {
 describe("核心答题与存档", () => {
   it("判题只结算一次，刷新保持结果；修订题库不改变已发出的卷", async () => {
     const { api, storage } = setup();
-    const game = await api.createGame(config),
+    const game = await api.beginActivity(
+        (await api.createGame(config)).id,
+        "read",
+      ),
       attempt = game.attempt!;
     const [bankId, id] = attempt.question.id.split("::");
     const bank = (await api.bootstrap()).banks.find((b) => b.id === bankId)!;
@@ -78,13 +81,18 @@ describe("核心答题与存档", () => {
       "判断卷",
     );
     await api.putBank(bank);
-    const game = await api.createGame({ ...config, bankIds: [bank.id] });
+    const game = await api.beginActivity(
+      (await api.createGame({ ...config, bankIds: [bank.id] })).id,
+      "read",
+    );
     // 模拟旧版本未保存判断选项的存档，确认继续游戏时补齐按钮。
     const old = JSON.parse(storage.getItem(STORAGE_KEY)!);
     old.saves[game.id].attempt.question.options = {};
     old.snapshots[game.id].options = {};
     storage.setItem(STORAGE_KEY, JSON.stringify(old));
-    expect(Object.keys((await api.getGame(game.id)).attempt!.question.options)).toHaveLength(2);
+    expect(
+      Object.keys((await api.getGame(game.id)).attempt!.question.options),
+    ).toHaveLength(2);
     const result = await api.answer(game.id, {
       attemptId: game.attempt!.id,
       answer: false,

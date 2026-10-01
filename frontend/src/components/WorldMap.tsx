@@ -1,48 +1,88 @@
-/**
- * 地图地点、坐标和背景来自 maps.json；章节通过 locationId 关联地点。
- * 此版地图用于展示已到达与尚未到达地点，推进仍由课业和剧情触发。
- */
-import { chapterDesign, mapDesign } from "../content";
+/** 可点击舆图：先查看地点、人物和门槛，再通过 API 移动，锁定地点也可查看解锁目标。 */
+import { useState } from "react";
+import { activities, mapDesign } from "../content";
 import type { Game } from "../domain/types";
-export function WorldMap({ game }: { game: Game }) {
+import { requirementIssues } from "../engine/AdventureEngine";
+export function WorldMap({
+  game,
+  busy,
+  travel,
+  study,
+}: {
+  game: Game;
+  busy: boolean;
+  travel: (id: string) => void;
+  study: () => void;
+}) {
+  const [selected, setSelected] = useState(game.adventure!.locationId);
+  const location =
+      mapDesign.locations.find((l) => l.id === selected) ||
+      mapDesign.locations[0],
+    issues = requirementIssues(game, location.requirements),
+    state = game.adventure!;
   return (
     <>
       <p className="hint">
-        地图用于回看旅途，不需要跑图才能作答。随着章节推进，新的地点自然开放。
+        山河可行，故人可访。点击地点查看风物；带着本领和信物，远处的门会逐一打开。
       </p>
-      <div className="county-map">
-        {mapDesign.locations.map((location, i) => (
-          <div
+      <div className="county-map interactive-map">
+        {mapDesign.locations.map((loc) => (
+          <button
             className={
               "map-location " +
-              (i === game.chapter
-                ? "active"
-                : i > game.chapter
-                  ? "future"
-                  : "visited")
+              (loc.id === selected ? "active" : "") +
+              (requirementIssues(game, loc.requirements).length
+                ? " future"
+                : "")
             }
-            key={location.id}
-            style={{ left: location.x + "%", top: location.y + "%" }}
+            key={loc.id}
+            style={{ left: loc.x + "%", top: loc.y + "%" }}
+            onClick={() => setSelected(loc.id)}
           >
             <i />
-            <b>{location.name.split(" · ")[1]}</b>
+            <b>{loc.name.split(" · ").at(-1)}</b>
             <small>
-              {i === game.chapter
+              {loc.id === state.locationId
                 ? "身在此处"
-                : i > game.chapter
-                  ? "尚未抵达"
-                  : chapterDesign[i]?.title}
+                : requirementIssues(game, loc.requirements).length
+                  ? "待解锁"
+                  : state.visited.includes(loc.id)
+                    ? "曾来过"
+                    : "可前往"}
             </small>
-          </div>
+          </button>
         ))}
       </div>
-      <p className="map-caption">
-        {
-          mapDesign.locations.find(
-            (l) => l.id === chapterDesign[game.chapter].locationId,
-          )?.description
-        }
-      </p>
+      <section className="map-destination">
+        <div>
+          <small>此地风物</small>
+          <h3>{location.name}</h3>
+          <p>{location.ambience}</p>
+          <small>
+            {activities
+              .filter((a) => a.locationId === location.id)
+              .map((a) => a.name)
+              .join(" · ") || "静读与休憩"}
+          </small>
+        </div>
+        <div>
+          {issues.length > 0 ? (
+            <>
+              <p>尚需：{issues.join("；")}</p>
+              <button onClick={study}>读书提升本领 →</button>
+            </>
+          ) : (
+            <button
+              className="gold-button"
+              disabled={busy || !!state.run}
+              onClick={() => travel(location.id)}
+            >
+              {location.id === state.locationId ? "回到此地" : "动身前往"} →
+            </button>
+          )}
+          {state.run && <small>请先结束当前行程再出发</small>}
+        </div>
+      </section>
     </>
   );
 }

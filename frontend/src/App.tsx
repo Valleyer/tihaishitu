@@ -1,3 +1,13 @@
+import {
+  WorldHub,
+  ActivityShelf,
+  ActivityDetail,
+  NpcPanel,
+  Inventory,
+  Outcome,
+  WorldGoals,
+} from "./components/Exploration";
+import { effectiveAttribute } from "./engine/AdventureEngine";
 /**
  * 页面总入口：协调首页、入章对话、答题主界面与案头弹窗。
  * 所有存档变更经 GameApi 执行；界面只接收已保存的结果，避免显示与存档不同步。
@@ -7,21 +17,25 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import type { Bank, Bootstrap, Game, NewGame } from "./domain/types";
 import { calendar, chapters } from "./engine/StoryEngine";
-import { gameDesign, locationFor } from "./content";
+import { gameDesign, mapDesign, adventureDesign } from "./content";
 import { Modal } from "./components/Modal";
 import { Portrait } from "./components/Portrait";
 import { NewGameForm } from "./components/NewGameForm";
 import { QuestionPanel } from "./components/QuestionPanel";
 import { Library } from "./components/Library";
 import { download } from "./utils/download";
-import { Journal, People, Reviews, Statistics } from "./components/Records";
+import { Journal, Reviews, Statistics } from "./components/Records";
 import { Settings } from "./components/Settings";
 import { ChapterGate } from "./components/ChapterGate";
 import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
 import "./App.css";
 import "./screen-fit.css";
+import "./adventure.css";
 type Panel =
+  | "study"
+  | "activity"
+  | "bag"
   | "new"
   | "library"
   | "saves"
@@ -37,6 +51,9 @@ type Panel =
   | "event"
   | null;
 const panelNames: Record<Exclude<Panel, null>, string> = {
+  study: "点灯读书",
+  activity: "一段行程",
+  bag: "随身珍藏",
   new: "落笔入世",
   library: "藏书阁",
   saves: "人生存牍",
@@ -52,13 +69,15 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   event: "一念之间",
 };
 const dock = [
+  { id: "study", icon: "书", label: "读书" },
   { id: "journal", icon: "▤", label: "札记" },
   { id: "people", icon: "人", label: "故人" },
   { id: "map", icon: "图", label: "舆图" },
   { id: "library", icon: "册", label: "藏书阁" },
   { id: "review", icon: "卷", label: "旧案" },
   { id: "stats", icon: "业", label: "修业" },
-  { id: "settings", icon: "囊", label: "行囊" },
+  { id: "bag", icon: "囊", label: "行囊" },
+  { id: "settings", icon: "选", label: "配卷" },
   { id: "saves", icon: "牍", label: "存牍" },
 ] as const;
 function App() {
@@ -71,6 +90,11 @@ function App() {
     [reviewOnly, setReview] = useState(false),
     [note, setNote] = useState("");
   const [savePage, setSavePage] = useState(0);
+  const [npcFocus,setNpcFocus]=useState<string|undefined>();
+  const meet=(id?:string)=>{setNpcFocus(id);show("people")};
+  const [activityOpen, setActivityOpen] = useState(false),
+    [detailId, setDetailId] = useState("read"),
+    [settlement, setSettlement] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -138,6 +162,8 @@ function App() {
     void run(async () => {
       setGame(await api.getGame(id));
       setReview(false);
+      setActivityOpen(false);
+      setSettlement(false);
       setPanel(null);
       await sync();
     });
@@ -157,22 +183,53 @@ function App() {
       setNote(game.notes[game.attempt.question.id] || "");
   }
   const chapter = game ? chapters[game.chapter] : null,
-    nextChapter = game ? chapters[game.chapter + 1] : null,
     date = game ? calendar(game) : null,
     attempt = game?.attempt;
-  const progress =
-    game && nextChapter
-      ? Math.min(
-          100,
-          Math.round((game.records.length / nextChapter.threshold) * 100),
-        )
-      : 100;
   const opening =
     game &&
     chapter &&
     !game.flags.includes("chapter-intro:" + chapter.id) &&
-    !attempt?.result;
-  const location = game ? locationFor(game.chapter) : null;
+    !attempt?.result &&
+    !game.adventure?.run;
+  const location = game
+    ? mapDesign.locations.find((l) => l.id === game.adventure?.locationId) ||
+      mapDesign.locations[0]
+    : null;
+  const activityRun = game?.adventure?.run;
+  const inspect = (id: string) => {
+    setDetailId(id);
+    show("activity");
+  };
+  const travel = (id: string) =>
+    void run(async () => {
+      if (!game) return;
+      const updated = await api.travel(game.id, id);
+      setGame(updated);
+      setActivityOpen(false);
+      if (updated.adventure?.encounter) {
+        setDetailId(updated.adventure.encounter);
+        setPanel("activity");
+      } else setPanel(null);
+    });
+  const begin = () =>
+    void run(async () => {
+      if (!game) return;
+      setGame(await api.beginActivity(game.id, detailId));
+      setSettlement(false);
+      setActivityOpen(true);
+      setPanel(null);
+    });
+  const resume = () => {
+    setActivityOpen(true);
+    setSettlement(activityRun?.status === "settled");
+  };
+  const finish = () =>
+    void run(async () => {
+      if (!game || !activityRun) return;
+      setGame(await api.finishActivity(game.id, activityRun.id));
+      setActivityOpen(false);
+      setSettlement(false);
+    });
   const warning = (
     <div className="error-banner" role="alert">
       {error}
@@ -319,10 +376,10 @@ function App() {
                     <dd>{game.player.reputation}</dd>
                   </div>
                   <div>
-                    <dt>铜钱</dt>
+                    <dt>{adventureDesign.currency.name}</dt>
                     <dd>
                       {game.player.coins}
-                      <small> 文</small>
+                      <small> {adventureDesign.currency.unit}</small>
                     </dd>
                   </div>
                   <div>
@@ -330,6 +387,14 @@ function App() {
                     <dd className="subdued">尚未入仕</dd>
                   </div>
                 </dl>
+                <div className="player-talents">
+                  {adventureDesign.attributes.map((a) => (
+                    <span key={a.id}>
+                      {a.name}
+                      <b>{effectiveAttribute(game, a.id)}</b>
+                    </span>
+                  ))}
+                </div>
                 <div className="mini-road">
                   {gameDesign.road.map((label, index) => (
                     <span key={label} className={index === 0 ? "current" : ""}>
@@ -355,107 +420,113 @@ function App() {
                     第 {String(game.chapter + 1).padStart(2, "0")} 章 ·{" "}
                     {chapter!.title}
                   </small>
-                  <b>{attempt?.scene.title}</b>
+                  <b>
+                    {activityOpen
+                      ? activityRun?.definition.name
+                      : "今日行止，由你落笔"}
+                  </b>
                 </div>
                 <button onClick={() => show("map")}>{location!.name} ↗</button>
               </div>
-              {attempt && (
+              {activityOpen && activityRun && attempt ? (
                 <>
-                  <section className="story-dialogue">
-                    <div className="speaker-medallion">
-                      <Portrait variant={attempt.scene.npcId} />
-                    </div>
-                    <div className="dialogue-content">
-                      <div className="speaker-name">
-                        {attempt.scene.speaker}
+                  {settlement && activityRun.status === "settled" ? (
+                    <Outcome game={game} busy={busy} finish={finish} />
+                  ) : (
+                    <>
+                      <div className="challenge-toolbar">
                         <span>
-                          {attempt.result ? "批卷之后" : attempt.scene.role}
+                          {activityRun.definition.name} ·{" "}
+                          {Math.min(
+                            activityRun.answered + (attempt.result ? 0 : 1),
+                            activityRun.definition.rounds,
+                          )}{" "}
+                          / {activityRun.definition.rounds} 页
                         </span>
-                        <button onClick={() => show("story")}>前情</button>
+                        <div>
+                          <button onClick={() => setActivityOpen(false)}>
+                            暂回世界
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "放下本轮？已答课业保留，未完成时不发整轮奖励。",
+                                )
+                              )
+                                void run(async () => {
+                                  setGame(
+                                    await api.abandonActivity(
+                                      game.id,
+                                      activityRun.id,
+                                    ),
+                                  );
+                                  setActivityOpen(false);
+                                });
+                            }}
+                          >
+                            放下本轮
+                          </button>
+                        </div>
                       </div>
-                      <p className="spoken-line">
-                        {attempt.result
-                          ? attempt.result.story
-                          : attempt.scene.dialogue}
-                      </p>
-                    </div>
-                  </section>
-                  <QuestionPanel
-                    key={attempt.id}
-                    attempt={attempt}
-                    busy={busy}
-                    submit={(answer) =>
-                      void run(async () => {
-                        setGame(
-                          await api.answer(game.id, {
-                            attemptId: attempt.id,
-                            answer,
-                          }),
-                        );
-                      })
-                    }
-                    next={() =>
-                      void run(async () => {
-                        setGame(
-                          await api.next(game.id, attempt.id, reviewOnly),
-                        );
-                      })
-                    }
-                    note={game.notes[attempt.question.id] || ""}
-                    showNote={() => show("notes")}
-                    eventPending={!!game.event}
-                    reviewOnly={reviewOnly}
-                    setReview={setReview}
-                    onEvent={() => show("event")}
-                  />
+                      <QuestionPanel
+                        key={attempt.id}
+                        attempt={attempt}
+                        busy={busy}
+                        submit={(answer) =>
+                          void run(async () => {
+                            setGame(
+                              await api.answer(game.id, {
+                                attemptId: attempt.id,
+                                answer,
+                              }),
+                            );
+                          })
+                        }
+                        next={() => {
+                          if (activityRun.status === "settled")
+                            setSettlement(true);
+                          else
+                            void run(async () => {
+                              setGame(await api.next(game.id, attempt.id));
+                            });
+                        }}
+                        nextLabel={
+                          activityRun.status === "settled"
+                            ? "查看此行战果 →"
+                            : "展开下一页 →"
+                        }
+                        allowReview={false}
+                        note={game.notes[attempt.question.id] || ""}
+                        showNote={() => show("notes")}
+                        eventPending={false}
+                        reviewOnly={reviewOnly}
+                        setReview={setReview}
+                        onEvent={() => show("event")}
+                      />
+                    </>
+                  )}
                 </>
+              ) : (
+                <WorldHub
+                  key={location!.id}
+                  game={game}
+                  inspect={inspect}
+                  people={meet}
+                  map={() => show("map")}
+                  study={() => show("study")}
+                  bag={() => show("bag")}
+                  resume={resume}
+                  legacy={() => show("event")}
+                />
               )}
             </main>
             <aside className="affairs-column">
-              <section className="objective-panel framed">
-                <div className="panel-label">
-                  眼下之志<span>主线</span>
-                </div>
-                <h2>
-                  {nextChapter ? "走向 · " + nextChapter.title : "长夜磨卷"}
-                </h2>
-                <p>{chapter!.goal}</p>
-                <div className="progress-label">
-                  <span>课业积累</span>
-                  <b>
-                    {game.records.length}
-                    {nextChapter ? " / " + nextChapter.threshold : ""}
-                  </b>
-                </div>
-                <progress max={100} value={progress} />
-                {nextChapter && (
-                  <div className="objective-conditions">
-                    <span
-                      className={
-                        game.player.knowledge >= nextChapter.knowledge
-                          ? "fulfilled"
-                          : ""
-                      }
-                    >
-                      ◇ 学识 {game.player.knowledge}/{nextChapter.knowledge}
-                    </span>
-                    <span
-                      className={
-                        game.npcs.reduce((s, n) => s + n.trust, 0) >=
-                        nextChapter.trust
-                          ? "fulfilled"
-                          : ""
-                      }
-                    >
-                      ◇ 获得认可 {game.npcs.reduce((s, n) => s + n.trust, 0)}/
-                      {nextChapter.trust}
-                    </span>
-                  </div>
-                )}
-              </section>
+              <WorldGoals game={game} inspect={inspect} />
               <section className="relations-panel framed">
                 <div className="panel-label">
-                  此间故人<button onClick={() => show("people")}>展开 →</button>
+                  此间故人<button onClick={() => meet()}>展开 →</button>
                 </div>
                 {game.npcs
                   .filter((n) => n.met)
@@ -522,7 +593,13 @@ function App() {
         <Modal
           title={panelNames[panel]}
           close={() => {
-            if (!busy) setPanel(null);
+            if (!busy) {
+              setPanel(null);
+              if (game?.adventure?.encounter)
+                void run(async () =>
+                  setGame(await api.dismissEncounter(game.id)),
+                );
+            }
           }}
           wide={panel === "library" || panel === "stats"}
           subtitle={
@@ -573,6 +650,8 @@ function App() {
                           if (file.size > 20_000_000)
                             throw new Error("文件超过 20 MB");
                           setGame(await api.importSave(await file.text()));
+                          setActivityOpen(false);
+                          setSettlement(false);
                           await sync();
                           setPanel(null);
                           setNotice("已作为新的存档恢复");
@@ -665,16 +744,63 @@ function App() {
             </>
           )}
           {game && panel === "journal" && <Journal game={game} />}
-          {game && panel === "people" && <People game={game} />}
-          {game && panel === "map" && <WorldMap game={game} />}
+          {game && panel === "people" && (
+            <NpcPanel key={npcFocus||"nearby"} initialNpc={npcFocus}
+              game={game}
+              busy={busy}
+              inspect={inspect}
+              travel={travel}
+              talk={(npc, topic) =>
+                void run(async () =>
+                  setGame(await api.talk(game.id, npc, topic)),
+                )
+              }
+              claim={(npc, index) =>
+                void run(async () =>
+                  setGame(await api.claimBond(game.id, npc, index)),
+                )
+              }
+            />
+          )}
+          {game && panel === "study" && (
+            <ActivityShelf game={game} inspect={inspect} />
+          )}
+          {game && panel === "activity" && (
+            <ActivityDetail
+              game={game}
+              id={detailId}
+              busy={busy}
+              start={begin}
+              travel={travel}
+              study={() => show("study")}
+            />
+          )}
+          {game && panel === "bag" && (
+            <Inventory
+              game={game}
+              busy={busy}
+              use={(id) =>
+                void run(async () => setGame(await api.useItem(game.id, id)))
+              }
+              buy={(id) =>
+                void run(async () => setGame(await api.buyItem(game.id, id)))
+              }
+            />
+          )}
+          {game && panel === "map" && (
+            <WorldMap
+              game={game}
+              busy={busy}
+              travel={travel}
+              study={() => show("study")}
+            />
+          )}
           {game && panel === "review" && (
             <Reviews
               game={game}
               busy={busy}
               start={() => {
-                setReview(true);
-                setPanel(null);
-                setNotice("完成当前卷后，进入旧案重审");
+                inspect("review");
               }}
             />
           )}

@@ -1,0 +1,154 @@
+[
+  {
+    "id": "inkstone",
+    "name": "青溪砚",
+    "description": "旧书塾试炼的专属墨砚。先生说：磨墨如磨心。装备后悟性 +3。",
+    "kind": "equipment",
+    "rarity": "精良",
+    "symbol": "砚",
+    "slot": "desk",
+    "bonuses": {
+      "insight": 3
+    }
+  },
+  {
+    "id": "ledger",
+    "name": "清账算盘",
+    "description": "漕仓旧账中寻得的算盘，装备后筹算 +4。",
+    "kind": "equipment",
+    "rarity": "精良",
+    "symbol": "筹",
+    "slot": "hand",
+    "bonuses": {
+      "craft": 4
+    }
+  },
+  {
+    "id": "jade-flute",
+    "name": "听雨玉笛",
+    "description": "听雨阁雅集的专属信物，装备后辞采 +4。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "笛",
+    "slot": "hand",
+    "bonuses": {
+      "eloquence": 4
+    }
+  },
+  {
+    "id": "academy-seal",
+    "name": "藏书楼玉印",
+    "description": "高评通过藏书楼秘卷所得，是书院认可的凭证。",
+    "kind": "keepsake",
+    "rarity": "珍品",
+    "symbol": "印"
+  },
+  {
+    "id": "lu-notes",
+    "name": "陆先生手札",
+    "description": "信任与共读换来的批注，装备后悟性 +5。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "札",
+    "slot": "desk",
+    "bonuses": {
+      "insight": 5
+    }
+  },
+  {
+    "id": "gu-knot",
+    "name": "同窗结",
+    "description": "顾怀安亲手系的结，装备后辞采 +3。",
+    "kind": "equipment",
+    "rarity": "精良",
+    "symbol": "结",
+    "slot": "charm",
+    "bonuses": {
+      "eloquence": 3
+    }
+  },
+  {
+    "id": "shen-pass",
+    "name": "县衙通行帖",
+    "description": "沈砚以自己的名义作保，开启县衙深处的旧卷。",
+    "kind": "keepsake",
+    "rarity": "珍品",
+    "symbol": "帖"
+  },
+  {
+    "id": "lin-bookmark",
+    "name": "兰叶书签",
+    "description": "林知微赠予知音的书签，装备后悟性 +2、辞采 +2。",
+    "kind": "equipment",
+    "rarity": "珍品",
+    "symbol": "兰",
+    "slot": "charm",
+    "bonuses": {
+      "insight": 2,
+      "eloquence": 2
+    }
+  },
+  {
+    "id": "tea",
+    "name": "静心茶",
+    "description": "饮用后悟性永久 +1。读书所得银两可在行囊中添置。",
+    "kind": "consumable",
+    "rarity": "寻常",
+    "symbol": "茶",
+    "price": 12,
+    "use": {
+      "attributes": {
+        "insight": 1
+      }
+    }
+  },
+  {
+    "id": "paper",
+    "name": "澄心纸",
+    "description": "练笔后辞采永久 +1。",
+    "kind": "consumable",
+    "rarity": "寻常",
+    "symbol": "纸",
+    "price": 12,
+    "use": {
+      "attributes": {
+        "eloquence": 1
+      }
+    }
+  },
+  {
+    "id": "abacus-bead",
+    "name": "算筹",
+    "description": "演算后筹算永久 +1。",
+    "kind": "consumable",
+    "rarity": "寻常",
+    "symbol": "算",
+    "price": 12,
+    "use": {
+      "attributes": {
+        "craft": 1
+      }
+    }
+  },
+  {
+    "id": "county-token",
+    "name": "青溪义士牌",
+    "description": "完成书院、县衙与河埠的连环委托后所得，记录这一段真正属于你的经历。",
+    "kind": "keepsake",
+    "rarity": "传世",
+    "symbol": "义"
+  },
+  {
+    "id": "river-chart",
+    "name": "青溪河防图",
+    "description": "通行帖打开内库，五关读通旧卷后方可得见。装备后筹算 +6、悟性 +2。",
+    "kind": "equipment",
+    "rarity": "传世",
+    "symbol": "图",
+    "slot": "desk",
+    "bonuses": {
+      "craft": 6,
+      "insight": 2
+    }
+  }
+]

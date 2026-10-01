@@ -9,6 +9,8 @@ import { typeNames } from "../engine/QuestionBankManager";
 import { displayAnswer } from "../engine/OptionShuffler";
 import { Modal } from "./Modal";
 export function QuestionPanel({
+  nextLabel = "继续此生 →",
+  allowReview = true,
   attempt,
   busy,
   submit,
@@ -20,6 +22,8 @@ export function QuestionPanel({
   setReview,
   onEvent,
 }: {
+  nextLabel?: string;
+  allowReview?: boolean;
   attempt: Attempt;
   busy: boolean;
   submit: (answer: Answer) => void;
@@ -267,14 +271,16 @@ export function QuestionPanel({
           <button className="text-button" onClick={showNote}>
             ✎ {note ? "查看批注" : "卷边批注"}
           </button>
-          <label className="review-switch">
-            <input
-              type="checkbox"
-              checked={reviewOnly}
-              onChange={(e) => setReview(e.target.checked)}
-            />
-            只重审旧案
-          </label>
+          {allowReview && (
+            <label className="review-switch">
+              <input
+                type="checkbox"
+                checked={reviewOnly}
+                onChange={(e) => setReview(e.target.checked)}
+              />
+              只重审旧案
+            </label>
+          )}
         </div>
         {result ? (
           <button
@@ -284,11 +290,7 @@ export function QuestionPanel({
               eventPending ? onEvent : recheck ? () => setRecheck(false) : next
             }
           >
-            {eventPending
-              ? "回应眼前际遇 →"
-              : recheck
-                ? "返回批卷"
-                : "继续此生 →"}
+            {eventPending ? "回应眼前际遇 →" : recheck ? "返回批卷" : nextLabel}
           </button>
         ) : (
           <button

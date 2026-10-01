@@ -31,6 +31,23 @@ async function request<T>(
 }
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
 export const httpApi: GameApi = {
+  beginActivity: (id, activityId) =>
+    request(gamePath(id) + "/activities", "POST", { activityId }),
+  finishActivity: (id, runId) =>
+    request(gamePath(id) + "/activities/finish", "POST", { runId }),
+  abandonActivity: (id, runId) =>
+    request(gamePath(id) + "/activities/abandon", "POST", { runId }),
+  travel: (id, locationId) =>
+    request(gamePath(id) + "/travel", "POST", { locationId }),
+  talk: (id, npcId, topicId) =>
+    request(gamePath(id) + "/talk", "POST", { npcId, topicId }),
+  dismissEncounter: (id) => request(gamePath(id) + "/encounter", "DELETE"),
+  useItem: (id, itemId) =>
+    request(gamePath(id) + "/items/use", "POST", { itemId }),
+  buyItem: (id, itemId) =>
+    request(gamePath(id) + "/items/buy", "POST", { itemId }),
+  claimBond: (id, npcId, milestone) =>
+    request(gamePath(id) + "/bonds", "POST", { npcId, milestone }),
   bootstrap: () => request("/bootstrap"),
   createGame: (config) => request("/games", "POST", config),
   getGame: (id) => request(gamePath(id)),

@@ -7,7 +7,12 @@
       "background": "/art/academy.png",
       "position": "50% 50%",
       "x": 15,
-      "y": 68
+      "y": 68,
+      "requirements": {},
+      "npcs": [
+        "lu"
+      ],
+      "ambience": "廊下灯火初上，旧塾的门半掩着。先生在屋里翻书，远处传来收摊的声音。"
     },
     {
       "id": "east-hall",
@@ -16,7 +21,12 @@
       "background": "/art/academy.png",
       "position": "70% 50%",
       "x": 37,
-      "y": 51
+      "y": 51,
+      "requirements": {},
+      "npcs": [
+        "gu"
+      ],
+      "ambience": "顾怀安把两盏茶放在窗边。风吹过竹帘，案上压着一张新送来的欠条。"
     },
     {
       "id": "library",
@@ -25,7 +35,14 @@
       "background": "/art/academy.png",
       "position": "90% 50%",
       "x": 58,
-      "y": 30
+      "y": 30,
+      "requirements": {
+        "attributes": {
+          "insight": 6
+        }
+      },
+      "npcs": [],
+      "ambience": "木梯通向暗处，书香混着陈年纸墨。楼上那方玉印，已许久没有人见过。"
     },
     {
       "id": "county-office",
@@ -34,7 +51,16 @@
       "background": "/art/academy.png",
       "position": "65% 40%",
       "x": 78,
-      "y": 47
+      "y": 47,
+      "requirements": {
+        "attributes": {
+          "craft": 2
+        }
+      },
+      "npcs": [
+        "shen"
+      ],
+      "ambience": "账册摞得齐整，院外有船夫等着申辩。沈砚抬了抬眼，把笔搁在一旁。"
     },
     {
       "id": "exam-street",
@@ -43,7 +69,16 @@
       "background": "/art/academy.png",
       "position": "30% 50%",
       "x": 65,
-      "y": 73
+      "y": 73,
+      "requirements": {
+        "attributes": {
+          "eloquence": 2
+        }
+      },
+      "npcs": [
+        "lin"
+      ],
+      "ambience": "听雨阁里有人轻敲杯沿。帘后一声笑，林知微又猜中了别人写的谜。"
     },
     {
       "id": "night-study",
@@ -52,7 +87,12 @@
       "background": "/art/academy.png",
       "position": "85% 65%",
       "x": 34,
-      "y": 23
+      "y": 23,
+      "requirements": {
+        "knowledge": 50
+      },
+      "npcs": [],
+      "ambience": "夜色深了，青溪仍有一处灯不灭。你可以在这里静读，也可以回去访友。"
     }
   ]
 }

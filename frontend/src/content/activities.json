@@ -1,0 +1,993 @@
+[
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "read",
+    "kind": "study",
+    "name": "青灯读书",
+    "subtitle": "修身 · 三页一卷",
+    "description": "静读一卷，悟性渐长。藏书楼的门，向读得懂旧卷的人开着。",
+    "invitation": "这一卷读完，便出去走走。",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "attributes": {
+            "insight": 2
+          },
+          "coins": 4
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "attributes": {
+            "insight": 3
+          },
+          "coins": 6
+        },
+        "firstRewards": {},
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "attributes": {
+            "insight": 4
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "compose",
+    "kind": "study",
+    "name": "临窗习文",
+    "subtitle": "修身 · 三页一卷",
+    "description": "把道理说清，把文章写好。辞采足够，便能去听雨阁会一会风雅之士。",
+    "invitation": "这一卷读完，便出去走走。",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "attributes": {
+            "eloquence": 2
+          },
+          "coins": 4
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "attributes": {
+            "eloquence": 3
+          },
+          "coins": 6
+        },
+        "firstRewards": {},
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "attributes": {
+            "eloquence": 4
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "calculate",
+    "kind": "study",
+    "name": "案头演算",
+    "subtitle": "修身 · 三页一卷",
+    "description": "账房招人，县衙也缺善算之人。练一练筹算，总有用处。",
+    "invitation": "这一卷读完，便出去走走。",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "attributes": {
+            "craft": 2
+          },
+          "coins": 4
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "attributes": {
+            "craft": 3
+          },
+          "coins": 6
+        },
+        "firstRewards": {},
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "attributes": {
+            "craft": 4
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "review",
+    "kind": "study",
+    "name": "温故知新",
+    "subtitle": "旧案 · 三页重审",
+    "description": "把曾经犹豫的地方读透，也能换来新的见识。",
+    "invitation": "只从已经做错的题中抽取。",
+    "rounds": 3,
+    "reviewOnly": true,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "attributes": {
+            "insight": 2
+          },
+          "coins": 4
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "attributes": {
+            "insight": 3
+          },
+          "coins": 6
+        },
+        "firstRewards": {},
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "attributes": {
+            "insight": 4
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "read-lu",
+    "kind": "companion",
+    "name": "先生考校",
+    "subtitle": "共读 · 五题定评",
+    "description": "惜才、严谨，不肯用一句好听话代替真本事。",
+    "invitation": "“门没有关。想问什么，进来坐。”",
+    "npcId": "lu",
+    "locationId": "old-school",
+    "rounds": 5,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“今日有些生疏，下次我们再慢慢核对。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "affinity": {
+            "lu": 2
+          },
+          "trust": {
+            "lu": 1
+          },
+          "coins": 5
+        },
+        "dialogue": "“门没有关。想问什么，进来坐。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "affinity": {
+            "lu": 4
+          },
+          "trust": {
+            "lu": 2
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“这卷边的批注，我特意给你留了空白。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "affinity": {
+            "lu": 6
+          },
+          "trust": {
+            "lu": 3
+          },
+          "coins": 12
+        },
+        "firstRewards": {},
+        "dialogue": "“你如今所问的，已有自己的分量了。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "read-gu",
+    "kind": "companion",
+    "name": "同窗对卷",
+    "subtitle": "共读 · 五题定评",
+    "description": "嘴上轻松，心里怕辜负家人；对肯陪他做完事的人格外认真。",
+    "invitation": "“来得巧，我正愁没人听我抱怨。”",
+    "npcId": "gu",
+    "locationId": "east-hall",
+    "rounds": 5,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“今日有些生疏，下次我们再慢慢核对。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "affinity": {
+            "gu": 2
+          },
+          "trust": {
+            "gu": 1
+          },
+          "coins": 5
+        },
+        "dialogue": "“来得巧，我正愁没人听我抱怨。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "affinity": {
+            "gu": 4
+          },
+          "trust": {
+            "gu": 2
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“窗边的位置替你留着，茶也还温。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "affinity": {
+            "gu": 6
+          },
+          "trust": {
+            "gu": 3
+          },
+          "coins": 12
+        },
+        "firstRewards": {},
+        "dialogue": "“旁人问我前程，我只想问你今天可有空。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "read-shen",
+    "kind": "companion",
+    "name": "共核旧账",
+    "subtitle": "共读 · 五题定评",
+    "description": "寡言谨慎，先核凭据再谈人情；敬重不怕麻烦的实干者。",
+    "invitation": "“先坐。桌上原册别动，副本在右手边。”",
+    "npcId": "shen",
+    "locationId": "county-office",
+    "rounds": 5,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“今日有些生疏，下次我们再慢慢核对。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "affinity": {
+            "shen": 2
+          },
+          "trust": {
+            "shen": 1
+          },
+          "coins": 5
+        },
+        "dialogue": "“先坐。桌上原册别动，副本在右手边。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "affinity": {
+            "shen": 4
+          },
+          "trust": {
+            "shen": 2
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“这次不用誊副本了。原册，你看吧。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "affinity": {
+            "shen": 6
+          },
+          "trust": {
+            "shen": 3
+          },
+          "coins": 12
+        },
+        "firstRewards": {},
+        "dialogue": "“你办的事，我不必再留第二份底稿。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "read-lin",
+    "kind": "companion",
+    "name": "听雨论诗",
+    "subtitle": "共读 · 五题定评",
+    "description": "聪慧清醒，爱诗也爱辩理；不以输赢伤人，却不肯把答案让给谁。",
+    "invitation": "“猜灯谜？先说好，我可不会因为你初来便相让。”",
+    "npcId": "lin",
+    "locationId": "exam-street",
+    "rounds": 5,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“今日有些生疏，下次我们再慢慢核对。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "affinity": {
+            "lin": 2
+          },
+          "trust": {
+            "lin": 1
+          },
+          "coins": 5
+        },
+        "dialogue": "“猜灯谜？先说好，我可不会因为你初来便相让。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "affinity": {
+            "lin": 4
+          },
+          "trust": {
+            "lin": 2
+          },
+          "coins": 8
+        },
+        "firstRewards": {},
+        "dialogue": "“上次未讲完的那句诗，我又想到另一种解法。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "affinity": {
+            "lin": 6
+          },
+          "trust": {
+            "lin": 3
+          },
+          "coins": 12
+        },
+        "firstRewards": {},
+        "dialogue": "“有些话别人不懂，我想，你会懂。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": true,
+    "passScore": 60,
+    "id": "trial-ink",
+    "kind": "dungeon",
+    "name": "旧塾夜试",
+    "subtitle": "副本 · 五关连试",
+    "locationId": "old-school",
+    "rounds": 5,
+    "description": "夜深时，先生点亮另一盏灯。旧木匣里的青溪砚，只赠给读通这份残卷的人。",
+    "invitation": "“五关之后，凭本事取你的那份东西。”",
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "coins": 15,
+          "attributes": {
+            "insight": 3
+          }
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "coins": 25,
+          "attributes": {
+            "insight": 3
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "inkstone": 1
+          }
+        },
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "coins": 40,
+          "attributes": {
+            "insight": 3
+          }
+        },
+        "firstRewards": {
+          "coins": 20,
+          "reputation": 2
+        },
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "attributes": {
+        "craft": 4
+      }
+    },
+    "repeatable": true,
+    "passScore": 60,
+    "id": "trial-ledger",
+    "kind": "dungeon",
+    "name": "漕仓疑账",
+    "subtitle": "副本 · 五关连试",
+    "locationId": "county-office",
+    "rounds": 5,
+    "description": "三本账，两种口径。沈砚要你辨出其中的破绽，清账算盘便是此行的报偿。",
+    "invitation": "“五关之后，凭本事取你的那份东西。”",
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "coins": 15,
+          "attributes": {
+            "craft": 4
+          }
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "coins": 25,
+          "attributes": {
+            "craft": 4
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "ledger": 1
+          }
+        },
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "coins": 40,
+          "attributes": {
+            "craft": 4
+          }
+        },
+        "firstRewards": {
+          "coins": 20,
+          "reputation": 2
+        },
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "attributes": {
+        "eloquence": 4
+      }
+    },
+    "repeatable": true,
+    "passScore": 60,
+    "id": "trial-rain",
+    "kind": "dungeon",
+    "name": "听雨雅集",
+    "subtitle": "副本 · 五关连试",
+    "locationId": "exam-street",
+    "rounds": 5,
+    "description": "琴声停下，阁中宾客等你落笔。林知微笑而不语，玉笛已摆在席前。",
+    "invitation": "“五关之后，凭本事取你的那份东西。”",
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "coins": 15,
+          "attributes": {
+            "eloquence": 4
+          }
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "coins": 25,
+          "attributes": {
+            "eloquence": 4
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "jade-flute": 1
+          }
+        },
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "coins": 40,
+          "attributes": {
+            "eloquence": 4
+          }
+        },
+        "firstRewards": {
+          "coins": 20,
+          "reputation": 2
+        },
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "attributes": {
+        "insight": 8
+      },
+      "items": [
+        "inkstone"
+      ]
+    },
+    "repeatable": true,
+    "passScore": 60,
+    "id": "trial-seal",
+    "kind": "dungeon",
+    "name": "藏书楼秘卷",
+    "subtitle": "副本 · 五关连试",
+    "locationId": "library",
+    "rounds": 5,
+    "description": "楼上尘封着一部无名古卷。若能逐页读通，守楼人便以玉印相赠。",
+    "invitation": "“五关之后，凭本事取你的那份东西。”",
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“错处不必藏着，今日且记下来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "coins": 15,
+          "attributes": {
+            "insight": 5
+          }
+        },
+        "dialogue": "“已经有几分火候了。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "coins": 25,
+          "attributes": {
+            "insight": 5
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "academy-seal": 1
+          }
+        },
+        "dialogue": "“这一番工夫，没有白费。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "coins": 40,
+          "attributes": {
+            "insight": 5
+          }
+        },
+        "firstRewards": {
+          "coins": 20,
+          "reputation": 2
+        },
+        "dialogue": "“漂亮！这份东西，合该归你。”"
+      }
+    ]
+  },
+  {
+    "requirements": {},
+    "repeatable": false,
+    "passScore": 60,
+    "id": "story-letter",
+    "kind": "story",
+    "name": "门内的一封信",
+    "subtitle": "青溪旧事 · 连环委托",
+    "description": "一封信牵出一笔旧债，一笔旧债连着河埠的粮。青溪的故事，正等你走进去。",
+    "invitation": "“县里送来一封急信，几处字迹被雨洇开了。你愿替我辨一辨意思吗？”",
+    "npcId": "lu",
+    "locationId": "old-school",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "待查",
+        "rewards": {},
+        "dialogue": "“线索还不够，先记下疑处。准备好了，再来找我。”"
+      },
+      {
+        "minScore": 60,
+        "label": "事了",
+        "rewards": {
+          "coins": 12,
+          "attributes": {
+            "insight": 2
+          },
+          "trust": {
+            "lu": 2
+          },
+          "flags": [
+            "letter-read"
+          ]
+        },
+        "dialogue": "“若不是你肯多看这一眼，这件事便被人轻轻揭过去了。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "flags": [
+        "letter-read"
+      ]
+    },
+    "repeatable": false,
+    "passScore": 60,
+    "id": "story-debt",
+    "kind": "story",
+    "name": "一张不该有的欠条",
+    "subtitle": "青溪旧事 · 连环委托",
+    "description": "一封信牵出一笔旧债，一笔旧债连着河埠的粮。青溪的故事，正等你走进去。",
+    "invitation": "“送信的孩子被拦住了。账上多出一笔欠款，你能帮他找出哪里不对吗？”",
+    "npcId": "gu",
+    "locationId": "east-hall",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "待查",
+        "rewards": {},
+        "dialogue": "“线索还不够，先记下疑处。准备好了，再来找我。”"
+      },
+      {
+        "minScore": 60,
+        "label": "事了",
+        "rewards": {
+          "coins": 20,
+          "attributes": {
+            "craft": 3
+          },
+          "trust": {
+            "gu": 2
+          },
+          "flags": [
+            "debt-cleared"
+          ]
+        },
+        "dialogue": "“若不是你肯多看这一眼，这件事便被人轻轻揭过去了。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "flags": [
+        "debt-cleared"
+      ],
+      "attributes": {
+        "craft": 5
+      }
+    },
+    "repeatable": false,
+    "passScore": 60,
+    "id": "story-ferry",
+    "kind": "story",
+    "name": "河埠的失踪货单",
+    "subtitle": "青溪旧事 · 连环委托",
+    "description": "一封信牵出一笔旧债，一笔旧债连着河埠的粮。青溪的故事，正等你走进去。",
+    "invitation": "“欠条上的印记来自河埠。缺失的货单我找到了，要不要和我一起核清？”",
+    "npcId": "shen",
+    "locationId": "county-office",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "待查",
+        "rewards": {},
+        "dialogue": "“线索还不够，先记下疑处。准备好了，再来找我。”"
+      },
+      {
+        "minScore": 60,
+        "label": "事了",
+        "rewards": {
+          "coins": 30,
+          "reputation": 2,
+          "trust": {
+            "shen": 3
+          },
+          "flags": [
+            "ferry-cleared"
+          ]
+        },
+        "dialogue": "“若不是你肯多看这一眼，这件事便被人轻轻揭过去了。”"
+      }
+    ]
+  },
+  {
+    "requirements": {
+      "flags": [
+        "ferry-cleared"
+      ]
+    },
+    "repeatable": false,
+    "passScore": 60,
+    "id": "story-lantern",
+    "kind": "story",
+    "name": "满城灯火为谁明",
+    "subtitle": "青溪旧事 · 连环委托",
+    "description": "一封信牵出一笔旧债，一笔旧债连着河埠的粮。青溪的故事，正等你走进去。",
+    "invitation": "“有人想把那批粮送到城外。最后一份名单，在灯谜里。你来，还是我来？”",
+    "npcId": "lin",
+    "locationId": "exam-street",
+    "rounds": 3,
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "待查",
+        "rewards": {},
+        "dialogue": "“线索还不够，先记下疑处。准备好了，再来找我。”"
+      },
+      {
+        "minScore": 60,
+        "label": "事了",
+        "rewards": {
+          "coins": 50,
+          "items": {
+            "county-token": 1
+          },
+          "reputation": 5,
+          "affinity": {
+            "lin": 3
+          },
+          "flags": [
+            "qingxi-complete"
+          ]
+        },
+        "dialogue": "“若不是你肯多看这一眼，这件事便被人轻轻揭过去了。”"
+      }
+    ]
+  },
+  {
+    "id": "trial-archive",
+    "kind": "dungeon",
+    "name": "内库尘封卷",
+    "subtitle": "隐秘副本 · 故人作保",
+    "locationId": "county-office",
+    "description": "通行帖上的落款是沈砚。内库门开，一幅遗失多年的河防图藏在五册旧卷之间。",
+    "invitation": "“沈书吏既肯作保，便请你进来。卷不可外借，能读明白，就把图带走。”",
+    "rounds": 5,
+    "passScore": 60,
+    "repeatable": true,
+    "requirements": {
+      "items": [
+        "shen-pass"
+      ],
+      "attributes": {
+        "craft": 8
+      }
+    },
+    "tiers": [
+      {
+        "minScore": 0,
+        "label": "未竟",
+        "rewards": {},
+        "dialogue": "“旧卷尚有疑处，下次再来。”"
+      },
+      {
+        "minScore": 60,
+        "label": "合格",
+        "rewards": {
+          "coins": 30,
+          "attributes": {
+            "craft": 3
+          }
+        },
+        "dialogue": "“难得有人肯在这里坐到天明。”"
+      },
+      {
+        "minScore": 80,
+        "label": "出众",
+        "rewards": {
+          "coins": 45,
+          "attributes": {
+            "craft": 4
+          }
+        },
+        "firstRewards": {
+          "items": {
+            "river-chart": 1
+          }
+        },
+        "dialogue": "“这幅图，你拿得起。”"
+      },
+      {
+        "minScore": 100,
+        "label": "无瑕",
+        "rewards": {
+          "coins": 60,
+          "attributes": {
+            "craft": 5
+          }
+        },
+        "firstRewards": {
+          "reputation": 5
+        },
+        "dialogue": "“青溪的水脉都在此图上。来日，它能救许多人。”"
+      }
+    ]
+  }
+]

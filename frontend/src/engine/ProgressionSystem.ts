@@ -12,9 +12,7 @@ export function settleProgress(
   difficulty: number,
   frequency: number,
 ): Change[] {
-  const scene = game.attempt!.scene;
-  const npc = game.npcs.find((n) => n.id === scene.npcId)!;
-  npc.met = true;
+  // 普通读书不自动结识场景人物，关系只由实际拜访与共读推进。
   const changes: Change[] = [];
   const increase = (label: string, before: number, after: number) => {
     if (before !== after) changes.push({ label, before, after });
@@ -33,11 +31,6 @@ export function settleProgress(
     : growth.wrongGain;
   game.player.knowledge += gain;
   increase("学识", oldKnowledge, game.player.knowledge);
-  if (correct) {
-    const oldTrust = npc.trust;
-    npc.trust = Math.min(growth.relationshipMax, npc.trust + growth.trustGain);
-    increase(npc.name + " · 信任", oldTrust, npc.trust);
-  }
   const total = game.records.length;
   if (total % growth.reputationEvery === 0 && correct) {
     const before = game.player.reputation;

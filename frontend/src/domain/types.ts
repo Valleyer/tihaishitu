@@ -129,6 +129,8 @@ export interface ChoiceEvent {
   options: { id: string; text: string; hint: string }[];
 }
 export interface Game {
+  /** 旧存档首次读取时迁移；新存档始终包含探索进度。 */
+  adventure?: import("./adventure").Adventure;
   id: string;
   version: 2;
   createdAt: string;
@@ -165,6 +167,15 @@ export interface AnswerInput {
   selfAssessment?: boolean;
 }
 export interface GameApi {
+  beginActivity(id: string, activityId: string): Promise<Game>;
+  finishActivity(id: string, runId: string): Promise<Game>;
+  abandonActivity(id: string, runId: string): Promise<Game>;
+  travel(id: string, locationId: string): Promise<Game>;
+  talk(id: string, npcId: string, topicId: string): Promise<Game>;
+  dismissEncounter(id: string): Promise<Game>;
+  useItem(id: string, itemId: string): Promise<Game>;
+  buyItem(id: string, itemId: string): Promise<Game>;
+  claimBond(id: string, npcId: string, milestone: number): Promise<Game>;
   bootstrap(): Promise<Bootstrap>;
   createGame(config: NewGame): Promise<Game>;
   getGame(id: string): Promise<Game>;

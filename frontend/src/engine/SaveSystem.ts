@@ -1,3 +1,4 @@
+import { hydrateAdventure } from "./AdventureEngine";
 /**
  * 存档与题库写入前的结构检查。导入备份只接受当前版本格式。
  * 不直接覆盖旧人生；题库和人物引用完整后，交由本地 API 创建独立副本。
@@ -109,6 +110,7 @@ export function parseBackup(text: string): Backup {
     )
   )
     throw new Error("存档学习记录或人物数据损坏。");
+  hydrateAdventure(game);
   if (
     characterDesign.some(
       (character) =>
@@ -152,5 +154,44 @@ export function parseBackup(text: string): Backup {
     )
       throw new Error("作答结果无效。");
   }
+  const state = game.adventure!;
+  if (
+    !state.inventory ||
+    !state.attributes ||
+    !state.equipped ||
+    !Array.isArray(state.rewardClaims) ||
+    !Array.isArray(state.visited) ||
+    !state.best ||
+    !state.clears
+  )
+    throw new Error("探索存档结构不完整。");
+  for (const values of [
+    state.inventory,
+    state.attributes,
+    state.best,
+    state.clears,
+  ])
+    if (Object.values(values).some((value) => !finite(value)))
+      throw new Error("探索数值损坏。");
+  const run = state.run;
+  if (
+    run &&
+    (!run.definition?.tiers?.length ||
+      !Number.isInteger(run.definition.rounds) ||
+      run.definition.rounds < 1 ||
+      !Number.isInteger(run.answered) ||
+      run.answered < 0 ||
+      run.answered > run.definition.rounds ||
+      !Number.isInteger(run.correct) ||
+      run.correct < 0 ||
+      run.correct > run.answered ||
+      !["active", "settled"].includes(run.status) ||
+      !game.attempt)
+  )
+    throw new Error("挑战进度损坏。");
+  if (run?.status === "active" && run.answered >= run.definition.rounds)
+    throw new Error("挑战轮次与状态不符。");
+  if (run?.status === "settled" && run.answered !== run.definition.rounds)
+    throw new Error("挑战结算状态不符。");
   return data;
 }

@@ -82,3 +82,32 @@ PublicQuestion 不含 answer、aliases、keywords、explanation；批卷后的 R
 - selfAssessment 是早期兼容字段，新三题型不再使用；后端可以只实现客观题流程。
 
 本地模式完整题库在浏览器可见，是单机体验。若将来加入考试排名，题库答案访问控制、身份认证、事务和防重复都需要在后端实现。
+
+
+## V2—V5 新增探索接口
+
+以下路径同样相对于 /api/v1，成功返回完整 Game。Game.adventure 的契约在 domain/adventure.ts；
+HTTP 实现必须返回已迁移的探索数据，UI 不负责猜测缺失字段。
+
+| 方法 | 路径 | 请求体 |
+| --- | --- | --- |
+| POST | /games/{id}/activities | {activityId} |
+| POST | /games/{id}/activities/finish | {runId} |
+| POST | /games/{id}/activities/abandon | {runId} |
+| POST | /games/{id}/travel | {locationId} |
+| POST | /games/{id}/talk | {npcId,topicId} |
+| DELETE | /games/{id}/encounter | 无 |
+| POST | /games/{id}/items/use | {itemId} |
+| POST | /games/{id}/items/buy | {itemId} |
+| POST | /games/{id}/bonds | {npcId,milestone} |
+
+创建人生现在返回 attempt=null、adventure.run=null，默认进入世界。
+开始活动后才发卷；有未结束 run 时拒绝开始其他活动或移动。暂停仅为 UI 隐藏，不调用 abandon。
+整轮最终题的 answers 请求中完成评分和奖励事务；finish 只结束已结算行程，不能重复发奖励。
+旧 next 接口必须校验 run.status=active，且使用 run.definition.reviewOnly，不能从客户端参数绕过活动状态。
+talk 校验人物所在地点和话题好感门槛，本身不给属性奖励。
+bonds 校验地点、好感和已领取标记；items/use 校验库存，equipment 切换部位，consumable 消耗一件。
+items/buy 校验可售价格和余额；没有 price 的副本专属物品禁止购买。
+travel 校验地点属性条件，遇到满足前置的新故事时填写 adventure.encounter。
+
+活动完整定义在开始时冻结进 run.definition。配置修改影响下一轮，后端也应保持这项承诺。
