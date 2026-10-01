@@ -158,24 +158,47 @@
 .world-shortcuts > button {
   flex: 1;
   background: none;
-  border: 0;
+  border: 1px solid transparent;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0;
+  padding: 6px 10px;
   text-align: left;
   color: #b4bd9e;
+  position: relative;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.world-shortcuts > button:hover:not(:disabled),
+.world-shortcuts > button:focus-visible {
+  background: linear-gradient(90deg, #a9915524, transparent 82%);
+  border-color: #9c8b5940;
+  color: #e0d5ae;
+  outline: 0;
+  transform: translateY(-1px);
+}
+.world-shortcuts > button:active {
+  transform: translateY(0);
+  background: linear-gradient(90deg, #b09a6035, transparent 82%);
 }
 .world-shortcuts b {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #9b89564d;
   font:
-    25px SimSun,
+    21px SimSun,
     serif;
   color: #bda978;
+  background: #a9925010;
+  flex: 0 0 auto;
 }
 .world-shortcuts span {
   font:
     12px SimSun,
     serif;
+  background: transparent !important;
 }
 .world-shortcuts small {
   display: block;
@@ -596,16 +619,46 @@
   margin-left: auto;
   white-space: nowrap;
 }
-.interactive-map .map-location {
-  border: 0;
-  background: transparent;
+.modal .interactive-map .map-location {
+  border: 1px solid #a9976255;
+  background: #132a25d9;
   cursor: pointer;
-  padding: 8px;
+  padding: 6px 9px 7px;
   color: #c5b788;
-  min-width: 90px;
+  min-width: 68px;
+  box-shadow: 0 5px 14px #07161155;
+  backdrop-filter: blur(3px);
 }
-.interactive-map .map-location:hover {
+.modal .interactive-map .map-location:hover,
+.modal .interactive-map .map-location:focus-visible {
+  background: #203a31ee;
+  border-color: #c3a76699;
   color: #eee1b4;
+  filter: none;
+  outline: 1px solid #d0b36d;
+  outline-offset: 2px;
+}
+.modal .interactive-map .map-location.active {
+  background: #34483add;
+  border-color: #d3b56f;
+  box-shadow: 0 0 0 1px #75643888, 0 7px 18px #07161166;
+}
+.modal .interactive-map .map-location.future {
+  opacity: 0.58;
+}
+.modal .interactive-map .map-location b {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #d5c79d;
+}
+.modal .interactive-map .map-location small {
+  margin-top: 4px;
+  color: #a7b497;
+}
+.modal .interactive-map .map-location i {
+  width: 6px;
+  height: 6px;
+  margin-bottom: 6px;
 }
 .interactive-map {
   height: 300px;
@@ -640,6 +693,93 @@
 }
 .map-destination button {
   font-size: 12px;
+}
+.modal .map-destination h3 {
+  color: #6f572b;
+}
+.modal .map-destination p {
+  color: #4f5d49;
+}
+.modal .map-destination small {
+  color: #68765f;
+}
+.modal .map-destination > div:last-child > p {
+  color: #8a5a32;
+  font-weight: 600;
+}
+
+/* 弹窗是浅色纸面，县试状态牌则是深色；两处分别保证正文对比度。 */
+.exam-status > div > small {
+  color: #91a88e;
+}
+.exam-status p {
+  color: #c0cbb5;
+}
+.exam-steps b {
+  color: #755d31;
+}
+.exam-steps p {
+  color: #4e5b48;
+}
+.exam-steps article.done b {
+  color: #55714e;
+}
+
+/* 右栏札记收成一张紧凑卡片，避免在较矮窗口里只露出半截。 */
+.recent-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 16px;
+}
+.recent-panel .recent-brief {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0 0;
+  margin-top: 10px;
+  border: 0;
+  border-top: 1px solid #6f765044;
+  background: transparent !important;
+  text-align: left;
+}
+.recent-brief > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #8e805766;
+  color: #c4a96d;
+  font: 16px SimSun, serif;
+}
+.recent-brief > span:last-child {
+  min-width: 0;
+}
+.recent-brief b,
+.recent-brief small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-brief b {
+  color: #c7bd94;
+  font: 12px SimSun, serif;
+  letter-spacing: 1px;
+}
+.recent-brief small {
+  color: #849584;
+  font-size: 9px;
+  margin-top: 5px;
+}
+.recent-panel .recent-brief:hover:not(:disabled),
+.recent-panel .recent-brief:focus-visible {
+  filter: none;
+  color: inherit;
+  border-top-color: #b09b675c;
+  outline: 0;
 }
 .inventory-top {
   display: flex;

@@ -333,21 +333,27 @@ export function ExamPanel({
   busy,
   inspect,
   travel,
-  study,
   register,
+  report,
 }: {
   game: Game;
   busy: boolean;
   inspect: (id: string) => void;
   travel: (id: string) => void;
-  study: () => void;
   register: (id: string) => void;
+  report: (message: string) => void;
 }) {
   const exam = exams[0],
     record = game.adventure!.exams[exam.id],
     issues = requirementIssues(game, exam.requirements),
     atExam = game.adventure!.locationId === exam.locationId,
-    shortOfMoney = game.player.coins < exam.fee;
+    shortOfMoney = game.player.coins < exam.fee,
+    missing = [
+      ...issues,
+      ...(shortOfMoney
+        ? ["银两 " + game.player.coins + "/" + exam.fee]
+        : []),
+    ];
   const statusName = {
     unregistered: "尚未报名",
     registered: "候场应试",
@@ -362,8 +368,10 @@ export function ExamPanel({
     } else if (record.status === "preparing")
       inspect(exam.preparationActivityId);
     else if (record.status === "registered") inspect(exam.activityId);
-    else if (!atExam) travel(exam.locationId);
-    else if (issues.length || shortOfMoney) study();
+    else if (missing.length) {
+      // 报名差距在点击查验时集中提示，不把一长串数值常驻在面板上。
+      report("报名条件尚未满足：" + missing.join("；"));
+    } else if (!atExam) travel(exam.locationId);
     else register(exam.id);
   };
   const actionText =
@@ -375,10 +383,10 @@ export function ExamPanel({
         ? "与先生复盘落卷"
         : record.status === "registered"
           ? "点名入号，应试十题"
-          : !atExam
-            ? "前往试院报名"
-            : issues.length || shortOfMoney
-              ? "先去读书筹备"
+          : missing.length
+            ? "查验报名条件"
+            : !atExam
+              ? "前往试院报名"
               : "缴银递帖，正式报名";
   return (
     <div className="exam-panel">
@@ -398,22 +406,17 @@ export function ExamPanel({
       <div className="exam-steps">
         <article className={record.status !== "unregistered" ? "done" : ""}>
           <b>壹 · 验明资格</b>
-          <p>{issues.length ? issues.join("；") : "学识、声名与三门本领均已验明"}</p>
+          <p>{issues.length ? "报名资格尚未齐备" : "学识、声名与三门本领均已验明"}</p>
         </article>
         <article className={record.status !== "unregistered" ? "done" : ""}>
           <b>贰 · 递帖报名</b>
-          <p>报名银 {exam.fee} 两 · 当前 {game.player.coins} 两</p>
+          <p>{shortOfMoney ? "报名银尚未备足" : "报名银 " + exam.fee + " 两已经备妥"}</p>
         </article>
         <article className={record.status === "passed" ? "done" : ""}>
           <b>叁 · 十题定榜</b>
           <p>七十分取中 · 已应试 {record.attempts} 次 · 最高 {record.best || "—"} 分</p>
         </article>
       </div>
-      {record.status === "unregistered" && (issues.length > 0 || shortOfMoney) && (
-        <div className="gate-reasons">
-          尚需：{[...issues, ...(shortOfMoney ? ["银两 " + game.player.coins + "/" + exam.fee] : [])].join("；")}
-        </div>
-      )}
       <button className="gold-button full" disabled={busy || !!game.adventure!.run} onClick={action}>
         {actionText} →
       </button>

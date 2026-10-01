@@ -574,11 +574,16 @@ function App() {
                   ))}
               </section>
               <section className="recent-panel framed">
-                <div className="panel-label">新近记事</div>
-                <h4>{game.journal.at(-1)?.title}</h4>
-                <p>{game.journal.at(-1)?.text}</p>
-                <button className="text-button" onClick={() => show("journal")}>
-                  展开札记 →
+                <div className="panel-label">
+                  新近记事
+                  <button onClick={() => show("journal")}>展开 →</button>
+                </div>
+                <button className="recent-brief" onClick={() => show("journal")}>
+                  <span>记</span>
+                  <span>
+                    <b>{game.journal.at(-1)?.title}</b>
+                    <small>{game.journal.at(-1)?.text}</small>
+                  </span>
                 </button>
               </section>
             </aside>
@@ -785,8 +790,8 @@ function App() {
               busy={busy}
               inspect={inspect}
               travel={travel}
-              study={() => show("study")}
               register={register}
+              report={setError}
             />
           )}
           {game && panel === "activity" && (
