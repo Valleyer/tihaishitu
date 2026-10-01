@@ -552,16 +552,6 @@ function App() {
                   人生札记<span>案头</span>
                 </div>
                 <button
-                  className="journal-history-button"
-                  onClick={() => show("journal")}
-                >
-                  <span>
-                    <b>历史札记</b>
-                    <small>已收录 {game.journal.length} 篇</small>
-                  </span>
-                  <strong>查看全部</strong>
-                </button>
-                <button
                   className="journal-today-button"
                   onClick={() => show("journal")}
                 >
@@ -571,6 +561,16 @@ function App() {
                     {game.journal.at(-1)?.text ||
                       "今日尚未留下新的记录，之后的行程会写在这里。"}
                   </span>
+                </button>
+                <button
+                  className="journal-history-button"
+                  onClick={() => show("journal")}
+                >
+                  <span>
+                    <b>历史札记</b>
+                    <small>已收录 {game.journal.length} 篇</small>
+                  </span>
+                  <strong>查看全部</strong>
                 </button>
               </section>
             </aside>

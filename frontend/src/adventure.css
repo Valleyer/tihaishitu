@@ -835,9 +835,12 @@
   padding: 12px;
   flex: 1 1 auto;
   min-height: 0;
+  display: block;
+  overflow-y: auto;
   border: 1px solid #81764e66;
   background: #1c302a;
   text-align: left;
+  align-self: stretch;
 }
 .journal-today-button small,
 .journal-today-button b,
@@ -859,9 +862,8 @@
   color: #8fa08e;
   font-size: 9px;
   line-height: 1.7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .journal-today-button:hover:not(:disabled),
 .journal-today-button:focus-visible {
