@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "startLocation": "old-school",
+  "currency": {
+    "name": "银两",
+    "unit": "两"
+  },
+  "answerRules": {
+    "ordinaryRounds": 5,
+    "ordinaryPassScore": 60,
+    "perfectScore": 100,
+    "mainRounds": 10,
+    "mainPassScore": 100
+  },
+  "attributes": [
+    {
+      "id": "insight",
+      "name": "悟性",
+      "description": "读书明理，开启古籍与书院试炼"
+    },
+    {
+      "id": "eloquence",
+      "name": "辞采",
+      "description": "与人辩论，赢得雅集与故人青睐"
+    },
+    {
+      "id": "craft",
+      "name": "筹算",
+      "description": "查验账册，解锁县衙与商路旧案"
+    }
+  ],
+  "hub": {
+    "eyebrow": "景和年间 · 青溪一隅",
+    "title": "今日，想往何处？",
+    "description": "廊下有人等一盘棋，街头新贴了悬赏。功名尚远，先把这一日过得有声有色。"
+  },
+  "rankNames": {
+    "study": "案头修习",
+    "companion": "故人邀约",
+    "dungeon": "秘境试炼",
+    "story": "支线任务",
+    "exam": "科举正试"
+  }
+}

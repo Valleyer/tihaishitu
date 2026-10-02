@@ -1,0 +1,49 @@
+[
+  {
+    "id": "county-exam",
+    "name": "青溪县试",
+    "subtitle": "童试第一关 · 十题全对",
+    "description": "县中开科，先验名帖，再入号舍。取中之后，你才真正踏上科举仕途。",
+    "locationId": "exam-street",
+    "activityId": "county-exam-paper",
+    "preparationActivityId": "county-exam-prep",
+    "fee": 12,
+    "requirements": {
+      "knowledge": 35,
+      "reputation": 3,
+      "attributes": {
+        "insight": 6,
+        "eloquence": 4,
+        "craft": 4
+      }
+    },
+    "dialogues": {
+      "unregistered": "试院门前新贴了告示。书吏逐项核验学识、声名与三门本领，合格者缴十二两报名银，方可递入名帖。",
+      "registered": "名帖已在册中。铜锣三响后入号舍，十题一卷，全部答对方可取中；未能全对可直接再试。",
+      "preparing": "名帖仍在册中。此番错题已经记下，不扣奖励，也不必重缴报名银，准备好便可再次应试。",
+      "passed": "红榜上已经有了你的名字。县试取中帖收入行囊，通往府城的驿路也向你开放。"
+    }
+  },
+  {
+    "id": "prefecture-exam",
+    "name": "临川府试",
+    "subtitle": "童试第二关 · 十个知识点全对",
+    "description": "府城贡院验过县试取中帖后方可递名。每次考核十个不同知识点，全部首题答对方能取中。",
+    "locationId": "prefecture-exam-street",
+    "activityId": "prefecture-exam-paper",
+    "preparationActivityId": "prefecture-exam-review",
+    "fee": 24,
+    "requirements": {
+      "flags": ["linchuan-arrived"],
+      "knowledge": 50,
+      "reputation": 3,
+      "attributes": {"insight": 6, "eloquence": 4, "craft": 4}
+    },
+    "dialogues": {
+      "unregistered": "贡院前街已经开始验帖。须持县试取中后的入城记录，备齐报名银，方可递入府试名帖。",
+      "registered": "名帖与县试凭证均已验明。府试考十个不同知识点，十问全部首答正确方可取中。",
+      "preparing": "本次未能全对，错题和知识点已记入疑难卷宗。没有惩罚，也无需再次缴银，可随时重试。",
+      "passed": "府试红榜已经落印。取中帖收入行囊，下一段院试与府城旧河案都在等待你。"
+    }
+  }
+]

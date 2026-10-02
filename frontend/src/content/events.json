@@ -1,0 +1,384 @@
+[
+  {
+    "id": "medicine-errand",
+    "at": 4,
+    "title": "廊下的药香",
+    "text": "药铺的小徒弟在塾门外探头：‘陆先生的咳疾又犯了，可他总说课没讲完。掌柜让我把药交给一个肯劝他歇一歇的人。’",
+    "options": [
+      {
+        "id": "deliver",
+        "text": "接过药包，当面盯着先生服下",
+        "hint": "陆承明信任 +2，开启送药支线",
+        "effects": {
+          "trust": {
+            "lu": 2
+          },
+          "flags": [
+            "medicine-entrusted"
+          ]
+        }
+      },
+      {
+        "id": "ask-clearly",
+        "text": "先向药童问清煎法与禁忌，再送进门",
+        "hint": "学识 +2，开启送药支线",
+        "effects": {
+          "knowledge": 2,
+          "flags": [
+            "medicine-entrusted"
+          ]
+        }
+      }
+    ],
+    "speaker": "药铺学徒",
+    "npcId": "lu"
+  },
+  {
+    "id": "lamp",
+    "at": 8,
+    "title": "一盏余灯",
+    "text": "陆承明：“灯油还剩半盏。你若愿意，便留下温书；我这里也有些散卷，需要人分一分。”",
+    "options": [
+      {
+        "id": "study",
+        "text": "留下温习，补齐今日疑处",
+        "hint": "学识 +3",
+        "effects": {
+          "knowledge": 3
+        }
+      },
+      {
+        "id": "sort",
+        "text": "替先生整理课卷",
+        "hint": "陆承明信任 +2",
+        "effects": {
+          "trust": {
+            "lu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "陆承明",
+    "npcId": "lu"
+  },
+  {
+    "id": "river-bookcase",
+    "at": 18,
+    "title": "桥下的书箱",
+    "text": "一阵急雨冲开车绳，顾怀安从府城带来的书箱翻进浅河。纸页已经吸水，他站在桥边，第一次没了平日的从容。",
+    "options": [
+      {
+        "id": "wade",
+        "text": "挽起衣摆下水，先把散开的书逐本捞回",
+        "hint": "顾怀安好感 +2，开启晒书支线",
+        "effects": {
+          "affinity": {
+            "gu": 2
+          },
+          "flags": [
+            "book-box-found"
+          ]
+        }
+      },
+      {
+        "id": "rope",
+        "text": "借来船绳拦在下游，再按目录清点",
+        "hint": "顾怀安信任 +2，开启晒书支线",
+        "effects": {
+          "trust": {
+            "gu": 2
+          },
+          "flags": [
+            "book-box-found"
+          ]
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id": "classmate",
+    "at": 28,
+    "title": "顾怀安的迟疑",
+    "text": "顾怀安：“家里催我回府城，可这份卷子还没有核完……你说，我该怎样才好？”",
+    "options": [
+      {
+        "id": "help",
+        "text": "接过卷子，约好回来时再谈",
+        "hint": "顾怀安好感 +3，留下共同经历",
+        "effects": {
+          "affinity": {
+            "gu": 3
+          },
+          "flags": [
+            "help-gu"
+          ]
+        }
+      },
+      {
+        "id": "stay",
+        "text": "劝他先回信，课业各自慢慢补",
+        "hint": "顾怀安信任 +2",
+        "effects": {
+          "trust": {
+            "gu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id": "anonymous-note",
+    "at": 48,
+    "title": "卷边没有落款的批注",
+    "text": "藏书楼归还的旧卷里多了一行小字：‘若只记得答案，下一次仍会在同一处跌倒。’顾怀安认得这不是先生的笔迹。",
+    "options": [
+      {
+        "id": "keep",
+        "text": "把这句话抄进自己的疑难册，不追问是谁",
+        "hint": "悟性增长，学识 +3",
+        "effects": {
+          "knowledge": 3
+        }
+      },
+      {
+        "id": "reply",
+        "text": "在下方写下自己的理解，把书放回原处",
+        "hint": "声望 +1，留下无名书友的回应",
+        "effects": {
+          "reputation": 1,
+          "flags": [
+            "answered-margin-note"
+          ]
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id": "clerk",
+    "at": 72,
+    "title": "借册单上的名字",
+    "text": "沈砚：“县衙有几册旧抄本，想找个细心人帮忙。不是举荐，也没有官身，你可愿意试试？”",
+    "options": [
+      {
+        "id": "accept",
+        "text": "应下此事，约好散学后前往",
+        "hint": "沈砚信任 +3，留下经手记录",
+        "effects": {
+          "trust": {
+            "shen": 3
+          },
+          "flags": [
+            "clerk-helper"
+          ]
+        }
+      },
+      {
+        "id": "defer",
+        "text": "先顾课业，答应核对书院的副本",
+        "hint": "学识 +3，沈砚好感 +1",
+        "effects": {
+          "knowledge": 3,
+          "affinity": {
+            "shen": 1
+          }
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
+    "id": "warehouse-watch",
+    "at": 96,
+    "title": "县仓熄灯之后",
+    "text": "沈砚在侧房门口等你：‘今夜有人会来改一页旧账。我没有官身调人，只缺一个见过原册、也肯把话说实的人。’",
+    "options": [
+      {
+        "id": "stay",
+        "text": "留在侧房守到三更，把原册逐页封好",
+        "hint": "沈砚信任 +3，开启守夜支线",
+        "effects": {
+          "trust": {
+            "shen": 3
+          },
+          "flags": [
+            "warehouse-clue"
+          ]
+        }
+      },
+      {
+        "id": "copy",
+        "text": "先誊出关键页，分别交给书院与县仓留底",
+        "hint": "沈砚好感 +2，开启守夜支线",
+        "effects": {
+          "affinity": {
+            "shen": 2
+          },
+          "flags": [
+            "warehouse-clue"
+          ]
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
+    "id": "payment",
+    "at": 128,
+    "title": "纸袋里的铜钱",
+    "text": "沈砚：“不算俸禄，是替人抄卷的工钱。收着吧，纸笔也得花钱。”",
+    "options": [
+      {
+        "id": "keep",
+        "text": "收下，添些纸笔",
+        "hint": "铜钱 +20",
+        "effects": {
+          "coins": 20
+        }
+      },
+      {
+        "id": "share",
+        "text": "买些纸，分给书院同窗",
+        "hint": "声望 +2，顾怀安好感 +2",
+        "effects": {
+          "reputation": 2,
+          "affinity": {
+            "gu": 2
+          }
+        }
+      }
+    ],
+    "speaker": "沈砚",
+    "npcId": "shen"
+  },
+  {
+    "id": "lantern-dispute",
+    "at": 156,
+    "title": "灯谜摊前的一场争执",
+    "text": "灯市上，两家商户都说最后一盏彩灯归自己。林知微展开两张字据：‘吵声再大也不能多出一盏灯。你替我看日期，我来问落款。’",
+    "options": [
+      {
+        "id": "compare",
+        "text": "把两张字据按日期和印记逐项对照",
+        "hint": "林知微信任 +2，开启灯市支线",
+        "effects": {
+          "trust": {
+            "lin": 2
+          },
+          "flags": [
+            "lantern-clue"
+          ]
+        }
+      },
+      {
+        "id": "listen",
+        "text": "先让双方各自说完，再指出前后矛盾",
+        "hint": "林知微好感 +2，开启灯市支线",
+        "effects": {
+          "affinity": {
+            "lin": 2
+          },
+          "flags": [
+            "lantern-clue"
+          ]
+        }
+      }
+    ],
+    "speaker": "林知微",
+    "npcId": "lin"
+  },
+  {
+    "id": "exam-eve",
+    "at": 188,
+    "title": "县试前夜，四封短笺",
+    "text": "案上并排放着四张笺：先生叫你早睡，顾怀安约你同路，沈砚抄来报名章程，林知微只写了‘别替榜上的自己答题’。窗外更鼓已过二更。",
+    "options": [
+      {
+        "id": "rest",
+        "text": "合上书卷，把明日要带的东西逐一收好",
+        "hint": "声望 +2，记住临场亦需从容",
+        "effects": {
+          "reputation": 2,
+          "flags": [
+            "exam-eve-rest"
+          ]
+        }
+      },
+      {
+        "id": "one-page",
+        "text": "只重看最没有把握的一页，随后熄灯",
+        "hint": "学识 +5，不再无休止熬夜",
+        "effects": {
+          "knowledge": 5,
+          "flags": [
+            "exam-eve-review"
+          ]
+        }
+      }
+    ],
+    "speaker": "你",
+    "npcId": "lu"
+  },
+  {
+    "id": "promise",
+    "at": 220,
+    "title": "灯下之约",
+    "text": "顾怀安：“无论以后身在何处，都别忘了这间旧书斋。来，在这卷尾留个名字？”",
+    "options": [
+      {
+        "id": "sign",
+        "text": "落下姓名，与同窗共勉",
+        "hint": "顾怀安信任 +3，留下灯下之约",
+        "effects": {
+          "trust": {
+            "gu": 3
+          },
+          "flags": [
+            "lamp-promise"
+          ]
+        }
+      },
+      {
+        "id": "quiet",
+        "text": "将纸收好，默默继续温书",
+        "hint": "学识 +5",
+        "effects": {
+          "knowledge": 5
+        }
+      }
+    ],
+    "speaker": "顾怀安",
+    "npcId": "gu"
+  },
+  {
+    "id":"linchuan-rain","at":260,"title":"府城第一场雨","text":"南门客栈的瓦沟忽然漫水。裴照抱着一摞题签进门，看见你仍在核对投宿名册：‘府城比青溪大，但错一行名字，还是会让一个人无处落脚。’",
+    "options":[
+      {"id":"finish","text":"先把缺失的名字逐一补齐，再谈备考","hint":"裴照信任 +2，声望 +1","effects":{"trust":{"pei":2},"reputation":1}},
+      {"id":"share","text":"请同住举子一起核对，让每个人确认自己的记录","hint":"裴照好感 +2，学识 +3","effects":{"affinity":{"pei":2},"knowledge":3}}
+    ],
+    "speaker":"裴照","npcId":"pei"
+  },
+  {
+    "id":"wharf-supper","at":320,"title":"码头收工饭","text":"苏明绮把核完的账尺搁到一旁，请船工、抄手和你围坐吃面。席上没人谈大道理，只把今日少损了多少粮、早开了多少时辰说得清清楚楚。",
+    "options":[
+      {"id":"listen","text":"听船工讲纸上看不见的水路规矩","hint":"筹算 +2","effects":{"flags":["heard-river-workers"]}},
+      {"id":"record","text":"把每条经验写在账页背面，留给下一班抄手","hint":"苏明绮信任 +2，声望 +2","effects":{"trust":{"su":2},"reputation":2}}
+    ],
+    "speaker":"苏明绮","npcId":"su"
+  },
+  {
+    "id":"exam-lanterns","at":400,"title":"贡院熄灯前","text":"府试前夜，贡院外的灯一盏盏熄下。裴照没有再递新题，只问：‘十个知识点里，哪一个你仍说不清？知道它，比假装全会更接近取中。’",
+    "options":[
+      {"id":"name","text":"写下最没有把握的知识点，先做一道最简单的同类题","hint":"学识 +5，留下临考复盘","effects":{"knowledge":5,"flags":["prefecture-eve-review"]}},
+      {"id":"rest","text":"合卷休息，明日用清醒的头脑逐题作答","hint":"声望 +2，留下临考从容","effects":{"reputation":2,"flags":["prefecture-eve-rest"]}}
+    ],
+    "speaker":"裴照","npcId":"pei"
+  }
+]

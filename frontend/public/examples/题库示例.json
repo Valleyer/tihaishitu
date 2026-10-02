@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "global-question-bank/v1",
+  "publish": false,
+  "bank": {
+    "id": "bf9da9ac-9852-4f02-9582-19f199e158a9",
+    "name": "数学一 · 高斯公式专题",
+    "description": "演示客观题和原始解答题的全服文集",
+    "enabled": true,
+    "weight": 5
+  },
+  "questions": [
+    {
+      "id": "d3ff9a34-4e4b-41b7-834b-e517de76ffba",
+      "subject": "数学一",
+      "sourceType": "custom",
+      "sourceName": "格式示例",
+      "questionType": "true_false",
+      "presentationType": "true_false",
+      "gradingMode": "auto",
+      "content": "含奇点时仍可不作处理，直接对整个区域应用高斯公式。",
+      "standardAnswer": false,
+      "analysis": "区域内有奇点时，应先挖去奇点邻域，再在剩余区域应用高斯公式并取极限。",
+      "difficulty": 1,
+      "options": [
+        { "key": "true", "text": "正确", "correct": false, "sortOrder": 0 },
+        { "key": "false", "text": "错误", "correct": true, "sortOrder": 1 }
+      ],
+      "knowledgePoints": [
+        { "code": "M1-H06-035", "role": "core", "sortOrder": 0 }
+      ]
+    },
+    {
+      "id": "27fc2ba7-156f-4786-9c48-f6e09da712d8",
+      "subject": "数学一",
+      "sourceType": "custom",
+      "sourceName": "格式示例",
+      "questionType": "solution",
+      "presentationType": "self_assessment",
+      "gradingMode": "self_assessment",
+      "content": "设曲面 $\\Sigma$ 包围一个奇点，说明如何计算相应曲面积分。",
+      "standardAnswer": "先挖去奇点的一个小邻域，在剩余区域应用高斯公式，再令小邻域半径趋于零。",
+      "analysis": "关键是让散度定理的使用区域避开奇点，并单独计算小曲面的通量贡献。",
+      "difficulty": 3,
+      "options": [],
+      "knowledgePoints": [
+        { "code": "M1-H06-035", "role": "core", "sortOrder": 0 }
+      ]
+    }
+  ]
+}

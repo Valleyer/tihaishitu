@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
       host: "127.0.0.1",
       proxy: {
         "/api": {
-          target: env.API_PROXY_TARGET || "http://localhost:8080",
+          target: env.API_PROXY_TARGET || "http://localhost:12345",
           changeOrigin: true,
         },
       },

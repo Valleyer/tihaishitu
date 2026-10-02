@@ -1,0 +1,32 @@
+[
+  {
+    "npcId":"pei","locationId":"qinghui-academy","personality":"严谨克制，擅长把大题拆成可以逐一验证的小问题。",
+    "greetings":[
+      {"minAffinity":0,"text":"“府试不怕题难，怕的是你连自己不会哪一处都说不清。”"},
+      {"minAffinity":10,"text":"“昨日那处误判，我另找了三道更简单的同类题。坐下吧。”"},
+      {"minAffinity":30,"text":"“你如今已经会自己追问错处，不必等我指出来了。”"}
+    ],
+    "topics":[
+      {"id":"method","label":"一道错题应该怎样重学？","minAffinity":0,"lines":["“先把考点写成一句能验证的话，再用最简单的题确认根基。”","“答对训练题不补回分数，但它能让下一次的分数有意义。”"]},
+      {"id":"academy","label":"清晖书院为何公开论题？","minAffinity":8,"lines":["“因为藏在书房里的聪明最容易自欺。”","“把理由说给不同的人听，才知道哪些是证据，哪些只是习惯。”"]},
+      {"id":"past","label":"你也曾屡试不中？","minAffinity":20,"lines":["“三次。第三次才明白，背熟答案和掌握知识点是两回事。”","“后来我留在府学，专门教人少走我走过的弯路。”"]}
+    ],
+    "activities":["read-pei"],
+    "milestones":[{"affinity":12,"title":"错题成阶","reward":{"items":{"pei-question-slip":1}},"dialogue":"“这叠题签按知识点排好了。不会的地方，从最小的一阶重新走。”"}]
+  },
+  {
+    "npcId":"su","locationId":"prefecture-wharf","personality":"精于账目与人情，愿意帮肯查到底的人，也警惕只会空谈的读书人。",
+    "greetings":[
+      {"minAffinity":0,"text":"“客官买书，还是查账？两样都先说清来路。”"},
+      {"minAffinity":10,"text":"“你上回圈出的那笔运费，果然有人来补凭据了。”"},
+      {"minAffinity":30,"text":"“若你日后真能执笔判事，记得账册里的每一行都是一家人的日子。”"}
+    ],
+    "topics":[
+      {"id":"books","label":"书坊为何设在码头边？","minAffinity":0,"lines":["“书也要走水路。哪处开科、哪处修志，船还没靠岸，我先从书单知道。”","“读书人与商人并非两种人，谁都得把纸、米和路费算明白。”"]},
+      {"id":"ledger","label":"怎样看出账册有问题？","minAffinity":8,"lines":["“先别找最大的数。找那些每次都只差一点、却总向同一边差的数。”","“错账偶然，偏向却有来处。”"]},
+      {"id":"river","label":"你最担心哪一段河道？","minAffinity":20,"lines":["“不是险滩，是府衙图上年年说已疏浚、船家却年年搁浅的那一段。”","“纸上的河不淹人，真河会。”"]}
+    ],
+    "activities":["read-su"],
+    "milestones":[{"affinity":12,"title":"一纸真账","reward":{"items":{"su-ledger-rule":1}},"dialogue":"“这把旧账尺给你。量纸也量人写在纸上的分寸。”"}]
+  }
+]

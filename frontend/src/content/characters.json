@@ -1,0 +1,62 @@
+[
+  {
+    "id": "lu",
+    "name": "陆承明",
+    "role": "青溪书院 · 教习",
+    "description": "不喜浮辞，惜才而不轻许。总在卷尾留一两字。",
+    "affinity": 0,
+    "trust": 0,
+    "met": true,
+    "portrait": "tutor"
+  },
+  {
+    "id": "gu",
+    "name": "顾怀安",
+    "role": "同窗 · 府城顾氏",
+    "description": "消息灵通，衣着整洁。比起高谈阔论，更留意谁肯把事情做完。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "friend"
+  },
+  {
+    "id": "shen",
+    "name": "沈砚",
+    "role": "青溪县衙 · 书吏",
+    "description": "出身寒门，善理账目。谨慎寡言，做事总留一份底稿。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "clerk"
+  },
+  {
+    "id": "lin",
+    "name": "林知微",
+    "role": "青溪才女 · 听雨阁常客",
+    "description": "善辩而不咄咄逼人，读诗也读账册，愿与真正的知音同行。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "lin"
+  },
+  {
+    "id": "pei",
+    "name": "裴照",
+    "role": "临川府学 · 助教",
+    "description": "出题严谨，言语简洁。总能从一道错题里追到真正含混的知识点。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "pei"
+  },
+  {
+    "id": "su",
+    "name": "苏明绮",
+    "role": "临川书坊 · 东家",
+    "description": "熟悉书价、漕运和府城人情。笑意温和，核账时却从不放过一笔含混数目。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "su"
+  }
+]

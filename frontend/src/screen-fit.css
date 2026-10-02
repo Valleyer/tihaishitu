@@ -1,0 +1,1636 @@
+/* 主游戏按视口分配空间；只有辅助编辑器和完整正文允许内部滚动。 */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+.game-app {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.game-app.in-world {
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr) 66px;
+}
+.world-header {
+  height: 64px;
+  position: relative;
+  padding: 0 28px;
+}
+.world-layout {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: 210px minmax(0, 1fr) 225px;
+  padding: 20px 24px;
+  gap: 22px;
+}
+.character-column,
+.affairs-column,
+.story-column {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.character-sheet {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+}
+.portrait-stage {
+  flex: 1;
+  min-height: 100px;
+  max-height: 44%;
+  height: auto;
+  margin: 14px -5px 5px;
+  overflow: hidden;
+}
+.portrait {
+  background-repeat: no-repeat;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+.character-sheet h1 {
+  font-size: clamp(19px, 1.7vw, 28px);
+  letter-spacing: 3px;
+  overflow-wrap: anywhere;
+  margin: 9px 0;
+  line-height: 1.4;
+}
+.identity-badge {
+  align-self: center;
+  font-size: 10px;
+  padding: 4px 9px;
+}
+.origin-line {
+  margin: 9px 0;
+  font-size: 10px;
+}
+.attributes {
+  padding-top: 8px;
+  border-top: 1px solid #68745466;
+}
+.attributes > div {
+  margin: 12px 0;
+}
+.attributes dd {
+  font-size: 22px;
+}
+.attributes dt {
+  font-size: 11px;
+}
+.mini-road {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  font:
+    10px SimSun,
+    serif;
+  color: #66776c;
+  border-top: 1px solid #586a4d66;
+  margin-top: auto;
+  padding-top: 15px;
+}
+.mini-road .current {
+  color: #c3b487;
+}
+.story-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.chapter-heading {
+  height: 44px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid #6e745144;
+  margin: 0;
+  background-size: cover;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.chapter-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.chapter-heading small {
+  font-size: 10px;
+  color: #a79f7e;
+  white-space: nowrap;
+  letter-spacing: 1px;
+}
+.chapter-heading b {
+  font:
+    15px SimSun,
+    serif;
+  color: #d0c198;
+  letter-spacing: 2px;
+}
+.chapter-heading button {
+  font-size: 9px;
+  color: #8ea18f;
+  background: none;
+  border: 0;
+  padding: 0;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.story-dialogue {
+  padding: 14px 2px;
+  min-height: 86px;
+  max-height: 114px;
+  flex-shrink: 0;
+  gap: 13px;
+  align-items: center;
+}
+.speaker-medallion {
+  width: 50px;
+  height: 63px;
+  border-radius: 2px;
+  align-self: center;
+  background: none;
+}
+.speaker-medallion .portrait {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+.dialogue-content {
+  flex: 1;
+  min-width: 0;
+}
+.speaker-name {
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.speaker-name > span {
+  font-size: 9px;
+  margin: 0;
+  letter-spacing: 0;
+  color: #7e9585;
+}
+.speaker-name > button {
+  margin-left: auto;
+  font:
+    10px SimSun,
+    serif;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #8d9b82;
+}
+.spoken-line {
+  font-size: 15px;
+  line-height: 1.8;
+  margin: 7px 0 0;
+  color: #d8cfb0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.scroll-paper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 27px 16px;
+}
+.paper-heading {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.question-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.question-chapter {
+  font-size: 10px;
+  margin: 14px 0 12px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.question-chapter > span {
+  font-size: 9px;
+}
+.question-prompt-area {
+  margin: 2px 0 16px;
+  flex-shrink: 0;
+}
+.question-text {
+  font-size: clamp(22px, 1.9vw, 29px);
+  line-height: 1.65;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+}
+.answers {
+  gap: 12px;
+  flex-shrink: 0;
+}
+.answers.two-columns {
+  grid-template-columns: 1fr 1fr;
+}
+.answer-option {
+  min-height: 57px;
+  padding: 12px 15px;
+  font-size: 17px;
+  gap: 12px;
+  position: relative;
+  line-height: 1.55;
+}
+.answer-letter {
+  font-size: 19px;
+  flex-shrink: 0;
+}
+.answer-mark {
+  font-size: 13px;
+}
+.answer-option > span:nth-of-type(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.choice-hint {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #8c896c;
+  margin: 14px 0 0;
+}
+.option-expand {
+  font-size: 9px;
+  padding: 2px;
+  border: 0;
+  background: none !important;
+  color: #7b734e;
+  margin-left: auto;
+}
+.paper-footer {
+  flex-shrink: 0;
+  margin: 14px 0 0;
+  padding-top: 14px;
+}
+.paper-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.review-switch {
+  margin: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.ink-button {
+  padding: 13px 24px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 10px 0;
+  font-size: 10px;
+  color: #7e8469;
+}
+.pager button {
+  padding: 5px 10px;
+  font-size: 10px;
+  background: #e2dec8;
+  color: #5c6a4c;
+  border-color: #b4b092;
+}
+.question-prompt-area .pager {
+  margin-bottom: 0;
+}
+.result-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  padding: 14px 0;
+}
+.result-heading {
+  font:
+    27px SimSun,
+    serif;
+  color: #4d714f;
+  letter-spacing: 3px;
+  margin-bottom: 14px;
+}
+.result-heading > small {
+  display: block;
+  font:
+    11px "Microsoft YaHei",
+    sans-serif;
+  letter-spacing: 1px;
+  color: #8b8c6f;
+  margin-top: 10px;
+}
+.result-stage.wrong .result-heading {
+  color: #916b43;
+}
+.result-seal {
+  position: absolute;
+  top: 20px;
+  right: 8px;
+  width: 54px;
+  height: 60px;
+  border: 2px solid #748966;
+  color: #748966;
+  display: grid;
+  place-items: center;
+  transform: rotate(7deg);
+  font:
+    38px "KaiTi",
+    SimSun,
+    serif;
+  opacity: 0.5;
+}
+.result-stage.wrong .result-seal {
+  color: #a87955;
+  border-color: #a87955;
+}
+.answer-summary {
+  background: #dde1c966;
+  border-left: 2px solid #8a9a6d;
+  padding: 8px 15px;
+  margin: 6px 0 12px;
+}
+.answer-summary p {
+  font-size: 15px;
+  color: #4f6649;
+  line-height: 1.8;
+  margin: 6px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.answer-summary b {
+  font-size: 10px;
+  letter-spacing: 2px;
+  display: block;
+  color: #8a8e70;
+  font-weight: 400;
+}
+.explanation-block p {
+  font:
+    17px/1.9 SimSun,
+    serif;
+  color: #657454;
+  margin: 0;
+}
+.result-stage .changes {
+  gap: 10px;
+  margin: 15px 0;
+  line-height: 1.7;
+}
+.result-stage > .text-button {
+  align-self: flex-start;
+}
+.affairs-column {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+.objective-panel,
+.relations-panel,
+.recent-panel {
+  padding: 18px;
+  margin: 0;
+}
+.objective-panel {
+  flex-shrink: 0;
+}
+.objective-panel h2 {
+  font-size: 17px;
+  margin: 18px 0 10px;
+  line-height: 1.5;
+}
+.objective-panel p {
+  font-size: 11px;
+  line-height: 1.9;
+  margin-bottom: 12px;
+}
+.objective-conditions {
+  gap: 7px;
+  font-size: 10px;
+}
+.progress-label {
+  margin-top: 12px;
+}
+.objective-panel progress {
+  margin: 10px 0;
+}
+.relations-panel {
+  flex-shrink: 0;
+}
+.relation-mini {
+  padding: 12px 0;
+  gap: 9px;
+}
+.mini-portrait {
+  width: 31px;
+  height: 40px;
+  border: 1px solid #8a8f63;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.relation-mini b {
+  font-size: 13px;
+}
+.relation-mini small {
+  font-size: 9px;
+}
+.trust-count {
+  font-size: 16px;
+}
+.recent-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.recent-panel > h4 {
+  font:
+    13px SimSun,
+    serif;
+  color: #b9b696;
+  margin: 15px 0 10px;
+}
+.recent-panel > p {
+  font:
+    12px/1.8 SimSun,
+    serif;
+  color: #8d9d8d;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.game-dock {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  height: 66px;
+  padding: 9px 15px;
+  align-items: center;
+}
+.game-dock button {
+  padding: 7px 20px;
+  gap: 10px;
+}
+.game-dock b {
+  font-size: 12px;
+}
+.gear-button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid #92805777;
+  background: #142322a8;
+  color: #c5b690;
+  font-size: 15px;
+}
+.gear-button > span {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.title-top .gear-button {
+  margin-left: auto;
+}
+.title-screen {
+  height: 100dvh;
+  min-height: 0;
+}
+.title-top {
+  flex-shrink: 0;
+  padding: 22px 4vw;
+}
+.title-content {
+  padding: clamp(12px, 4vh, 55px) 8vw 20px;
+  min-height: 0;
+}
+.title-content h1 {
+  font-size: clamp(45px, 6vw, 90px);
+  margin: 17px 0;
+}
+.title-rule {
+  margin: 19px 0;
+}
+.title-poem {
+  font-size: 23px;
+  line-height: 1.8;
+  margin-bottom: 15px;
+}
+.title-description {
+  margin: 14px 0 23px;
+  line-height: 1.9;
+}
+.title-actions {
+  gap: 10px;
+}
+.title-actions > div {
+  margin-top: 0;
+}
+.title-footer {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 16px 4vw;
+}
+.chapter-gate {
+  height: 100dvh;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+.gate-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #0d1c1aef, #0d1c1ad9 50%, #0d1c1a77),
+    linear-gradient(0deg, #071311, transparent);
+}
+.gate-content {
+  position: relative;
+  z-index: 2;
+  width: 60%;
+  max-width: 830px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 30px 6vw;
+}
+.gate-content > small {
+  font-size: 11px;
+  letter-spacing: 5px;
+  color: #b6a16e;
+}
+.gate-content > h1 {
+  font:
+    clamp(40px, 5vw, 70px) "KaiTi",
+    SimSun,
+    serif;
+  letter-spacing: 8px;
+  color: #e3cfa1;
+  margin: 23px 0 16px;
+}
+.gate-location {
+  font-size: 12px;
+  color: #93a38c;
+  letter-spacing: 3px;
+}
+.gate-dialogue {
+  margin: 28px 0;
+  padding: 22px;
+  border: 1px solid #9b8d6355;
+  background: #1a2d25bb;
+}
+.gate-dialogue > b {
+  font:
+    17px SimSun,
+    serif;
+  color: #cbb17c;
+  letter-spacing: 3px;
+}
+.gate-dialogue > p {
+  font:
+    22px/1.9 "KaiTi",
+    SimSun,
+    serif;
+  color: #dbd4b8;
+  margin: 14px 0;
+}
+.gate-dialogue > span {
+  font-size: 10px;
+  color: #7f9281;
+  display: block;
+  text-align: right;
+}
+.gate-progress {
+  display: flex;
+  gap: 25px;
+  font-size: 10px;
+  color: #8c9d84;
+  line-height: 1.8;
+}
+.gate-progress b {
+  color: #c9bb8c;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.gate-objective {
+  margin: 22px 0;
+}
+.gate-objective small {
+  font-size: 10px;
+  color: #a99566;
+  letter-spacing: 3px;
+}
+.gate-objective p {
+  font-size: 12px;
+  color: #a5b097;
+  line-height: 1.9;
+  margin: 9px 0;
+}
+.gate-portrait {
+  position: absolute;
+  right: 4%;
+  bottom: 0;
+  width: 36%;
+  height: 85%;
+  max-width: 430px;
+  opacity: 0.93;
+  mask-image: linear-gradient(
+    0deg,
+    transparent,
+    #000 15%,
+    #000 85%,
+    transparent
+  );
+  border-left: 1px solid #bca16f33;
+}
+.gate-settings {
+  position: fixed;
+  right: 30px;
+  top: 25px;
+  z-index: 5;
+}
+.gate-error {
+  position: fixed;
+  left: 25%;
+  right: 25%;
+  bottom: 20px;
+  z-index: 8;
+}
+.floating-error {
+  position: fixed;
+  top: 70px;
+  left: 25%;
+  right: 25%;
+  z-index: 15;
+}
+.modal {
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+}
+.modal-header {
+  padding: 17px 25px;
+}
+.modal-header h2 {
+  font-size: 23px;
+}
+.modal-body {
+  padding: 22px 25px;
+  max-height: calc(100dvh - 137px);
+  overflow: auto;
+}
+.display-settings h3 {
+  font:
+    20px SimSun,
+    serif;
+  color: #4b6745;
+  margin-bottom: 14px;
+}
+.display-settings p {
+  font-size: 12px;
+  line-height: 2;
+  color: #7f896c;
+}
+.display-settings > div + div {
+  margin-top: 27px;
+  padding-top: 22px;
+  border-top: 1px solid #bdb795;
+}
+.person-card > .portrait {
+  height: 155px;
+  width: 103px;
+  background-color: #233d32;
+  background-image: inherit;
+}
+.story-recap {
+  display: flex;
+  gap: 25px;
+  align-items: flex-start;
+}
+.story-recap > .portrait {
+  width: 130px;
+  height: 195px;
+  flex-shrink: 0;
+}
+.story-recap h3 {
+  font:
+    23px SimSun,
+    serif;
+  color: #4e6846;
+  margin: 12px 0;
+}
+.story-recap small {
+  color: #879171;
+  font-size: 10px;
+}
+.story-recap p,
+.story-recap blockquote {
+  font:
+    16px/2 SimSun,
+    serif;
+  color: #637454;
+}
+.story-recap blockquote {
+  margin: 15px 0;
+  border-left: 2px solid #a99b69;
+  padding-left: 16px;
+}
+.event-conversation > small {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #967e4d;
+}
+.event-conversation h3 {
+  font:
+    25px SimSun,
+    serif;
+  letter-spacing: 4px;
+  color: #55724b;
+  margin: 18px 0;
+}
+.event-conversation > p {
+  font:
+    17px/2 SimSun,
+    serif;
+  color: #6d7c5c;
+  margin-bottom: 23px;
+}
+.event-conversation > button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  padding: 15px 35px 15px 17px;
+  margin: 10px 0;
+  font-size: 14px !important;
+}
+.event-conversation button small {
+  display: block;
+  font-size: 10px;
+  color: #959070;
+  margin-top: 8px;
+}
+.event-conversation button > span {
+  position: absolute;
+  right: 17px;
+  top: 24px;
+}
+.county-map {
+  height: 340px;
+  position: relative;
+  background-size: cover;
+  background-repeat: no-repeat;
+  border: 1px solid #8b9a71;
+}
+.map-location {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  white-space: nowrap;
+}
+.map-location i {
+  display: block;
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  border: 1px solid #bfc49b;
+  margin: 0 auto 9px;
+  background: #344a33;
+}
+.map-location b {
+  display: block;
+  font:
+    15px SimSun,
+    serif;
+  letter-spacing: 2px;
+  color: #c2c5a3;
+}
+.map-location small {
+  display: block;
+  margin-top: 7px;
+  font-size: 9px;
+  color: #9dae8e;
+}
+.map-location.active b {
+  color: #f1d393;
+}
+.map-location.active i {
+  background: #d4b878;
+  box-shadow: 0 0 20px #d4b878;
+}
+.map-location.future {
+  opacity: 0.4;
+}
+.map-caption {
+  font:
+    14px SimSun,
+    serif;
+  color: #7e8865;
+  text-align: center;
+  margin: 15px 0 0;
+}
+.expanded-text {
+  font:
+    20px/2 SimSun,
+    serif;
+  white-space: pre-wrap;
+}
+@media (min-width: 1600px) {
+  .world-layout {
+    grid-template-columns: 235px minmax(0, 1fr) 265px;
+    padding: 24px 34px;
+    gap: 30px;
+  }
+  .portrait-stage {
+    max-height: 49%;
+  }
+  .scroll-paper {
+    padding: 28px 38px 20px;
+  }
+  .answer-option {
+    font-size: 21px;
+    min-height: 68px;
+  }
+  .question-text {
+    font-size: 30px;
+  }
+  .story-dialogue {
+    min-height: 100px;
+  }
+  .spoken-line {
+    font-size: 18px;
+  }
+  .objective-panel p {
+    font-size: 13px;
+  }
+  .objective-panel h2 {
+    font-size: 21px;
+  }
+}
+@media (max-width: 1180px) {
+  .world-layout {
+    grid-template-columns: 170px minmax(0, 1fr) 190px;
+    padding: 16px;
+    gap: 16px;
+  }
+  .character-sheet {
+    padding: 15px;
+  }
+  .attributes > div {
+    margin: 10px 0;
+  }
+  .mini-road {
+    font-size: 9px;
+    gap: 8px;
+  }
+  .affairs-column {
+    gap: 14px;
+  }
+  .objective-panel,
+  .relations-panel,
+  .recent-panel {
+    padding: 15px;
+  }
+  .objective-panel p {
+    font-size: 10px;
+  }
+  .objective-panel h2 {
+    font-size: 16px;
+    margin: 15px 0 10px;
+  }
+  .scroll-paper {
+    padding: 21px;
+  }
+  .question-text {
+    font-size: 23px;
+  }
+  .answer-option {
+    font-size: 16px;
+    padding: 10px 13px;
+    min-height: 52px;
+  }
+  .chapter-heading b {
+    font-size: 13px;
+  }
+  .chapter-heading > div {
+    gap: 10px;
+  }
+  .chapter-heading button {
+    font-size: 8px;
+  }
+  .game-dock button {
+    padding: 7px 17px;
+  }
+  .result-heading {
+    font-size: 25px;
+  }
+}
+@media (max-width: 1000px) {
+  .world-layout {
+    grid-template-columns: 170px minmax(0, 1fr);
+    max-width: none;
+  }
+  .affairs-column {
+    display: none;
+  }
+  .story-column {
+    height: 100%;
+  }
+  .world-status > i {
+    display: none;
+  }
+  .world-status {
+    gap: 5px;
+  }
+  .world-status > .gear-button {
+    margin: 0;
+  }
+  .world-date {
+    font-size: 10px;
+  }
+  .scene-window {
+    display: none;
+  }
+  .question-text {
+    font-size: 25px;
+  }
+  .answer-option {
+    font-size: 18px;
+  }
+  .game-dock button {
+    padding: 7px 14px;
+  }
+  .portrait-stage {
+    max-height: 46%;
+  }
+}
+@media (max-height: 740px) and (min-width: 721px) {
+  .world-layout {
+    padding: 12px 18px;
+    gap: 18px;
+  }
+  .game-app.in-world {
+    grid-template-rows: 56px minmax(0, 1fr) 57px;
+  }
+  .world-header {
+    height: 56px;
+  }
+  .game-dock {
+    height: 57px;
+    padding: 6px 10px;
+  }
+  .chapter-heading {
+    height: 36px;
+    min-height: 36px;
+  }
+  .story-dialogue {
+    min-height: 70px;
+    max-height: 83px;
+    padding: 9px 0;
+  }
+  .speaker-medallion {
+    height: 52px;
+    width: 38px;
+  }
+  .spoken-line {
+    font-size: 14px;
+    line-height: 1.65;
+    -webkit-line-clamp: 2;
+    margin-top: 5px;
+  }
+  .speaker-name {
+    font-size: 13px;
+  }
+  .scroll-paper {
+    padding: 17px 22px 12px;
+  }
+  .question-text {
+    font-size: 22px;
+    line-height: 1.55;
+  }
+  .question-prompt-area {
+    margin-bottom: 13px;
+  }
+  .question-chapter {
+    margin: 10px 0;
+    font-size: 9px;
+  }
+  .answer-option {
+    font-size: 15px;
+    padding: 9px 12px;
+    min-height: 43px;
+  }
+  .answers {
+    gap: 8px;
+  }
+  .choice-hint {
+    margin-top: 10px;
+    font-size: 9px;
+  }
+  .paper-footer {
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .ink-button {
+    padding: 10px 18px;
+    font-size: 12px;
+  }
+  .character-sheet {
+    padding: 13px;
+  }
+  .portrait-stage {
+    min-height: 90px;
+    max-height: 37%;
+    margin-top: 8px;
+  }
+  .character-sheet h1 {
+    font-size: 21px;
+  }
+  .origin-line {
+    font-size: 9px;
+    margin: 7px 0;
+  }
+  .attributes > div {
+    margin: 9px 0;
+  }
+  .attributes dd {
+    font-size: 18px;
+  }
+  .mini-road {
+    padding-top: 10px;
+  }
+  .objective-panel,
+  .relations-panel,
+  .recent-panel {
+    padding: 13px;
+  }
+  .objective-panel h2 {
+    font-size: 15px;
+    margin: 12px 0 8px;
+  }
+  .objective-panel p {
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+  .objective-conditions {
+    font-size: 9px;
+  }
+  .relation-mini {
+    padding: 9px 0;
+  }
+  .recent-panel {
+    display: none;
+  }
+  .title-content {
+    padding-top: 12px;
+  }
+  .title-content h1 {
+    font-size: 64px;
+  }
+  .title-poem {
+    font-size: 20px;
+  }
+  .title-description {
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+  .gate-dialogue {
+    margin: 18px 0;
+    padding: 17px;
+  }
+  .gate-dialogue p {
+    font-size: 19px;
+  }
+  .gate-content > h1 {
+    font-size: 50px;
+    margin: 18px 0 12px;
+  }
+  .gate-objective {
+    margin: 17px 0;
+  }
+  .result-heading {
+    font-size: 23px;
+    margin-bottom: 9px;
+  }
+  .result-seal {
+    width: 42px;
+    height: 48px;
+    font-size: 30px;
+    top: 14px;
+  }
+  .answer-summary p {
+    font-size: 13px;
+  }
+  .explanation-block p {
+    font-size: 15px;
+    line-height: 1.75;
+  }
+}
+@media (max-width: 720px) {
+  .game-app.in-world {
+    grid-template-rows: 54px minmax(0, 1fr) 58px;
+  }
+  .world-header {
+    height: 54px;
+    padding: 0 12px;
+  }
+  .wordmark {
+    font-size: 19px;
+  }
+  .world-date {
+    display: none;
+  }
+  .world-status {
+    display: flex;
+    font-size: 9px;
+  }
+  .world-status > .gear-button {
+    padding: 4px 7px;
+    font-size: 14px;
+  }
+  .world-status > button:last-child {
+    padding: 4px 7px;
+    margin-left: 4px;
+    font-size: 10px;
+  }
+  .world-layout {
+    display: block;
+    padding: 9px 10px;
+  }
+  .character-column,
+  .affairs-column {
+    display: none;
+  }
+  .story-column {
+    height: 100%;
+  }
+  .chapter-heading {
+    height: 36px;
+    min-height: 36px;
+    padding: 6px 10px;
+  }
+  .chapter-heading small {
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+  .chapter-heading b {
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .chapter-heading button {
+    font-size: 8px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .story-dialogue {
+    padding: 10px 0;
+    min-height: 74px;
+    max-height: 100px;
+    gap: 10px;
+  }
+  .speaker-medallion {
+    width: 38px;
+    height: 52px;
+  }
+  .speaker-name {
+    font-size: 13px;
+    gap: 8px;
+  }
+  .speaker-name > span {
+    font-size: 8px;
+  }
+  .spoken-line {
+    font-size: 14px;
+    line-height: 1.8;
+    -webkit-line-clamp: 3;
+    margin-top: 4px;
+  }
+  .scroll-paper {
+    padding: 19px 15px 13px;
+  }
+  .paper-heading {
+    font-size: 12px;
+  }
+  .subject-tag,
+  .review-tag {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+  .question-body {
+    justify-content: center;
+  }
+  .question-chapter {
+    display: block;
+    margin: 11px 0 12px;
+    font-size: 9px;
+  }
+  .question-chapter > span {
+    font-size: 8px;
+    margin-top: 4px;
+  }
+  .question-text {
+    font-size: 21px;
+    line-height: 1.75;
+    letter-spacing: 0;
+  }
+  .question-prompt-area {
+    margin-bottom: 18px;
+  }
+  .answers.two-columns {
+    grid-template-columns: 1fr;
+  }
+  .answers {
+    gap: 10px;
+  }
+  .answer-option {
+    font-size: 16px;
+    min-height: 51px;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .answer-letter {
+    font-size: 17px;
+  }
+  .choice-hint {
+    font-size: 9px;
+    margin-top: 11px;
+    letter-spacing: 0;
+  }
+  .paper-footer {
+    margin-top: 12px;
+    padding-top: 12px;
+    gap: 8px;
+  }
+  .paper-footer > div {
+    display: block;
+  }
+  .review-switch {
+    font-size: 8px;
+    margin-top: 7px;
+  }
+  .paper-footer .text-button {
+    font-size: 10px;
+    padding: 0;
+  }
+  .ink-button {
+    font-size: 12px;
+    padding: 12px 15px;
+    letter-spacing: 1px;
+  }
+  .game-dock {
+    height: 58px;
+    padding: 4px 2px;
+    gap: 0;
+  }
+  .game-dock button {
+    padding: 3px 0;
+    gap: 4px;
+    flex: 1;
+  }
+  .game-dock button > span {
+    font-size: 18px;
+    width: 22px;
+    height: 20px;
+  }
+  .game-dock b {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .pager {
+    font-size: 9px;
+    gap: 12px;
+    margin: 9px 0;
+  }
+  .pager button {
+    font-size: 9px;
+    padding: 4px 8px;
+  }
+  .result-heading {
+    font-size: 24px;
+  }
+  .result-seal {
+    width: 42px;
+    height: 48px;
+    font-size: 30px;
+    top: 15px;
+  }
+  .result-heading > small {
+    font-size: 10px;
+  }
+  .answer-summary {
+    padding: 7px 12px;
+  }
+  .answer-summary p {
+    font-size: 14px;
+    -webkit-line-clamp: 4;
+  }
+  .explanation-block p {
+    font-size: 16px;
+    line-height: 1.9;
+  }
+  .result-stage .changes {
+    font-size: 9px;
+  }
+  .title-top {
+    padding: 17px 20px;
+  }
+  .title-top .gear-button > span {
+    display: inline;
+  }
+  .title-content {
+    padding: 3vh 28px 12px;
+  }
+  .title-content h1 {
+    font-size: 60px;
+  }
+  .title-poem {
+    font-size: 22px;
+  }
+  .title-description {
+    font-size: 11px;
+  }
+  .title-footer {
+    font-size: 8px;
+    padding: 13px 20px;
+  }
+  .gate-content {
+    width: 100%;
+    padding: 30px 25px;
+  }
+  .gate-content > small {
+    font-size: 9px;
+    letter-spacing: 3px;
+  }
+  .gate-content > h1 {
+    font-size: 48px;
+  }
+  .gate-portrait {
+    right: -8%;
+    width: 57%;
+    height: 75%;
+    opacity: 0.25;
+  }
+  .gate-shade {
+    background: #0a1a17ce;
+  }
+  .gate-dialogue {
+    padding: 17px;
+    margin: 21px 0;
+  }
+  .gate-dialogue p {
+    font-size: 21px;
+    line-height: 1.9;
+  }
+  .gate-progress {
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 9px;
+  }
+  .gate-settings {
+    right: 20px;
+    top: 17px;
+  }
+  .gate-objective p {
+    font-size: 12px;
+  }
+  .floating-error {
+    left: 12px;
+    right: 12px;
+    top: 58px;
+  }
+  .gate-error {
+    left: 15px;
+    right: 15px;
+  }
+  .modal {
+    max-width: calc(100vw - 18px);
+    max-height: calc(100dvh - 22px);
+  }
+  .modal-header {
+    padding: 16px 18px;
+  }
+  .modal-body {
+    padding: 18px;
+    max-height: calc(100dvh - 117px);
+  }
+  .story-recap {
+    gap: 14px;
+  }
+  .story-recap > .portrait {
+    width: 80px;
+    height: 120px;
+  }
+  .story-recap p,
+  .story-recap blockquote {
+    font-size: 14px;
+  }
+  .county-map {
+    height: 300px;
+  }
+  .map-location b {
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  .map-location small {
+    font-size: 8px;
+  }
+}
+@media (max-height: 570px) {
+  .title-top {
+    padding-top: 12px;
+    padding-bottom: 8px;
+  }
+  .title-content {
+    padding-top: 6px;
+  }
+  .title-content .eyebrow {
+    font-size: 9px;
+    margin-bottom: 10px;
+  }
+  .title-content h1 {
+    font-size: 47px;
+    margin: 10px 0;
+  }
+  .title-rule {
+    margin: 12px 0;
+  }
+  .title-poem {
+    font-size: 17px;
+    line-height: 1.7;
+    margin-bottom: 10px;
+  }
+  .title-description {
+    font-size: 10px;
+    margin: 10px 0 15px;
+  }
+  .title-actions .gold-button,
+  .title-actions .outline-button {
+    padding: 10px 20px;
+  }
+  .title-actions {
+    gap: 7px;
+  }
+  .title-footer {
+    padding: 10px 4vw;
+  }
+  .gate-content > h1 {
+    font-size: 38px;
+    margin: 12px 0;
+  }
+  .gate-location {
+    font-size: 10px;
+  }
+  .gate-dialogue {
+    margin: 15px 0;
+    padding: 12px 16px;
+  }
+  .gate-dialogue p {
+    font-size: 17px;
+    line-height: 1.8;
+    margin: 8px 0;
+  }
+  .gate-objective {
+    margin: 13px 0;
+  }
+  .gate-objective p {
+    font-size: 11px;
+  }
+  .gate-content .gold-button {
+    padding: 10px 20px;
+  }
+  .chapter-heading {
+    height: 30px;
+    min-height: 30px;
+  }
+  .story-dialogue {
+    min-height: 51px;
+    max-height: 60px;
+    padding: 6px 0;
+  }
+  .speaker-medallion {
+    height: 40px;
+    width: 29px;
+  }
+  .spoken-line {
+    font-size: 12px;
+    line-height: 1.6;
+    -webkit-line-clamp: 1;
+  }
+  .speaker-name {
+    font-size: 12px;
+  }
+  .scroll-paper {
+    padding: 14px 16px 10px;
+  }
+  .paper-heading {
+    font-size: 11px;
+  }
+  .question-chapter {
+    display: none;
+  }
+  .question-text {
+    font-size: 18px;
+    line-height: 1.5;
+  }
+  .question-prompt-area {
+    margin: 10px 0;
+  }
+  .answer-option {
+    min-height: 34px;
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .answer-letter {
+    font-size: 14px;
+  }
+  .answers {
+    gap: 7px;
+  }
+  .choice-hint {
+    display: none;
+  }
+  .paper-footer {
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+  .ink-button {
+    padding: 8px 14px;
+  }
+  .result-heading {
+    font-size: 20px;
+    margin-bottom: 7px;
+  }
+  .result-heading > small {
+    display: none;
+  }
+  .answer-summary {
+    margin: 7px 0;
+    padding: 6px 10px;
+  }
+  .answer-summary p {
+    font-size: 12px;
+    margin: 3px 0;
+    -webkit-line-clamp: 2;
+  }
+  .explanation-block p {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .result-stage .changes {
+    margin: 9px 0;
+  }
+  .review-switch {
+    font-size: 8px;
+  }
+  .attributes > div {
+    margin: 7px 0;
+  }
+  .character-sheet .mini-road {
+    display: none;
+  }
+  .modal-header {
+    padding: 12px 18px;
+  }
+  .modal-header h2 {
+    font-size: 20px;
+  }
+  .modal-body {
+    max-height: calc(100dvh - 110px);
+  }
+}
+
+/* 创建人生的两步导航；局部弹窗承载长表单，主游戏始终按视口排版。 */
+.form-steps {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+.form-steps .active {
+  color: var(--gold);
+}

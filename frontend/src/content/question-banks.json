@@ -1,0 +1,1038 @@
+[
+  {
+    "id": "math",
+    "name": "算学拾遗",
+    "description": "数学一 · 概念与条件辨析",
+    "questions": [
+      {
+        "id": "m1",
+        "subject": "数学一",
+        "category": "线性代数",
+        "chapter": "线性代数·特征值",
+        "type": "single_choice",
+        "question": "若 A² = A，则 A 的特征值只能取哪些值？",
+        "answer": "A",
+        "explanation": "λ² = λ，因此 λ 只能取 0 或 1。",
+        "options": {
+          "A": "0 和 1",
+          "B": "−1 和 1",
+          "C": "任意实数",
+          "D": "只有 1"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m2",
+        "subject": "数学一",
+        "category": "线性代数",
+        "chapter": "线性代数·实对称矩阵",
+        "type": "true_false",
+        "question": "实对称矩阵一定可以正交对角化。",
+        "answer": true,
+        "explanation": "实对称矩阵存在一组标准正交特征向量。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m3",
+        "subject": "数学一",
+        "category": "多元微分",
+        "chapter": "多元微分·条件辨析",
+        "type": "single_choice",
+        "question": "二元函数在一点偏导数存在，能否推出它在该点可微？",
+        "answer": "A",
+        "explanation": "偏导存在仅沿坐标方向提供信息，不能保证可微。",
+        "options": {
+          "A": "不能，仅偏导存在不足以保证可微",
+          "B": "一定能推出",
+          "C": "只要一个偏导存在就可微",
+          "D": "二者完全等价"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m4",
+        "subject": "数学一",
+        "category": "级数",
+        "chapter": "级数·必要条件",
+        "type": "true_false",
+        "question": "正项级数 ∑aₙ 收敛，一定能推出 n·aₙ → 0。",
+        "answer": false,
+        "explanation": "一般不成立；增加 aₙ 单调递减等条件后才可得到该结论。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m5",
+        "subject": "数学一",
+        "category": "极限",
+        "chapter": "极限·等价无穷小",
+        "type": "single_choice",
+        "question": "等价无穷小替换通常可以直接用于哪种结构？",
+        "answer": "A",
+        "explanation": "乘除结构可在适用条件下替换；加减结构需警惕高阶项抵消。",
+        "options": {
+          "A": "乘除结构",
+          "B": "任意加减结构",
+          "C": "任意指数结构",
+          "D": "所有结构均可"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m6",
+        "subject": "数学一",
+        "category": "概率",
+        "chapter": "概率·独立与不相关",
+        "type": "true_false",
+        "question": "随机变量独立且二阶矩存在，则它们不相关。",
+        "answer": true,
+        "explanation": "独立时 E(XY)=E(X)E(Y)，协方差为 0；反向一般不成立。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m7",
+        "subject": "数学一",
+        "category": "概率",
+        "chapter": "概率·方差",
+        "type": "single_choice",
+        "question": "写出 D(X) 与 E(X²)、E(X) 的关系。",
+        "answer": "A",
+        "explanation": "方差等于平方的期望减去期望的平方。",
+        "options": {
+          "A": "E(X²) − [E(X)]²",
+          "B": "[E(X)]² − E(X²)",
+          "C": "E(X²) + [E(X)]²",
+          "D": "E(X)²"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m8",
+        "subject": "数学一",
+        "category": "线性代数",
+        "chapter": "线性代数·可逆矩阵",
+        "type": "multiple_choice",
+        "question": "n 阶矩阵 A 可逆，以下哪些结论成立？",
+        "answer": [
+          "A",
+          "B",
+          "D"
+        ],
+        "explanation": "可逆等价于行列式非零、秩为 n、零空间只有零向量。",
+        "options": {
+          "A": "det(A) ≠ 0",
+          "B": "rank(A) = n",
+          "C": "A 一定是对称矩阵",
+          "D": "Ax=0 只有零解"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m9",
+        "subject": "数学一",
+        "category": "积分",
+        "chapter": "积分·奇偶性",
+        "type": "single_choice",
+        "question": "可积奇函数在对称区间 [−a,a] 上的定积分为？",
+        "answer": "B",
+        "explanation": "奇函数在对称区间上的积分相互抵消。",
+        "options": {
+          "A": "一定为正",
+          "B": "0",
+          "C": "一定为负",
+          "D": "无法确定"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m10",
+        "subject": "数学一",
+        "category": "微分",
+        "chapter": "微分·极值",
+        "type": "true_false",
+        "question": "函数在某点导数为零，该点一定是极值点。",
+        "answer": false,
+        "explanation": "驻点未必是极值点，例如 f(x)=x³ 在 x=0 处。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m11",
+        "subject": "数学一",
+        "category": "线性代数",
+        "chapter": "线性代数·秩",
+        "type": "single_choice",
+        "question": "矩阵的行秩与列秩有什么关系？",
+        "answer": "A",
+        "explanation": "行秩与列秩总是相等，统一称为矩阵的秩。",
+        "options": {
+          "A": "总是相等",
+          "B": "行秩总大于列秩",
+          "C": "列秩总大于行秩",
+          "D": "仅方阵时相等"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "m12",
+        "subject": "数学一",
+        "category": "多元微分",
+        "chapter": "多元微分·极值判别",
+        "type": "single_choice",
+        "question": "二元函数驻点处，A=fxx、B=fxy、C=fyy；AC−B²<0 时该点是什么点？",
+        "answer": "A",
+        "explanation": "Hessian 不定，驻点不是极值点，称为鞍点。",
+        "options": {
+          "A": "鞍点，不是极值点",
+          "B": "极大值点",
+          "C": "极小值点",
+          "D": "无法判断 Hessian 的定性"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      }
+    ],
+    "enabled": true,
+    "weight": 1
+  },
+  {
+    "id": "cs",
+    "name": "机务要略",
+    "description": "408 · 数据结构、组成、操作系统、网络",
+    "questions": [
+      {
+        "id": "c1",
+        "subject": "408",
+        "category": "操作系统",
+        "chapter": "操作系统·虚拟内存",
+        "type": "single_choice",
+        "question": "页面大小增大，哪一项通常增加？",
+        "answer": "B",
+        "explanation": "页面越大，页表项通常越少，页内碎片通常越大。",
+        "options": {
+          "A": "页表项数量",
+          "B": "页内碎片",
+          "C": "页号位数",
+          "D": "缺页次数一定增加"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c2",
+        "subject": "408",
+        "category": "操作系统",
+        "chapter": "操作系统·地址转换",
+        "type": "true_false",
+        "question": "TLB 未命中一定意味着缺页。",
+        "answer": false,
+        "explanation": "TLB 未命中后访问主存页表；目标页仍可能在主存。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c3",
+        "subject": "408",
+        "category": "数据结构",
+        "chapter": "数据结构·排序",
+        "type": "multiple_choice",
+        "question": "以下哪些排序算法通常是稳定的？",
+        "answer": [
+          "A",
+          "C"
+        ],
+        "explanation": "直接插入排序与归并排序可保持相等元素的相对顺序。",
+        "options": {
+          "A": "直接插入排序",
+          "B": "堆排序",
+          "C": "归并排序",
+          "D": "快速排序"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c4",
+        "subject": "408",
+        "category": "网络",
+        "chapter": "网络·传输层",
+        "type": "single_choice",
+        "question": "TCP 提供的服务是？",
+        "answer": "C",
+        "explanation": "TCP 提供面向连接、可靠的字节流服务。",
+        "options": {
+          "A": "不可靠数据报",
+          "B": "有消息边界的数据报",
+          "C": "可靠字节流",
+          "D": "广播服务"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c5",
+        "subject": "408",
+        "category": "操作系统",
+        "chapter": "操作系统·死锁",
+        "type": "multiple_choice",
+        "question": "以下哪些属于死锁产生的必要条件？",
+        "answer": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "explanation": "死锁四个必要条件：互斥、请求并保持、不剥夺、循环等待。",
+        "options": {
+          "A": "互斥",
+          "B": "请求并保持",
+          "C": "不剥夺",
+          "D": "循环等待"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c6",
+        "subject": "408",
+        "category": "数据结构",
+        "chapter": "数据结构·树",
+        "type": "single_choice",
+        "question": "一棵有 n 个结点的非空树，共有多少条边？",
+        "answer": "A",
+        "explanation": "树连通且无环，边数为结点数减一。",
+        "options": {
+          "A": "n−1",
+          "B": "n",
+          "C": "n+1",
+          "D": "2n"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c7",
+        "subject": "408",
+        "category": "组成原理",
+        "chapter": "组成原理·Cache",
+        "type": "true_false",
+        "question": "Cache 的命中率越高，平均访存时间通常越短。",
+        "answer": true,
+        "explanation": "在其他访存开销保持不变的条件下，命中率提高可降低平均访存时间。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c8",
+        "subject": "408",
+        "category": "操作系统",
+        "chapter": "操作系统·进程",
+        "type": "single_choice",
+        "question": "一个进程由运行态转为阻塞态，是否一定由时间片用完引起？",
+        "answer": "A",
+        "explanation": "时间片用完通常进入就绪态；等待 I/O 等事件才会阻塞。",
+        "options": {
+          "A": "不是，时间片用完通常进入就绪态",
+          "B": "一定是时间片用完",
+          "C": "阻塞态就是就绪态",
+          "D": "只能由时间片用完引起"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c9",
+        "subject": "408",
+        "category": "网络",
+        "chapter": "网络·应用层",
+        "type": "single_choice",
+        "question": "将域名解析为 IP 地址的系统简称是什么？",
+        "answer": "A",
+        "explanation": "DNS 是域名系统。",
+        "options": {
+          "A": "DNS",
+          "B": "ARP",
+          "C": "HTTP",
+          "D": "SMTP"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c10",
+        "subject": "408",
+        "category": "数据结构",
+        "chapter": "数据结构·二分查找",
+        "type": "single_choice",
+        "question": "对长度为 n 的有序顺序表做二分查找，最坏时间复杂度是？",
+        "answer": "B",
+        "explanation": "每次将待查区间减半，故为 O(log n)。",
+        "options": {
+          "A": "O(n)",
+          "B": "O(log n)",
+          "C": "O(n log n)",
+          "D": "O(1)"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c11",
+        "subject": "408",
+        "category": "网络",
+        "chapter": "网络·地址解析",
+        "type": "single_choice",
+        "question": "在 IPv4 局域网内，ARP 主要完成什么映射？",
+        "answer": "A",
+        "explanation": "ARP 通过已知 IPv4 地址解析对应链路层 MAC 地址。",
+        "options": {
+          "A": "IPv4 地址到 MAC 地址",
+          "B": "域名到 IPv4 地址",
+          "C": "端口号到进程名",
+          "D": "MAC 地址到域名"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "c12",
+        "subject": "408",
+        "category": "操作系统",
+        "chapter": "操作系统·同步",
+        "type": "true_false",
+        "question": "互斥信号量通常初始化为 1。",
+        "answer": true,
+        "explanation": "一个可用的互斥资源对应一个初始许可。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      }
+    ],
+    "enabled": true,
+    "weight": 1
+  },
+  {
+    "id": "politics",
+    "name": "经义札记",
+    "description": "政治 · 基础理论回忆，无年度时政",
+    "questions": [
+      {
+        "id": "p1",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·物质",
+        "type": "single_choice",
+        "question": "物质的唯一特性是什么？",
+        "answer": "A",
+        "explanation": "客观实在性是物质的唯一特性。",
+        "options": {
+          "A": "客观实在性",
+          "B": "主观能动性",
+          "C": "可知性",
+          "D": "可见性"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p2",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·认识论",
+        "type": "single_choice",
+        "question": "检验真理的唯一标准是什么？",
+        "answer": "A",
+        "explanation": "实践是检验真理的唯一标准。",
+        "options": {
+          "A": "实践",
+          "B": "权威观点",
+          "C": "多数人的认同",
+          "D": "逻辑形式正确"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p3",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·运动",
+        "type": "true_false",
+        "question": "运动是物质的根本属性和存在方式。",
+        "answer": true,
+        "explanation": "物质与运动不可分，静止是运动的特殊状态。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p4",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·矛盾",
+        "type": "single_choice",
+        "question": "事物发展的根本动力是？",
+        "answer": "A",
+        "explanation": "矛盾是事物发展的源泉和动力。",
+        "options": {
+          "A": "矛盾",
+          "B": "外部压力",
+          "C": "主观愿望",
+          "D": "偶然事件"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p5",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·认识",
+        "type": "multiple_choice",
+        "question": "感性认识的形式包括哪些？",
+        "answer": [
+          "A",
+          "B",
+          "C"
+        ],
+        "explanation": "感觉、知觉、表象属于感性认识；概念属于理性认识。",
+        "options": {
+          "A": "感觉",
+          "B": "知觉",
+          "C": "表象",
+          "D": "概念"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p6",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·实践",
+        "type": "true_false",
+        "question": "认识对实践具有反作用。",
+        "answer": true,
+        "explanation": "正确认识能够指导实践，错误认识也会产生消极影响。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p7",
+        "subject": "政治",
+        "category": "政治经济学",
+        "chapter": "政治经济学·商品",
+        "type": "single_choice",
+        "question": "商品具有使用价值和什么两因素？",
+        "answer": "A",
+        "explanation": "使用价值和价值是商品的两因素。",
+        "options": {
+          "A": "价值",
+          "B": "价格",
+          "C": "交换比例",
+          "D": "稀缺性"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "p8",
+        "subject": "政治",
+        "category": "哲学",
+        "chapter": "哲学·量变质变",
+        "type": "single_choice",
+        "question": "量变是否必然在任何时候都立刻引起质变？",
+        "answer": "A",
+        "explanation": "量变达到一定程度、突破事物的度，才引起质变。",
+        "options": {
+          "A": "不是，量变达到一定程度才引起质变",
+          "B": "每次量变都立即质变",
+          "C": "量变不可能引起质变",
+          "D": "量变和质变完全无关"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      }
+    ],
+    "enabled": true,
+    "weight": 1
+  },
+  {
+    "id": "english",
+    "name": "译学小笺",
+    "description": "英语一 · 熟词僻义与短语",
+    "questions": [
+      {
+        "id": "e1",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·熟词僻义",
+        "type": "single_choice",
+        "question": "address a problem 中 address 的意思是？",
+        "answer": "B",
+        "explanation": "address 作动词可表示处理、应对问题。",
+        "options": {
+          "A": "地址",
+          "B": "处理",
+          "C": "邮寄",
+          "D": "忽略"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e2",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·短语",
+        "type": "single_choice",
+        "question": "account for 在解释原因的语境中意为？",
+        "answer": "A",
+        "explanation": "account for 可表示解释、说明，也可表示占某比例。",
+        "options": {
+          "A": "解释、说明",
+          "B": "放弃",
+          "C": "预订",
+          "D": "对比"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e3",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·熟词僻义",
+        "type": "single_choice",
+        "question": "be subject to change 中 subject to 表示？",
+        "answer": "A",
+        "explanation": "be subject to 表示受……影响、可能遭受……。",
+        "options": {
+          "A": "可能发生、受……影响",
+          "B": "研究课题",
+          "C": "主动决定",
+          "D": "绝不改变"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e4",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·熟词僻义",
+        "type": "single_choice",
+        "question": "curb spending 中 curb 的意思是？",
+        "answer": "A",
+        "explanation": "curb 作动词表示限制、抑制、控制。",
+        "options": {
+          "A": "控制、限制",
+          "B": "增加",
+          "C": "讨论",
+          "D": "计算"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e5",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·短语",
+        "type": "single_choice",
+        "question": "take something for granted 的意思是？",
+        "answer": "C",
+        "explanation": "该短语表示认为某事理所当然。",
+        "options": {
+          "A": "申请补助",
+          "B": "认真研究",
+          "C": "认为理所当然",
+          "D": "赠送礼物"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e6",
+        "subject": "英语一",
+        "category": "语法",
+        "chapter": "语法·虚拟语气",
+        "type": "true_false",
+        "question": "If I were you, I would… 可以表达与现在事实相反的假设。",
+        "answer": true,
+        "explanation": "与现在事实相反的虚拟条件句可使用 were 与 would。",
+        "options": {
+          "true": "正确",
+          "false": "错误"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e7",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·熟词僻义",
+        "type": "single_choice",
+        "question": "issue a statement 中 issue 作动词表示什么？",
+        "answer": "A",
+        "explanation": "issue 可作动词，表示发布、发表、颁发。",
+        "options": {
+          "A": "发布、发表",
+          "B": "问题",
+          "C": "争论",
+          "D": "撤回"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      },
+      {
+        "id": "e8",
+        "subject": "英语一",
+        "category": "词汇",
+        "chapter": "词汇·短语",
+        "type": "multiple_choice",
+        "question": "下列哪些表达可表示“由于”？",
+        "answer": [
+          "A",
+          "B",
+          "D"
+        ],
+        "explanation": "because of、due to、owing to 可表示原因；despite 表示尽管。",
+        "options": {
+          "A": "because of",
+          "B": "due to",
+          "C": "despite",
+          "D": "owing to"
+        },
+        "aliases": [],
+        "keywords": [],
+        "difficulty": 3,
+        "frequency": 4,
+        "enabled": true,
+        "tags": [
+          "高频",
+          "易混"
+        ]
+      }
+    ],
+    "enabled": true,
+    "weight": 1
+  }
+]

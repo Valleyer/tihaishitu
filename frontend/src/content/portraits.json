@@ -1,0 +1,44 @@
+{
+  "portraits": {
+    "playerMale": {
+      "src": "/art/portraits/player-male.jpg",
+      "label": "寒门男书生",
+      "position": "50% 26%"
+    },
+    "playerFemale": {
+      "src": "/art/portraits/player-female.jpg",
+      "label": "寒门女书生",
+      "position": "50% 24%"
+    },
+    "tutor": {
+      "src": "/art/portraits/lu-chengming.jpg",
+      "label": "陆承明",
+      "position": "50% 24%"
+    },
+    "friend": {
+      "src": "/art/portraits/gu-huaian.jpg",
+      "label": "顾怀安",
+      "position": "50% 24%"
+    },
+    "clerk": {
+      "src": "/art/portraits/shen-yan.jpg",
+      "label": "沈砚",
+      "position": "50% 24%"
+    },
+    "lin": {
+      "src": "/art/portraits/lin-zhiwei.jpg",
+      "label": "林知微",
+      "position": "50% 22%"
+    },
+    "pei": {
+      "src": "/art/portraits/pei-zhao.jpg",
+      "label": "裴照",
+      "position": "50% 24%"
+    },
+    "su": {
+      "src": "/art/portraits/su-mingqi.jpg",
+      "label": "苏明绮",
+      "position": "50% 22%"
+    }
+  }
+}

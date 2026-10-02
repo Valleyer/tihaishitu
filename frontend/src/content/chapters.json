@@ -1,0 +1,134 @@
+[
+  {
+    "title": "一灯如豆",
+    "subtitle": "寒门求学",
+    "place": "青溪县 · 旧书塾",
+    "threshold": 0,
+    "knowledge": 0,
+    "trust": 0,
+    "goal": "读完十二页入门课业，让先生记住你的名字。",
+    "id": "chapter-0",
+    "sceneGroup": 0,
+    "locationId": "old-school",
+    "intro": {
+      "speaker": "陆承明",
+      "lines": [
+        "青溪的门，向肯用功的人开着。",
+        "先别问功名。十二页课业之后，我再看看你的长进。"
+      ],
+      "action": "推门入塾",
+      "npcId": "lu"
+    },
+    "playerTitle": "寒门书生"
+  },
+  {
+    "title": "青衿初识",
+    "subtitle": "书院旁听",
+    "place": "青溪书院 · 东斋",
+    "threshold": 12,
+    "knowledge": 20,
+    "trust": 2,
+    "goal": "完成四十次课业，积累学识与先生的认可。",
+    "id": "chapter-1",
+    "sceneGroup": 1,
+    "locationId": "east-hall",
+    "intro": {
+      "speaker": "顾怀安",
+      "lines": [
+        "先生说，你以后可以到东斋听课。",
+        "我替你留了窗边的位置。四十页课业，我们一道读。"
+      ],
+      "action": "入席共读",
+      "npcId": "gu"
+    },
+    "playerTitle": "书院旁听生"
+  },
+  {
+    "title": "纸上有声",
+    "subtitle": "书院求学",
+    "place": "青溪书院 · 藏书楼",
+    "threshold": 40,
+    "knowledge": 80,
+    "trust": 5,
+    "goal": "修习满八十次，学会与同窗相互印证。",
+    "id": "chapter-2",
+    "sceneGroup": 2,
+    "locationId": "library",
+    "intro": {
+      "speaker": "陆承明",
+      "lines": [
+        "书楼里的旧卷，可以交给你补录了。",
+        "把学问写准，比写得漂亮更要紧。"
+      ],
+      "action": "前往藏书楼",
+      "npcId": "lu"
+    },
+    "playerTitle": "书院学生"
+  },
+  {
+    "title": "县城旧事",
+    "subtitle": "见习文书",
+    "place": "青溪县 · 县衙侧房",
+    "threshold": 80,
+    "knowledge": 160,
+    "trust": 10,
+    "goal": "积累一百四十次课业，为县试准备一份扎实的底稿。",
+    "id": "chapter-3",
+    "sceneGroup": 3,
+    "locationId": "county-office",
+    "intro": {
+      "speaker": "沈砚",
+      "lines": [
+        "先生向我提过你。先帮我看一册旧案。",
+        "不授官，也不许诺功名。每一页都要核得踏实。"
+      ],
+      "action": "接过旧册",
+      "npcId": "shen"
+    },
+    "playerTitle": "书院学生"
+  },
+  {
+    "title": "风起青萍",
+    "subtitle": "县试备考",
+    "place": "青溪书院 · 试院前巷",
+    "threshold": 140,
+    "knowledge": 280,
+    "trust": 18,
+    "goal": "修习满二百四十次，接触县城的人情与事务。",
+    "id": "chapter-4",
+    "sceneGroup": 4,
+    "locationId": "exam-street",
+    "intro": {
+      "speaker": "顾怀安",
+      "lines": [
+        "城里已有人议论县试，我们也该静下心了。",
+        "今日先不说必中，只说这一卷你我还有哪里不懂。"
+      ],
+      "action": "同赴试院前巷",
+      "npcId": "gu"
+    },
+    "playerTitle": "县试备考生"
+  },
+  {
+    "title": "长夜磨卷",
+    "subtitle": "潜心修业",
+    "place": "青溪书院 · 夜读斋",
+    "threshold": 240,
+    "knowledge": 480,
+    "trust": 25,
+    "goal": "整理旧案、补齐三门本领，前往试院报名参加青溪县试。",
+    "id": "chapter-5",
+    "sceneGroup": 4,
+    "locationId": "night-study",
+    "intro": {
+      "speaker": "陆承明",
+      "lines": [
+        "你已走过不少课业，尚不可自满。",
+        "县试名帖已经张榜。先把三门本领补齐，再去试院递帖。"
+      ],
+      "action": "灯下续读",
+      "npcId": "lu"
+    },
+    "playerTitle": "县试备考生"
+  }
+]

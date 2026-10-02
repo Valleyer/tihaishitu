@@ -1,81 +1,84 @@
 # 题海仕途
 
-从寒门到朝堂，前程一题一题答。
+先过一段古风人生，再为想要的前程读书。
 
-React 前端初始化项目。Java 后端暂未实现，默认完全在浏览器本地运行。
-已有三份设计文档保留在根目录，代表长期设计目标，不代表当前功能已经完成。
+React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成首轮对接。题库正文按修订号缓存在浏览器，作答和存档通过 UUID 与本地服务交互。
+
+## 现在怎么玩
+
+默认进入可探索的世界，题面不会自动出现。
+
+- **读书**：三页一卷，提升学识、悟性、辞采、筹算并赚银两。
+- **访友**：与六位人物交谈、共读；按整轮成绩增加好感，解锁话题与关系信物。
+- **游历**：青溪县、临川府两张大地图共十二个地点，统一显示“大地图名 · 小地点名”。
+- **挑战**：普通活动按五个不同知识点考核，60 分基础过关、100 分完美过关；首题答错会进入同知识点训练。
+- **主线**：县试、府试和核心剧情按十个知识点考核，必须全对；未全对无惩罚并可无限重试。
+- **养成**：26 件装备、消耗品和信物可收入行囊，装备加成实际参与解锁条件。
+
+判断、单选、多选继续支持，选项每次发卷打乱。题库导入编辑、错题复习、多存档与统计保留。
+
+当前已完成青溪求学、县试、赴府、府城游历与府试主干，共 44 项可配置活动。[具体里程碑](docs/releases.md)。
 
 ## 启动
 
-推荐 Node.js 24 LTS（最低 22.12），npm 10+。
+前端需要 Node.js 22.12+，推荐 Node.js 24。
 
-```powershell
-cd E:\题海仕途
+~~~powershell
+cd E:\题海仕途\frontend
 npm install
 npm run dev
-```
+~~~
 
-访问终端显示的本地地址，通常是 http://127.0.0.1:5173。
-如果电脑默认仍为 Node 16，可以运行 `powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1`。
-此辅助脚本优先使用符合要求的系统 Node，否则尝试本机 Codex 已有的 Node；不会安装或修改系统环境。
+打开终端显示的本地地址，一般为 http://127.0.0.1:5173。
 
-## 已完成
+本机系统 Node 版本过旧时：
 
-- React + TypeScript + Vite，npm workspaces，锁文件。
-- 书院答题、示例题库列表、疑难旧案、学业统计四个页面。
-- 四道单选示例题循环，判题、短讲解、轻量剧情反馈与学识积累。
-- localStorage 自动保存当前题目、答题结果和记录。
-- local / http 两套 API 适配器，共享类型接口。
-- 答题和下一题的重复请求保护，基础测试，CI 构建检查。
+~~~powershell
+powershell -ExecutionPolicy Bypass -File ..\scripts\start-local.ps1
+~~~
 
-## 当前边界
+后端使用 Java 17，默认端口 `12345`：
 
-这是可运行的项目骨架，不是完整游戏。尚无自定义题库编辑/导入、多题型、
-间隔复习、多存档、完整科举晋升、NPC 或后期权谋系统。
-目前固定玩家折叶，四道题顺序循环，不自动升官。
-本地数据按浏览器和源地址隔离，清理浏览器数据会删除存档。
-本地模式仅供单标签页使用，不支持跨设备同步或多标签并发写入。
+~~~powershell
+cd E:\题海仕途\backend
+$env:JAVA_HOME='D:\Java\jdk-17.0.2'
+.\mvnw.cmd spring-boot:run
+~~~
 
-## 目录
+数据库连接、环境变量和 HTTP 模式见 [后端说明](backend/README.md)。仓库不保存数据库密码。
 
-```text
-frontend/
-  src/
-    api/
-      local/          # 示例题库与本地存档实现
-      http.ts         # 将来 Java 后端的 HTTP 适配器
-      index.ts        # 适配器选择
-    domain/types.ts   # 数据模型和 GameApi 契约
-    App.tsx           # 初始页面及交互
-backend/              # 仅预留说明，没有 Java 代码
-docs/api.md           # 接口和响应契约
-scripts/start-local.ps1
-```
+## 自己修改
 
-## 接 Java 后端
+| 想改什么 | 文档 |
+| --- | --- |
+| 读书、奖励、副本、地图门槛、人物互动、装备 | [探索玩法修改手册](docs/adventure-guide.md) |
+| 题库、世界观、章首、素材等基础配置 | [基础配置手册](docs/configuration-guide.md) |
+| 代码分工、状态流 | [开发说明](docs/development.md) |
+| Java 接口与低流量缓存 | [接口契约](docs/api.md) |
+| 后端实施进度 | [后端开发记录](docs/后端开发记录.md) |
+| 本地背景与立绘 | [素材说明](docs/art-assets.md) |
+| 可直接导入的三题型题库 | [示例 JSON](frontend/public/examples/题库示例.json) |
 
-复制 `frontend/.env.example` 为 `frontend/.env.local`：
+内容在 frontend/src/content，素材在 frontend/public/art，规则在 frontend/src/engine。
+关键代码配中文注释，JSON 字段说明见手册。
 
-```dotenv
-VITE_API_MODE=http
-VITE_API_BASE_URL=/api/v1
-API_PROXY_TARGET=http://localhost:8080
-```
+## 存档与配置
 
-重启开发服务器。开发时 Vite 将 /api 转发至本机 Java 服务。
-生产构建需另配同源反向代理，或使用允许 CORS 的服务地址。
-本地模式不会向 Java 服务发请求；HTTP 失败不会静默降级为本地数据。
-现有本地存档不会自动迁移到后端。API 细节见 [接口说明](docs/api.md)。
+新旧人生都默认进入世界。V1 升级时保留历史、钱、学识和人物关系，退出旧版未交卷面；新活动可以暂停、读档继续。
 
-## 检查
+当前活动开始时冻结规则；改配置影响下一轮。服务端统一维护题库，浏览器按文集 revision 缓存 Markdown、公式、选项与解析；作答只提交课卷、题目 UUID 和答案。
 
-```sh
-npm run lint
-npm test
+主世界与题面采用视口布局；复杂编辑器、长正文与互动面板可以局部滚动。
+
+## 最小验证
+
+~~~powershell
+cd E:\题海仕途\frontend
 npm run build
-npm run preview
-```
+npm test
+~~~
 
-构建产物位于 frontend/dist。脚手架采用 [Vite 官方 React + TypeScript 模板](https://vite.dev/guide/)。
+build 包含配置引用、图片路径、题目知识点数量检查与类型编译，产物位于 frontend/dist。
+只改配置时可单独 npm run validate:content，不重复运行全套检查。
 
-
+接 Java 时在 frontend/.env.local 设置 VITE_API_MODE=http；默认 local 完全本地运行，详见接口契约。

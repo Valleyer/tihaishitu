@@ -1,0 +1,62 @@
+server:
+  port: ${SERVER_PORT:12345}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types: application/json,text/html,text/plain,text/css,application/javascript
+  shutdown: graceful
+
+spring:
+  application:
+    name: tihaishitu-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/tihaishitu?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 1
+      connection-timeout: 10000
+  jackson:
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: never
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
+    validate-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  initial-admin:
+    username: ${APP_INITIAL_ADMIN_USERNAME:}
+    password: ${APP_INITIAL_ADMIN_PASSWORD:}
+    display-name: ${APP_INITIAL_ADMIN_DISPLAY_NAME:初始管理员}
+  knowledge:
+    math1-seed-enabled: ${MATH1_KNOWLEDGE_SEED_ENABLED:true}
+    math1-resource: classpath:knowledge/math1-knowledge-final.json
+  catalog:
+    seed-enabled: ${CATALOG_SEED_ENABLED:true}
+    seed-location: classpath:content/question-banks.json
+    # 留空时管理写接口表现为不存在；部署时只在服务端环境变量中配置。
+    admin-key: ${APP_ADMIN_KEY:}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
