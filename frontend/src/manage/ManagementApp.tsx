@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { RichText } from "../components/RichText";
 import {
   manageApi,
+  type AuditLogView,
   type KnowledgeView,
   type ManageUser,
   type QuestionBankImportResult,
@@ -11,7 +12,7 @@ import {
 } from "./api";
 import "./manage.css";
 
-type Page = "dashboard" | "questions" | "knowledge" | "reviews" | "imports" | "users";
+type Page = "dashboard" | "questions" | "knowledge" | "reviews" | "imports" | "users" | "audit";
 
 export default function ManagementApp() {
   const [user, setUser] = useState<ManageUser | null>(null);
@@ -36,6 +37,7 @@ export default function ManagementApp() {
           <Nav active={page === "reviews"} onClick={() => setPage("reviews")}>审核中心</Nav>
           {admin && <Nav active={page === "imports"} onClick={() => setPage("imports")}>批量导入</Nav>}
           {admin && <Nav active={page === "users"} onClick={() => setPage("users")}>用户与权限</Nav>}
+          {admin && <Nav active={page === "audit"} onClick={() => setPage("audit")}>审计记录</Nav>}
         </nav>
         <footer>
           <span>{user.displayName}</span><small>{user.roles.join(" · ")}</small>
@@ -51,6 +53,7 @@ export default function ManagementApp() {
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
         {page === "imports" && admin && <ImportPage fail={setError} />}
         {page === "users" && admin && <UsersPage fail={setError} />}
+        {page === "audit" && admin && <AuditPage fail={setError} />}
       </main>
     </div>
   );
@@ -146,12 +149,23 @@ function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string)
       <button onClick={load}>查询</button></div>
     <div className="split-workspace"><div className="data-table"><div className="table-head"><span>CODE</span><span>名称</span><span>章节</span><span>题目数</span><span>状态</span></div>
       {items.map((item) => <button className="table-row" key={item.id} onClick={() => setSelected(item)}><code>{item.code}</code><b>{item.name}</b><span>{item.chapter}</span><span>{item.questionCount}</span><i>{item.status}</i></button>)}</div>
-      <aside className="detail-panel">{selected ? <KnowledgeEditor key={selected.id + selected.revision} point={selected} editable={editable} fail={fail} saved={(point) => { setSelected(point); load(); }} /> : <Empty>选择一条知识点查看详情</Empty>}</aside></div>
+      <aside className="detail-panel">{selected ? <KnowledgeEditor key={selected.id + selected.revision} point={selected} editable={editable} admin={user.roles.includes("ADMIN")} fail={fail} saved={(point) => { setSelected(point); load(); }} /> : <Empty>选择一条知识点查看详情</Empty>}</aside></div>
   </section>;
 }
 
-function KnowledgeEditor({ point: initial, editable, fail, saved }: { point: KnowledgeView; editable: boolean; fail: (v: string) => void; saved: (v: KnowledgeView) => void }) {
+function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { point: KnowledgeView; editable: boolean; admin: boolean; fail: (v: string) => void; saved: (v: KnowledgeView) => void }) {
   const [point, setPoint] = useState(initial); const [busy, setBusy] = useState(false);
+  const [targetQuery, setTargetQuery] = useState("");
+  const [targets, setTargets] = useState<KnowledgeView[]>([]);
+  const [target, setTarget] = useState<KnowledgeView | null>(null);
+  const [mergeReason, setMergeReason] = useState("");
+  const merge = () => {
+    if (!target || !mergeReason.trim()) return;
+    if (!window.confirm(`确认把 ${point.code} ${point.name} 合并到 ${target.code} ${target.name}？题目关系会随之迁移。`)) return;
+    setBusy(true);
+    manageApi.mergeKnowledge(point, target.id, mergeReason)
+      .then((result) => saved(result.target)).catch((error) => fail(error.message)).finally(() => setBusy(false));
+  };
   return <div className="editor"><header><code>{point.code}</code><span>revision {point.revision}</span></header>
     <label>名称<input disabled={!editable} value={point.name} onChange={(e) => setPoint({ ...point, name: e.target.value })} /></label>
     <div className="form-row"><label>默认角色<select disabled={!editable} value={point.defaultRole} onChange={(e) => setPoint({ ...point, defaultRole: e.target.value as KnowledgeView["defaultRole"] })}><option value="core">core</option><option value="auxiliary">auxiliary</option></select></label>
@@ -161,6 +175,14 @@ function KnowledgeEditor({ point: initial, editable, fail, saved }: { point: Kno
     <label>说明<textarea disabled={!editable} value={point.description} onChange={(e) => setPoint({ ...point, description: e.target.value })} /></label>
     <label>知识点解析（Markdown + LaTeX）<textarea disabled={!editable} rows={8} value={point.explanation} onChange={(e) => setPoint({ ...point, explanation: e.target.value })} /></label>
     {editable && <button disabled={busy} onClick={() => { setBusy(true); manageApi.saveKnowledge(point).then(saved).catch((e) => fail(e.message)).finally(() => setBusy(false)); }}>保存知识点</button>}
+    {admin && point.status === "active" && <fieldset className="editor-group merge-panel"><legend>合并知识点</legend>
+      <p>旧知识点会保留为 deprecated；题目关系、旧 code、名称和别名将迁移到目标知识点。</p>
+      <div className="inline-search"><input placeholder="搜索目标 code / 名称 / alias" value={targetQuery} onChange={(e) => setTargetQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: targetQuery, status: "active", size: 10 }).then((page) => setTargets(page.content.filter((item) => item.id !== point.id))).catch((error) => fail(error.message))}>搜索</button></div>
+      {targets.length > 0 && <div className="merge-targets">{targets.map((item) => <button className={target?.id === item.id ? "selected" : ""} key={item.id} onClick={() => setTarget(item)}><code>{item.code}</code><span>{item.name}</span><small>{item.chapter}</small></button>)}</div>}
+      {target && <p className="selected-target">目标：<code>{target.code}</code> {target.name}</p>}
+      <label>合并原因<textarea rows={3} value={mergeReason} onChange={(event) => setMergeReason(event.target.value)} placeholder="记录口径重复、命名修订或知识体系调整原因" /></label>
+      <button className="danger" disabled={busy || !target || !mergeReason.trim()} onClick={merge}>确认迁移并合并</button>
+    </fieldset>}
   </div>;
 }
 
@@ -195,7 +217,7 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
     <label>题干（Markdown + LaTeX）<textarea rows={8} value={question.content || ""} onChange={(e) => setQuestion({ ...question, content: e.target.value })} /></label><details><summary>预览题干</summary><div className="markdown-preview"><RichText>{question.content || "暂无题干"}</RichText></div></details>
     <label>标准答案（JSON）<textarea rows={3} value={answerText} onChange={(e) => setAnswerText(e.target.value)} /></label><label>完整解析<textarea rows={7} value={question.analysis || ""} onChange={(e) => setQuestion({ ...question, analysis: e.target.value })} /></label>
     <fieldset className="editor-group"><legend>游戏化选项</legend>{(question.options || []).map((option, index) => <OptionRow key={index} option={option} changed={(next) => setQuestion({ ...question, options: question.options!.map((old, i) => i === index ? next : old) })} remove={() => setQuestion({ ...question, options: question.options!.filter((_, i) => i !== index) })} />)}<button onClick={addOption}>添加选项</button></fieldset>
-    <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索 code / 名称 / alias" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>
+    <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索 code / 名称 / alias" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, status: "active", size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>
       {matches.length > 0 && <div className="search-results">{matches.map((point) => <button key={point.id} onClick={() => { if (!(question.knowledgePoints || []).some((r) => (r.id || r.knowledgePointId) === point.id)) setQuestion({ ...question, knowledgePoints: [...(question.knowledgePoints || []), { id: point.id, knowledgePointId: point.id, code: point.code, name: point.name, role: "core", sortOrder: question.knowledgePoints?.length || 0 }] }); }}>{point.code} {point.name}</button>)}</div>}
       <div className="relations">{(question.knowledgePoints || []).map((relation, index) => <div key={relation.id || relation.knowledgePointId}><span><code>{relation.code}</code> {relation.name}</span><select value={relation.role} onChange={(e) => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.map((r, i) => i === index ? { ...r, role: e.target.value as QuestionRelation["role"] } : r) })}><option value="core">核心</option><option value="auxiliary">辅助</option></select><button onClick={() => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.filter((_, i) => i !== index) })}>解绑</button></div>)}</div>
     </fieldset>
@@ -205,6 +227,37 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
 }
 
 function OptionRow({ option, changed, remove }: { option: QuestionOption; changed: (v: QuestionOption) => void; remove: () => void }) { return <div className="option-edit"><input className="option-key" value={option.key} onChange={(e) => changed({ ...option, key: e.target.value })} /><input value={option.text} onChange={(e) => changed({ ...option, text: e.target.value })} /><label><input type="checkbox" checked={option.correct} onChange={(e) => changed({ ...option, correct: e.target.checked })} />正确</label><button onClick={remove}>删除</button></div>; }
+
+function AuditPage({ fail }: { fail: (value: string) => void }) {
+  const [action, setAction] = useState("");
+  const [entityType, setEntityType] = useState("");
+  const [actor, setActor] = useState("");
+  const [items, setItems] = useState<AuditLogView[]>([]);
+  const [total, setTotal] = useState(0);
+  const load = useCallback(() => manageApi.auditLogs({ action, entityType, actor, size: 100 })
+    .then((page) => { setItems(page.content); setTotal(page.totalElements); })
+    .catch((error) => fail(error.message)), [action, entityType, actor, fail]);
+  useEffect(() => { void load(); }, [load]);
+  return <section><PageTitle title="审计记录" detail={`共 ${total} 条；只读展示全服内容与权限变更`} />
+    <div className="manage-toolbar audit-filters"><input placeholder="操作者账号 / 名称 / UUID" value={actor} onChange={(event) => setActor(event.target.value)} />
+      <select value={action} onChange={(event) => setAction(event.target.value)}><option value="">全部动作</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option></select>
+      <select value={entityType} onChange={(event) => setEntityType(event.target.value)}><option value="">全部实体</option><option value="knowledge_point">知识点</option><option value="question">题目</option><option value="app_user">用户</option><option value="question_bank">文集</option></select>
+      <button onClick={load}>查询</button></div>
+    <div className="audit-list">{items.map((item) => <article key={item.id} className="audit-row"><header><b>{auditAction(item.action)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time></header>
+      <p><span>{item.actorDisplayName || "系统"}</span>{item.actorUsername && <code>{item.actorUsername}</code>} · {item.entityType} · <code>{item.entityId}</code></p>
+      <pre>{JSON.stringify(item.metadata, null, 2)}</pre></article>)}{items.length === 0 && <Empty>暂无符合条件的审计记录</Empty>}</div>
+  </section>;
+}
+
+function auditAction(action: string) {
+  const labels: Record<string, string> = {
+    KNOWLEDGE_UPDATED: "知识点修改", KNOWLEDGE_ALIASES_UPDATED: "知识点别名修改", KNOWLEDGE_MERGED: "知识点合并",
+    QUESTION_CREATED: "题目创建", QUESTION_UPDATED: "题目修改", QUESTION_SUBMITTED: "题目提交审核",
+    QUESTION_REVIEW_APPROVED: "题目审核通过", QUESTION_REVIEW_REJECTED: "题目审核退回", QUESTION_ARCHIVED: "题目归档",
+    USER_CREATED: "管理账号创建", USER_ROLE_UPDATED: "用户权限修改", QUESTION_BANK_IMPORTED: "题库导入",
+  };
+  return labels[action] || action;
+}
 
 function UsersPage({ fail }: { fail: (v: string) => void }) {
   const [users, setUsers] = useState<ManageUser[]>([]); const [draft, setDraft] = useState({ username: "", displayName: "", password: "", roles: ["CONTRIBUTOR"] });

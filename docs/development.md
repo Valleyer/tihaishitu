@@ -6,11 +6,13 @@
 
 `/manage` 由 `main.tsx` 根据 pathname 加载独立 `ManagementApp`，不复用藏书阁的私人题库编辑入口。界面提供知识点、独立题目、审核和用户权限工作区，使用 `frontend/src/manage/api.ts` 统一访问 Java API。
 
-后端数据库改用 Flyway。V1 保留原游戏表，V2 新建全局知识点/题目/集合关系/账号/审计表，V3 增加账号 revision 与自评作答字段。旧题库表继续服务现有游戏，后续通过兼容投影迁移；禁止直接 DROP 旧表。
+后端数据库改用 Flyway。V1 保留原游戏表，V2 新建全局知识点/题目/集合关系/账号/审计表，V3 增加账号 revision 与自评作答字段，V4 建立旧目录到全局资源的兼容映射，V5 保存知识点合并历史。旧题库表继续服务现有游戏；禁止直接 DROP 旧表。
 
 正式数学一数据源保存于 `backend/src/main/resources/knowledge/math1-knowledge-final.json`，启动时按 code 幂等同步。code 是业务稳定身份，数据库 UUID 由 code 确定性生成；alias 单独建表。参考源与核心交接规格归档在 `docs/references/knowledge-platform/`。
 
 管理权限由 Spring Security 在后端执行：CONTRIBUTOR 创建和提交自己的题；REVIEWER 维护知识点并审核他人题；ADMIN 管理用户角色和全服生命周期。管理会话采用 Session + HttpOnly Cookie + CSRF，不允许把机器级 `APP_ADMIN_KEY` 放进前端。
+
+知识点合并只能由 ADMIN 通过专用接口完成。源知识点保留并标记 deprecated，题目关系迁移到目标；重复关系按 core 优先规则折叠，文集 revision 同步递增。旧 code、名称和 alias 继续能检索目标知识点。所有合并写入 `knowledge_merge_history` 与 `content_audit_log`，管理端“审计记录”只读展示这些变更。
 
 默认世界由 components/Exploration.tsx 渲染，题面只有主动开始或恢复活动时展示。WorldMap 负责选择目的地，真正的门槛校验在引擎与 API。
 

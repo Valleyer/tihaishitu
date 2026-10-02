@@ -84,6 +84,27 @@ export type QuestionBankImportResult = {
   updatedQuestions: number;
 };
 
+export type KnowledgeMergeResult = {
+  historyId: string;
+  source: KnowledgeView;
+  target: KnowledgeView;
+  migratedRelations: number;
+  collapsedRelations: number;
+  affectedQuestions: number;
+};
+
+export type AuditLogView = {
+  id: string;
+  actorUserId?: string;
+  actorUsername?: string;
+  actorDisplayName?: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
 let csrf: { headerName: string; token: string } | null = null;
 
 async function ensureCsrf() {
@@ -153,6 +174,13 @@ export const manageApi = {
         expectedRevision: point.revision,
       }),
     }),
+  mergeKnowledge: (source: KnowledgeView, targetId: string, reason: string) =>
+    request<KnowledgeMergeResult>(`/knowledge-points/${source.id}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ targetId, reason, expectedRevision: source.revision }),
+    }),
+  auditLogs: (filters: Record<string, string | number | undefined>) =>
+    request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
   questions: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<QuestionView>>(`/questions?${params(filters)}`),
   question: (id: string) => request<QuestionView>(`/questions/${id}`),

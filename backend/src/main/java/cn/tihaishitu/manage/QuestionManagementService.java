@@ -116,7 +116,9 @@ public class QuestionManagementService {
                 bad("知识点关系角色不合法，或同一知识点被重复绑定。");
             }
             hasCore |= "core".equals(relation.role());
-            if (knowledgeStore.find(relation.knowledgePointId()).isEmpty()) bad("题目引用了不存在的知识点。");
+            var knowledge = knowledgeStore.find(relation.knowledgePointId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "题目引用了不存在的知识点。"));
+            if (!"active".equals(knowledge.status())) bad("题目不能绑定已停用或已合并的知识点。");
         }
         if (!hasCore) bad("题目至少需要一个核心知识点。");
     }

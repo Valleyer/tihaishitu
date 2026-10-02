@@ -60,7 +60,8 @@ API_PROXY_TARGET=http://localhost:12345
 | GET | /manage/auth/me | 已登录 | 当前账号与服务端角色 |
 | GET | /manage/knowledge-points | CONTRIBUTOR+ | 分页并按 code/name/alias/分科/章节/状态搜索 |
 | GET | /manage/knowledge-points/{id} | CONTRIBUTOR+ | 知识点详情 |
-| PUT | /manage/knowledge-points/{id} | REVIEWER/ADMIN | 改名、说明、alias、角色、deprecated/合并指向；code 不可由普通表单修改 |
+| PUT | /manage/knowledge-points/{id} | REVIEWER/ADMIN | 改名、说明、alias、角色和无题目绑定时的 deprecated；code 与合并指向不可由普通表单修改 |
+| POST | /manage/knowledge-points/{id}/merge | ADMIN | 按 expectedRevision 把源知识点事务合并到 active 目标并保留历史 |
 | GET/POST | /manage/questions | CONTRIBUTOR+ | 查询题目或创建自己的 draft |
 | GET/PUT | /manage/questions/{id} | 按资源权限 | 详情与带 expectedRevision 的编辑 |
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
@@ -68,8 +69,9 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
 | POST | /manage/imports/question-bank | ADMIN | 事务校验并导入 global-question-bank/v1 文件 |
 | GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
+| GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 
-知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
+知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。知识点合并会把源记录标为 deprecated 并写入 `merged_into_id`，逐题迁移关系；目标关系已存在时折叠为一条，任一原关系为 core 则保留 core。源记录、合并历史和审计记录均不删除。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。
