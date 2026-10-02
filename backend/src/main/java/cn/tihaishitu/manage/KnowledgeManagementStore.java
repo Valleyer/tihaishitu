@@ -7,8 +7,10 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -22,6 +24,10 @@ public class KnowledgeManagementStore {
     public record KnowledgeUpdate(
             String name, String defaultRole, String status, String description, String explanation,
             String mergedIntoId, List<String> aliases, long expectedRevision) {}
+
+    public record KnowledgeMergeResult(
+            String historyId, KnowledgeView source, KnowledgeView target,
+            int migratedRelations, int collapsedRelations, int affectedQuestions) {}
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -53,13 +59,31 @@ public class KnowledgeManagementStore {
 
     @Transactional
     public KnowledgeView update(String id, KnowledgeUpdate update, String actorId) {
+        KnowledgeView existing = find(id).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "知识点不存在。"));
+        String requestedMerge = emptyToNull(update.mergedIntoId());
+        if (!java.util.Objects.equals(existing.mergedIntoId(), requestedMerge)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "知识点合并必须使用专用合并操作。");
+        }
+        if (existing.mergedIntoId() != null && "active".equals(update.status())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "已合并知识点不能重新启用。");
+        }
+        if ("active".equals(existing.status()) && "deprecated".equals(update.status())
+                && existing.questionCount() > 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "已有题目绑定的知识点必须通过合并操作停用。");
+        }
+        Set<String> previousAliases = new LinkedHashSet<>(existing.aliases());
+        Set<String> nextAliases = normalizeAliases(update.aliases());
         int changed = jdbc.update("""
                 UPDATE global_knowledge_point
                    SET name = ?, default_role = ?, status = ?, description = ?, explanation = ?,
                        merged_into_id = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
                  WHERE id = ? AND revision = ?
                 """, update.name(), update.defaultRole(), update.status(), update.description(), update.explanation(),
-                emptyToNull(update.mergedIntoId()), id, update.expectedRevision());
+                requestedMerge, id, update.expectedRevision());
         if (changed == 0) {
             if (find(id).isEmpty()) throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.NOT_FOUND, "知识点不存在。");
@@ -67,14 +91,114 @@ public class KnowledgeManagementStore {
                     org.springframework.http.HttpStatus.CONFLICT, "知识点已被其他人修改，请重新加载。");
         }
         jdbc.update("DELETE FROM knowledge_alias WHERE knowledge_point_id = ?", id);
-        for (String alias : update.aliases()) {
-            if (alias == null || alias.isBlank()) continue;
+        for (String alias : nextAliases) {
             jdbc.update("INSERT INTO knowledge_alias(id, knowledge_point_id, alias) VALUES (?, ?, ?)",
-                    UUID.randomUUID().toString(), id, alias.trim());
+                    UUID.randomUUID().toString(), id, alias);
         }
         audit(actorId, "KNOWLEDGE_UPDATED", "knowledge_point", id,
                 java.util.Map.of("expectedRevision", update.expectedRevision()));
+        if (!previousAliases.equals(nextAliases)) {
+            audit(actorId, "KNOWLEDGE_ALIASES_UPDATED", "knowledge_point", id,
+                    java.util.Map.of("before", previousAliases, "after", nextAliases));
+        }
         return find(id).orElseThrow();
+    }
+
+    @Transactional
+    public KnowledgeMergeResult merge(String sourceId, String targetId, long expectedRevision,
+                                      String reason, String actorId) {
+        if (sourceId.equals(targetId)) bad("知识点不能合并到自身。");
+        KnowledgeView source = find(sourceId).orElseThrow(() -> missing("源知识点不存在。"));
+        KnowledgeView target = find(targetId).orElseThrow(() -> missing("目标知识点不存在。"));
+        if (!"active".equals(source.status()) || source.mergedIntoId() != null) bad("源知识点已经停用或合并。");
+        if (!"active".equals(target.status()) || target.mergedIntoId() != null) bad("目标知识点必须是有效知识点。");
+        if (!source.subject().equals(target.subject())) bad("只能合并同一学科的知识点。");
+        if (reason == null || reason.isBlank()) bad("请填写合并原因。");
+
+        List<RelationRow> relations = jdbc.query("""
+                SELECT question_id, relation_role, sort_order
+                  FROM question_resource_knowledge
+                 WHERE knowledge_point_id = ?
+                 ORDER BY question_id
+                """, (row, index) -> new RelationRow(row.getString("question_id"),
+                row.getString("relation_role"), row.getInt("sort_order")), sourceId);
+        Set<String> questionIds = new LinkedHashSet<>();
+        int migrated = 0;
+        int collapsed = 0;
+        for (RelationRow relation : relations) {
+            questionIds.add(relation.questionId());
+            List<RelationRow> existing = jdbc.query("""
+                    SELECT question_id, relation_role, sort_order
+                      FROM question_resource_knowledge
+                     WHERE question_id = ? AND knowledge_point_id = ?
+                    """, (row, index) -> new RelationRow(row.getString("question_id"),
+                    row.getString("relation_role"), row.getInt("sort_order")), relation.questionId(), targetId);
+            if (existing.isEmpty()) {
+                jdbc.update("""
+                        UPDATE question_resource_knowledge SET knowledge_point_id = ?
+                         WHERE question_id = ? AND knowledge_point_id = ?
+                        """, targetId, relation.questionId(), sourceId);
+                migrated++;
+            } else {
+                RelationRow targetRelation = existing.get(0);
+                String role = "core".equals(relation.role()) || "core".equals(targetRelation.role())
+                        ? "core" : "auxiliary";
+                jdbc.update("""
+                        UPDATE question_resource_knowledge SET relation_role = ?, sort_order = ?
+                         WHERE question_id = ? AND knowledge_point_id = ?
+                        """, role, Math.min(relation.sortOrder(), targetRelation.sortOrder()),
+                        relation.questionId(), targetId);
+                jdbc.update("DELETE FROM question_resource_knowledge WHERE question_id = ? AND knowledge_point_id = ?",
+                        relation.questionId(), sourceId);
+                collapsed++;
+            }
+        }
+
+        Set<String> bankIds = new LinkedHashSet<>();
+        for (String questionId : questionIds) {
+            bankIds.addAll(jdbc.query("SELECT bank_id FROM question_bank_item WHERE question_id = ?",
+                    (row, index) -> row.getString("bank_id"), questionId));
+        }
+        for (String bankId : bankIds) {
+            jdbc.update("UPDATE question_bank SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    bankId);
+        }
+
+        int sourceChanged = jdbc.update("""
+                UPDATE global_knowledge_point
+                   SET status = 'deprecated', merged_into_id = ?, revision = revision + 1,
+                       updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND revision = ? AND status = 'active' AND merged_into_id IS NULL
+                """, targetId, sourceId, expectedRevision);
+        if (sourceChanged == 0) conflictOrMissing(sourceId);
+        jdbc.update("""
+                UPDATE global_knowledge_point SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?
+                """, targetId);
+
+        Set<String> searchableNames = new LinkedHashSet<>();
+        searchableNames.add(source.code());
+        searchableNames.add(source.name());
+        searchableNames.addAll(source.aliases());
+        for (String alias : searchableNames) addAliasIfAbsent(targetId, target, alias);
+
+        String historyId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO knowledge_merge_history(
+                    id, source_knowledge_id, target_knowledge_id, actor_user_id,
+                    migrated_relation_count, collapsed_relation_count, reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, historyId, sourceId, targetId, actorId, migrated, collapsed, reason.trim());
+        audit(actorId, "KNOWLEDGE_MERGED", "knowledge_point", sourceId, java.util.Map.of(
+                "targetId", targetId,
+                "migratedRelations", migrated,
+                "collapsedRelations", collapsed,
+                "affectedQuestions", questionIds.size(),
+                "affectedBanks", bankIds.size(),
+                "reason", reason.trim(),
+                "historyId", historyId));
+        return new KnowledgeMergeResult(historyId, find(sourceId).orElseThrow(), find(targetId).orElseThrow(),
+                migrated, collapsed, questionIds.size());
     }
 
     public String userId(String username) {
@@ -139,6 +263,42 @@ public class KnowledgeManagementStore {
     private static String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }
+
+    private Set<String> normalizeAliases(List<String> aliases) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (aliases == null) return normalized;
+        for (String alias : aliases) if (alias != null && !alias.isBlank()) normalized.add(alias.trim());
+        return normalized;
+    }
+
+    private void addAliasIfAbsent(String targetId, KnowledgeView target, String alias) {
+        if (alias == null || alias.isBlank() || alias.equals(target.name()) || alias.equals(target.code())) return;
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM knowledge_alias WHERE knowledge_point_id = ? AND alias = ?
+                """, Integer.class, targetId, alias.trim());
+        if (count == null || count == 0) {
+            jdbc.update("INSERT INTO knowledge_alias(id, knowledge_point_id, alias) VALUES (?, ?, ?)",
+                    UUID.randomUUID().toString(), targetId, alias.trim());
+        }
+    }
+
+    private void conflictOrMissing(String id) {
+        if (find(id).isEmpty()) throw missing("知识点不存在。");
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT, "知识点已被其他人修改，请重新加载。");
+    }
+
+    private static org.springframework.web.server.ResponseStatusException missing(String message) {
+        return new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, message);
+    }
+
+    private static void bad(String message) {
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, message);
+    }
+
+    private record RelationRow(String questionId, String role, int sortOrder) {}
 
     private record SqlFilter(String where, List<Object> params) {}
 }

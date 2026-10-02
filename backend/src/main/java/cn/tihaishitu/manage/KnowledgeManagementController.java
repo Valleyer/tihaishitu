@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,6 +61,14 @@ public class KnowledgeManagementController {
                 body.expectedRevision()), store.userId(authentication.getName()));
     }
 
+    @PostMapping("/{id}/merge")
+    @PreAuthorize("hasRole('ADMIN')")
+    KnowledgeManagementStore.KnowledgeMergeResult merge(
+            @PathVariable String id, @Valid @RequestBody MergeRequest body, Authentication authentication) {
+        return store.merge(id, body.targetId().trim(), body.expectedRevision(), body.reason(),
+                store.userId(authentication.getName()));
+    }
+
     private static String value(String input) { return input == null ? "" : input; }
 
     public record UpdateRequest(
@@ -70,5 +79,10 @@ public class KnowledgeManagementController {
             String explanation,
             String mergedIntoId,
             List<String> aliases,
+            @NotNull Long expectedRevision) {}
+
+    public record MergeRequest(
+            @NotBlank String targetId,
+            @NotBlank String reason,
             @NotNull Long expectedRevision) {}
 }
