@@ -27,7 +27,6 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /games | NewGame | Game |
 | GET | /games/{id} | 无 | Game |
 | DELETE | /games/{id} | 无 | 204 |
-| GET | /question-banks | 无 | Bank[]（管理/诊断用途） |
 | GET | /question-banks/{uuid} | 无 | Bank，带 revision 与缓存响应头 |
 | POST | /games/{id}/answers | {attemptId, questionId, answer} | Game |
 | POST | /games/{id}/next | {attemptId, reviewOnly} | Game |
@@ -37,6 +36,15 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /games/{id}/chapter | {chapterId} | Game |
 | GET | /games/{id}/export | 无 | JSON 字符串 |
 | POST | /games/import | {json: "备份全文"} | 新 Game |
+
+管理写接口使用独立前缀 `/api/v1/admin`，只有服务端配置 `APP_ADMIN_KEY` 后才启用，请求头必须带 `X-Admin-Key`：
+
+| 方法 | 路径 | 请求体 | 成功返回 |
+| --- | --- | --- | --- |
+| POST | /admin/question-banks/import | QuestionBankDto | 新增或修订后的 Bank |
+| PUT | /admin/question-banks/{uuid}/metadata | {name?,description?,enabled?,weight?} | 改名后的 Bank |
+
+导入同一文集 UUID 会原子替换该文集内容并递增 revision；其他文集不重写。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。

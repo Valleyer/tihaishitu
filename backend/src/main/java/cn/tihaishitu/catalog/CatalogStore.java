@@ -167,13 +167,32 @@ public class CatalogStore {
     @Transactional
     public void replaceAll(List<QuestionBankDto> banks) {
         jdbc.update("DELETE FROM question_bank");
-        for (QuestionBankDto bank : banks) insert(bank);
+        for (QuestionBankDto bank : banks) insert(bank, 1);
     }
 
-    private void insert(QuestionBankDto bank) {
+    @Transactional
+    public void upsert(QuestionBankDto bank) {
+        long revision = revisionOf(bank.id());
+        if (revision >= 0) jdbc.update("DELETE FROM question_bank WHERE id = ?", bank.id());
+        insert(bank, revision < 0 ? 1 : revision + 1);
+    }
+
+    public boolean updateMetadata(String id, String name, String description, boolean enabled, int weight) {
+        return jdbc.update(
+                """
+                UPDATE question_bank
+                   SET name = ?, description = ?, enabled = ?, weight_value = ?,
+                       revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?
+                """,
+                name, description, enabled, weight, id
+        ) > 0;
+    }
+
+    private void insert(QuestionBankDto bank, long revision) {
         jdbc.update(
-                "INSERT INTO question_bank(id, name, description, enabled, weight_value) VALUES (?, ?, ?, ?, ?)",
-                bank.id(), bank.name(), bank.description(), bank.enabled(), bank.weight()
+                "INSERT INTO question_bank(id, name, description, enabled, weight_value, revision) VALUES (?, ?, ?, ?, ?, ?)",
+                bank.id(), bank.name(), bank.description(), bank.enabled(), bank.weight(), revision
         );
         int pointOrder = 0;
         for (KnowledgePointDto point : bank.knowledgePoints()) {

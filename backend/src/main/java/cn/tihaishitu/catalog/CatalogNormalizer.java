@@ -80,7 +80,7 @@ public class CatalogNormalizer {
         }
         return new QuestionBankDto(bankId, source.name().trim(),
                 defaultText(source.description(), "服务器统一题库"), List.copyOf(points.values()),
-                questions, source.enabled(), source.weight() <= 0 ? 1 : source.weight());
+                questions, source.enabled(), source.weight() < 0 ? 1 : source.weight());
     }
 
     private KnowledgePointDto normalizePoint(KnowledgePointDto point, String id, Map<String, String> pointIds) {

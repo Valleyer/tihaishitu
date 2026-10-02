@@ -39,11 +39,14 @@ class CatalogSeedIntegrationTest {
         String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body)
                 .path("bankManifest").path(0).path("id").asText();
         UUID.fromString(id);
-        mvc.perform(get("/api/v1/question-banks/{id}", id))
+        String etag = mvc.perform(get("/api/v1/question-banks/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.questions").isNotEmpty())
-                .andExpect(jsonPath("$.knowledgePoints").isNotEmpty());
+                .andExpect(jsonPath("$.knowledgePoints").isNotEmpty())
+                .andReturn().getResponse().getHeader("ETag");
+        mvc.perform(get("/api/v1/question-banks/{id}", id).header("If-None-Match", etag))
+                .andExpect(status().isNotModified());
     }
 
     @Test

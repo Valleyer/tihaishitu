@@ -25,6 +25,7 @@ $env:DB_PORT = "3306"
 $env:DB_NAME = "tihaishitu"
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "你的本地密码"
+$env:APP_ADMIN_KEY = "至少 24 位随机题库管理密钥"
 ```
 
 在 IDEA 中可把这些变量填入 Spring Boot 运行配置的 Environment variables。首次启动会执行 `src/main/resources/schema.sql`，并将前端内置题库同步为服务端初始题库。
@@ -61,7 +62,6 @@ API_PROXY_TARGET=http://localhost:12345
 ## 当前接口
 
 - `GET /api/v1/bootstrap`：返回存档摘要和服务端题库目录
-- `GET /api/v1/question-banks`：返回文集、题目、选项和细分知识点
 - `GET /api/v1/question-banks/{uuid}`：按文集 UUID 下载可长期缓存的题库正文
 - `POST /api/v1/games`：创建新存档
 - `GET /api/v1/games/{id}`：读取完整存档
@@ -70,7 +70,11 @@ API_PROXY_TARGET=http://localhost:12345
 - `POST /api/v1/games/{id}/answers`：只提交课卷 UUID、题目 UUID 与答案
 - `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
+- `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
+- `PUT /api/v1/admin/question-banks/{uuid}/metadata`：改名、改简介、启停与调整权重
 
 `/bootstrap` 不传完整题库，只返回文集清单和 revision。浏览器把完整文集存入 IndexedDB，仅在 revision 变化时重新下载；历史答题记录在网络响应中只携带题目 UUID，前端用本地缓存补回 Markdown 展示数据。JSON 响应超过 1KB 时还会启用压缩。
 
-后续游戏行为、答题提交、知识点训练、题库导入与管理接口会继续沿用同一分层和 `/api/v1` 版本前缀。MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 REST API；需要 AI 管理题库时可以在此服务之上增加 MCP 适配层。
+题库管理写接口仅在配置 `APP_ADMIN_KEY` 后启用，请求必须携带 `X-Admin-Key`。留空时接口返回 404，避免误把本地开发管理能力暴露给普通玩家。导入会完整校验 UUID、知识点引用、题型、选项和答案，并在事务中替换单部文集、递增 revision；浏览器下一次启动会只重新下载这部发生变化的文集。管理密钥只放服务端环境变量，不写入仓库或普通游戏前端。
+
+MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 REST API；需要 AI 自动管理题库时可以在这组受保护 REST 服务之上增加 MCP 适配层。
