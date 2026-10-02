@@ -37,7 +37,7 @@ $env:APP_INITIAL_ADMIN_USERNAME = "你的管理员用户名"
 $env:APP_INITIAL_ADMIN_PASSWORD = "足够长的随机密码"
 ```
 
-密码只以 BCrypt 哈希入库。浏览器管理后台位于 `/manage`，使用服务端 Session、HttpOnly Cookie 和 CSRF 防护；`APP_ADMIN_KEY` 仍只供脚本、Codex、初始化导入和后续 MCP 使用，不用于浏览器登录。
+密码只以 BCrypt 哈希入库。浏览器管理后台位于 `/manage`，使用服务端 Session、HttpOnly Cookie 和 CSRF 防护；`APP_ADMIN_KEY` 仍只供脚本、Codex、初始化导入和后续 MCP 使用，不用于浏览器登录。管理员停用账号后，后端会在下一次管理请求时立即注销该账号已有 Session；停用账号也无法重新登录。
 
 ## 启动和验证
 
@@ -108,3 +108,5 @@ MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 RE
 - `knowledge_merge_history` 永久记录源/目标、迁移与折叠关系数、操作者和原因。合并不会删除旧知识点；旧 code、名称与 alias 会加入目标知识点检索词，受影响文集 revision 会递增。
 
 全服批量导入先在内存中校验整批数据，再在单一事务中写入。它只接受 active 全局知识点的稳定 code，每题绑定 1–3 个知识点且至少一个 core；任一引用、答案或题型组合非法都会整批回滚。相同文集和题目 UUID 再次导入执行更新，适合由外部 AI 生成后反复修订。正式格式以 `docs/题库生成提示词.md` 和 `frontend/public/examples/题库示例.json` 为准。
+
+知识点列表支持科目、分科、章节和状态组合筛选。题目编辑器允许调整 1–3 个知识点的 core/auxiliary 角色及展示顺序，保存时会把当前顺序归一化为连续的 `sortOrder`。

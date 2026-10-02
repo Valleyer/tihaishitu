@@ -134,18 +134,24 @@ function ImportPage({ fail }: { fail: (value: string) => void }) {
 
 function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string) => void }) {
   const [query, setQuery] = useState("");
+  const [subject, setSubject] = useState("数学一");
   const [section, setSection] = useState("");
+  const [chapter, setChapter] = useState("");
+  const [status, setStatus] = useState("");
   const [items, setItems] = useState<KnowledgeView[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<KnowledgeView | null>(null);
   const editable = user.roles.some((role) => role === "REVIEWER" || role === "ADMIN");
-  const load = useCallback(() => manageApi.knowledge({ query, section, size: 50 })
+  const load = useCallback(() => manageApi.knowledge({ query, subject, section, chapter, status, size: 50 })
     .then((page) => { setItems(page.content); setTotal(page.totalElements); })
-    .catch((e) => fail(e.message)), [query, section, fail]);
+    .catch((e) => fail(e.message)), [query, subject, section, chapter, status, fail]);
   useEffect(() => { void load(); }, [load]);
   return <section><PageTitle title="知识点管理" detail={`共 ${total} 条；code 是永久稳定身份`} />
-    <div className="manage-toolbar"><input placeholder="搜索 code / 名称 / alias" value={query} onChange={(e) => setQuery(e.target.value)} />
+    <div className="manage-toolbar knowledge-filters"><input placeholder="搜索 code / 名称 / alias" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <select value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">全部科目</option><option>数学一</option></select>
       <select value={section} onChange={(e) => setSection(e.target.value)}><option value="">全部分科</option><option>高等数学</option><option>线性代数</option><option>概率论与数理统计</option></select>
+      <input placeholder="章节精确筛选" value={chapter} onChange={(e) => setChapter(e.target.value)} />
+      <select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">全部状态</option><option value="active">有效</option><option value="deprecated">已停用/合并</option></select>
       <button onClick={load}>查询</button></div>
     <div className="split-workspace"><div className="data-table"><div className="table-head"><span>CODE</span><span>名称</span><span>章节</span><span>题目数</span><span>状态</span></div>
       {items.map((item) => <button className="table-row" key={item.id} onClick={() => setSelected(item)}><code>{item.code}</code><b>{item.name}</b><span>{item.chapter}</span><span>{item.questionCount}</span><i>{item.status}</i></button>)}</div>
@@ -209,6 +215,13 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
   const [knowledgeQuery, setKnowledgeQuery] = useState(""); const [matches, setMatches] = useState<KnowledgeView[]>([]); const [busy, setBusy] = useState(false);
   const canReview = user.roles.some((r) => r === "REVIEWER" || r === "ADMIN");
   const addOption = () => setQuestion({ ...question, options: [...(question.options || []), { key: String.fromCharCode(65 + (question.options?.length || 0)), text: "", correct: false, sortOrder: question.options?.length || 0 }] });
+  const moveKnowledge = (index: number, offset: number) => {
+    const relations = [...(question.knowledgePoints || [])];
+    const destination = index + offset;
+    if (destination < 0 || destination >= relations.length) return;
+    [relations[index], relations[destination]] = [relations[destination], relations[index]];
+    setQuestion({ ...question, knowledgePoints: relations.map((relation, sortOrder) => ({ ...relation, sortOrder })) });
+  };
   const save = async () => { try { setBusy(true); const payload = { ...question, standardAnswer: JSON.parse(answerText) }; const result = initial ? await manageApi.saveQuestion(payload as QuestionView) : await manageApi.createQuestion(payload); saved(result); } catch (e) { fail(e instanceof Error ? e.message : "保存失败"); } finally { setBusy(false); } };
   return <div className="editor question-editor"><header><b>{initial ? `题目 ${initial.id.slice(0, 8)}` : "新建全服题目草稿"}</b><span>{question.status || "draft"} {question.revision ? `· rev ${question.revision}` : ""}</span></header>
     <div className="form-grid"><label>科目<input value={question.subject || ""} onChange={(e) => setQuestion({ ...question, subject: e.target.value })} /></label><label>来源类型<select value={question.sourceType} onChange={(e) => setQuestion({ ...question, sourceType: e.target.value })}><option value="real_exam">real_exam</option><option value="mock">mock</option><option value="custom">custom</option></select></label>
@@ -219,7 +232,7 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
     <fieldset className="editor-group"><legend>游戏化选项</legend>{(question.options || []).map((option, index) => <OptionRow key={index} option={option} changed={(next) => setQuestion({ ...question, options: question.options!.map((old, i) => i === index ? next : old) })} remove={() => setQuestion({ ...question, options: question.options!.filter((_, i) => i !== index) })} />)}<button onClick={addOption}>添加选项</button></fieldset>
     <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索 code / 名称 / alias" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, status: "active", size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>
       {matches.length > 0 && <div className="search-results">{matches.map((point) => <button key={point.id} onClick={() => { if (!(question.knowledgePoints || []).some((r) => (r.id || r.knowledgePointId) === point.id)) setQuestion({ ...question, knowledgePoints: [...(question.knowledgePoints || []), { id: point.id, knowledgePointId: point.id, code: point.code, name: point.name, role: "core", sortOrder: question.knowledgePoints?.length || 0 }] }); }}>{point.code} {point.name}</button>)}</div>}
-      <div className="relations">{(question.knowledgePoints || []).map((relation, index) => <div key={relation.id || relation.knowledgePointId}><span><code>{relation.code}</code> {relation.name}</span><select value={relation.role} onChange={(e) => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.map((r, i) => i === index ? { ...r, role: e.target.value as QuestionRelation["role"] } : r) })}><option value="core">核心</option><option value="auxiliary">辅助</option></select><button onClick={() => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.filter((_, i) => i !== index) })}>解绑</button></div>)}</div>
+      <div className="relations">{(question.knowledgePoints || []).map((relation, index) => <div key={relation.id || relation.knowledgePointId}><span><code>{relation.code}</code> {relation.name}</span><select value={relation.role} onChange={(e) => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.map((r, i) => i === index ? { ...r, role: e.target.value as QuestionRelation["role"] } : r) })}><option value="core">核心</option><option value="auxiliary">辅助</option></select><span className="relation-order"><button aria-label="上移知识点" disabled={index === 0} onClick={() => moveKnowledge(index, -1)}>↑</button><button aria-label="下移知识点" disabled={index === (question.knowledgePoints?.length || 0) - 1} onClick={() => moveKnowledge(index, 1)}>↓</button></span><button onClick={() => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.filter((_, i) => i !== index) })}>解绑</button></div>)}</div>
     </fieldset>
     {question.reviewComment && <p className="review-comment">审核意见：{question.reviewComment}</p>}
     <div className="editor-actions"><button className="primary" disabled={busy} onClick={save}>保存草稿</button>{initial && ["draft","rejected"].includes(initial.status) && <button onClick={() => manageApi.submitQuestion(initial).then(saved).catch((e) => fail(e.message))}>提交审核</button>}{initial?.status === "pending_review" && canReview && <><button className="approve" onClick={() => manageApi.reviewQuestion(initial, true, "审核通过").then(saved).catch((e) => fail(e.message))}>审核通过</button><button className="reject" onClick={() => manageApi.reviewQuestion(initial, false, prompt("退回原因") || "需要修改").then(saved).catch((e) => fail(e.message))}>退回修改</button></>}</div>

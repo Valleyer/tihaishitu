@@ -10,7 +10,7 @@
 
 正式数学一数据源保存于 `backend/src/main/resources/knowledge/math1-knowledge-final.json`，启动时按 code 幂等同步。code 是业务稳定身份，数据库 UUID 由 code 确定性生成；alias 单独建表。参考源与核心交接规格归档在 `docs/references/knowledge-platform/`。
 
-管理权限由 Spring Security 在后端执行：CONTRIBUTOR 创建和提交自己的题；REVIEWER 维护知识点并审核他人题；ADMIN 管理用户角色和全服生命周期。管理会话采用 Session + HttpOnly Cookie + CSRF，不允许把机器级 `APP_ADMIN_KEY` 放进前端。
+管理权限由 Spring Security 在后端执行：CONTRIBUTOR 创建和提交自己的题；REVIEWER 维护知识点并审核他人题；ADMIN 管理用户角色和全服生命周期。管理会话采用 Session + HttpOnly Cookie + CSRF，不允许把机器级 `APP_ADMIN_KEY` 放进前端。账号状态会在每次管理请求时复核，停用账号的既有 Session 会立即失效。
 
 知识点合并只能由 ADMIN 通过专用接口完成。源知识点保留并标记 deprecated，题目关系迁移到目标；重复关系按 core 优先规则折叠，文集 revision 同步递增。旧 code、名称和 alias 继续能检索目标知识点。所有合并写入 `knowledge_merge_history` 与 `content_audit_log`，管理端“审计记录”只读展示这些变更。
 

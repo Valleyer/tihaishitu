@@ -19,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 @Configuration
 @EnableMethodSecurity
@@ -49,7 +50,8 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper mapper) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http, ObjectMapper mapper, ActiveManageAccountFilter activeManageAccountFilter) throws Exception {
         CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
         http
                 .cors(cors -> {})
@@ -64,7 +66,8 @@ public class SecurityConfiguration {
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, error) -> writeError(response, mapper, 401, "请先登录管理后台。"))
                         .accessDeniedHandler((request, response, error) -> writeError(response, mapper, 403, "当前账号没有此操作权限。")))
-                .logout(logout -> logout.disable());
+                .logout(logout -> logout.disable())
+                .addFilterAfter(activeManageAccountFilter, SecurityContextHolderFilter.class);
         return http.build();
     }
 

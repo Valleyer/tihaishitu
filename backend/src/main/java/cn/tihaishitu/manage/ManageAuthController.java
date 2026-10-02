@@ -65,8 +65,12 @@ public class ManageAuthController {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录管理后台。");
         }
-        return users.findView(authentication.getName())
+        ManageUserView user = users.findView(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号不存在。"));
+        if (!"active".equals(user.status())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "账号已停用。");
+        }
+        return user;
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
