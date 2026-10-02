@@ -1,0 +1,38 @@
+server:
+  port: ${SERVER_PORT:12345}
+  shutdown: graceful
+
+spring:
+  application:
+    name: tihaishitu-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/tihaishitu?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 1
+      connection-timeout: 10000
+  jackson:
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  catalog:
+    seed-enabled: ${CATALOG_SEED_ENABLED:true}
+    seed-location: classpath:content/question-banks.json
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}

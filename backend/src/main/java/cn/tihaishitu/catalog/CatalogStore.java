@@ -1,0 +1,247 @@
+package cn.tihaishitu.catalog;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Repository
+public class CatalogStore {
+    private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
+
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
+
+    public CatalogStore(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+        this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
+    }
+
+    public int countBanks() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM question_bank", Integer.class);
+        return count == null ? 0 : count;
+    }
+
+    public long catalogRevision() {
+        Long revision = jdbc.queryForObject(
+                "SELECT COALESCE(MAX(revision), 0) FROM question_bank", Long.class);
+        return revision == null ? 0 : revision;
+    }
+
+    public List<QuestionBankDto> findAll() {
+        return jdbc.query(
+                "SELECT id, name, description, enabled, weight_value FROM question_bank ORDER BY created_at, id",
+                (result, row) -> loadBank(result)
+        );
+    }
+
+    public List<QuestionBankManifest> findManifests() {
+        return jdbc.query(
+                """
+                SELECT b.id, b.name, b.description, b.enabled, b.weight_value, b.revision,
+                       (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) question_count,
+                       (SELECT COUNT(*) FROM knowledge_point k WHERE k.bank_id = b.id) point_count
+                  FROM question_bank b
+                 ORDER BY b.created_at, b.id
+                """,
+                (result, row) -> new QuestionBankManifest(
+                        result.getString("id"), result.getString("name"), result.getString("description"),
+                        result.getBoolean("enabled"), result.getInt("weight_value"), result.getLong("revision"),
+                        result.getInt("question_count"), result.getInt("point_count")
+                )
+        );
+    }
+
+    public Optional<QuestionBankDto> findById(String id) {
+        List<QuestionBankDto> banks = jdbc.query(
+                "SELECT id, name, description, enabled, weight_value FROM question_bank WHERE id = ?",
+                (result, row) -> loadBank(result), id);
+        return banks.stream().findFirst();
+    }
+
+    public long revisionOf(String id) {
+        List<Long> revisions = jdbc.query(
+                "SELECT revision FROM question_bank WHERE id = ?",
+                (result, row) -> result.getLong("revision"), id);
+        return revisions.isEmpty() ? -1 : revisions.get(0);
+    }
+
+    private QuestionBankDto loadBank(ResultSet result) throws SQLException {
+        String bankId = result.getString("id");
+        return new QuestionBankDto(
+                bankId,
+                result.getString("name"),
+                result.getString("description"),
+                loadKnowledgePoints(bankId),
+                loadQuestions(bankId),
+                result.getBoolean("enabled"),
+                result.getInt("weight_value")
+        );
+    }
+
+    private List<KnowledgePointDto> loadKnowledgePoints(String bankId) {
+        return jdbc.query(
+                """
+                SELECT id, name, subject_name, category_name, description, explanation,
+                       parent_id, prerequisites_json, tags_json
+                  FROM knowledge_point
+                 WHERE bank_id = ?
+                 ORDER BY sort_order, id
+                """,
+                (result, row) -> new KnowledgePointDto(
+                        result.getString("id"), result.getString("name"),
+                        result.getString("subject_name"), result.getString("category_name"),
+                        result.getString("description"), result.getString("explanation"),
+                        result.getString("parent_id"), readStringList(result.getString("prerequisites_json")),
+                        readStringList(result.getString("tags_json"))
+                ),
+                bankId
+        );
+    }
+
+    private List<QuestionDto> loadQuestions(String bankId) {
+        Map<String, Map<String, String>> options = new LinkedHashMap<>();
+        jdbc.query(
+                """
+                SELECT question_id, option_key, option_text
+                  FROM question_option
+                 WHERE bank_id = ?
+                 ORDER BY question_id, sort_order
+                """,
+                (RowCallbackHandler) result -> options
+                        .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
+                        .put(result.getString("option_key"), result.getString("option_text")),
+                bankId
+        );
+        Map<String, List<String>> pointIds = new LinkedHashMap<>();
+        jdbc.query(
+                """
+                SELECT question_id, knowledge_point_id
+                  FROM question_knowledge_point
+                 WHERE bank_id = ?
+                 ORDER BY question_id, sort_order
+                """,
+                (RowCallbackHandler) result -> pointIds
+                        .computeIfAbsent(result.getString("question_id"), ignored -> new ArrayList<>())
+                        .add(result.getString("knowledge_point_id")),
+                bankId
+        );
+        return jdbc.query(
+                """
+                SELECT id, subject_name, category_name, chapter_name, question_type,
+                       question_text, answer_json, explanation, aliases_json, keywords_json,
+                       difficulty, frequency_value, tags_json, enabled
+                  FROM question_item
+                 WHERE bank_id = ?
+                 ORDER BY sort_order, id
+                """,
+                (result, row) -> {
+                    String id = result.getString("id");
+                    return new QuestionDto(
+                            id, result.getString("subject_name"), result.getString("category_name"),
+                            result.getString("chapter_name"), result.getString("question_type"),
+                            result.getString("question_text"), options.getOrDefault(id, Map.of()),
+                            readTree(result.getString("answer_json")), result.getString("explanation"),
+                            readStringList(result.getString("aliases_json")),
+                            readStringList(result.getString("keywords_json")), result.getInt("difficulty"),
+                            result.getInt("frequency_value"), readStringList(result.getString("tags_json")),
+                            pointIds.getOrDefault(id, List.of()), result.getBoolean("enabled")
+                    );
+                },
+                bankId
+        );
+    }
+
+    @Transactional
+    public void replaceAll(List<QuestionBankDto> banks) {
+        jdbc.update("DELETE FROM question_bank");
+        for (QuestionBankDto bank : banks) insert(bank);
+    }
+
+    private void insert(QuestionBankDto bank) {
+        jdbc.update(
+                "INSERT INTO question_bank(id, name, description, enabled, weight_value) VALUES (?, ?, ?, ?, ?)",
+                bank.id(), bank.name(), bank.description(), bank.enabled(), bank.weight()
+        );
+        int pointOrder = 0;
+        for (KnowledgePointDto point : bank.knowledgePoints()) {
+            jdbc.update(
+                    """
+                    INSERT INTO knowledge_point(
+                        bank_id, id, name, subject_name, category_name, description, explanation,
+                        parent_id, prerequisites_json, tags_json, sort_order
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    bank.id(), point.id(), point.name(), point.subject(), point.category(),
+                    point.description(), point.explanation(), point.parentId(), json(point.prerequisites()),
+                    json(point.tags()), pointOrder++
+            );
+        }
+        int questionOrder = 0;
+        for (QuestionDto question : bank.questions()) {
+            jdbc.update(
+                    """
+                    INSERT INTO question_item(
+                        bank_id, id, subject_name, category_name, chapter_name, question_type,
+                        question_text, answer_json, explanation, aliases_json, keywords_json,
+                        tags_json, difficulty, frequency_value, enabled, sort_order
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    bank.id(), question.id(), question.subject(), question.category(), question.chapter(),
+                    question.type(), question.question(), json(question.answer()), question.explanation(),
+                    json(question.aliases()), json(question.keywords()), json(question.tags()),
+                    question.difficulty(), question.frequency(), question.enabled(), questionOrder++
+            );
+            int optionOrder = 0;
+            for (Map.Entry<String, String> option : question.options().entrySet()) {
+                jdbc.update(
+                        "INSERT INTO question_option(bank_id, question_id, option_key, option_text, sort_order) VALUES (?, ?, ?, ?, ?)",
+                        bank.id(), question.id(), option.getKey(), option.getValue(), optionOrder++
+                );
+            }
+            int pointLinkOrder = 0;
+            for (String pointId : question.knowledgePointIds()) {
+                jdbc.update(
+                        "INSERT INTO question_knowledge_point(bank_id, question_id, knowledge_point_id, sort_order) VALUES (?, ?, ?, ?)",
+                        bank.id(), question.id(), pointId, pointLinkOrder++
+                );
+            }
+        }
+    }
+
+    private List<String> readStringList(String value) {
+        try {
+            return objectMapper.readValue(value, STRING_LIST);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("数据库中的字符串数组不是合法 JSON。", error);
+        }
+    }
+
+    private JsonNode readTree(String value) {
+        try {
+            return objectMapper.readTree(value);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("数据库中的答案不是合法 JSON。", error);
+        }
+    }
+
+    private String json(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("题库内容无法序列化。", error);
+        }
+    }
+}

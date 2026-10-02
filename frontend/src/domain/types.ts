@@ -54,6 +54,16 @@ export interface Bank {
   enabled: boolean;
   weight: number;
 }
+export interface QuestionBankManifest {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  weight: number;
+  revision: number;
+  questionCount: number;
+  knowledgePointCount: number;
+}
 export interface NewGame {
   name: string;
   gender: string;

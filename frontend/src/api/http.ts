@@ -3,7 +3,13 @@
  * 默认不会调用此文件的 HTTP 方法；只有 VITE_API_MODE=http 时启用。
  * 不自动降级成本地数据，避免用户误以为写入了服务器。
  */
-import type { GameApi } from "../domain/types";
+import type {
+  Bank,
+  Bootstrap,
+  GameApi,
+  QuestionBankManifest,
+} from "../domain/types";
+import { loadCachedBanks } from "./catalog-cache";
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(
   /\/$/,
   "",
@@ -50,7 +56,20 @@ export const httpApi: GameApi = {
     request(gamePath(id) + "/items/buy", "POST", { itemId }),
   claimBond: (id, npcId, milestone) =>
     request(gamePath(id) + "/bonds", "POST", { npcId, milestone }),
-  bootstrap: () => request("/bootstrap"),
+  bootstrap: async () => {
+    const data = await request<
+      Omit<Bootstrap, "banks"> & {
+        bankManifest: QuestionBankManifest[];
+        banks?: Bank[];
+      }
+    >("/bootstrap");
+    const banks = data.bankManifest
+      ? await loadCachedBanks(data.bankManifest, (id) =>
+          request<Bank>("/question-banks/" + encodeURIComponent(id)),
+        )
+      : data.banks || [];
+    return { ...data, banks };
+  },
   createGame: (config) => request("/games", "POST", config),
   getGame: (id) => request(gamePath(id)),
   deleteGame: (id) => request(gamePath(id), "DELETE"),

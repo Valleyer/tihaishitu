@@ -1,6 +1,8 @@
-# Java API 预留契约
+# Java API 契约
 
-当前只实现本地版，不启动 Java 服务。统一接口在 frontend/src/domain/types.ts 的 GameApi，HTTP 路由映射在 frontend/src/api/http.ts。
+Java 17 + Spring Boot 后端已在 `backend` 目录开始实现，服务端口为 `12345`。统一接口在 `frontend/src/domain/types.ts` 的 `GameApi`，HTTP 路由映射在 `frontend/src/api/http.ts`。
+
+当前已实现启动数据、服务端题库目录和存档的创建、读取、删除接口；下表中的其余游戏行为接口是后续实现契约。后端启动与数据库配置见 `backend/README.md`。
 
 ## 切换方式
 
@@ -9,7 +11,7 @@ frontend/.env.local：
 ~~~dotenv
 VITE_API_MODE=http
 VITE_API_BASE_URL=/api/v1
-API_PROXY_TARGET=http://localhost:8080
+API_PROXY_TARGET=http://localhost:12345
 ~~~
 
 重启开发服务器。Vite 开发代理把 /api 请求交给 Java；部署时自行配置同源代理或 CORS。

@@ -1,9 +1,10 @@
 {
+  "id": "0d1678a2-f909-40f0-a765-8e0d041b9bc1",
   "name": "入门知识点示例",
   "description": "演示细分知识点、三种题型以及 Markdown 与 LaTeX 题面。",
   "knowledgePoints": [
     {
-      "id": "integer-parity",
+      "id": "9ba141be-66f1-413d-9ca3-987f08ae59bb",
       "name": "整数奇偶性的判定",
       "subject": "数学",
       "category": "整数基础",
@@ -13,7 +14,7 @@
       "tags": ["整数", "奇偶性"]
     },
     {
-      "id": "integer-addition",
+      "id": "8f323074-ab9e-45af-b5c8-13759499d03c",
       "name": "整数加法的直接计算",
       "subject": "数学",
       "category": "整数基础",
@@ -25,7 +26,7 @@
   ],
   "questions": [
     {
-      "id": "demo-single",
+      "id": "79a7f8db-06cf-4d68-975a-b42b51c95b53",
       "subject": "数学",
       "category": "整数基础",
       "chapter": "整数运算",
@@ -43,11 +44,11 @@
       "difficulty": 1,
       "frequency": 3,
       "tags": ["诊断题"],
-      "knowledgePointIds": ["integer-addition"],
+      "knowledgePointIds": ["8f323074-ab9e-45af-b5c8-13759499d03c"],
       "enabled": true
     },
     {
-      "id": "demo-multi",
+      "id": "d95be0dc-8c92-4181-8e14-1e501cabcc41",
       "subject": "数学",
       "category": "整数基础",
       "chapter": "整数性质",
@@ -66,11 +67,11 @@
       "difficulty": 1,
       "frequency": 3,
       "tags": ["诊断题"],
-      "knowledgePointIds": ["integer-parity"],
+      "knowledgePointIds": ["9ba141be-66f1-413d-9ca3-987f08ae59bb"],
       "enabled": true
     },
     {
-      "id": "demo-judge",
+      "id": "b9c9b860-275c-4545-a339-6988ccae2caa",
       "subject": "数学",
       "category": "整数基础",
       "chapter": "整数性质",
@@ -87,7 +88,7 @@
       "difficulty": 2,
       "frequency": 3,
       "tags": ["性质判断"],
-      "knowledgePointIds": ["integer-parity"],
+      "knowledgePointIds": ["9ba141be-66f1-413d-9ca3-987f08ae59bb"],
       "enabled": true
     }
   ]
