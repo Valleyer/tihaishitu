@@ -754,6 +754,22 @@
   font: 15px SimSun, serif;
   color: #4c6246;
 }
+.self-assessment-reference {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 82%, var(--jade) 18%);
+}
+.self-assessment-reference > h3 {
+  margin: 0.75rem 0 0.4rem;
+  color: var(--gold-deep);
+  font-size: 1rem;
+}
+.self-assessment-reference > h3:first-child { margin-top: 0; }
+.self-assessment-hint { padding: 1rem; border: 1px dashed var(--line); }
+.self-assessment-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; }
+.self-assessment-actions button { min-width: 7rem; }
+.result-stage.partial { border-color: var(--gold); }
 .answers {
   display: grid;
   gap: 10px;

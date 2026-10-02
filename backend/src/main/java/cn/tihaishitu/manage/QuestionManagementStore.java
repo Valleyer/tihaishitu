@@ -99,6 +99,7 @@ public class QuestionManagementStore {
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, id, expectedRevision);
         if (changed == 0) conflictOrMissing(id);
         replaceChildren(id, input, actorId);
+        bumpContainingBanks(id);
         knowledgeStore.audit(actorId, "QUESTION_UPDATED", "question", id,
                 java.util.Map.of("expectedRevision", expectedRevision));
         return find(id).orElseThrow();
@@ -117,6 +118,7 @@ public class QuestionManagementStore {
                 """, to, actorId, isReview(action), actorId, isReview(action), isReview(action),
                 comment, id, expectedRevision, from);
         if (changed == 0) conflictOrMissing(id);
+        bumpContainingBanks(id);
         knowledgeStore.audit(actorId, action, "question", id,
                 java.util.Map.of("from", from, "to", to, "comment", comment == null ? "" : comment));
         return find(id).orElseThrow();
@@ -140,6 +142,13 @@ public class QuestionManagementStore {
                     VALUES (?, ?, ?, ?, ?)
                     """, id, relation.knowledgePointId(), relation.role(), relation.sortOrder(), actorId);
         }
+    }
+
+    private void bumpContainingBanks(String questionId) {
+        jdbc.update("""
+                UPDATE question_bank SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id IN (SELECT bank_id FROM question_bank_item WHERE question_id = ?)
+                """, questionId);
     }
 
     private QuestionView map(java.sql.ResultSet result) throws java.sql.SQLException {

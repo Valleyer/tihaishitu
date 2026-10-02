@@ -168,6 +168,74 @@ public class GameActionService {
     }
 
     @Transactional
+    public ObjectNode reveal(String gameId, String attemptId, String questionId) {
+        ObjectNode game = game(gameId);
+        ObjectNode current = requireCurrentAttempt(game, attemptId);
+        if (!questionId.equals(current.path("question").path("id").asText()))
+            throw bad("题目已经变化，请重新载入。");
+        QuestionAttemptStore.Snapshot snapshot = attempts.find(attemptId, gameId);
+        if (!snapshot.questionId().equals(questionId)) throw bad("题目与课卷不匹配。");
+        if (current.has("reveal") && !current.path("reveal").isNull()) return game;
+        attempts.reveal(snapshot);
+
+        ObjectNode reveal = mapper.createObjectNode();
+        reveal.set("standard", snapshot.standard().deepCopy());
+        reveal.put("explanation", snapshot.question().path("explanation").asText());
+        reveal.set("knowledgePoints", knowledgeDetails(game, snapshot.question()));
+        current.set("reveal", reveal);
+        persist(game);
+        return game;
+    }
+
+    @Transactional
+    public ObjectNode selfAssess(String gameId, SelfAssessmentRequest request) {
+        ObjectNode game = game(gameId);
+        ObjectNode current = requireCurrentAttempt(game, request.attemptId());
+        if (!request.questionId().equals(current.path("question").path("id").asText()))
+            throw bad("题目已经变化，请重新载入。");
+        QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
+        if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
+        if (!current.path("result").isNull()) return game;
+        if (!attempts.recordSelfAssessment(snapshot, request.assessment())) {
+            throw bad("请先查看参考解答，或此题已经完成自评。");
+        }
+        boolean correct = "correct".equals(request.assessment());
+        ObjectNode result = mapper.createObjectNode();
+        result.put("correct", correct);
+        result.put("assessment", request.assessment());
+        result.put("gradingSource", "self");
+        result.put("answer", request.assessment());
+        result.set("standard", snapshot.standard().deepCopy());
+        result.put("explanation", snapshot.question().path("explanation").asText());
+        result.set("aliases", snapshot.question().path("aliases").deepCopy());
+        result.put("story", switch (request.assessment()) {
+            case "correct" -> "自校无误，此题已经完整掌握。";
+            case "partial" -> "思路已有根基，尚有步骤需要补全。";
+            default -> "错处已经记下，接下来会从同一知识点查漏补缺。";
+        });
+        result.set("changes", mapper.createArrayNode());
+        current.set("result", result);
+
+        ObjectNode record = mapper.createObjectNode();
+        record.put("attemptId", request.attemptId());
+        record.put("questionId", request.questionId());
+        record.put("answer", request.assessment());
+        record.put("correct", correct);
+        record.put("assessment", request.assessment());
+        record.put("gradingSource", "self");
+        record.put("at", Instant.now().toString());
+        record.put("review", current.path("review").asBoolean());
+        game.withArray("records").add(record);
+        updateLearning(game, request.questionId(), mapper.getNodeFactory().textNode(request.assessment()), correct);
+        ObjectNode learning = (ObjectNode) game.with("learning").path(request.questionId());
+        if ("partial".equals(request.assessment()))
+            learning.put("partial", learning.path("partial").asInt() + 1);
+        settleRunAnswer(game, correct, request.questionId());
+        persist(game);
+        return game;
+    }
+
+    @Transactional
     public ObjectNode next(String gameId, NextQuestionRequest request) {
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
@@ -312,16 +380,34 @@ public class GameActionService {
         ArrayNode knowledge = mapper.createArrayNode();
         selectedBanks(game).stream().flatMap(bank -> bank.knowledgePoints().stream())
                 .filter(point -> question.knowledgePointIds().contains(point.id()))
-                .forEach(point -> knowledge.add(mapper.valueToTree(point)));
+                .forEach(point -> {
+                    ObjectNode visiblePoint = mapper.valueToTree(point);
+                    if ("self_assessment".equals(full.path("gradingMode").asText("auto"))) {
+                        visiblePoint.put("description", "");
+                        visiblePoint.put("explanation", "");
+                    }
+                    knowledge.add(visiblePoint);
+                });
         visible.set("knowledgePoints", knowledge);
         ObjectNode attempt = mapper.createObjectNode();
         attempt.put("id", attemptId);
         attempt.set("question", visible);
         attempt.set("scene", scene(question, run.path("definition")));
         attempt.putNull("result");
+        attempt.putNull("reveal");
         attempt.put("review", run.path("training").asBoolean());
         game.set("attempt", attempt);
         attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer());
+    }
+
+    private ArrayNode knowledgeDetails(ObjectNode game, JsonNode question) {
+        Set<String> ids = new HashSet<>();
+        question.path("knowledgePointIds").forEach(id -> ids.add(id.asText()));
+        ArrayNode result = mapper.createArrayNode();
+        selectedBanks(game).stream().flatMap(bank -> bank.knowledgePoints().stream())
+                .filter(point -> ids.contains(point.id()))
+                .forEach(point -> result.add(mapper.valueToTree(point)));
+        return result;
     }
 
     private ObjectNode scene(QuestionDto question, JsonNode activity) {

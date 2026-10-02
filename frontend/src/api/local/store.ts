@@ -258,13 +258,16 @@ export function createLocalApi(
       id: crypto.randomUUID(),
       question: {
         ...question,
-        knowledgePoints: resolveKnowledgePoints(
-          db.banks,
-          full.knowledgePointIds,
+        knowledgePoints: resolveKnowledgePoints(db.banks, full.knowledgePointIds).map(
+          (point) =>
+            full.gradingMode === "self_assessment"
+              ? { ...point, description: "", explanation: "" }
+              : point,
         ),
       },
       scene,
       result: null,
+      reveal: null,
       review: review || (game.learning[full.id]?.wrong ?? 0) > 0,
     };
     db.snapshots[game.id] = full;
@@ -444,6 +447,8 @@ export function createLocalApi(
         throw new Error("请先进入一项读书或挑战活动。");
       const full = db.snapshots[id];
       if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
+      if (full.gradingMode === "self_assessment")
+        throw new Error("这是一道自评题，请先查看参考解答。");
       if (game.event) throw new Error("请先回应眼前的际遇。");
       let answer = input.answer;
       let correct: boolean | null;
@@ -495,6 +500,71 @@ export function createLocalApi(
         kind: "story",
       });
 
+      return persist(db, game);
+    },
+    async reveal(id, attemptId, questionId) {
+      const db = read(),
+        game = get(db, id),
+        attempt = game.attempt,
+        full = db.snapshots[id];
+      if (!attempt || attempt.id !== attemptId || attempt.question.id !== questionId)
+        throw new Error("课卷已更新，请重新载入存档。");
+      if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
+      if (full.gradingMode !== "self_assessment")
+        throw new Error("自动判题无需单独查看参考解答。");
+      if (attempt.result || attempt.reveal) return structuredClone(game);
+      attempt.reveal = {
+        standard: full.answer,
+        explanation: full.explanation,
+        knowledgePoints: resolveKnowledgePoints(db.banks, full.knowledgePointIds),
+      };
+      return persist(db, game);
+    },
+    async selfAssess(id, attemptId, questionId, assessment) {
+      const db = read(),
+        game = get(db, id),
+        attempt = game.attempt,
+        full = db.snapshots[id];
+      if (!attempt || attempt.id !== attemptId || attempt.question.id !== questionId)
+        throw new Error("课卷已更新，请重新载入存档。");
+      if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
+      if (!attempt.reveal) throw new Error("请先查看参考解答。");
+      if (attempt.result) return structuredClone(game);
+      if (!["correct", "partial", "wrong"].includes(assessment))
+        throw new Error("自评结果不合法。");
+      const correct = assessment === "correct",
+        now = new Date().toISOString();
+      attempt.result = {
+        correct,
+        answer: assessment,
+        standard: full.answer,
+        explanation: full.explanation,
+        aliases: full.aliases,
+        story: correct
+          ? "自校无误，此题已经完整掌握。"
+          : assessment === "partial"
+            ? "思路已有根基，尚有步骤需要补全。"
+            : "错处已经记下，接下来会从同一知识点查漏补缺。",
+        changes: [],
+        assessment,
+        gradingSource: "self",
+      };
+      game.records.push({
+        attemptId,
+        question: full,
+        answer: assessment,
+        correct,
+        at: now,
+        review: attempt.review,
+        assessment,
+        gradingSource: "self",
+      });
+      recordLearning(game, full, correct, assessment, now);
+      if (assessment === "partial") {
+        const learning = game.learning[full.id];
+        learning.partial = (learning.partial || 0) + 1;
+      }
+      settleRunAnswer(game, correct, full.id);
       return persist(db, game);
     },
     async next(id, attemptId, reviewOnly = false) {

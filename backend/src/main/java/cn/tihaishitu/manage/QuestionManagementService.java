@@ -101,6 +101,7 @@ public class QuestionManagementService {
         List<QuestionManagementStore.OptionInput> options = input.options() == null ? List.of() : input.options();
         List<QuestionManagementStore.RelationInput> relations = input.knowledgePoints() == null
                 ? List.of() : input.knowledgePoints();
+        if (relations.isEmpty() || relations.size() > 3) bad("题目必须关联 1–3 个知识点。");
         if ("auto".equals(input.gradingMode()) && !"true_false".equals(input.presentationType())
                 && options.size() < 2) bad("自动选择题至少需要两个结构化选项。");
         Set<String> keys = new HashSet<>();
@@ -109,12 +110,15 @@ public class QuestionManagementService {
                     || !keys.add(option.key())) bad("选项键和值不能为空，且选项键不能重复。");
         }
         Set<String> points = new HashSet<>();
+        boolean hasCore = false;
         for (var relation : relations) {
             if (!RELATION_ROLES.contains(relation.role()) || !points.add(relation.knowledgePointId())) {
                 bad("知识点关系角色不合法，或同一知识点被重复绑定。");
             }
+            hasCore |= "core".equals(relation.role());
             if (knowledgeStore.find(relation.knowledgePointId()).isEmpty()) bad("题目引用了不存在的知识点。");
         }
+        if (!hasCore) bad("题目至少需要一个核心知识点。");
     }
 
     private String actorId(Authentication auth) { return knowledgeStore.userId(auth.getName()); }

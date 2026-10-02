@@ -92,6 +92,17 @@ export const httpApi: GameApi = {
   getGame: (id) => gameRequest(gamePath(id)),
   deleteGame: (id) => request(gamePath(id), "DELETE"),
   answer: (id, input) => gameRequest(gamePath(id) + "/answers", "POST", input),
+  reveal: (id, attemptId, questionId) =>
+    gameRequest(gamePath(id) + "/answers/reveal", "POST", {
+      attemptId,
+      questionId,
+    }),
+  selfAssess: (id, attemptId, questionId, assessment) =>
+    gameRequest(gamePath(id) + "/answers/self-assess", "POST", {
+      attemptId,
+      questionId,
+      assessment,
+    }),
   next: (id, attemptId, reviewOnly) =>
     gameRequest(gamePath(id) + "/next", "POST", { attemptId, reviewOnly }),
   choose: (id, eventId, choiceId) =>

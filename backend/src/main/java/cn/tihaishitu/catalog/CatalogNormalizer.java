@@ -103,7 +103,8 @@ public class CatalogNormalizer {
         require(question.options().size() >= 2 && question.options().size() <= 6, "题目“" + question.id() + "”需要 2–6 个选项。");
         return new QuestionDto(id, defaultText(question.subject(), "自修"),
                 defaultText(question.category(), "通识"), defaultText(question.chapter(), "未分章"),
-                question.type(), question.question().trim(), question.options(), question.answer(),
+                question.type(), question.originalType(), question.presentationType(), question.gradingMode(),
+                question.question().trim(), question.options(), question.answer(),
                 defaultText(question.explanation(), "请对照标准答案复习。"), question.aliases(), question.keywords(),
                 question.difficulty(), question.frequency(), question.tags(),
                 List.copyOf(new LinkedHashSet<>(pointIds)), question.enabled());

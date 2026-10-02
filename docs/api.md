@@ -29,6 +29,8 @@ API_PROXY_TARGET=http://localhost:12345
 | DELETE | /games/{id} | 无 | 204 |
 | GET | /question-banks/{uuid} | 无 | Bank，带 revision 与缓存响应头 |
 | POST | /games/{id}/answers | {attemptId, questionId, answer} | Game |
+| POST | /games/{id}/answers/reveal | {attemptId, questionId} | 自评题参考答案与解析 |
+| POST | /games/{id}/answers/self-assess | {attemptId, questionId, assessment} | Game；assessment 为 correct/partial/wrong |
 | POST | /games/{id}/next | {attemptId, reviewOnly} | Game |
 | POST | /games/{id}/choices | {eventId, choiceId} | Game |
 | PUT | /games/{id}/notes | {questionId, note} | Game |
@@ -42,6 +44,7 @@ API_PROXY_TARGET=http://localhost:12345
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
 | POST | /admin/question-banks/import | QuestionBankDto | 新增或修订后的 Bank |
+| POST | /admin/global-question-banks/import | global-question-bank/v1 | 幂等导入全服文集与独立题目 |
 | PUT | /admin/question-banks/{uuid}/metadata | {name?,description?,enabled?,weight?} | 改名后的 Bank |
 
 导入同一文集 UUID 会原子替换该文集内容并递增 revision；其他文集不重写。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
@@ -63,6 +66,7 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
 | POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
+| POST | /manage/imports/question-bank | ADMIN | 事务校验并导入 global-question-bank/v1 文件 |
 | GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
 
 知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
@@ -124,7 +128,7 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 题库修订只影响以后发卷，不影响已有快照和历史记录。
 - 导入先完整校验，再原子保存；备份创建新人生并重映射题库引用。
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
-- selfAssessment 是早期兼容字段，新三题型不再使用；后端可以只实现客观题流程。
+- 填空题与解答题保留原始题型，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
 
 本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
 

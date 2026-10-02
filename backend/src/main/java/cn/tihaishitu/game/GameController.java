@@ -76,6 +76,16 @@ public class GameController {
         return actions.answer(id, body);
     }
 
+    @PostMapping("/{id}/answers/reveal")
+    JsonNode reveal(@PathVariable String id, @RequestBody JsonNode body) {
+        return actions.reveal(id, required(body, "attemptId"), required(body, "questionId"));
+    }
+
+    @PostMapping("/{id}/answers/self-assess")
+    JsonNode selfAssess(@PathVariable String id, @Valid @RequestBody SelfAssessmentRequest body) {
+        return actions.selfAssess(id, body);
+    }
+
     @PostMapping("/{id}/next")
     JsonNode next(@PathVariable String id, @Valid @RequestBody NextQuestionRequest body) {
         return actions.next(id, body);

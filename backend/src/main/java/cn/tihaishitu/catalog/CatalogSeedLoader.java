@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +36,7 @@ public class CatalogSeedLoader {
     }
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(100)
     public void seedEmptyCatalog() throws IOException {
         if (!enabled || !service.isEmpty()) return;
         List<QuestionBankDto> banks;

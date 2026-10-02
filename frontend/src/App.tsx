@@ -509,6 +509,29 @@ function App() {
                             );
                           })
                         }
+                        reveal={() =>
+                          void run(async () => {
+                            setGame(
+                              await api.reveal(
+                                game.id,
+                                attempt.id,
+                                attempt.question.id,
+                              ),
+                            );
+                          })
+                        }
+                        assess={(assessment) =>
+                          void run(async () => {
+                            setGame(
+                              await api.selfAssess(
+                                game.id,
+                                attempt.id,
+                                attempt.question.id,
+                                assessment,
+                              ),
+                            );
+                          })
+                        }
                         next={() => {
                           if (activityRun.status === "settled")
                             setSettlement(true);

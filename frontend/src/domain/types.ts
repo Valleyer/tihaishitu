@@ -4,7 +4,18 @@
  * answer 使用题库原始选项键（或判断题布尔值），不要提交屏幕上随机后的字母编号。
  * aliases、keywords、selfAssessment 为早期数据兼容字段，新三题型不依赖自然语言自评。
  */
-export type QuestionType = "single_choice" | "multiple_choice" | "true_false";
+export type QuestionType =
+  | "single_choice"
+  | "multiple_choice"
+  | "true_false"
+  | "self_assessment";
+export type OriginalQuestionType =
+  | "single_choice"
+  | "multiple_choice"
+  | "true_false"
+  | "blank"
+  | "solution";
+export type Assessment = "correct" | "partial" | "wrong";
 export type Answer = string | string[] | boolean;
 /**
  * 知识点是比章节更细的教学单位。一道题关联 1–3 个知识点；名称应具体到
@@ -28,6 +39,10 @@ export interface Question {
   category: string;
   chapter: string;
   type: QuestionType;
+  /** 原卷题型、游戏展示与判题方式彼此独立；旧题库缺省时沿用 type/auto。 */
+  originalType?: OriginalQuestionType;
+  presentationType?: QuestionType;
+  gradingMode?: "auto" | "self_assessment";
   /** Markdown + LaTeX；后端按原文返回，前端负责安全渲染。 */
   question: string;
   options: Record<string, string>;
@@ -117,12 +132,20 @@ export interface Result {
   aliases: string[];
   story: string;
   changes: Change[];
+  assessment?: Assessment;
+  gradingSource?: "automatic" | "self";
+}
+export interface RevealedAnswer {
+  standard: Answer;
+  explanation: string;
+  knowledgePoints: KnowledgePoint[];
 }
 export interface Attempt {
   id: string;
   question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
   scene: Scene;
   result: Result | null;
+  reveal?: RevealedAnswer | null;
   review: boolean;
 }
 export interface StudyRecord {
@@ -132,12 +155,15 @@ export interface StudyRecord {
   correct: boolean;
   at: string;
   review: boolean;
+  assessment?: Assessment;
+  gradingSource?: "automatic" | "self";
 }
 export interface Learning {
   /** 累计作答次数、答对数与答错数用于判断该题是否已经掌握。 */
   attempts: number;
   correct: number;
   wrong: number;
+  partial?: number;
   /** 0–100 的累计错误率；旧存档读取时会自动补算。 */
   errorRate?: number;
   streak: number;
@@ -223,6 +249,13 @@ export interface GameApi {
   getGame(id: string): Promise<Game>;
   deleteGame(id: string): Promise<void>;
   answer(id: string, input: AnswerInput): Promise<Game>;
+  reveal(id: string, attemptId: string, questionId: string): Promise<Game>;
+  selfAssess(
+    id: string,
+    attemptId: string,
+    questionId: string,
+    assessment: Assessment,
+  ): Promise<Game>;
   next(id: string, attemptId: string, reviewOnly?: boolean): Promise<Game>;
   choose(id: string, eventId: string, choiceId: string): Promise<Game>;
   saveNote(id: string, questionId: string, note: string): Promise<Game>;

@@ -51,8 +51,18 @@ public class CatalogStore {
         return jdbc.query(
                 """
                 SELECT b.id, b.name, b.description, b.enabled, b.weight_value, b.revision,
-                       (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) question_count,
-                       (SELECT COUNT(*) FROM knowledge_point k WHERE k.bank_id = b.id) point_count
+                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
+                            THEN (SELECT COUNT(*) FROM question_bank_item bi
+                                   JOIN question_resource qr ON qr.id = bi.question_id
+                                  WHERE bi.bank_id = b.id AND qr.status = 'published')
+                            ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) END question_count,
+                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
+                            THEN (SELECT COUNT(DISTINCT qk.knowledge_point_id)
+                           FROM question_bank_item bi
+                           JOIN question_resource qr ON qr.id = bi.question_id
+                           JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
+                          WHERE bi.bank_id = b.id AND qr.status = 'published')
+                            ELSE (SELECT COUNT(*) FROM knowledge_point k WHERE k.bank_id = b.id) END point_count
                   FROM question_bank b
                  ORDER BY b.created_at, b.id
                 """,
@@ -92,33 +102,39 @@ public class CatalogStore {
     }
 
     private List<KnowledgePointDto> loadKnowledgePoints(String bankId) {
+        if (!hasProjectedItems(bankId)) return loadLegacyKnowledgePoints(bankId);
         return jdbc.query(
                 """
-                SELECT id, name, subject_name, category_name, description, explanation,
-                       parent_id, prerequisites_json, tags_json
-                  FROM knowledge_point
-                 WHERE bank_id = ?
-                 ORDER BY sort_order, id
+                SELECT DISTINCT k.id, k.name, k.subject_name, k.section_name, k.chapter_name,
+                       k.description, k.explanation, k.sort_order
+                   FROM question_bank_item bi
+                   JOIN question_resource q ON q.id = bi.question_id
+                   JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
+                   JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
+                  WHERE bi.bank_id = ? AND q.status = 'published' AND k.status = 'active'
+                 ORDER BY k.sort_order, k.id
                 """,
                 (result, row) -> new KnowledgePointDto(
                         result.getString("id"), result.getString("name"),
-                        result.getString("subject_name"), result.getString("category_name"),
+                        result.getString("subject_name"), result.getString("section_name"),
                         result.getString("description"), result.getString("explanation"),
-                        result.getString("parent_id"), readStringList(result.getString("prerequisites_json")),
-                        readStringList(result.getString("tags_json"))
+                        null, List.of(), List.of(result.getString("chapter_name"))
                 ),
                 bankId
         );
     }
 
     private List<QuestionDto> loadQuestions(String bankId) {
+        if (!hasProjectedItems(bankId)) return loadLegacyQuestions(bankId);
         Map<String, Map<String, String>> options = new LinkedHashMap<>();
         jdbc.query(
                 """
-                SELECT question_id, option_key, option_text
-                  FROM question_option
-                 WHERE bank_id = ?
-                 ORDER BY question_id, sort_order
+                SELECT o.question_id, o.option_key, o.option_text
+                   FROM question_bank_item bi
+                   JOIN question_resource q ON q.id = bi.question_id
+                   JOIN question_resource_option o ON o.question_id = bi.question_id
+                  WHERE bi.bank_id = ? AND q.status = 'published'
+                 ORDER BY o.question_id, o.sort_order
                 """,
                 (RowCallbackHandler) result -> options
                         .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
@@ -128,10 +144,12 @@ public class CatalogStore {
         Map<String, List<String>> pointIds = new LinkedHashMap<>();
         jdbc.query(
                 """
-                SELECT question_id, knowledge_point_id
-                  FROM question_knowledge_point
-                 WHERE bank_id = ?
-                 ORDER BY question_id, sort_order
+                SELECT qk.question_id, qk.knowledge_point_id
+                   FROM question_bank_item bi
+                   JOIN question_resource q ON q.id = bi.question_id
+                   JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
+                  WHERE bi.bank_id = ? AND q.status = 'published'
+                 ORDER BY qk.question_id, qk.sort_order
                 """,
                 (RowCallbackHandler) result -> pointIds
                         .computeIfAbsent(result.getString("question_id"), ignored -> new ArrayList<>())
@@ -140,28 +158,82 @@ public class CatalogStore {
         );
         return jdbc.query(
                 """
-                SELECT id, subject_name, category_name, chapter_name, question_type,
-                       question_text, answer_json, explanation, aliases_json, keywords_json,
-                       difficulty, frequency_value, tags_json, enabled
-                  FROM question_item
-                 WHERE bank_id = ?
-                 ORDER BY sort_order, id
+                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
+                       q.presentation_type, q.grading_mode, q.content_markdown,
+                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                  FROM question_bank_item bi
+                  JOIN question_resource q ON q.id = bi.question_id
+                 WHERE bi.bank_id = ? AND q.status = 'published'
+                 ORDER BY bi.sort_order, q.id
                 """,
                 (result, row) -> {
                     String id = result.getString("id");
                     return new QuestionDto(
-                            id, result.getString("subject_name"), result.getString("category_name"),
-                            result.getString("chapter_name"), result.getString("question_type"),
-                            result.getString("question_text"), options.getOrDefault(id, Map.of()),
-                            readTree(result.getString("answer_json")), result.getString("explanation"),
-                            readStringList(result.getString("aliases_json")),
-                            readStringList(result.getString("keywords_json")), result.getInt("difficulty"),
-                            result.getInt("frequency_value"), readStringList(result.getString("tags_json")),
-                            pointIds.getOrDefault(id, List.of()), result.getBoolean("enabled")
+                            id, result.getString("subject_name"), result.getString("source_type"),
+                            value(result.getString("source_name"), "全服题库"),
+                            result.getString("presentation_type"), result.getString("question_type"),
+                            result.getString("presentation_type"), result.getString("grading_mode"),
+                            result.getString("content_markdown"), options.getOrDefault(id, Map.of()),
+                            readTree(result.getString("standard_answer_json")), result.getString("analysis_markdown"),
+                            List.of(), List.of(), result.getInt("difficulty"), 3, List.of(),
+                            pointIds.getOrDefault(id, List.of()), true
                     );
                 },
                 bankId
         );
+    }
+
+    private boolean hasProjectedItems(String bankId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ?",
+                Integer.class, bankId);
+        return count != null && count > 0;
+    }
+
+    private List<KnowledgePointDto> loadLegacyKnowledgePoints(String bankId) {
+        return jdbc.query("""
+                SELECT id, name, subject_name, category_name, description, explanation,
+                       parent_id, prerequisites_json, tags_json
+                  FROM knowledge_point WHERE bank_id = ? ORDER BY sort_order, id
+                """, (result, row) -> new KnowledgePointDto(
+                result.getString("id"), result.getString("name"), result.getString("subject_name"),
+                result.getString("category_name"), result.getString("description"),
+                result.getString("explanation"), result.getString("parent_id"),
+                readStringList(result.getString("prerequisites_json")),
+                readStringList(result.getString("tags_json"))), bankId);
+    }
+
+    private List<QuestionDto> loadLegacyQuestions(String bankId) {
+        Map<String, Map<String, String>> options = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT question_id, option_key, option_text FROM question_option
+                 WHERE bank_id = ? ORDER BY question_id, sort_order
+                """, (RowCallbackHandler) result -> options
+                .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
+                .put(result.getString("option_key"), result.getString("option_text")), bankId);
+        Map<String, List<String>> pointIds = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT question_id, knowledge_point_id FROM question_knowledge_point
+                 WHERE bank_id = ? ORDER BY question_id, sort_order
+                """, (RowCallbackHandler) result -> pointIds
+                .computeIfAbsent(result.getString("question_id"), ignored -> new ArrayList<>())
+                .add(result.getString("knowledge_point_id")), bankId);
+        return jdbc.query("""
+                SELECT id, subject_name, category_name, chapter_name, question_type,
+                       question_text, answer_json, explanation, aliases_json, keywords_json,
+                       difficulty, frequency_value, tags_json, enabled
+                  FROM question_item WHERE bank_id = ? ORDER BY sort_order, id
+                """, (result, row) -> {
+            String id = result.getString("id");
+            String type = result.getString("question_type");
+            return new QuestionDto(id, result.getString("subject_name"), result.getString("category_name"),
+                    result.getString("chapter_name"), type, type, type, "auto",
+                    result.getString("question_text"), options.getOrDefault(id, Map.of()),
+                    readTree(result.getString("answer_json")), result.getString("explanation"),
+                    readStringList(result.getString("aliases_json")),
+                    readStringList(result.getString("keywords_json")), result.getInt("difficulty"),
+                    result.getInt("frequency_value"), readStringList(result.getString("tags_json")),
+                    pointIds.getOrDefault(id, List.of()), result.getBoolean("enabled"));
+        }, bankId);
     }
 
     @Transactional
@@ -262,5 +334,9 @@ public class CatalogStore {
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("题库内容无法序列化。", error);
         }
+    }
+
+    private static String value(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 }

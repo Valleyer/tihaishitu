@@ -4,13 +4,14 @@ import {
   manageApi,
   type KnowledgeView,
   type ManageUser,
+  type QuestionBankImportResult,
   type QuestionOption,
   type QuestionRelation,
   type QuestionView,
 } from "./api";
 import "./manage.css";
 
-type Page = "dashboard" | "questions" | "knowledge" | "reviews" | "users";
+type Page = "dashboard" | "questions" | "knowledge" | "reviews" | "imports" | "users";
 
 export default function ManagementApp() {
   const [user, setUser] = useState<ManageUser | null>(null);
@@ -33,6 +34,7 @@ export default function ManagementApp() {
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>
           <Nav active={page === "knowledge"} onClick={() => setPage("knowledge")}>知识点管理</Nav>
           <Nav active={page === "reviews"} onClick={() => setPage("reviews")}>审核中心</Nav>
+          {admin && <Nav active={page === "imports"} onClick={() => setPage("imports")}>批量导入</Nav>}
           {admin && <Nav active={page === "users"} onClick={() => setPage("users")}>用户与权限</Nav>}
         </nav>
         <footer>
@@ -47,6 +49,7 @@ export default function ManagementApp() {
         {page === "knowledge" && <KnowledgePage user={user} fail={setError} />}
         {page === "questions" && <QuestionPage user={user} fail={setError} />}
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
+        {page === "imports" && admin && <ImportPage fail={setError} />}
         {page === "users" && admin && <UsersPage fail={setError} />}
       </main>
     </div>
@@ -84,6 +87,45 @@ function Dashboard({ user }: { user: ManageUser }) {
       <Metric label="待审核题目" value={pending} note="贡献者提交的全服资源" />
       <Metric label="当前权限" value={user.roles.length} note={user.roles.join(" / ")} /></div>
     <div className="manage-card"><h2>资源边界</h2><p>这里维护全服正式知识点与题目。玩家自己的藏书阁仍是私人学习空间，不会修改这里的官方资源。</p></div>
+  </section>;
+}
+
+function ImportPage({ fail }: { fail: (value: string) => void }) {
+  const [source, setSource] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuestionBankImportResult | null>(null);
+  let preview: { schemaVersion?: string; publish?: boolean; bank?: { name?: string; id?: string }; questions?: unknown[] } | null = null;
+  let parseError = "";
+  if (source.trim()) {
+    try { preview = JSON.parse(source); }
+    catch { parseError = "JSON 格式尚不完整。"; }
+  }
+  const submit = () => {
+    if (!preview) return;
+    setBusy(true); setResult(null);
+    manageApi.importQuestionBank(preview)
+      .then(setResult).catch((error) => fail(error.message)).finally(() => setBusy(false));
+  };
+  const loadFile = (file?: File) => {
+    if (!file) return;
+    file.text().then((text) => { setSource(text); setResult(null); })
+      .catch(() => fail("无法读取所选文件。"));
+  };
+  return <section><PageTitle title="批量导入" detail="导入全服题目文集；UUID 相同的题目会幂等更新" />
+    <div className="import-workspace">
+      <div className="manage-card import-source">
+        <div className="import-heading"><div><h2>题库 JSON</h2><p>格式版本固定为 <code>global-question-bank/v1</code>，知识点只引用全局稳定 code。</p></div>
+          <label className="file-button">选择文件<input type="file" accept="application/json,.json" onChange={(event) => loadFile(event.target.files?.[0])} /></label></div>
+        <textarea rows={24} spellCheck={false} value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} placeholder="粘贴题库生成提示词产出的 JSON，或选择文件…" />
+      </div>
+      <aside className="manage-card import-preview"><h2>导入预检</h2>
+        {!source && <Empty>选择文件或粘贴 JSON 后，这里会显示文集摘要。</Empty>}
+        {parseError && <p className="form-error">{parseError}</p>}
+        {preview && <dl><dt>格式</dt><dd>{preview.schemaVersion || "未提供"}</dd><dt>文集</dt><dd>{preview.bank?.name || "未提供"}</dd><dt>文集 UUID</dt><dd><code>{preview.bank?.id || "未提供"}</code></dd><dt>题目数</dt><dd>{Array.isArray(preview.questions) ? preview.questions.length : 0}</dd><dt>导入状态</dt><dd>{preview.publish ? "直接发布" : "进入待审核"}</dd></dl>}
+        <button className="primary" disabled={!preview || busy} onClick={submit}>{busy ? "导入中…" : "校验并导入"}</button>
+        {result && <div className="import-result"><b>导入完成</b><p>{result.bankName}</p><p>题目 {result.questionCount} 道；新建 {result.createdQuestions}，更新 {result.updatedQuestions}</p><p>选项 {result.optionCount} 条；知识点关系 {result.relationCount} 条</p></div>}
+      </aside>
+    </div>
   </section>;
 }
 

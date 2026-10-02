@@ -4,7 +4,7 @@
  * 小屏题干和选项分段展示，长选项可展开；所有分页共享同一份选择状态。
  */
 import { useState, useEffect } from "react";
-import type { Answer, Attempt } from "../domain/types";
+import type { Answer, Assessment, Attempt } from "../domain/types";
 import { typeNames } from "../engine/QuestionBankManager";
 import { displayAnswer } from "../engine/OptionShuffler";
 import { Modal } from "./Modal";
@@ -15,6 +15,8 @@ export function QuestionPanel({
   attempt,
   busy,
   submit,
+  reveal,
+  assess,
   next,
   note,
   showNote,
@@ -28,6 +30,8 @@ export function QuestionPanel({
   attempt: Attempt;
   busy: boolean;
   submit: (answer: Answer) => void;
+  reveal: () => void;
+  assess: (assessment: Assessment) => void;
   next: () => void;
   note: string;
   showNote: () => void;
@@ -51,6 +55,8 @@ export function QuestionPanel({
   }, []);
   const q = attempt.question,
     result = attempt.result,
+    isSelfAssessment =
+      q.gradingMode === "self_assessment" || q.type === "self_assessment",
     ready =
       typeof answer === "boolean" ||
       (Array.isArray(answer) ? answer.length > 0 : !!answer);
@@ -58,6 +64,13 @@ export function QuestionPanel({
     perPage = small ? 3 : 6,
     optionPages = Math.ceil(entries.length / perPage);
   const resultView = !!result && !recheck;
+  const assessmentTitle =
+    result?.assessment === "partial"
+      ? "部分明白"
+      : result?.correct
+        ? "此卷已明"
+        : "留待复核";
+  const knowledgePoints = attempt.reveal?.knowledgePoints || q.knowledgePoints;
   return (
     <article className={"scroll-paper " + (resultView ? "show-result" : "")}>
       <div className="paper-heading">
@@ -71,14 +84,23 @@ export function QuestionPanel({
       </div>
       {resultView ? (
         <section
-          className={"result-stage " + (result!.correct ? "good" : "wrong")}
+          className={
+            "result-stage " +
+            (result!.assessment === "partial"
+              ? "partial"
+              : result!.correct
+                ? "good"
+                : "wrong")
+          }
           aria-live="polite"
         >
           <div className="result-seal">{result!.correct ? "可" : "思"}</div>
           <div className="result-heading">
-            <span>{result!.correct ? "此卷已明" : "留待复核"}</span>
+            <span>{assessmentTitle}</span>
             <small>
-              {result!.correct
+              {result!.assessment === "partial"
+                ? "思路已有根基，补全步骤后再试。"
+                : result!.correct
                 ? "一页读通，前路又明一分。"
                 : "错处留卷，来日再审。"}
             </small>
@@ -88,7 +110,7 @@ export function QuestionPanel({
               <b>标准答案</b>
               {displayAnswer(result!.standard, q.options)}
             </p>
-            {!result!.correct && (
+            {!isSelfAssessment && !result!.correct && (
               <p>
                 <b>你的回答</b>
                 {displayAnswer(result!.answer, q.options)}
@@ -100,7 +122,7 @@ export function QuestionPanel({
           </div>
           <details className="knowledge-explanation">
             <summary>查看本题知识点解析</summary>
-            {q.knowledgePoints.map((point) => (
+            {knowledgePoints.map((point) => (
               <section key={point.id}>
                 <h3>{point.name}</h3>
                 <RichText>{point.explanation || point.description}</RichText>
@@ -148,6 +170,29 @@ export function QuestionPanel({
           <div className="question-prompt-area">
             <RichText className="question-text">{q.question}</RichText>
           </div>
+          {isSelfAssessment ? (
+            attempt.reveal ? (
+              <section className="self-assessment-reference" aria-live="polite">
+                <h3>参考解答</h3>
+                <RichText>{String(attempt.reveal.standard)}</RichText>
+                <h3>解题分析</h3>
+                <RichText>{attempt.reveal.explanation}</RichText>
+                <details className="knowledge-explanation">
+                  <summary>查看知识点解析</summary>
+                  {attempt.reveal.knowledgePoints.map((point) => (
+                    <section key={point.id}>
+                      <h3>{point.name}</h3>
+                      <RichText>{point.explanation || point.description}</RichText>
+                    </section>
+                  ))}
+                </details>
+              </section>
+            ) : (
+              <p className="choice-hint self-assessment-hint">
+                请先在纸上完成推导或作答，再查看参考解答并如实自评。
+              </p>
+            )
+          ) : (
           <fieldset
             className={"answers " + (entries.length > 2 ? "two-columns" : "")}
           >
@@ -202,7 +247,8 @@ export function QuestionPanel({
                 );
               })}
           </fieldset>
-          {optionPages > 1 && (
+          )}
+          {!isSelfAssessment && optionPages > 1 && (
             <div className="pager">
               <button
                 disabled={optionPage === 0}
@@ -224,13 +270,13 @@ export function QuestionPanel({
               </button>
             </div>
           )}
-          <p className="choice-hint">
+          {!isSelfAssessment && <p className="choice-hint">
             {q.type === "multiple_choice"
               ? "多选题 · 请选择全部符合条件的选项"
               : q.type === "true_false"
                 ? "判断题 · 辨明此言真伪"
                 : "单选题 · 请选择一个最合适的答案"}
-          </p>
+          </p>}
         </div>
       )}
       <div className="paper-footer">
@@ -259,6 +305,24 @@ export function QuestionPanel({
           >
             {eventPending ? "回应眼前际遇 →" : recheck ? "返回批卷" : nextLabel}
           </button>
+        ) : isSelfAssessment ? (
+          attempt.reveal ? (
+            <div className="self-assessment-actions" aria-label="自评结果">
+              <button disabled={busy} onClick={() => assess("correct")}>
+                完整答对
+              </button>
+              <button disabled={busy} onClick={() => assess("partial")}>
+                部分正确
+              </button>
+              <button disabled={busy} onClick={() => assess("wrong")}>
+                做错／不会
+              </button>
+            </div>
+          ) : (
+            <button className="ink-button" disabled={busy} onClick={reveal}>
+              我已完成，查看参考解答
+            </button>
+          )
         ) : (
           <button
             className="ink-button"

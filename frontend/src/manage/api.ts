@@ -72,6 +72,18 @@ export type QuestionView = {
   knowledgePoints: QuestionRelation[];
 };
 
+export type QuestionBankImportResult = {
+  schemaVersion: string;
+  bankId: string;
+  bankName: string;
+  published: boolean;
+  questionCount: number;
+  optionCount: number;
+  relationCount: number;
+  createdQuestions: number;
+  updatedQuestions: number;
+};
+
 let csrf: { headerName: string; token: string } | null = null;
 
 async function ensureCsrf() {
@@ -163,6 +175,11 @@ export const manageApi = {
     request<QuestionView>(`/questions/${question.id}/review`, {
       method: "POST",
       body: JSON.stringify({ expectedRevision: question.revision, approve, comment }),
+    }),
+  importQuestionBank: (payload: unknown) =>
+    request<QuestionBankImportResult>("/imports/question-bank", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   users: () => request<ManageUser[]>("/users"),
   createUser: (input: { username: string; displayName: string; password: string; roles: string[] }) =>

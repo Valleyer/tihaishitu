@@ -15,6 +15,7 @@ export const typeNames: Record<QuestionType, string> = {
   single_choice: "单选",
   multiple_choice: "多选",
   true_false: "判断",
+  self_assessment: "解答自评",
 };
 function list(value: unknown): string[] {
   return Array.isArray(value)
@@ -113,7 +114,7 @@ export function normalizeQuestion(value: unknown, index: number): Question {
   const q = value as Record<string, unknown>;
   const type = String(q.type || "single_choice") as QuestionType;
   if (!(type in typeNames))
-    throw new Error("仅支持判断、单选、多选，请将 " + type + " 改编后导入");
+    throw new Error("仅支持单选、多选、判断和解答自评题；当前题型：" + type);
   const text = String(q.question || q.prompt || "").trim();
   if (!text || text.length > 6000)
     throw new Error("题干不能为空且不能超过 6000 字");
@@ -132,7 +133,11 @@ export function normalizeQuestion(value: unknown, index: number): Question {
       if (q["option" + key]) options[key] = String(q["option" + key]);
     });
   let answer = q.answer;
-  if (type === "true_false") {
+  if (type === "self_assessment") {
+    answer = String(answer ?? "").trim();
+    if (!answer) throw new Error("自评题缺少参考答案");
+    for (const key of Object.keys(options)) delete options[key];
+  } else if (type === "true_false") {
     if (answer === undefined || answer === "")
       throw new Error("判断题缺少答案");
     answer = bool(answer, false);
@@ -163,6 +168,10 @@ export function normalizeQuestion(value: unknown, index: number): Question {
   return {
     id: String(q.id || "question-" + (index + 1)),
     type,
+    originalType: (q.originalType || q.questionType || type) as Question["originalType"],
+    presentationType: type,
+    gradingMode:
+      type === "self_assessment" ? "self_assessment" : "auto",
     question: text,
     options,
     answer: answer as Question["answer"],

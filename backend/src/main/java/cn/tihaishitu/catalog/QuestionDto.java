@@ -12,6 +12,9 @@ public record QuestionDto(
         String category,
         String chapter,
         String type,
+        String originalType,
+        String presentationType,
+        String gradingMode,
         String question,
         Map<String, String> options,
         JsonNode answer,
@@ -25,6 +28,9 @@ public record QuestionDto(
         boolean enabled
 ) {
     public QuestionDto {
+        originalType = originalType == null || originalType.isBlank() ? type : originalType;
+        presentationType = presentationType == null || presentationType.isBlank() ? type : presentationType;
+        gradingMode = gradingMode == null || gradingMode.isBlank() ? "auto" : gradingMode;
         options = options == null ? Map.of() : new LinkedHashMap<>(options);
         aliases = aliases == null ? List.of() : List.copyOf(aliases);
         keywords = keywords == null ? List.of() : List.copyOf(keywords);

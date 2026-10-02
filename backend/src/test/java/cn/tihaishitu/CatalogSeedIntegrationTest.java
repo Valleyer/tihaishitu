@@ -1,6 +1,7 @@
 package cn.tihaishitu;
 
 import cn.tihaishitu.catalog.CatalogService;
+import cn.tihaishitu.catalog.LegacyCatalogMigrator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.UUID;
 
@@ -29,6 +31,27 @@ class CatalogSeedIntegrationTest {
     ObjectMapper mapper;
     @Autowired
     CatalogService catalog;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Autowired
+    LegacyCatalogMigrator migrator;
+
+    @Test
+    void legacyBanksAreIdempotentlyProjectedIntoGlobalResources() {
+        int legacyQuestions = jdbc.queryForObject("SELECT COUNT(*) FROM question_item", Integer.class);
+        int projected = jdbc.queryForObject("SELECT COUNT(*) FROM legacy_question_map", Integer.class);
+        int bankItems = jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_item", Integer.class);
+        org.assertj.core.api.Assertions.assertThat(projected).isEqualTo(legacyQuestions);
+        org.assertj.core.api.Assertions.assertThat(bankItems).isEqualTo(legacyQuestions);
+
+        migrator.migrateAfterSeed();
+        org.assertj.core.api.Assertions.assertThat(
+                jdbc.queryForObject("SELECT COUNT(*) FROM legacy_question_map", Integer.class))
+                .isEqualTo(projected);
+        org.assertj.core.api.Assertions.assertThat(
+                jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_item", Integer.class))
+                .isEqualTo(bankItems);
+    }
 
     @Test
     void builtInCatalogIsSeededWithUuidKeysAndAvailableByManifest() throws Exception {

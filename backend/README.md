@@ -77,13 +77,16 @@ API_PROXY_TARGET=http://localhost:12345
 - `DELETE /api/v1/games/{id}`：删除存档
 - `POST /api/v1/games/{id}/activities`：开始五知识点副本或十知识点主线
 - `POST /api/v1/games/{id}/answers`：只提交课卷 UUID、题目 UUID 与答案
+- `POST /api/v1/games/{id}/answers/reveal`、`/self-assess`：解答题显式揭示答案并自评掌握程度
 - `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
 - `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
+- `POST /api/v1/admin/global-question-banks/import`：按稳定 UUID 与全局知识点 code 幂等导入正式题目资源
 - `PUT /api/v1/admin/question-banks/{uuid}/metadata`：改名、改简介、启停与调整权重
 - `POST /api/v1/manage/auth/login`、`POST /logout`、`GET /me`：管理后台 Session
 - `/api/v1/manage/knowledge-points`：全服知识点分页、code/name/alias 搜索和审核者维护
 - `/api/v1/manage/questions`：独立题目草稿、知识点绑定、提交、审核和归档工作流
+- `POST /api/v1/manage/imports/question-bank`：管理员批量导入 `global-question-bank/v1` 文件
 - `/api/v1/manage/users`：管理员创建、禁用账号和分配角色
 
 `/bootstrap` 不传完整题库，只返回文集清单和 revision。浏览器把完整文集存入 IndexedDB，仅在 revision 变化时重新下载；历史答题记录在网络响应中只携带题目 UUID，前端用本地缓存补回 Markdown 展示数据。JSON 响应超过 1KB 时还会启用压缩。
@@ -100,3 +103,5 @@ MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 RE
 - `question_resource_knowledge` 保存题目与知识点的多对多关系及 core/auxiliary 角色。
 - `question_bank_item` 把文集定义为题目集合。旧 `knowledge_point/question_item` 表暂时作为现有游戏兼容层保留，不会在迁移中删除。
 - `app_user/app_user_role/content_audit_log` 支撑 CONTRIBUTOR、REVIEWER、ADMIN 和内容审计。
+
+全服批量导入先在内存中校验整批数据，再在单一事务中写入。它只接受 active 全局知识点的稳定 code，每题绑定 1–3 个知识点且至少一个 core；任一引用、答案或题型组合非法都会整批回滚。相同文集和题目 UUID 再次导入执行更新，适合由外部 AI 生成后反复修订。正式格式以 `docs/题库生成提示词.md` 和 `frontend/public/examples/题库示例.json` 为准。
