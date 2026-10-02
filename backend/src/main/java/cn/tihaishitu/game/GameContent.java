@@ -25,12 +25,16 @@ public class GameContent {
         activities = mapper.createArrayNode();
         resource("content/activities.json").forEach(item -> activities.add(normalizeActivity((ObjectNode) item)));
         resource("content/activities-v7.json").forEach(item -> activities.add(normalizeActivity((ObjectNode) item)));
+        resource("content/activities-v8.json").forEach(item -> activities.add(normalizeActivity((ObjectNode) item)));
         locations = (ArrayNode) resource("content/maps.json").path("locations");
         exams = (ArrayNode) resource("content/exams.json");
-        companions = (ArrayNode) resource("content/companions.json");
+        companions = mapper.createArrayNode();
+        resource("content/companions.json").forEach(companions::add);
+        resource("content/companions-v8.json").forEach(companions::add);
         items = mapper.createArrayNode();
         resource("content/items.json").forEach(items::add);
         resource("content/items-v7.json").forEach(items::add);
+        resource("content/items-v8.json").forEach(items::add);
         events = (ArrayNode) resource("content/events.json");
     }
 

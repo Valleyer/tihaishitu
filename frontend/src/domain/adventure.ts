@@ -9,6 +9,8 @@ export interface Requirements {
 }
 export interface WorldLocation {
   id: string;
+  /** 所属大地图；界面始终显示“大地图名 · 小地点名”。 */
+  regionId: string;
   name: string;
   description: string;
   background: string;
@@ -18,6 +20,14 @@ export interface WorldLocation {
   requirements: Requirements;
   npcs: string[];
   ambience: string;
+}
+export interface MapRegion {
+  id: string;
+  name: string;
+  description: string;
+  background: string;
+  position: string;
+  requirements: Requirements;
 }
 export interface Rewards {
   knowledge?: number;

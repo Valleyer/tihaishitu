@@ -1,16 +1,16 @@
 # 科举系统配置说明
 
-县试从 V6 起是一条独立的主线进阶。玩家先在世界中积累学识、声望、三门本领与报名银，再主动递帖；报名完成后才会出现正式答题。县试、乡试、会试、殿试以及以后标记为主线任务的核心答题，统一为十题且必须全部答对。没有全对只记录题目结果，不扣属性、银两或资格，玩家可以直接无限次重试。取中会改变身份、发放信物并开放新地图。
+县试从 V6 起是一条独立的主线进阶，V8 已用同一状态机接入临川府试。玩家先在世界中取得报名资格，再主动递帖；县试、府试、乡试、会试、殿试以及以后标记为主线任务的核心答题，统一为十个不同知识点且必须全部首答正确。没有全对只记录题目结果，不扣属性、银两或资格，玩家可以直接无限次重试。
 
 ## 一、相关文件
 
 | 文件 | 作用 |
 | --- | --- |
 | `frontend/src/content/exams.json` | 考试名称、报名地点、费用、资格、状态对白及关联活动 |
-| `frontend/src/content/activities.json` | 正试内容、满分奖励与后续主线剧情 |
+| `frontend/src/content/activities.json`、`activities-v8.json` | 县试、府试正试内容、满分奖励与后续主线剧情 |
 | `frontend/src/content/adventure.json` | 全局普通答题与主线答题的题数、过关线 |
-| `frontend/src/content/items.json` | 取中帖、簪花、府试投牒等功名物品 |
-| `frontend/src/content/maps.json` | 试院地点与取中后开放的府城驿路 |
+| `frontend/src/content/items.json`、`items-v8.json` | 取中帖、府试投牒等功名物品 |
+| `frontend/src/content/maps.json` | 多张大地图、试院地点与取中后开放区域 |
 | `frontend/src/domain/adventure.ts` | 考试配置和存档字段类型 |
 | `frontend/src/engine/AdventureEngine.ts` | 报名扣费、应试资格、揭榜和重考状态机 |
 
@@ -87,7 +87,7 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 "requirements": { "flags": ["county-exam-passed"] }
 ~~~
 
-这样取中前地图会显示前置要求，取中后可以直接前往。驿路上的 `prefecture-departure` 是当前的后续主线任务，完成后获得府试投牒。以后增加乡试、会试、殿试时，新建 exam 配置并把对应活动设为 `kind: "exam"` 或 `quest: "main"`，便会自动沿用十题全对规则。
+这样取中前地图会显示前置要求。驿路上的 `prefecture-departure` 是赴府主线，十个知识点全对后发放 `prefecture-road-opened`，地图便可切换到临川府。完成 `story-linchuan-arrival` 后可以报名 `prefecture-exam`。以后增加院试、乡试、会试、殿试时，新建 exam 配置并把对应活动设为 `kind: "exam"` 或 `quest: "main"`，便会自动沿用十题全对规则。
 
 ## 六、存档字段
 
@@ -95,7 +95,7 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 
 ~~~json
 {
-  "county-exam": {
+  "prefecture-exam": {
     "status": "registered",
     "attempts": 1,
     "best": 60,
@@ -112,4 +112,5 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 - 报名费应低于玩家通过数轮普通活动能稳定取得的银两，避免被迫重复刷同一活动。
 - 主线题数和过关线集中配置在 `adventure.json.answerRules.mainRounds` 与 `mainPassScore`。当前产品规则固定为 10 和 100。
 - 正试抽取玩家已启用的题库，仍只支持判断、单选和多选，选项每次出现都会随机排列。
-- 新增考试后，界面目前默认重点展示 `exams.json` 第一项；多场考试的状态机和存档已支持，未来制作府试时再增加考试列表选择界面。
+- 科举面板按 `exams.json` 生成阶段标签，并默认打开第一场尚未取中的考试；侧栏主线任务也会自动指向它。
+- Java 后端读取旧存档时会补齐新增考试记录和新增人物，保留原有关系、物品、成绩和作答历史。

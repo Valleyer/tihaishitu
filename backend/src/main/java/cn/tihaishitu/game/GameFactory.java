@@ -81,6 +81,39 @@ public class GameFactory {
         return game;
     }
 
+    /**
+     * 配置新增人物或科举后，旧存档在读取时原地补齐容器。
+     * 已有关系和考试成绩保持不变；这里只追加缺失项。
+     */
+    public ObjectNode hydrate(ObjectNode game) {
+        if (!game.path("npcs").isArray()) game.set("npcs", objectMapper.createArrayNode());
+        ArrayNode savedNpcs = (ArrayNode) game.path("npcs");
+        characters.forEach(character -> {
+            boolean exists = false;
+            for (JsonNode saved : savedNpcs)
+                if (saved.path("id").asText().equals(character.path("id").asText())) { exists = true; break; }
+            if (!exists) savedNpcs.add(character.deepCopy());
+        });
+        if (!game.path("adventure").isObject()) game.set("adventure", initialAdventure());
+        ObjectNode adventure = (ObjectNode) game.path("adventure");
+        if (!adventure.path("exams").isObject()) adventure.set("exams", objectMapper.createObjectNode());
+        ObjectNode records = (ObjectNode) adventure.path("exams");
+        exams.forEach(exam -> {
+            String id = exam.path("id").asText();
+            if (!records.path(id).isObject()) records.set(id, blankExamRecord());
+        });
+        return game;
+    }
+
+    private ObjectNode blankExamRecord() {
+        ObjectNode record = objectMapper.createObjectNode();
+        record.put("status", "unregistered");
+        record.put("attempts", 0);
+        record.put("best", 0);
+        record.put("lastScore", 0);
+        return record;
+    }
+
     private ObjectNode initialAdventure() {
         ObjectNode adventure = objectMapper.createObjectNode();
         String start = adventureDesign.path("startLocation").asText("old-school");
@@ -101,12 +134,7 @@ public class GameFactory {
         adventure.putNull("run");
         ObjectNode examRecords = objectMapper.createObjectNode();
         exams.forEach(exam -> {
-            ObjectNode record = objectMapper.createObjectNode();
-            record.put("status", "unregistered");
-            record.put("attempts", 0);
-            record.put("best", 0);
-            record.put("lastScore", 0);
-            examRecords.set(exam.path("id").asText(), record);
+            examRecords.set(exam.path("id").asText(), blankExamRecord());
         });
         adventure.set("exams", examRecords);
         return adventure;

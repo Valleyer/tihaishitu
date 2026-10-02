@@ -56,7 +56,7 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   study: "点灯读书",
   activity: "一段行程",
   bag: "随身珍藏",
-  exam: "青溪县试",
+  exam: "科举进度",
   new: "落笔入世",
   library: "藏书阁",
   saves: "人生存档",
@@ -66,7 +66,7 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   review: "疑难卷宗",
   stats: "修业簿",
   display: "游戏设置",
-  map: "青溪县地图",
+  map: "山河地图",
   story: "此间前情",
   event: "一念之间",
 };

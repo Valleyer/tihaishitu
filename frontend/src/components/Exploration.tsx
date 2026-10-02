@@ -325,7 +325,11 @@ export function ExamPanel({
   register: (id: string) => void;
   report: (message: string) => void;
 }) {
-  const exam = exams[0],
+  const [examId, setExamId] = useState(
+      exams.find((item) => game.adventure!.exams[item.id]?.status !== "passed")
+        ?.id || exams.at(-1)!.id,
+    ),
+    exam = exams.find((item) => item.id === examId) || exams[0],
     record = game.adventure!.exams[exam.id],
     issues = requirementIssues(game, exam.requirements),
     atExam = game.adventure!.locationId === exam.locationId,
@@ -344,9 +348,9 @@ export function ExamPanel({
   }[record.status];
   const action = () => {
     if (record.status === "passed") {
-      if (game.adventure!.locationId === "prefecture-road")
+      if (exam.id === "county-exam" && game.adventure!.locationId === "prefecture-road")
         inspect("prefecture-departure");
-      else travel("prefecture-road");
+      else travel(exam.id === "county-exam" ? "prefecture-road" : exam.locationId);
     } else if (record.status === "preparing") inspect(exam.activityId);
     else if (record.status === "registered") inspect(exam.activityId);
     else if (missing.length) {
@@ -357,9 +361,11 @@ export function ExamPanel({
   };
   const actionText =
     record.status === "passed"
-      ? game.adventure!.locationId === "prefecture-road"
+      ? exam.id === "county-exam" && game.adventure!.locationId === "prefecture-road"
         ? "展开府城新篇"
-        : "沿驿路赴府"
+        : exam.id === "county-exam"
+          ? "沿驿路赴府"
+          : "返回贡院前街"
       : record.status === "preparing"
         ? "再次入号，应试十题"
         : record.status === "registered"
@@ -371,6 +377,18 @@ export function ExamPanel({
               : "缴银递帖，正式报名";
   return (
     <div className="exam-panel">
+      <nav className="exam-tabs" aria-label="科举阶段">
+        {exams.map((item) => (
+          <button
+            key={item.id}
+            className={item.id === exam.id ? "active" : ""}
+            onClick={() => setExamId(item.id)}
+          >
+            {item.name}
+            <small>{game.adventure!.exams[item.id]?.status === "passed" ? "已取中" : "查看进度"}</small>
+          </button>
+        ))}
+      </nav>
       <header>
         <small>{exam.subtitle}</small>
         <h2>{exam.name}</h2>
@@ -760,7 +778,13 @@ export function WorldGoals({
   inspect: (id: string) => void;
   openExam: () => void;
 }) {
-  const exam = exams[0], record = game.adventure!.exams[exam.id];
+  const exam =
+      exams.find((item) => game.adventure!.exams[item.id]?.status !== "passed") ||
+      exams.at(-1)!,
+    record = game.adventure!.exams[exam.id],
+    allPassed = exams.every(
+      (item) => game.adventure!.exams[item.id]?.status === "passed",
+    );
   const target = activities
     .filter((a) => a.kind === "dungeon")
     .find((a) =>
@@ -777,15 +801,19 @@ export function WorldGoals({
   return (
     <section className="objective-panel framed">
       <div className="panel-label">
-        {record.status !== "passed" ? "主线任务" : "支线任务"}
-        <span>{record.status !== "passed" ? "科举" : "游历"}</span>
+        {!allPassed ? "主线任务" : "支线任务"}
+        <span>{!allPassed ? "科举" : "游历"}</span>
       </div>
-      {record.status !== "passed" ? (
+      {!allPassed ? (
         <>
-          <h2>{record.status === "unregistered" ? "报名青溪县试" : "入号应试"}</h2>
+          <h2>
+            {record.status === "unregistered"
+              ? "报名" + exam.name
+              : exam.name + "入号应试"}
+          </h2>
           <p>{exam.dialogues[record.status]}</p>
           <button className="main-quest-button" onClick={openExam}>
-            查看县试进度
+            查看{exam.name.replace("青溪", "").replace("临川", "")}进度
           </button>
         </>
       ) : target && treasure ? (

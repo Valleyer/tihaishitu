@@ -14,10 +14,19 @@ export function WorldMap({
   travel: (id: string) => void;
   study: () => void;
 }) {
-  const [selected, setSelected] = useState(game.adventure!.locationId);
-  const location =
-      mapDesign.locations.find((l) => l.id === selected) ||
+  const currentLocation =
+      mapDesign.locations.find((l) => l.id === game.adventure!.locationId) ||
       mapDesign.locations[0],
+    [regionId, setRegionId] = useState(currentLocation.regionId),
+    region =
+      mapDesign.regions.find((item) => item.id === regionId) ||
+      mapDesign.regions[0],
+    regionLocations = mapDesign.locations.filter(
+      (item) => item.regionId === region.id,
+    );
+  const [selected, setSelected] = useState(currentLocation.id);
+  const location =
+      regionLocations.find((l) => l.id === selected) || regionLocations[0],
     issues = requirementIssues(game, location.requirements),
     state = game.adventure!;
   return (
@@ -25,8 +34,36 @@ export function WorldMap({
       <p className="hint">
         山河可行，故人可访。点击地点查看风物；带着本领和信物，远处的门会逐一打开。
       </p>
-      <div className="county-map interactive-map">
-        {mapDesign.locations.map((loc) => (
+      <nav className="map-region-tabs" aria-label="大地图选择">
+        {mapDesign.regions.map((item) => {
+          const locked = requirementIssues(game, item.requirements).length > 0;
+          return (
+            <button
+              key={item.id}
+              className={item.id === region.id ? "active" : ""}
+              disabled={locked}
+              onClick={() => {
+                setRegionId(item.id);
+                setSelected(
+                  mapDesign.locations.find((loc) => loc.regionId === item.id)?.id ||
+                    selected,
+                );
+              }}
+            >
+              {item.name}{locked ? " · 待解锁" : ""}
+            </button>
+          );
+        })}
+      </nav>
+      <p className="map-region-description">{region.description}</p>
+      <div
+        className="county-map interactive-map"
+        style={{
+          backgroundImage: `linear-gradient(#233d2999, #182f2bcc), url(${region.background})`,
+          backgroundPosition: region.position,
+        }}
+      >
+        {regionLocations.map((loc) => (
           <button
             className={
               "map-location " +

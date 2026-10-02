@@ -5,8 +5,8 @@
 | 文件 | 用途 |
 | --- | --- |
 | frontend/public/art/academy.png | 首页与兼容场景背景 |
-| frontend/public/art/portraits/*.jpg | 六张独立人物头像：男女主角、陆承明、顾怀安、沈砚、林知微 |
-| frontend/public/art/locations/*.jpg | 七张独立地点背景与一张青溪县地图底图 |
+| frontend/public/art/portraits/*.jpg | 八张独立人物头像：男女主角与六位可互动人物；府城两张当前为待替换占位图 |
+| frontend/public/art/locations/*.jpg | 十二张独立地点背景与青溪、临川两张地图底图；府城六张当前为待替换占位图 |
 
 所有图片的文件名、当前尺寸、建议尺寸、完整生成提示词和替换路径，以 `docs/map-background-assets.md` 的统一资产总表为准。以后新增图片也必须先登记到该文件。
 

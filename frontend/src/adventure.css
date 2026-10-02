@@ -752,6 +752,31 @@
   height: 300px;
   min-height: 220px;
 }
+.map-region-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+.map-region-tabs button {
+  min-width: 110px;
+  border: 1px solid #9f9068;
+  background: #e8dfc7;
+  color: #53604d;
+  padding: 8px 14px;
+}
+.map-region-tabs button.active {
+  background: #244436;
+  color: #ead79e;
+  border-color: #bca365;
+}
+.map-region-tabs button:disabled {
+  opacity: 0.48;
+}
+.map-region-description {
+  margin: 0 0 10px;
+  color: #68765f;
+  font-size: 11px;
+}
 .map-destination {
   display: flex;
   gap: 20px;
@@ -797,6 +822,29 @@
 }
 
 /* 弹窗是浅色纸面，县试状态牌则是深色；两处分别保证正文对比度。 */
+.exam-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.exam-tabs button {
+  border: 1px solid #b0a27c;
+  background: #e7dfc9;
+  color: #5d624e;
+  padding: 10px 14px;
+  text-align: left;
+}
+.exam-tabs button.active {
+  border-color: #8d7138;
+  background: #294738;
+  color: #ead69c;
+}
+.exam-tabs small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.72;
+}
 .exam-status > div > small {
   color: #91a88e;
 }

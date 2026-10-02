@@ -28,14 +28,16 @@ public class GameActionService {
     private final QuestionAttemptStore attempts;
     private final CatalogService catalog;
     private final GameContent content;
+    private final GameFactory factory;
     private final ObjectMapper mapper;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts, CatalogService catalog,
-                             GameContent content, ObjectMapper mapper) {
+                             GameContent content, GameFactory factory, ObjectMapper mapper) {
         this.games = games;
         this.attempts = attempts;
         this.catalog = catalog;
         this.content = content;
+        this.factory = factory;
         this.mapper = mapper;
     }
 
@@ -470,7 +472,7 @@ public class GameActionService {
         return (ObjectNode) run;
     }
     private ObjectNode adventure(ObjectNode game) { return (ObjectNode) game.path("adventure"); }
-    private ObjectNode game(String id) { return games.findObject(id); }
+    private ObjectNode game(String id) { return factory.hydrate(games.findObject(id)); }
     private void persist(ObjectNode game) { games.save(game); }
     private void ensureNoActiveRun(ObjectNode game) { if (adventure(game).path("run").isObject()) throw bad("请先结束眼前的行程。"); }
     private ObjectNode npc(ObjectNode game, String id) {

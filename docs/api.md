@@ -2,7 +2,7 @@
 
 Java 17 + Spring Boot 后端已在 `backend` 目录开始实现，服务端口为 `12345`。统一接口在 `frontend/src/domain/types.ts` 的 `GameApi`，HTTP 路由映射在 `frontend/src/api/http.ts`。
 
-当前已实现启动数据、服务端题库目录和存档的创建、读取、删除接口；下表中的其余游戏行为接口是后续实现契约。后端启动与数据库配置见 `backend/README.md`。
+当前已实现启动数据、按修订下载并缓存文集、存档 CRUD 和下列游戏行为接口。普通用户题库改名、导入、修订与发布接口仍待管理员认证层完成。后端启动与数据库配置见 `backend/README.md`。
 
 ## 切换方式
 
@@ -27,14 +27,14 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /games | NewGame | Game |
 | GET | /games/{id} | 无 | Game |
 | DELETE | /games/{id} | 无 | 204 |
-| POST | /games/{id}/answers | {attemptId, answer} | Game |
+| GET | /question-banks | 无 | Bank[]（管理/诊断用途） |
+| GET | /question-banks/{uuid} | 无 | Bank，带 revision 与缓存响应头 |
+| POST | /games/{id}/answers | {attemptId, questionId, answer} | Game |
 | POST | /games/{id}/next | {attemptId, reviewOnly} | Game |
 | POST | /games/{id}/choices | {eventId, choiceId} | Game |
 | PUT | /games/{id}/notes | {questionId, note} | Game |
 | PUT | /games/{id}/configuration | {bankIds, weights} | Game |
 | POST | /games/{id}/chapter | {chapterId} | Game |
-| PUT | /question-banks/{id} | Bank | Bank |
-| DELETE | /question-banks/{id} | 无 | 204 |
 | GET | /games/{id}/export | 无 | JSON 字符串 |
 | POST | /games/import | {json: "备份全文"} | 新 Game |
 
@@ -102,8 +102,7 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 
 ## V2—V5 新增探索接口
 
-以下路径同样相对于 /api/v1，成功返回完整 Game。Game.adventure 的契约在 domain/adventure.ts；
-HTTP 实现必须返回已迁移的探索数据，UI 不负责猜测缺失字段。
+以下路径同样相对于 /api/v1，当前均已实现并返回 Game。Game.adventure 的契约在 domain/adventure.ts；后端读取旧存档时会补齐新增人物与考试记录。
 
 | 方法 | 路径 | 请求体 |
 | --- | --- | --- |
@@ -133,6 +132,6 @@ travel 校验地点属性条件，遇到满足前置的新故事时填写 advent
 
 报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程、报名资格和银两充足。只允许从 `unregistered` 进入 `registered`，扣费、状态与札记必须一次保存。
 
-开始 `kind=exam` 的活动前校验对应考试为 `registered`。最后一题判卷时，在同一事务内更新 attempts、lastScore、best 与状态；及格进入 `passed`，未及格进入 `preparing`。落榜备考活动达标后恢复 `registered`，不再次扣费。活动中途放下不改变考试状态。
+开始 `kind=exam` 的活动前校验对应考试为 `registered`。最后一题判卷时，在同一事务内更新 attempts、lastScore、best 与状态；100 分进入 `passed`，未满分仍保持 `registered`，不扣数值、不取消资格、不再次收费，可直接无限次重试。活动中途放下不改变考试状态。
 
 HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。`Game.adventure.exams` 与活动首次奖励记账一并返回，重复提交同一答题请求不得重复发取中帖或身份奖励。

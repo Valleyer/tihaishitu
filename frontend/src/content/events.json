@@ -356,5 +356,29 @@
     ],
     "speaker": "顾怀安",
     "npcId": "gu"
+  },
+  {
+    "id":"linchuan-rain","at":260,"title":"府城第一场雨","text":"南门客栈的瓦沟忽然漫水。裴照抱着一摞题签进门，看见你仍在核对投宿名册：‘府城比青溪大，但错一行名字，还是会让一个人无处落脚。’",
+    "options":[
+      {"id":"finish","text":"先把缺失的名字逐一补齐，再谈备考","hint":"裴照信任 +2，声望 +1","effects":{"trust":{"pei":2},"reputation":1}},
+      {"id":"share","text":"请同住举子一起核对，让每个人确认自己的记录","hint":"裴照好感 +2，学识 +3","effects":{"affinity":{"pei":2},"knowledge":3}}
+    ],
+    "speaker":"裴照","npcId":"pei"
+  },
+  {
+    "id":"wharf-supper","at":320,"title":"码头收工饭","text":"苏明绮把核完的账尺搁到一旁，请船工、抄手和你围坐吃面。席上没人谈大道理，只把今日少损了多少粮、早开了多少时辰说得清清楚楚。",
+    "options":[
+      {"id":"listen","text":"听船工讲纸上看不见的水路规矩","hint":"筹算 +2","effects":{"flags":["heard-river-workers"]}},
+      {"id":"record","text":"把每条经验写在账页背面，留给下一班抄手","hint":"苏明绮信任 +2，声望 +2","effects":{"trust":{"su":2},"reputation":2}}
+    ],
+    "speaker":"苏明绮","npcId":"su"
+  },
+  {
+    "id":"exam-lanterns","at":400,"title":"贡院熄灯前","text":"府试前夜，贡院外的灯一盏盏熄下。裴照没有再递新题，只问：‘十个知识点里，哪一个你仍说不清？知道它，比假装全会更接近取中。’",
+    "options":[
+      {"id":"name","text":"写下最没有把握的知识点，先做一道最简单的同类题","hint":"学识 +5，留下临考复盘","effects":{"knowledge":5,"flags":["prefecture-eve-review"]}},
+      {"id":"rest","text":"合卷休息，明日用清醒的头脑逐题作答","hint":"声望 +2，留下临考从容","effects":{"reputation":2,"flags":["prefecture-eve-rest"]}}
+    ],
+    "speaker":"裴照","npcId":"pei"
   }
 ]

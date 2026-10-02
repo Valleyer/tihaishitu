@@ -199,20 +199,21 @@ flags 可被 scenes.memories 使用，暂不支持任意脚本或动态表达式
 
 ### maps.json
 
-locations 每项包含 id、name、description、background、position、x、y。
+`regions` 配置大地图的 id、name、description、background、position 与 requirements；`locations` 每项包含 id、regionId、name、description、background、position、x、y。
 
 - name：统一使用“大地图名 · 小地点名”，例如 `青溪县 · 旧书塾`、`青溪县 · 东斋`。地图节点只显示点号后的短名；以后新增任何地点也必须沿用此格式。
+- regionId：引用 `regions` 中的大地图 id；地图弹窗只在当前大地图底图上显示属于它的小地点。
 - background：本地图片路径，/art/青溪.jpg 对应 frontend/public/art/青溪.jpg。
 - position：CSS 背景取景位置，例如 70% 50%。
 - x、y：地图点的百分比坐标，建议保持在 10–90，避免贴边。
-- 当前地图是地点进度展示，点击地图不会传送或跳章。
-- 当前七个地点各自使用 `public/art/locations/` 下的独立背景；图片文件名、建议尺寸与完整生成提示词统一登记在 `docs/map-background-assets.md`。
+- 点击大地图标签只切换查看区域；点击具体地点并确认后才调用移动 API。
+- 当前十二个地点各自使用 `public/art/locations/` 下的独立背景；图片文件名、建议尺寸与完整生成提示词统一登记在 `docs/map-background-assets.md`。
 
 ### portraits.json
 
-当前使用 `public/art/portraits/` 下的六张独立方形头像。每项包含 `src`、`label` 与 `position`；替换图片后通常保持文件名不变，只需在必要时调整 `position`。
+当前使用 `public/art/portraits/` 下的八张独立方形头像。每项包含 `src`、`label` 与 `position`；替换图片后通常保持文件名不变，只需在必要时调整 `position`。
 
-`playerMale`、`playerFemale` 是玩家默认键，请保留。NPC 头像键为 `lu`、`gu`、`shen`、`lin`，人物仍可重复引用已有键。所有图片的尺寸、路径、生成提示词和替换要求统一登记在 `docs/map-background-assets.md`。
+`playerMale`、`playerFemale` 是玩家默认键，请保留。NPC 头像键为 `lu`、`gu`、`shen`、`lin`、`pei`、`su`，人物仍可重复引用已有键。所有图片的尺寸、路径、生成提示词和替换要求统一登记在 `docs/map-background-assets.md`。
 
 ## 九、题库：三种题型与正确答案
 

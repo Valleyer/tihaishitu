@@ -38,5 +38,25 @@
     "trust": 0,
     "met": false,
     "portrait": "lin"
+  },
+  {
+    "id": "pei",
+    "name": "裴照",
+    "role": "临川府学 · 助教",
+    "description": "出题严谨，言语简洁。总能从一道错题里追到真正含混的知识点。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "pei"
+  },
+  {
+    "id": "su",
+    "name": "苏明绮",
+    "role": "临川书坊 · 东家",
+    "description": "熟悉书价、漕运和府城人情。笑意温和，核账时却从不放过一笔含混数目。",
+    "affinity": 0,
+    "trust": 0,
+    "met": false,
+    "portrait": "su"
   }
 ]

@@ -1,114 +1,20 @@
 {
+  "regions": [
+    {"id":"qingxi","name":"青溪县","description":"山溪入城，书院、县衙与试院沿河而立。这里是仕途起笔之处。","background":"/art/locations/qingxi-map.jpg","position":"50% 50%","requirements":{}},
+    {"id":"linchuan","name":"临川府","description":"水陆汇聚的府城。贡院、书院、文库与码头之间，藏着比县城更复杂的人情与规矩。","background":"/art/locations/linchuan-map.jpg","position":"50% 50%","requirements":{"flags":["prefecture-road-opened"]}}
+  ],
   "locations": [
-    {
-      "id": "old-school",
-      "name": "青溪县 · 旧书塾",
-      "description": "青溪城外旧塾，寒门求学的起点。",
-      "background": "/art/locations/old-school.jpg",
-      "position": "50% 50%",
-      "x": 15,
-      "y": 68,
-      "requirements": {},
-      "npcs": [
-        "lu"
-      ],
-      "ambience": "廊下灯火初上，旧塾的门半掩着。先生在屋里翻书，远处传来收摊的声音。"
-    },
-    {
-      "id": "east-hall",
-      "name": "青溪县 · 东斋",
-      "description": "同窗相识，书卷相传。",
-      "background": "/art/locations/east-hall.jpg",
-      "position": "50% 50%",
-      "x": 37,
-      "y": 51,
-      "requirements": {},
-      "npcs": [
-        "gu"
-      ],
-      "ambience": "顾怀安把两盏茶放在窗边。风吹过竹帘，案上压着一张新送来的欠条。"
-    },
-    {
-      "id": "library",
-      "name": "青溪县 · 藏书楼",
-      "description": "整理旧卷、积累学识的地方。",
-      "background": "/art/locations/library.jpg",
-      "position": "50% 50%",
-      "x": 58,
-      "y": 30,
-      "requirements": {
-        "attributes": {
-          "insight": 6
-        }
-      },
-      "npcs": [],
-      "ambience": "木梯通向暗处，书香混着陈年纸墨。楼上那方玉印，已许久没有人见过。"
-    },
-    {
-      "id": "county-office",
-      "name": "青溪县 · 县衙侧房",
-      "description": "无官身，只在侧房核对旧文书。",
-      "background": "/art/locations/county-office.jpg",
-      "position": "50% 50%",
-      "x": 78,
-      "y": 47,
-      "requirements": {
-        "attributes": {
-          "craft": 2
-        }
-      },
-      "npcs": [
-        "shen"
-      ],
-      "ambience": "账册摞得齐整，院外有船夫等着申辩。沈砚抬了抬眼，把笔搁在一旁。"
-    },
-    {
-      "id": "exam-street",
-      "name": "青溪县 · 试院前巷",
-      "description": "榜尚未开，先静心备考。",
-      "background": "/art/locations/exam-street.jpg",
-      "position": "50% 50%",
-      "x": 65,
-      "y": 73,
-      "requirements": {
-        "attributes": {
-          "eloquence": 2
-        }
-      },
-      "npcs": [
-        "lin"
-      ],
-      "ambience": "听雨阁里有人轻敲杯沿。帘后一声笑，林知微又猜中了别人写的谜。"
-    },
-    {
-      "id": "night-study",
-      "name": "青溪县 · 夜读斋",
-      "description": "长线修习与旧案重审。",
-      "background": "/art/locations/night-study.jpg",
-      "position": "50% 50%",
-      "x": 34,
-      "y": 23,
-      "requirements": {
-        "knowledge": 50
-      },
-      "npcs": [],
-      "ambience": "夜色深了，青溪仍有一处灯不灭。你可以在这里静读，也可以回去访友。"
-    },
-    {
-      "id": "prefecture-road",
-      "name": "青溪县 · 清溪驿路",
-      "description": "县试取中后开放，下一场功名在山路尽头。",
-      "background": "/art/locations/prefecture-road.jpg",
-      "position": "50% 50%",
-      "x": 89,
-      "y": 18,
-      "requirements": {
-        "flags": [
-          "county-exam-passed"
-        ]
-      },
-      "npcs": [],
-      "ambience": "驿铃沿山道渐远。青溪在身后缩成一片灯火，府城的轮廓尚在云外。"
-    }
+    {"id":"old-school","regionId":"qingxi","name":"青溪县 · 旧书塾","description":"青溪城外旧塾，寒门求学的起点。","background":"/art/locations/old-school.jpg","position":"50% 50%","x":15,"y":68,"requirements":{},"npcs":["lu"],"ambience":"廊下灯火初上，旧塾的门半掩着。先生在屋里翻书，远处传来收摊的声音。"},
+    {"id":"east-hall","regionId":"qingxi","name":"青溪县 · 东斋","description":"同窗相识，书卷相传。","background":"/art/locations/east-hall.jpg","position":"50% 50%","x":37,"y":51,"requirements":{},"npcs":["gu"],"ambience":"顾怀安把两盏茶放在窗边。风吹过竹帘，案上压着一张新送来的欠条。"},
+    {"id":"library","regionId":"qingxi","name":"青溪县 · 藏书楼","description":"整理旧卷、积累学识的地方。","background":"/art/locations/library.jpg","position":"50% 50%","x":58,"y":30,"requirements":{"attributes":{"insight":6}},"npcs":[],"ambience":"木梯通向暗处，书香混着陈年纸墨。楼上那方玉印，已许久没有人见过。"},
+    {"id":"county-office","regionId":"qingxi","name":"青溪县 · 县衙侧房","description":"无官身，只在侧房核对旧文书。","background":"/art/locations/county-office.jpg","position":"50% 50%","x":78,"y":47,"requirements":{"attributes":{"craft":2}},"npcs":["shen"],"ambience":"账册摞得齐整，院外有船夫等着申辩。沈砚抬了抬眼，把笔搁在一旁。"},
+    {"id":"exam-street","regionId":"qingxi","name":"青溪县 · 试院前巷","description":"榜尚未开，先静心备考。","background":"/art/locations/exam-street.jpg","position":"50% 50%","x":65,"y":73,"requirements":{"attributes":{"eloquence":2}},"npcs":["lin"],"ambience":"听雨阁里有人轻敲杯沿。帘后一声笑，林知微又猜中了别人写的谜。"},
+    {"id":"night-study","regionId":"qingxi","name":"青溪县 · 夜读斋","description":"长线修习与旧案重审。","background":"/art/locations/night-study.jpg","position":"50% 50%","x":34,"y":23,"requirements":{"knowledge":50},"npcs":[],"ambience":"夜色深了，青溪仍有一处灯不灭。你可以在这里静读，也可以回去访友。"},
+    {"id":"prefecture-road","regionId":"qingxi","name":"青溪县 · 清溪驿路","description":"县试取中后开放，下一场功名在山路尽头。","background":"/art/locations/prefecture-road.jpg","position":"50% 50%","x":89,"y":18,"requirements":{"flags":["county-exam-passed"]},"npcs":[],"ambience":"驿铃沿山道渐远。青溪在身后缩成一片灯火，府城的轮廓尚在云外。"},
+    {"id":"prefecture-inn","regionId":"linchuan","name":"临川府 · 南门客栈","description":"进城后的落脚处，来往举子与行商带来各路消息。","background":"/art/locations/prefecture-inn.jpg","position":"50% 50%","x":16,"y":70,"requirements":{"flags":["prefecture-road-opened"]},"npcs":["pei"],"ambience":"南门钟声刚落，客栈檐下挂满未干的油伞。各县举子围着炉火交换抄卷，也交换真假难辨的消息。"},
+    {"id":"prefecture-exam-street","regionId":"linchuan","name":"临川府 · 贡院前街","description":"府试报名与应试之地，十题全对方可取中。","background":"/art/locations/prefecture-exam-street.jpg","position":"50% 50%","x":52,"y":70,"requirements":{"flags":["prefecture-road-opened"]},"npcs":["pei"],"ambience":"高墙内号舍成列，街上却异常安静。书吏核验县试取中帖，铜锣声穿过长街。"},
+    {"id":"qinghui-academy","regionId":"linchuan","name":"临川府 · 清晖书院","description":"府学名师与各县才俊论学之所。","background":"/art/locations/qinghui-academy.jpg","position":"50% 50%","x":34,"y":30,"requirements":{"flags":["prefecture-road-opened"],"attributes":{"insight":8}},"npcs":["pei"],"ambience":"讲堂外立着一排旧碑，水榭中有人公开辩题。这里不问来处，只问一句话能否经得住追问。"},
+    {"id":"prefecture-wharf","regionId":"linchuan","name":"临川府 · 漕运码头","description":"货船、税册与民生在此交汇。","background":"/art/locations/prefecture-wharf.jpg","position":"50% 50%","x":79,"y":60,"requirements":{"flags":["prefecture-road-opened"],"attributes":{"craft":6}},"npcs":["su"],"ambience":"河面帆影相接，牙人高声报数。几只粮船的封条颜色不一，一场争执正从仓门蔓延到码头。"},
+    {"id":"prefecture-archive","regionId":"linchuan","name":"临川府 · 府衙文库","description":"旧案、河工与历年试牍皆收于此。","background":"/art/locations/prefecture-archive.jpg","position":"50% 50%","x":69,"y":25,"requirements":{"flags":["prefecture-road-opened","wharf-ledger-cleared"]},"npcs":["su"],"ambience":"高窗下堆着多年河工卷宗，值房灯火彻夜不灭。一张被水浸过的旧图，把码头疑案引向更深处。"}
   ]
 }

@@ -28,7 +28,7 @@ public class GameService {
     }
 
     public JsonNode find(String id) {
-        return store.find(id);
+        return factory.hydrate(store.findObject(id));
     }
 
     @Transactional
@@ -57,6 +57,7 @@ public class GameService {
             String now = java.time.Instant.now().toString();
             game.put("id", java.util.UUID.randomUUID().toString());
             game.put("createdAt", now); game.put("updatedAt", now); game.put("revision", 0);
+            factory.hydrate(game);
             store.insert(game);
             return game;
         } catch (com.fasterxml.jackson.core.JsonProcessingException | ClassCastException error) {

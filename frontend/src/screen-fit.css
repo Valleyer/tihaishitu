@@ -802,9 +802,8 @@ body,
 .county-map {
   height: 340px;
   position: relative;
-  background:
-    linear-gradient(#233d2999, #182f2bcc),
-    url("/art/locations/qingxi-map.jpg") center/cover;
+  background-size: cover;
+  background-repeat: no-repeat;
   border: 1px solid #8b9a71;
 }
 .map-location {
