@@ -201,6 +201,8 @@ export interface Bootstrap {
 }
 export interface AnswerInput {
   attemptId: string;
+  /** 只传 UUID；服务端从答题快照取标准答案，不接收题目 Markdown。 */
+  questionId?: string;
   answer: Answer;
   selfAssessment?: boolean;
 }

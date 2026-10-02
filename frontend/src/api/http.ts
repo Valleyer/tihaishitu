@@ -6,6 +6,7 @@
 import type {
   Bank,
   Bootstrap,
+  Game,
   GameApi,
   QuestionBankManifest,
 } from "../domain/types";
@@ -36,26 +37,42 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
+let cachedBanks: Bank[] = [];
+function hydrateGame(value: Game): Game {
+  const questions = new Map(
+    cachedBanks.flatMap((bank) => bank.questions).map((question) => [question.id, question]),
+  );
+  value.records = value.records.map((record) => {
+    const wire = record as typeof record & { questionId?: string };
+    if (wire.question) return wire;
+    const question = questions.get(wire.questionId || "");
+    if (!question) throw new Error("本地题库缓存缺少历史题目，请重新载入题库。");
+    return { ...wire, question };
+  });
+  return value;
+}
+const gameRequest = async (path: string, method = "GET", body?: unknown) =>
+  hydrateGame(await request<Game>(path, method, body));
 export const httpApi: GameApi = {
   registerExam: (id, examId) =>
-    request(gamePath(id) + "/exams/register", "POST", { examId }),
+    gameRequest(gamePath(id) + "/exams/register", "POST", { examId }),
   beginActivity: (id, activityId) =>
-    request(gamePath(id) + "/activities", "POST", { activityId }),
+    gameRequest(gamePath(id) + "/activities", "POST", { activityId }),
   finishActivity: (id, runId) =>
-    request(gamePath(id) + "/activities/finish", "POST", { runId }),
+    gameRequest(gamePath(id) + "/activities/finish", "POST", { runId }),
   abandonActivity: (id, runId) =>
-    request(gamePath(id) + "/activities/abandon", "POST", { runId }),
+    gameRequest(gamePath(id) + "/activities/abandon", "POST", { runId }),
   travel: (id, locationId) =>
-    request(gamePath(id) + "/travel", "POST", { locationId }),
+    gameRequest(gamePath(id) + "/travel", "POST", { locationId }),
   talk: (id, npcId, topicId) =>
-    request(gamePath(id) + "/talk", "POST", { npcId, topicId }),
-  dismissEncounter: (id) => request(gamePath(id) + "/encounter", "DELETE"),
+    gameRequest(gamePath(id) + "/talk", "POST", { npcId, topicId }),
+  dismissEncounter: (id) => gameRequest(gamePath(id) + "/encounter", "DELETE"),
   useItem: (id, itemId) =>
-    request(gamePath(id) + "/items/use", "POST", { itemId }),
+    gameRequest(gamePath(id) + "/items/use", "POST", { itemId }),
   buyItem: (id, itemId) =>
-    request(gamePath(id) + "/items/buy", "POST", { itemId }),
+    gameRequest(gamePath(id) + "/items/buy", "POST", { itemId }),
   claimBond: (id, npcId, milestone) =>
-    request(gamePath(id) + "/bonds", "POST", { npcId, milestone }),
+    gameRequest(gamePath(id) + "/bonds", "POST", { npcId, milestone }),
   bootstrap: async () => {
     const data = await request<
       Omit<Bootstrap, "banks"> & {
@@ -68,26 +85,27 @@ export const httpApi: GameApi = {
           request<Bank>("/question-banks/" + encodeURIComponent(id)),
         )
       : data.banks || [];
+    cachedBanks = banks;
     return { ...data, banks };
   },
-  createGame: (config) => request("/games", "POST", config),
-  getGame: (id) => request(gamePath(id)),
+  createGame: (config) => gameRequest("/games", "POST", config),
+  getGame: (id) => gameRequest(gamePath(id)),
   deleteGame: (id) => request(gamePath(id), "DELETE"),
-  answer: (id, input) => request(gamePath(id) + "/answers", "POST", input),
+  answer: (id, input) => gameRequest(gamePath(id) + "/answers", "POST", input),
   next: (id, attemptId, reviewOnly) =>
-    request(gamePath(id) + "/next", "POST", { attemptId, reviewOnly }),
+    gameRequest(gamePath(id) + "/next", "POST", { attemptId, reviewOnly }),
   choose: (id, eventId, choiceId) =>
-    request(gamePath(id) + "/choices", "POST", { eventId, choiceId }),
+    gameRequest(gamePath(id) + "/choices", "POST", { eventId, choiceId }),
   saveNote: (id, questionId, note) =>
-    request(gamePath(id) + "/notes", "PUT", { questionId, note }),
+    gameRequest(gamePath(id) + "/notes", "PUT", { questionId, note }),
   configure: (id, bankIds, weights) =>
-    request(gamePath(id) + "/configuration", "PUT", { bankIds, weights }),
+    gameRequest(gamePath(id) + "/configuration", "PUT", { bankIds, weights }),
   acknowledgeChapter: (id, chapterId) =>
-    request(gamePath(id) + "/chapter", "POST", { chapterId }),
+    gameRequest(gamePath(id) + "/chapter", "POST", { chapterId }),
   putBank: (bank) =>
     request("/question-banks/" + encodeURIComponent(bank.id), "PUT", bank),
   deleteBank: (id) =>
     request("/question-banks/" + encodeURIComponent(id), "DELETE"),
   exportSave: (id) => request(gamePath(id) + "/export"),
-  importSave: (json) => request("/games/import", "POST", { json }),
+  importSave: (json) => gameRequest("/games/import", "POST", { json }),
 };

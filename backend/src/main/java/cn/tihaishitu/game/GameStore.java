@@ -4,6 +4,7 @@ import cn.tihaishitu.common.ApiException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -45,6 +46,27 @@ public class GameStore {
         );
         if (values.isEmpty()) throw new ApiException(HttpStatus.NOT_FOUND, "没有找到这份存档。");
         return read(values.get(0));
+    }
+
+    public ObjectNode findObject(String id) {
+        return (ObjectNode) find(id);
+    }
+
+    public void save(ObjectNode game) {
+        game.put("updatedAt", Instant.now().toString());
+        game.put("revision", game.path("revision").asLong() + 1);
+        int changed = jdbc.update(
+                """
+                UPDATE game_save
+                   SET player_name = ?, player_title = ?, answer_total = ?, payload_json = ?,
+                       revision = ?, updated_at = ?
+                 WHERE id = ?
+                """,
+                game.path("player").path("name").asText(), game.path("player").path("title").asText(),
+                game.path("records").size(), json(game), game.path("revision").asLong(),
+                Timestamp.from(Instant.parse(game.path("updatedAt").asText())), game.path("id").asText()
+        );
+        if (changed == 0) throw new ApiException(HttpStatus.NOT_FOUND, "没有找到这份存档。");
     }
 
     public void delete(String id) {

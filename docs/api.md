@@ -57,7 +57,7 @@ API_PROXY_TARGET=http://localhost:12345
 
 pace 为 normal / slow；difficulty 为 gentle / standard。
 新建人生界面不再要求玩家选择文集或题量；客户端自动接入当前可用文集。`bankIds` 允许为空，因此没有可用文集时仍可进入世界，待题库接入后再参与答题活动。
-Bootstrap 为 `{saves, banks, questionCatalog, activeId, legacyNotice}`；saves 中每项为 `{id,name,title,total,updatedAt}`。
+服务端 Bootstrap 为 `{saves, bankManifest, questionCatalog, activeId, legacyNotice}`；saves 中每项为 `{id,name,title,total,updatedAt}`。`bankManifest` 只包含文集 UUID、名称、修订号和题目/知识点数量。HTTP 前端把它与 IndexedDB 缓存比较，仅在文集 revision 变化时请求 `/question-banks/{uuid}`；合并后再向界面提供原有的 `banks` 字段。
 
 `questionCatalog` 用于切换本地编辑题库与上线后的服务器统一题库：
 
@@ -65,17 +65,17 @@ Bootstrap 为 `{saves, banks, questionCatalog, activeId, legacyNotice}`；saves 
 {"source":"server","canEdit":false,"revision":"2026-10-01.3"}
 ~~~
 
-生产环境普通用户应返回 `source=server, canEdit=false`。前端仍可浏览文集、题目与知识点，但会隐藏导入、改名、删题等写操作。题库管理交给独立的后台管理权限；游戏客户端无需为每个用户保存一份题库。
+生产环境普通用户应返回 `source=server, canEdit=false`。前端仍可浏览文集、题目与知识点，但会隐藏导入、改名、删题等写操作。题库管理交给独立的后台管理权限；题目 Markdown、选项和解析按修订缓存在浏览器 IndexedDB 中，不随每次启动和答题重复传输。
 
 Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习状态、札记、批注、事件、当前课卷。时间统一用 ISO 字符串。
 
 ## 答题与随机选项
 
 ~~~json
-{"attemptId":"一次发卷的唯一编号","answer":["A","C"]}
+{"attemptId":"课卷 UUID","questionId":"题目 UUID","answer":["A","C"]}
 ~~~
 
-单选 answer 是原始键字符串，多选是原始键数组，判断是布尔值。屏幕字母由前端按照 options 的顺序生成，不能按显示字母重新解释提交值。
+单选 answer 是原始键字符串，多选是原始键数组，判断是布尔值。答题提交不回传题干、选项、Markdown 或解析，只传课卷 UUID、题目 UUID 和答案。屏幕字母由前端按照 options 的顺序生成，不能按显示字母重新解释提交值。
 
 题干、选项、题目解析与知识点解析均使用 Markdown + LaTeX；服务端只保存和返回原文，不返回预渲染 HTML。前端通过安全的 Markdown 与 KaTeX 组件渲染。
 

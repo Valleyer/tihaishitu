@@ -62,8 +62,15 @@ API_PROXY_TARGET=http://localhost:12345
 
 - `GET /api/v1/bootstrap`：返回存档摘要和服务端题库目录
 - `GET /api/v1/question-banks`：返回文集、题目、选项和细分知识点
+- `GET /api/v1/question-banks/{uuid}`：按文集 UUID 下载可长期缓存的题库正文
 - `POST /api/v1/games`：创建新存档
 - `GET /api/v1/games/{id}`：读取完整存档
 - `DELETE /api/v1/games/{id}`：删除存档
+- `POST /api/v1/games/{id}/activities`：开始五知识点副本或十知识点主线
+- `POST /api/v1/games/{id}/answers`：只提交课卷 UUID、题目 UUID 与答案
+- `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
+- 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
+
+`/bootstrap` 不传完整题库，只返回文集清单和 revision。浏览器把完整文集存入 IndexedDB，仅在 revision 变化时重新下载；历史答题记录在网络响应中只携带题目 UUID，前端用本地缓存补回 Markdown 展示数据。JSON 响应超过 1KB 时还会启用压缩。
 
 后续游戏行为、答题提交、知识点训练、题库导入与管理接口会继续沿用同一分层和 `/api/v1` 版本前缀。MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 REST API；需要 AI 管理题库时可以在此服务之上增加 MCP 适配层。

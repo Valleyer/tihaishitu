@@ -503,6 +503,7 @@ function App() {
                             setGame(
                               await api.answer(game.id, {
                                 attemptId: attempt.id,
+                                questionId: attempt.question.id,
                                 answer,
                               }),
                             );

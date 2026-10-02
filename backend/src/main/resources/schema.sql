@@ -84,3 +84,33 @@ CREATE TABLE IF NOT EXISTS game_save (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_game_updated (updated_at)
 );
+
+CREATE TABLE IF NOT EXISTS study_attempt (
+    id CHAR(36) PRIMARY KEY,
+    game_id CHAR(36) NOT NULL,
+    question_id CHAR(36) NOT NULL,
+    question_snapshot_json LONGTEXT NOT NULL,
+    standard_answer_json LONGTEXT NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    answered_at TIMESTAMP NULL,
+    INDEX idx_attempt_game (game_id, created_at),
+    CONSTRAINT fk_attempt_game FOREIGN KEY (game_id)
+        REFERENCES game_save(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS answer_record (
+    id CHAR(36) PRIMARY KEY,
+    game_id CHAR(36) NOT NULL,
+    attempt_id CHAR(36) NOT NULL,
+    question_id CHAR(36) NOT NULL,
+    submitted_answer_json LONGTEXT NOT NULL,
+    correct BOOLEAN NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_answer_attempt (attempt_id),
+    INDEX idx_answer_game_question (game_id, question_id),
+    CONSTRAINT fk_answer_game FOREIGN KEY (game_id)
+        REFERENCES game_save(id) ON DELETE CASCADE,
+    CONSTRAINT fk_answer_attempt FOREIGN KEY (attempt_id)
+        REFERENCES study_attempt(id) ON DELETE CASCADE
+);
