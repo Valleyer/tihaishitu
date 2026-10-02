@@ -51,7 +51,7 @@ API_PROXY_TARGET=http://localhost:12345
 
 ## 全服管理后台 API
 
-`/api/v1/manage/*` 是浏览器用户后台，与机器级 `/admin/*` 严格分开。后台使用服务端 Session；前端先请求 `GET /manage/auth/csrf`，修改请求携带返回的 CSRF header，且始终使用 `credentials: include`。
+`/api/v1/manage/*` 是浏览器用户后台，与机器级 `/admin/*` 严格分开。后台使用服务端 Session；前端先请求 `GET /manage/auth/csrf`，修改请求携带返回的 CSRF header，且始终使用 `credentials: include`。后端会在每次管理请求时复核账号状态；账号被停用后，已有 Session 的下一次请求返回 401 并被注销。
 
 | 方法 | 路径 | 权限 | 用途 |
 | --- | --- | --- | --- |
