@@ -28,7 +28,16 @@ $env:DB_PASSWORD = "你的本地密码"
 $env:APP_ADMIN_KEY = "至少 24 位随机题库管理密钥"
 ```
 
-在 IDEA 中可把这些变量填入 Spring Boot 运行配置的 Environment variables。首次启动会执行 `src/main/resources/schema.sql`，并将前端内置题库同步为服务端初始题库。
+在 IDEA 中可把这些变量填入 Spring Boot 运行配置的 Environment variables。数据库结构由 `src/main/resources/db/migration` 下的 Flyway 版本脚本维护；已有非空数据库会从版本 0 建立基线后按顺序迁移，不删除旧题库和存档。首次启动还会幂等导入正式数学一知识点源。
+
+管理后台首个管理员只在数据库尚无有效 ADMIN，且以下两个变量同时存在时创建：
+
+```powershell
+$env:APP_INITIAL_ADMIN_USERNAME = "你的管理员用户名"
+$env:APP_INITIAL_ADMIN_PASSWORD = "足够长的随机密码"
+```
+
+密码只以 BCrypt 哈希入库。浏览器管理后台位于 `/manage`，使用服务端 Session、HttpOnly Cookie 和 CSRF 防护；`APP_ADMIN_KEY` 仍只供脚本、Codex、初始化导入和后续 MCP 使用，不用于浏览器登录。
 
 ## 启动和验证
 
@@ -72,9 +81,22 @@ API_PROXY_TARGET=http://localhost:12345
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
 - `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
 - `PUT /api/v1/admin/question-banks/{uuid}/metadata`：改名、改简介、启停与调整权重
+- `POST /api/v1/manage/auth/login`、`POST /logout`、`GET /me`：管理后台 Session
+- `/api/v1/manage/knowledge-points`：全服知识点分页、code/name/alias 搜索和审核者维护
+- `/api/v1/manage/questions`：独立题目草稿、知识点绑定、提交、审核和归档工作流
+- `/api/v1/manage/users`：管理员创建、禁用账号和分配角色
 
 `/bootstrap` 不传完整题库，只返回文集清单和 revision。浏览器把完整文集存入 IndexedDB，仅在 revision 变化时重新下载；历史答题记录在网络响应中只携带题目 UUID，前端用本地缓存补回 Markdown 展示数据。JSON 响应超过 1KB 时还会启用压缩。
 
 题库管理写接口仅在配置 `APP_ADMIN_KEY` 后启用，请求必须携带 `X-Admin-Key`。留空时接口返回 404，避免误把本地开发管理能力暴露给普通玩家。导入会完整校验 UUID、知识点引用、题型、选项和答案，并在事务中替换单部文集、递增 revision；浏览器下一次启动会只重新下载这部发生变化的文集。管理密钥只放服务端环境变量，不写入仓库或普通游戏前端。
 
 MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 REST API；需要 AI 自动管理题库时可以在这组受保护 REST 服务之上增加 MCP 适配层。
+
+## 全服内容模型
+
+- `global_knowledge_point` 使用 UUID 主键和唯一稳定 `code`；`M1-H06-035` 不因改名、排序或迁移变化。
+- `knowledge_alias` 独立存储可搜索别名。正式 Math1 源为 469 条：高等数学 198、线性代数 136、概率论与数理统计 135。
+- `question_resource` 保存独立原题，分别记录 `question_type`、`presentation_type`、`grading_mode`。
+- `question_resource_knowledge` 保存题目与知识点的多对多关系及 core/auxiliary 角色。
+- `question_bank_item` 把文集定义为题目集合。旧 `knowledge_point/question_item` 表暂时作为现有游戏兼容层保留，不会在迁移中删除。
+- `app_user/app_user_role/content_audit_log` 支撑 CONTRIBUTOR、REVIEWER、ADMIN 和内容审计。

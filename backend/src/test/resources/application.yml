@@ -6,7 +6,13 @@ spring:
     driver-class-name: org.h2.Driver
   sql:
     init:
-      mode: always
+      mode: never
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
+    validate-on-migrate: true
 
 app:
   catalog:

@@ -6,9 +6,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
 
@@ -33,6 +36,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({ConstraintViolationException.class, HttpMessageNotReadableException.class})
     ResponseEntity<ApiError> invalidRequest(Exception error) {
         return ResponseEntity.badRequest().body(ApiError.of("请求格式不正确。"));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ApiError> authentication(AuthenticationException error) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiError.of("用户名或密码错误。"));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiError> accessDenied(AccessDeniedException error) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiError.of("当前账号没有此操作权限。"));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    ResponseEntity<ApiError> status(ResponseStatusException error) {
+        return ResponseEntity.status(error.getStatusCode())
+                .body(ApiError.of(error.getReason() == null ? "请求无法处理。" : error.getReason()));
     }
 
     @ExceptionHandler(Exception.class)

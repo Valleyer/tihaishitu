@@ -46,6 +46,27 @@ API_PROXY_TARGET=http://localhost:12345
 
 导入同一文集 UUID 会原子替换该文集内容并递增 revision；其他文集不重写。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
 
+## 全服管理后台 API
+
+`/api/v1/manage/*` 是浏览器用户后台，与机器级 `/admin/*` 严格分开。后台使用服务端 Session；前端先请求 `GET /manage/auth/csrf`，修改请求携带返回的 CSRF header，且始终使用 `credentials: include`。
+
+| 方法 | 路径 | 权限 | 用途 |
+| --- | --- | --- | --- |
+| POST | /manage/auth/login | 公开 + CSRF | 建立管理 Session |
+| POST | /manage/auth/logout | 已登录 | 注销 Session |
+| GET | /manage/auth/me | 已登录 | 当前账号与服务端角色 |
+| GET | /manage/knowledge-points | CONTRIBUTOR+ | 分页并按 code/name/alias/分科/章节/状态搜索 |
+| GET | /manage/knowledge-points/{id} | CONTRIBUTOR+ | 知识点详情 |
+| PUT | /manage/knowledge-points/{id} | REVIEWER/ADMIN | 改名、说明、alias、角色、deprecated/合并指向；code 不可由普通表单修改 |
+| GET/POST | /manage/questions | CONTRIBUTOR+ | 查询题目或创建自己的 draft |
+| GET/PUT | /manage/questions/{id} | 按资源权限 | 详情与带 expectedRevision 的编辑 |
+| POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
+| POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
+| POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
+| GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
+
+知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
+
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。
 

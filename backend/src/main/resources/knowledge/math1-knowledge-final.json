@@ -1,0 +1,4790 @@
+{
+  "metadata": {
+    "title": "数学一知识点库 Final",
+    "version": "Final-2026-10",
+    "scope_basis": "以2026考研数学一大纲为范围边界，并用1987—2026共40届数学一真题反向校准知识点粒度。",
+    "granularity_rule": "一个知识点尽量对应一类稳定题型或一种稳定解题方法；一道题允许绑定多个知识点。",
+    "total_knowledge_points": 469,
+    "counts": {
+      "高等数学": 198,
+      "线性代数": 136,
+      "概率论与数理统计": 135
+    },
+    "chapter_counts": {
+      "H01": 22,
+      "H02": 31,
+      "H03": 27,
+      "H04": 15,
+      "H05": 22,
+      "H06": 44,
+      "H07": 21,
+      "H08": 16,
+      "L01": 12,
+      "L02": 28,
+      "L03": 27,
+      "L04": 18,
+      "L05": 32,
+      "L06": 19,
+      "P01": 18,
+      "P02": 24,
+      "P03": 21,
+      "P04": 19,
+      "P05": 8,
+      "P06": 15,
+      "P07": 18,
+      "P08": 12
+    }
+  },
+  "knowledge_points": [
+    {
+      "id": "M1-H01-001",
+      "name": "函数定义域",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-002",
+      "name": "复合函数与反函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-003",
+      "name": "函数奇偶性、周期性与单调性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-004",
+      "name": "函数有界性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-005",
+      "name": "数列极限计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-006",
+      "name": "函数极限计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-007",
+      "name": "左右极限与极限存在性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-008",
+      "name": "无穷小与无穷大量",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-009",
+      "name": "无穷小阶的比较",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-010",
+      "name": "等价无穷小替换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-011",
+      "name": "两个重要极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-012",
+      "name": "夹逼准则求极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-013",
+      "name": "单调有界准则求数列极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-014",
+      "name": "洛必达法则求极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-015",
+      "name": "泰勒展开求极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-016",
+      "name": "变限积分型极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-017",
+      "name": "递推数列极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-018",
+      "name": "函数连续性判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-019",
+      "name": "分段函数连续参数确定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-020",
+      "name": "间断点类型判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-021",
+      "name": "闭区间连续函数性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H01-022",
+      "name": "零点存在定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "函数、极限与连续",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-001",
+      "name": "导数定义求导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-002",
+      "name": "导数定义判断可导性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-003",
+      "name": "导数与连续的关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-004",
+      "name": "复合函数求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-005",
+      "name": "隐函数求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-006",
+      "name": "参数方程一阶导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-007",
+      "name": "参数方程二阶导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-008",
+      "name": "反函数求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-009",
+      "name": "高阶导数计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-010",
+      "name": "莱布尼茨公式求高阶导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-011",
+      "name": "微分计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-012",
+      "name": "切线与法线方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-013",
+      "name": "导数判断函数单调性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-014",
+      "name": "函数极值判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-015",
+      "name": "函数最值计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-016",
+      "name": "函数凹凸性判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-017",
+      "name": "拐点判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-018",
+      "name": "渐近线求解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-019",
+      "name": "曲率与曲率半径",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-020",
+      "name": "罗尔定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-021",
+      "name": "拉格朗日中值定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-022",
+      "name": "柯西中值定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-023",
+      "name": "泰勒中值定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-024",
+      "name": "辅助函数构造法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-025",
+      "name": "中值定理证明等式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-026",
+      "name": "中值定理证明不等式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-027",
+      "name": "中值定理证明零点存在性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-028",
+      "name": "零点个数与唯一性证明",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-029",
+      "name": "导数证明函数不等式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-030",
+      "name": "导函数零点与原函数性态",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H02-031",
+      "name": "函数与导函数图像关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-001",
+      "name": "基本积分法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-002",
+      "name": "第一类换元积分法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-003",
+      "name": "第二类换元积分法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-004",
+      "name": "分部积分法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-005",
+      "name": "有理函数积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-006",
+      "name": "三角函数积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-007",
+      "name": "根式积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-008",
+      "name": "定积分基本性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-009",
+      "name": "定积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-010",
+      "name": "定积分周期性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-011",
+      "name": "定积分换元法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-012",
+      "name": "定积分分部积分法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-013",
+      "name": "牛顿—莱布尼茨公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-014",
+      "name": "积分中值定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-015",
+      "name": "变限积分函数求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-016",
+      "name": "变限积分函数性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-017",
+      "name": "变限积分综合极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-018",
+      "name": "无穷区间反常积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-019",
+      "name": "无界函数反常积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-020",
+      "name": "反常积分敛散性判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-021",
+      "name": "反常积分比较判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-022",
+      "name": "定积分求平面图形面积",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-023",
+      "name": "定积分求旋转体体积",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-024",
+      "name": "定积分求平行截面体体积",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-025",
+      "name": "定积分求平面曲线弧长",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-026",
+      "name": "定积分求旋转曲面面积",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H03-027",
+      "name": "定积分物理应用",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "一元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-001",
+      "name": "向量基本运算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-002",
+      "name": "方向角与方向余弦",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-003",
+      "name": "数量积及其几何应用",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-004",
+      "name": "向量积及其几何应用",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-005",
+      "name": "向量平行与垂直判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-006",
+      "name": "平面方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-007",
+      "name": "空间直线方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-008",
+      "name": "直线、平面位置关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-009",
+      "name": "空间夹角计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-010",
+      "name": "点到平面距离",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-011",
+      "name": "柱面识别",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-012",
+      "name": "旋转曲面方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-013",
+      "name": "二次曲面识别",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-014",
+      "name": "空间曲线参数方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H04-015",
+      "name": "空间曲线投影方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "向量代数与空间解析几何",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-001",
+      "name": "二元函数定义域",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-002",
+      "name": "二元函数极限",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-003",
+      "name": "二元函数连续性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-004",
+      "name": "一阶偏导数计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-005",
+      "name": "高阶偏导数与混合偏导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-006",
+      "name": "全微分计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-007",
+      "name": "多元函数可微性判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-008",
+      "name": "连续、可偏导、可微关系判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-009",
+      "name": "多元复合函数链式求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-010",
+      "name": "抽象复合函数偏导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-011",
+      "name": "一元隐函数求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-012",
+      "name": "二元隐函数偏导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-013",
+      "name": "隐函数组求导",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-014",
+      "name": "方向导数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-015",
+      "name": "梯度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-016",
+      "name": "最大方向导数与梯度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-017",
+      "name": "空间曲线切线与法平面",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-018",
+      "name": "曲面切平面与法线",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-019",
+      "name": "二元函数无条件极值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-020",
+      "name": "二元函数极值充分条件",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-021",
+      "name": "拉格朗日乘数法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H05-022",
+      "name": "闭区域多元函数最值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数微分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-001",
+      "name": "二重积分直角坐标法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-002",
+      "name": "二重积分极坐标法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-003",
+      "name": "二重积分积分区域确定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-004",
+      "name": "二重积分交换积分次序",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-005",
+      "name": "二重积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-006",
+      "name": "二重积分分区域计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-007",
+      "name": "二重积分中值定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-008",
+      "name": "三重积分直角坐标法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-009",
+      "name": "三重积分柱面坐标法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-010",
+      "name": "三重积分球面坐标法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-011",
+      "name": "三重积分积分区域确定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-012",
+      "name": "三重积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-013",
+      "name": "第一类曲线积分参数化法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-014",
+      "name": "第一类曲线积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-015",
+      "name": "第二类曲线积分参数化法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-016",
+      "name": "第二类曲线积分方向判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-017",
+      "name": "两类曲线积分相互转化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-018",
+      "name": "普通格林公式",
+      "aliases": [
+        "Green公式",
+        "格林公式"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-019",
+      "name": "格林公式补线法",
+      "aliases": [
+        "补线格林",
+        "补区域格林",
+        "闭合曲线法"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-020",
+      "name": "有瑕点的格林公式",
+      "aliases": [
+        "有奇点的格林公式",
+        "挖洞格林",
+        "去奇点格林"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-021",
+      "name": "第二类曲线积分路径无关判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-022",
+      "name": "利用路径无关换路",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-023",
+      "name": "利用路径无关求原函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-024",
+      "name": "全微分型曲线积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-025",
+      "name": "第一类曲面积分直接投影法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-026",
+      "name": "第一类曲面积分参数化法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-027",
+      "name": "第一类曲面积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-028",
+      "name": "第二类曲面积分方向判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-029",
+      "name": "第二类曲面积分直接投影法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-030",
+      "name": "三合一投影法",
+      "aliases": [
+        "第二类曲面积分三合一投影法"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-031",
+      "name": "第二类曲面积分对称性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-032",
+      "name": "两类曲面积分相互转化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-033",
+      "name": "普通高斯公式",
+      "aliases": [
+        "Gauss公式",
+        "高斯公式"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-034",
+      "name": "高斯公式补面法",
+      "aliases": [
+        "补面高斯"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-035",
+      "name": "有瑕点的高斯公式",
+      "aliases": [
+        "有奇点的高斯公式",
+        "挖洞高斯",
+        "挖球法",
+        "去奇点高斯"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-036",
+      "name": "第一类斯托克斯公式",
+      "aliases": [
+        "第一类Stokes公式"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-037",
+      "name": "第二类斯托克斯公式",
+      "aliases": [
+        "第二类Stokes公式"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-038",
+      "name": "斯托克斯公式换面法",
+      "aliases": [
+        "Stokes换面法"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-039",
+      "name": "斯托克斯公式方向判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-040",
+      "name": "散度计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-041",
+      "name": "旋度计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-042",
+      "name": "第二类曲线积分求功",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-043",
+      "name": "第一类曲线积分求质量与质心",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H06-044",
+      "name": "三重积分求质量与质心",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "多元函数积分学",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-001",
+      "name": "级数收敛必要条件",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-002",
+      "name": "正项级数比较判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-003",
+      "name": "正项级数极限比较判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-004",
+      "name": "正项级数比值判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-005",
+      "name": "正项级数根值判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-006",
+      "name": "正项级数积分判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-007",
+      "name": "交错级数莱布尼茨判别法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-008",
+      "name": "绝对收敛与条件收敛",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-009",
+      "name": "一般项级数敛散性判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-010",
+      "name": "幂级数收敛半径",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-011",
+      "name": "幂级数收敛区间与端点敛散性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-012",
+      "name": "幂级数逐项求导与逐项积分",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-013",
+      "name": "幂级数求和函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-014",
+      "name": "由和函数反求级数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-015",
+      "name": "函数直接展开为幂级数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-016",
+      "name": "利用已知展开式间接展开",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-017",
+      "name": "Fourier系数计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-018",
+      "name": "Fourier级数展开",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-019",
+      "name": "正弦级数与余弦级数展开",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-020",
+      "name": "狄利克雷收敛定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H07-021",
+      "name": "Fourier级数收敛值判断",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "无穷级数",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-001",
+      "name": "可分离变量微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-002",
+      "name": "齐次微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-003",
+      "name": "一阶线性微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-004",
+      "name": "伯努利微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-005",
+      "name": "变量代换解微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-006",
+      "name": "一阶微分方程初值问题",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-007",
+      "name": "缺失因变量的降阶方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-008",
+      "name": "缺失自变量的降阶方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-009",
+      "name": "常系数齐次线性微分方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-010",
+      "name": "常系数非齐次微分方程待定系数法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-011",
+      "name": "非齐次特解形式判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-012",
+      "name": "非齐次特解共振处理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-013",
+      "name": "欧拉方程",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-014",
+      "name": "微分方程反求未知函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-015",
+      "name": "微分方程应用题",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-H08-016",
+      "name": "非齐次线性微分方程解的结构",
+      "aliases": [
+        "非齐次方程解结构"
+      ],
+      "subject": "数学一",
+      "section": "高等数学",
+      "chapter": "常微分方程",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-001",
+      "name": "行列式直接计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-002",
+      "name": "行列式性质与初等变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-003",
+      "name": "按行列展开行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-004",
+      "name": "余子式与代数余子式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-005",
+      "name": "代数余子式求和",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-006",
+      "name": "三角形行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-007",
+      "name": "分块行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-008",
+      "name": "范德蒙德行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-009",
+      "name": "递推型行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-010",
+      "name": "特殊结构行列式计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-011",
+      "name": "矩阵乘积的行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L01-012",
+      "name": "利用行列式判断矩阵可逆",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "行列式",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-001",
+      "name": "矩阵基本运算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-002",
+      "name": "矩阵乘法及不可交换性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-003",
+      "name": "矩阵幂计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-004",
+      "name": "矩阵多项式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-005",
+      "name": "矩阵转置运算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-006",
+      "name": "对称矩阵与反对称矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-007",
+      "name": "矩阵可逆判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-008",
+      "name": "伴随矩阵法求逆",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-009",
+      "name": "初等变换法求逆",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-010",
+      "name": "分块矩阵求逆",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-011",
+      "name": "逆矩阵性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-012",
+      "name": "伴随矩阵基本性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-013",
+      "name": "伴随矩阵与原矩阵关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-014",
+      "name": "伴随矩阵的秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-015",
+      "name": "矩阵初等变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-016",
+      "name": "初等矩阵左乘与行变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-017",
+      "name": "初等矩阵右乘与列变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-018",
+      "name": "初等矩阵求逆",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-019",
+      "name": "初等变换求矩阵秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-020",
+      "name": "含参数矩阵的秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-021",
+      "name": "非零子式与矩阵秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-022",
+      "name": "矩阵乘积的秩关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-023",
+      "name": "矩阵和的秩关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-024",
+      "name": "AB=0的秩关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-025",
+      "name": "可逆矩阵乘法不改变秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-026",
+      "name": "矩阵等价与秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-027",
+      "name": "矩阵标准形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L02-028",
+      "name": "分块矩阵运算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "矩阵",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-001",
+      "name": "向量线性组合",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-002",
+      "name": "向量由向量组线性表示",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-003",
+      "name": "向量不能由向量组线性表示",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-004",
+      "name": "向量组线性相关判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-005",
+      "name": "向量组线性无关判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-006",
+      "name": "部分相关与整体相关关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-007",
+      "name": "向量个数与维数判定线性相关",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-008",
+      "name": "齐次方程组判定向量组线性相关",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-009",
+      "name": "求极大线性无关组",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-010",
+      "name": "利用极大无关组表示原向量组",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-011",
+      "name": "极大无关组与向量组秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-012",
+      "name": "求向量组的秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-013",
+      "name": "向量组秩与矩阵秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-014",
+      "name": "增减向量对向量组秩的影响",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-015",
+      "name": "向量组等价判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-016",
+      "name": "向量组等价与秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-017",
+      "name": "两组向量相互表示与秩关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-018",
+      "name": "向量空间及子空间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-019",
+      "name": "向量空间的基与维数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-020",
+      "name": "向量在一组基下的坐标",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-021",
+      "name": "基变换与过渡矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-022",
+      "name": "不同基下的坐标变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-023",
+      "name": "向量内积与正交",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-024",
+      "name": "正交向量组的性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-025",
+      "name": "施密特正交化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-026",
+      "name": "单位化与标准正交基",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L03-027",
+      "name": "正交矩阵及其性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "向量与向量空间",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-001",
+      "name": "克拉默法则",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-002",
+      "name": "齐次线性方程组非零解判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-003",
+      "name": "非齐次线性方程组解的秩判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-004",
+      "name": "齐次线性方程组基础解系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-005",
+      "name": "齐次线性方程组通解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-006",
+      "name": "齐次方程组解空间维数n-r(A)",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-007",
+      "name": "非齐次线性方程组特解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-008",
+      "name": "非齐次线性方程组通解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-009",
+      "name": "非齐次解与对应齐次解的关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-010",
+      "name": "已知若干解构造其他解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-011",
+      "name": "含参数方程组有解条件",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-012",
+      "name": "含参数方程组解的个数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-013",
+      "name": "含参数方程组求通解",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-014",
+      "name": "方程组有解与向量线性表示",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-015",
+      "name": "齐次方程组与向量组线性相关",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-016",
+      "name": "方程组与矩阵秩综合",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-017",
+      "name": "矩阵方程求解",
+      "aliases": [
+        "AX=B",
+        "XA=B",
+        "AC-CA=B",
+        "矩阵未知量方程"
+      ],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L04-018",
+      "name": "矩阵方程有解的秩条件",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "线性方程组",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-001",
+      "name": "特征方程与特征多项式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-002",
+      "name": "求矩阵特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-003",
+      "name": "含参数矩阵的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-004",
+      "name": "求特征向量",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-005",
+      "name": "求特征子空间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-006",
+      "name": "不同特征值对应特征向量线性无关",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-007",
+      "name": "重特征值的特征向量",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-008",
+      "name": "特征值之和与矩阵迹",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-009",
+      "name": "特征值之积与矩阵行列式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-010",
+      "name": "特征值与矩阵可逆性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-011",
+      "name": "特征值与矩阵秩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-012",
+      "name": "kA与A+kE的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-013",
+      "name": "A^n的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-014",
+      "name": "A^{-1}的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-015",
+      "name": "矩阵多项式f(A)的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-016",
+      "name": "伴随矩阵的特征值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-017",
+      "name": "矩阵相似判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-018",
+      "name": "相似矩阵的性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-019",
+      "name": "矩阵可相似对角化判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-020",
+      "name": "重特征值下可对角化判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-021",
+      "name": "求相似变换矩阵P",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-022",
+      "name": "相似对角化求矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-023",
+      "name": "利用相似关系求矩阵幂",
+      "aliases": [
+        "相似对角化求矩阵幂",
+        "矩阵递推"
+      ],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-024",
+      "name": "实对称矩阵特征值与特征向量性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-025",
+      "name": "实对称矩阵正交对角化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-026",
+      "name": "构造正交变换矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-027",
+      "name": "已知特征值反求矩阵参数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-028",
+      "name": "已知特征向量反求矩阵参数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-029",
+      "name": "特征值与矩阵方程综合",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-030",
+      "name": "由特征值和特征向量重构实对称矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-031",
+      "name": "特征向量的线性组合与分解",
+      "aliases": [
+        "特征向量线性组合",
+        "特征向量分解"
+      ],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L05-032",
+      "name": "AB与BA的特征值关系",
+      "aliases": [
+        "AB与BA非零特征值",
+        "AB与BA特征多项式"
+      ],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "特征值与特征向量",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-001",
+      "name": "二次型与对称矩阵互化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-002",
+      "name": "二次型的线性变换",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-003",
+      "name": "矩阵合同判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-004",
+      "name": "合同矩阵的性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-005",
+      "name": "二次型标准形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-006",
+      "name": "二次型规范形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-007",
+      "name": "配方法化二次型为标准形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-008",
+      "name": "正交变换化二次型为标准形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-009",
+      "name": "利用特征值确定标准形",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-010",
+      "name": "利用特征向量构造正交矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-011",
+      "name": "重特征值对应特征向量正交化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-012",
+      "name": "惯性定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-013",
+      "name": "二次型的正负惯性指数",
+      "aliases": [
+        "正惯性指数",
+        "负惯性指数"
+      ],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-014",
+      "name": "利用惯性指数判断合同",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-015",
+      "name": "正定二次型与正定矩阵",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-016",
+      "name": "特征值法判断正定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-017",
+      "name": "顺序主子式法判断正定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-018",
+      "name": "含参数正定矩阵判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-L06-019",
+      "name": "正定矩阵的性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "线性代数",
+      "chapter": "二次型",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-001",
+      "name": "事件关系与事件运算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-002",
+      "name": "互斥事件与对立事件",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-003",
+      "name": "完备事件组",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-004",
+      "name": "概率基本性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-005",
+      "name": "概率加法公式与容斥原理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-006",
+      "name": "古典概型",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-007",
+      "name": "排列组合计数求概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-008",
+      "name": "几何概型",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-009",
+      "name": "条件概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-010",
+      "name": "概率乘法公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-011",
+      "name": "全概率公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-012",
+      "name": "贝叶斯公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-013",
+      "name": "事件独立性判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-014",
+      "name": "多个事件相互独立",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-015",
+      "name": "两两独立与相互独立",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-016",
+      "name": "互斥与独立的区别",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-017",
+      "name": "伯努利重复试验与二项概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P01-018",
+      "name": "至少一次问题的对立事件法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机事件和概率",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-001",
+      "name": "由概率求分布函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-002",
+      "name": "由分布函数求概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-003",
+      "name": "分布函数基本性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-004",
+      "name": "分段分布函数与参数确定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-005",
+      "name": "离散型随机变量分布律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-006",
+      "name": "由概率条件确定分布律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-007",
+      "name": "概率密度函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-008",
+      "name": "由概率密度求分布函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-009",
+      "name": "由分布函数求概率密度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-010",
+      "name": "概率密度归一化确定参数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-011",
+      "name": "0-1分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-012",
+      "name": "二项分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-013",
+      "name": "几何分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-014",
+      "name": "超几何分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-015",
+      "name": "泊松分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-016",
+      "name": "泊松分布近似二项分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-017",
+      "name": "均匀分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-018",
+      "name": "指数分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-019",
+      "name": "正态分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-020",
+      "name": "正态分布标准化",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-021",
+      "name": "标准正态分布概率计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-022",
+      "name": "离散型随机变量函数的分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-023",
+      "name": "分布函数法求连续随机变量函数的分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P02-024",
+      "name": "连续型随机变量函数变换法",
+      "aliases": [
+        "单调变换法",
+        "密度函数变换法",
+        "随机变量变换公式"
+      ],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "一维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-001",
+      "name": "二维离散型联合分布律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-002",
+      "name": "联合分布表补全",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-003",
+      "name": "由联合分布求概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-004",
+      "name": "二维联合概率密度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-005",
+      "name": "二维密度归一化确定参数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-006",
+      "name": "二维区域概率计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-007",
+      "name": "二维均匀分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-008",
+      "name": "离散型边缘分布律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-009",
+      "name": "连续型边缘概率密度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-010",
+      "name": "离散型条件分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-011",
+      "name": "连续型条件概率密度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-012",
+      "name": "二维离散随机变量独立性判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-013",
+      "name": "二维连续随机变量独立性判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-014",
+      "name": "二维正态分布参数识别",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-015",
+      "name": "二维正态分布的边缘分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-016",
+      "name": "二维正态下不相关等价于独立",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-017",
+      "name": "随机变量和的分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-018",
+      "name": "卷积公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-019",
+      "name": "正态随机变量线性组合",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-020",
+      "name": "最大值与最小值的分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P03-021",
+      "name": "二维区域法求随机变量函数分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "多维随机变量及其分布",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-001",
+      "name": "离散型随机变量数学期望",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-002",
+      "name": "连续型随机变量数学期望",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-003",
+      "name": "随机变量函数的数学期望",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-004",
+      "name": "二维随机变量函数的数学期望",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-005",
+      "name": "期望线性性质",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-006",
+      "name": "条件期望",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-007",
+      "name": "全期望公式",
+      "aliases": [
+        "塔式期望",
+        "迭代期望"
+      ],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-008",
+      "name": "方差及其计算公式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-009",
+      "name": "随机变量线性变换的方差",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-010",
+      "name": "随机变量和的方差",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-011",
+      "name": "协方差计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-012",
+      "name": "利用协方差计算和的方差",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-013",
+      "name": "相关系数计算",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-014",
+      "name": "随机变量不相关判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-015",
+      "name": "独立与不相关的关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-016",
+      "name": "原点矩与中心矩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-017",
+      "name": "二阶矩与方差关系",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "auxiliary",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-018",
+      "name": "利用分布求数字特征",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P04-019",
+      "name": "相关系数绝对值为1的线性关系",
+      "aliases": [
+        "完全相关",
+        "完全正相关",
+        "完全负相关",
+        "ρ=±1"
+      ],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "随机变量的数字特征",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-001",
+      "name": "切比雪夫不等式",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-002",
+      "name": "切比雪夫不等式估计概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-003",
+      "name": "切比雪夫大数定律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-004",
+      "name": "伯努利大数定律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-005",
+      "name": "辛钦大数定律",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-006",
+      "name": "棣莫弗—拉普拉斯中心极限定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-007",
+      "name": "列维—林德伯格中心极限定理",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P05-008",
+      "name": "中心极限定理求概率",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "大数定律与中心极限定理",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-001",
+      "name": "总体、个体与简单随机样本",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-002",
+      "name": "统计量判定",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-003",
+      "name": "样本均值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-004",
+      "name": "样本方差",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-005",
+      "name": "样本矩",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-006",
+      "name": "经验分布函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-007",
+      "name": "卡方分布及其构造",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-008",
+      "name": "t分布及其构造",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-009",
+      "name": "F分布及其构造",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-010",
+      "name": "分位数与上α分位点",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-011",
+      "name": "正态总体样本均值分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-012",
+      "name": "样本均值与样本方差的独立性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-013",
+      "name": "(n-1)S^2/σ^2的卡方分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-014",
+      "name": "未知方差时样本均值的t分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P06-015",
+      "name": "两个样本方差比的F分布",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "数理统计基本概念",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-001",
+      "name": "矩估计法",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-002",
+      "name": "多参数矩估计",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-003",
+      "name": "似然函数构造",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-004",
+      "name": "对数似然函数",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-005",
+      "name": "求导法求最大似然估计",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-006",
+      "name": "非正则情形最大似然估计",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-007",
+      "name": "利用样本极值求最大似然估计",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-008",
+      "name": "估计量无偏性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-009",
+      "name": "构造无偏估计量",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-010",
+      "name": "估计量有效性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-011",
+      "name": "估计量一致性",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-012",
+      "name": "置信区间与置信度",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-013",
+      "name": "枢轴量法构造置信区间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-014",
+      "name": "正态总体均值置信区间——方差已知",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-015",
+      "name": "正态总体均值置信区间——方差未知",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-016",
+      "name": "正态总体方差置信区间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-017",
+      "name": "两个正态总体均值差置信区间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P07-018",
+      "name": "两个正态总体方差比置信区间",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "参数估计",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-001",
+      "name": "原假设与备择假设",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-002",
+      "name": "显著性水平与拒绝域",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-003",
+      "name": "检验统计量与临界值",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-004",
+      "name": "双侧检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-005",
+      "name": "单侧检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-006",
+      "name": "第一类错误",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-007",
+      "name": "第二类错误",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-008",
+      "name": "单总体均值Z检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-009",
+      "name": "单总体均值t检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-010",
+      "name": "单总体方差卡方检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-011",
+      "name": "两总体均值差检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    },
+    {
+      "id": "M1-P08-012",
+      "name": "两总体方差比F检验",
+      "aliases": [],
+      "subject": "数学一",
+      "section": "概率论与数理统计",
+      "chapter": "假设检验",
+      "default_role": "core",
+      "status": "active"
+    }
+  ]
+}

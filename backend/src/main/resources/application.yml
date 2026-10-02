@@ -1,5 +1,11 @@
 server:
   port: ${SERVER_PORT:12345}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
   compression:
     enabled: true
     min-response-size: 1024
@@ -22,8 +28,13 @@ spring:
     default-property-inclusion: non_null
   sql:
     init:
-      mode: always
-      encoding: UTF-8
+      mode: never
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
+    validate-on-migrate: true
 
 management:
   endpoints:
@@ -35,6 +46,13 @@ management:
       show-details: when-authorized
 
 app:
+  initial-admin:
+    username: ${APP_INITIAL_ADMIN_USERNAME:}
+    password: ${APP_INITIAL_ADMIN_PASSWORD:}
+    display-name: ${APP_INITIAL_ADMIN_DISPLAY_NAME:初始管理员}
+  knowledge:
+    math1-seed-enabled: ${MATH1_KNOWLEDGE_SEED_ENABLED:true}
+    math1-resource: classpath:knowledge/math1-knowledge-final.json
   catalog:
     seed-enabled: ${CATALOG_SEED_ENABLED:true}
     seed-location: classpath:content/question-banks.json
