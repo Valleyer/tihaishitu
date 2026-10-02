@@ -147,9 +147,13 @@ for (const path of [
 }
 
 // V2—V6：配置引用在构建时一次检查，避免手改后进入副本才发现漏写奖励或人物。
-const activities = [...read("activities"), ...read("activities-v7")],
-  items = [...read("items"), ...read("items-v7")],
-  companions = read("companions"),
+const activities = [
+    ...read("activities"),
+    ...read("activities-v7"),
+    ...read("activities-v8"),
+  ],
+  items = [...read("items"), ...read("items-v7"), ...read("items-v8")],
+  companions = [...read("companions"), ...read("companions-v8")],
   exams = read("exams"),
   adventure = read("adventure");
 unique(activities, "activities");
