@@ -157,7 +157,6 @@ public class GameActionService {
         ObjectNode record = mapper.createObjectNode();
         record.put("attemptId", request.attemptId());
         record.put("questionId", request.questionId());
-        record.set("question", snapshot.question().deepCopy());
         record.set("answer", request.answer().deepCopy());
         record.put("correct", correct);
         record.put("at", Instant.now().toString());
@@ -221,7 +220,6 @@ public class GameActionService {
         ObjectNode record = mapper.createObjectNode();
         record.put("attemptId", request.attemptId());
         record.put("questionId", request.questionId());
-        record.set("question", snapshot.question().deepCopy());
         record.put("answer", request.assessment());
         record.put("correct", correct);
         record.put("assessment", request.assessment());

@@ -8,9 +8,14 @@ import type {
   Bootstrap,
   Game,
   GameApi,
+  Question,
   QuestionBankManifest,
 } from "../domain/types";
-import { loadCachedBanks } from "./catalog-cache";
+import {
+  cacheAnsweredQuestion,
+  loadAnsweredQuestions,
+  loadCachedBanks,
+} from "./catalog-cache";
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(
   /\/$/,
   "",
@@ -38,21 +43,56 @@ async function request<T>(
 }
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
 let cachedBanks: Bank[] = [];
-function hydrateGame(value: Game): Game {
+const answeredQuestions = new Map<string, Question>();
+async function hydrateGame(value: Game): Promise<Game> {
   const questions = new Map(
-    cachedBanks.flatMap((bank) => bank.questions).map((question) => [question.id, question]),
+    cachedBanks
+      .flatMap((bank) => bank.questions)
+      .map((question) => [question.id, question]),
   );
+  answeredQuestions.forEach((question, id) => questions.set(id, question));
+  const attempt = value.attempt;
+  if (attempt?.result) {
+    const question: Question = {
+      ...attempt.question,
+      answer: attempt.result.standard,
+      aliases: attempt.result.aliases,
+      keywords: [],
+      explanation: attempt.result.explanation,
+    };
+    questions.set(question.id, question);
+    answeredQuestions.set(question.id, question);
+    await cacheAnsweredQuestion(question).catch(() => undefined);
+  }
+  const missingIds = [
+    ...new Set(
+      value.records
+        .map((record) => {
+          const wire = record as typeof record & { questionId?: string };
+          return wire.question ? "" : wire.questionId || "";
+        })
+        .filter((id) => id && !questions.has(id)),
+    ),
+  ];
+  if (missingIds.length) {
+    const cached = await loadAnsweredQuestions(missingIds).catch(() => []);
+    cached.forEach((question) => {
+      questions.set(question.id, question);
+      answeredQuestions.set(question.id, question);
+    });
+  }
   value.records = value.records.map((record) => {
     const wire = record as typeof record & { questionId?: string };
     if (wire.question) return wire;
     const question = questions.get(wire.questionId || "");
-    if (!question) throw new Error("本地题库缓存缺少历史题目，请重新载入题库。");
+    if (!question)
+      throw new Error("本地题库缓存缺少历史题目，请重新载入题库。");
     return { ...wire, question };
   });
   return value;
 }
 const gameRequest = async (path: string, method = "GET", body?: unknown) =>
-  hydrateGame(await request<Game>(path, method, body));
+  await hydrateGame(await request<Game>(path, method, body));
 export const httpApi: GameApi = {
   registerExam: (id, examId) =>
     gameRequest(gamePath(id) + "/exams/register", "POST", { examId }),
