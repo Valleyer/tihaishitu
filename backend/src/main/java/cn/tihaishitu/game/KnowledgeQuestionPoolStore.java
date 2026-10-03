@@ -101,7 +101,7 @@ public class KnowledgeQuestionPoolStore {
         List<QuestionRow> rows = jdbc.query("""
                 SELECT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty, q.status
+                       q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_resource q
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
@@ -120,26 +120,6 @@ public class KnowledgeQuestionPoolStore {
                    )
                  ORDER BY q.id
                 """.formatted(marks), (result, row) -> questionRow(result), args.toArray());
-        return questions(rows);
-    }
-
-    public Map<String, QuestionDto> questionsByIds(Collection<String> questionIds) {
-        if (questionIds.isEmpty()) return Map.of();
-        List<QuestionRow> rows = jdbc.query("""
-                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
-                       q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty, q.status
-                  FROM question_resource q
-                 WHERE q.id IN (%s)
-                 ORDER BY q.id
-                """.formatted(placeholders(questionIds.size())),
-                (result, row) -> questionRow(result), questionIds.toArray());
-        Map<String, QuestionDto> result = new LinkedHashMap<>();
-        questions(rows).forEach(question -> result.put(question.id(), question));
-        return result;
-    }
-
-    private List<QuestionDto> questions(List<QuestionRow> rows) {
         if (rows.isEmpty()) return List.of();
         List<String> questionIds = rows.stream().map(QuestionRow::id).toList();
         Map<String, Map<String, String>> options = loadOptions(questionIds);
@@ -149,7 +129,7 @@ public class KnowledgeQuestionPoolStore {
                 row.presentationType(), row.questionType(), row.presentationType(), row.gradingMode(),
                 row.content(), options.getOrDefault(row.id(), Map.of()), readTree(row.answer()), row.analysis(),
                 List.of(), List.of(), row.difficulty(), 3, List.of(),
-                knowledge.getOrDefault(row.id(), List.of()), "published".equals(row.status())
+                knowledge.getOrDefault(row.id(), List.of()), true
         )).toList();
     }
 
@@ -224,8 +204,7 @@ public class KnowledgeQuestionPoolStore {
                 result.getString("source_name"), result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
                 result.getString("content_markdown"), result.getString("standard_answer_json"),
-                result.getString("analysis_markdown"), result.getInt("difficulty"),
-                result.getString("status"));
+                result.getString("analysis_markdown"), result.getInt("difficulty"));
     }
 
     private JsonNode readTree(String value) {
@@ -247,5 +226,5 @@ public class KnowledgeQuestionPoolStore {
     private record QuestionRow(
             String id, String subject, String sourceType, String sourceName, String questionType,
             String presentationType, String gradingMode, String content, String answer,
-            String analysis, int difficulty, String status) {}
+            String analysis, int difficulty) {}
 }

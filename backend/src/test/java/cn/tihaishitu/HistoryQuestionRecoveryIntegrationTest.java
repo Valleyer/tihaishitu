@@ -37,46 +37,24 @@ class HistoryQuestionRecoveryIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
-    void restoresGradedSnapshotThenFallsBackToCurrentGlobalQuestion() throws Exception {
-        String gameId = game();
-        String questionId = globalQuestion("当前版本题面");
-        String gradedAttemptId = UUID.randomUUID().toString();
-        ObjectNode historical = questionSnapshot(questionId, "作答时的历史题面");
-        attempts.create(gradedAttemptId, gameId, questionId, historical, TextNode.valueOf("A"));
-        attempts.recordAnswer(attempts.find(gradedAttemptId, gameId), TextNode.valueOf("A"), true);
-        addRecord(gameId, gradedAttemptId, questionId);
-
-        String importedAttemptId = UUID.randomUUID().toString();
-        addRecord(gameId, importedAttemptId, questionId);
-
-        ObjectNode body = mapper.createObjectNode();
-        body.putArray("attemptIds").add(gradedAttemptId).add(importedAttemptId);
-        mvc.perform(post("/api/v1/games/{id}/history/questions", gameId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(body)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.questions.length()").value(2))
-                .andExpect(jsonPath("$.questions[0].attemptId").value(gradedAttemptId))
-                .andExpect(jsonPath("$.questions[0].question.question").value("作答时的历史题面"))
-                .andExpect(jsonPath("$.questions[1].attemptId").value(importedAttemptId))
-                .andExpect(jsonPath("$.questions[1].question.question").value("当前版本题面"))
-                .andExpect(jsonPath("$.questions[1].question.answer").value("A"));
-
-        Long links = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM question_bank_item WHERE question_id = ?", Long.class, questionId);
-        assertThat(links).isZero();
-    }
-
-    @Test
-    void doesNotExposeActiveOrOtherGameAttempt() throws Exception {
+    void forgedImportedAndUnfinishedAttemptsDoNotExposeGlobalAnswers() throws Exception {
         String firstGame = game();
         String secondGame = game();
-        String questionId = globalQuestion("不可提前查看的题面");
+        String questionId = globalQuestion("不可提前查看的当前题面");
+
+        String forgedAttempt = UUID.randomUUID().toString();
+        addRecord(firstGame, forgedAttempt, questionId);
 
         String activeAttempt = UUID.randomUUID().toString();
         attempts.create(activeAttempt, firstGame, questionId,
                 questionSnapshot(questionId, "active"), TextNode.valueOf("A"));
         addRecord(firstGame, activeAttempt, questionId);
+
+        String revealedAttempt = UUID.randomUUID().toString();
+        attempts.create(revealedAttempt, firstGame, questionId,
+                questionSnapshot(questionId, "revealed"), TextNode.valueOf("A"), "self_assessment");
+        attempts.reveal(attempts.find(revealedAttempt, firstGame));
+        addRecord(firstGame, revealedAttempt, questionId);
 
         String otherAttempt = UUID.randomUUID().toString();
         attempts.create(otherAttempt, secondGame, questionId,
@@ -85,12 +63,39 @@ class HistoryQuestionRecoveryIntegrationTest {
         addRecord(secondGame, otherAttempt, questionId);
 
         ObjectNode body = mapper.createObjectNode();
-        body.putArray("attemptIds").add(activeAttempt).add(otherAttempt);
+        body.putArray("attemptIds")
+                .add(forgedAttempt).add(activeAttempt).add(revealedAttempt).add(otherAttempt);
         mvc.perform(post("/api/v1/games/{id}/history/questions", firstGame)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questions").isEmpty());
+    }
+
+    @Test
+    void gradedSnapshotWinsOverCurrentGlobalQuestionVersion() throws Exception {
+        String gameId = game();
+        String questionId = globalQuestion("当前版本题面");
+        String gradedAttemptId = UUID.randomUUID().toString();
+        ObjectNode historical = questionSnapshot(questionId, "作答时的历史题面");
+        attempts.create(gradedAttemptId, gameId, questionId, historical, TextNode.valueOf("A"));
+        attempts.recordAnswer(attempts.find(gradedAttemptId, gameId), TextNode.valueOf("A"), true);
+        addRecord(gameId, gradedAttemptId, questionId);
+
+        ObjectNode body = mapper.createObjectNode();
+        body.putArray("attemptIds").add(gradedAttemptId);
+        mvc.perform(post("/api/v1/games/{id}/history/questions", gameId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(1))
+                .andExpect(jsonPath("$.questions[0].attemptId").value(gradedAttemptId))
+                .andExpect(jsonPath("$.questions[0].question.question").value("作答时的历史题面"))
+                .andExpect(jsonPath("$.questions[0].question.answer").value("A"));
+
+        Long links = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM question_bank_item WHERE question_id = ?", Long.class, questionId);
+        assertThat(links).isZero();
     }
 
     private String game() throws Exception {

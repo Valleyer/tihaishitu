@@ -40,7 +40,7 @@ API_PROXY_TARGET=http://localhost:12345
 | GET | /games/{id}/export | 无 | JSON 字符串 |
 | POST | /games/import | {json: "备份全文"} | 新 Game |
 
-历史题目恢复接口先校验 `attemptId` 存在于该 Game 的 compact records 中，只返回已评分的 `study_attempt` 快照；导入存档缺少 attempt 行时才按 record 中的 Question UUID 回退到当前全局题目（包括 archived）。active attempt、其他 Game 的 attempt 与未作答题目不会返回答案。前端只在文集缓存、内存与 IndexedDB 均未命中时发起一次批量恢复；仍无法恢复的单题显示占位内容，不影响整个 Game 加载。
+历史题目恢复接口先校验 `attemptId` 存在于该 Game 的 compact records 中，并且只返回 Question UUID 一致、状态为 graded 的服务器 `study_attempt` 快照；客户端导入的 records 不能单独作为读取全局题目答案的凭据。active、revealed、其他 Game 的 attempt 与未作答题目均不会返回答案。请求一次最多包含 500 个 attempt。前端优先使用 attempt 级内存和 IndexedDB 快照，缺失时发起一次服务器批量恢复；旧文集当前题面仅作最后兼容回退，仍无法恢复的单题显示占位内容，不影响整个 Game 加载。
 
 管理写接口使用独立前缀 `/api/v1/admin`，只有服务端配置 `APP_ADMIN_KEY` 后才启用，请求头必须带 `X-Admin-Key`：
 

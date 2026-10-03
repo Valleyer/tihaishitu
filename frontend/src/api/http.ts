@@ -42,6 +42,7 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
+const HISTORY_RECOVERY_BATCH_SIZE = 500;
 let cachedBanks: Bank[] = [];
 const answeredQuestions = new Map<string, Question>();
 interface HistoryQuestionResult {
@@ -93,12 +94,8 @@ async function hydrateGame(value: Game): Promise<Game> {
     await cacheAnsweredQuestion(attempt.id, question).catch(() => undefined);
   }
   const missingRecords = value.records.filter((record) => {
-    const wire = record as typeof record & { questionId?: string };
-    return (
-      !wire.question &&
-      !bankQuestions.has(wire.questionId || "") &&
-      !answeredQuestions.has(wire.attemptId)
-    );
+    const wire = record as typeof record;
+    return !wire.question && !answeredQuestions.has(wire.attemptId);
   });
   const missingAttemptIds = [
     ...new Set(
@@ -117,13 +114,32 @@ async function hydrateGame(value: Game): Promise<Game> {
     (attemptId) => !answeredQuestions.has(attemptId),
   );
   if (serverMissingAttemptIds.length) {
-    const recovered = await request<HistoryQuestionResult>(
-      gamePath(value.id) + "/history/questions",
-      "POST",
-      { attemptIds: serverMissingAttemptIds },
-    ).catch(() => ({ questions: [] }));
+    const batches: string[][] = [];
+    for (
+      let start = 0;
+      start < serverMissingAttemptIds.length;
+      start += HISTORY_RECOVERY_BATCH_SIZE
+    ) {
+      batches.push(
+        serverMissingAttemptIds.slice(
+          start,
+          start + HISTORY_RECOVERY_BATCH_SIZE,
+        ),
+      );
+    }
+    const recovered = (
+      await Promise.all(
+        batches.map((attemptIds) =>
+          request<HistoryQuestionResult>(
+            gamePath(value.id) + "/history/questions",
+            "POST",
+            { attemptIds },
+          ).catch(() => ({ questions: [] })),
+        ),
+      )
+    ).flatMap((result) => result.questions);
     await Promise.all(
-      recovered.questions.map(async (item) => {
+      recovered.map(async (item) => {
         const record = missingRecords.find(
           (candidate) => candidate.attemptId === item.attemptId,
         ) as (typeof missingRecords)[number] & { questionId?: string };
@@ -139,8 +155,8 @@ async function hydrateGame(value: Game): Promise<Game> {
     const wire = record as typeof record & { questionId?: string };
     if (wire.question) return wire;
     const question =
-      bankQuestions.get(wire.questionId || "") ||
       answeredQuestions.get(wire.attemptId) ||
+      bankQuestions.get(wire.questionId || "") ||
       unavailableQuestion(wire.questionId || "未知");
     return { ...wire, question };
   });

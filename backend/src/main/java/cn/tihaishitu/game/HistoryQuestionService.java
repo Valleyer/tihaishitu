@@ -1,6 +1,5 @@
 package cn.tihaishitu.game;
 
-import cn.tihaishitu.catalog.QuestionDto;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -11,20 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 public class HistoryQuestionService {
     private final GameStore games;
     private final QuestionAttemptStore attempts;
-    private final KnowledgeQuestionPoolStore questions;
     private final ObjectMapper mapper;
 
-    public HistoryQuestionService(GameStore games, QuestionAttemptStore attempts,
-                                  KnowledgeQuestionPoolStore questions, ObjectMapper mapper) {
+    public HistoryQuestionService(GameStore games, QuestionAttemptStore attempts, ObjectMapper mapper) {
         this.games = games;
         this.attempts = attempts;
-        this.questions = questions;
         this.mapper = mapper;
     }
 
@@ -32,21 +27,13 @@ public class HistoryQuestionService {
     public ObjectNode recover(String gameId, HistoryQuestionsRequest request) {
         ObjectNode game = games.findObject(gameId);
         Map<String, String> recordedQuestions = recordedQuestions(game);
-        Set<String> requested = new LinkedHashSet<>();
+        var requested = new LinkedHashSet<String>();
         request.attemptIds().forEach(attemptId -> {
             if (recordedQuestions.containsKey(attemptId)) requested.add(attemptId);
         });
 
         Map<String, QuestionAttemptStore.HistorySnapshot> snapshots =
                 attempts.findForHistory(gameId, requested);
-        Set<String> fallbackQuestionIds = new LinkedHashSet<>();
-        for (String attemptId : requested) {
-            QuestionAttemptStore.HistorySnapshot snapshot = snapshots.get(attemptId);
-            if (snapshot == null || ("graded".equals(snapshot.status()) && snapshot.question() == null)) {
-                fallbackQuestionIds.add(recordedQuestions.get(attemptId));
-            }
-        }
-        Map<String, QuestionDto> fallbackQuestions = questions.questionsByIds(fallbackQuestionIds);
 
         ArrayNode recovered = mapper.createArrayNode();
         for (String attemptId : requested) {
@@ -56,10 +43,6 @@ public class HistoryQuestionService {
             if (snapshot != null && "graded".equals(snapshot.status())
                     && questionId.equals(snapshot.questionId()) && snapshot.question() != null) {
                 question = snapshot.question();
-            } else if (snapshot == null || ("graded".equals(snapshot.status())
-                    && questionId.equals(snapshot.questionId()) && snapshot.question() == null)) {
-                QuestionDto current = fallbackQuestions.get(questionId);
-                if (current != null) question = mapper.valueToTree(current);
             }
             if (question == null) continue;
             ObjectNode item = recovered.addObject();
