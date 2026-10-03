@@ -44,13 +44,42 @@ async function request<T>(
 const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
 let cachedBanks: Bank[] = [];
 const answeredQuestions = new Map<string, Question>();
+interface HistoryQuestionResult {
+  questions: {
+    attemptId: string;
+    questionId: string;
+    question: Question;
+  }[];
+}
+function unavailableQuestion(id: string): Question {
+  return {
+    id,
+    subject: "历史记录",
+    category: "题目恢复",
+    chapter: "",
+    type: "self_assessment",
+    originalType: "solution",
+    presentationType: "self_assessment",
+    gradingMode: "self_assessment",
+    question: `题目内容暂时无法恢复\n\nQuestion ID: \`${id}\``,
+    options: {},
+    answer: "暂时无法恢复",
+    aliases: [],
+    keywords: [],
+    explanation: "",
+    difficulty: 1,
+    frequency: 0,
+    tags: [],
+    knowledgePointIds: [],
+    enabled: false,
+  };
+}
 async function hydrateGame(value: Game): Promise<Game> {
-  const questions = new Map(
+  const bankQuestions = new Map(
     cachedBanks
       .flatMap((bank) => bank.questions)
       .map((question) => [question.id, question]),
   );
-  answeredQuestions.forEach((question, id) => questions.set(id, question));
   const attempt = value.attempt;
   if (attempt?.result) {
     const question: Question = {
@@ -60,33 +89,59 @@ async function hydrateGame(value: Game): Promise<Game> {
       keywords: [],
       explanation: attempt.result.explanation,
     };
-    questions.set(question.id, question);
-    answeredQuestions.set(question.id, question);
-    await cacheAnsweredQuestion(question).catch(() => undefined);
+    answeredQuestions.set(attempt.id, question);
+    await cacheAnsweredQuestion(attempt.id, question).catch(() => undefined);
   }
-  const missingIds = [
+  const missingRecords = value.records.filter((record) => {
+    const wire = record as typeof record & { questionId?: string };
+    return (
+      !wire.question &&
+      !bankQuestions.has(wire.questionId || "") &&
+      !answeredQuestions.has(wire.attemptId)
+    );
+  });
+  const missingAttemptIds = [
     ...new Set(
-      value.records
-        .map((record) => {
-          const wire = record as typeof record & { questionId?: string };
-          return wire.question ? "" : wire.questionId || "";
-        })
-        .filter((id) => id && !questions.has(id)),
+      missingRecords.map((record) => record.attemptId).filter(Boolean),
     ),
   ];
-  if (missingIds.length) {
-    const cached = await loadAnsweredQuestions(missingIds).catch(() => []);
-    cached.forEach((question) => {
-      questions.set(question.id, question);
-      answeredQuestions.set(question.id, question);
+  if (missingAttemptIds.length) {
+    const cached = await loadAnsweredQuestions(missingAttemptIds).catch(
+      () => [],
+    );
+    cached.forEach(({ id, question }) => {
+      answeredQuestions.set(id, question);
     });
+  }
+  const serverMissingAttemptIds = missingAttemptIds.filter(
+    (attemptId) => !answeredQuestions.has(attemptId),
+  );
+  if (serverMissingAttemptIds.length) {
+    const recovered = await request<HistoryQuestionResult>(
+      gamePath(value.id) + "/history/questions",
+      "POST",
+      { attemptIds: serverMissingAttemptIds },
+    ).catch(() => ({ questions: [] }));
+    await Promise.all(
+      recovered.questions.map(async (item) => {
+        const record = missingRecords.find(
+          (candidate) => candidate.attemptId === item.attemptId,
+        ) as (typeof missingRecords)[number] & { questionId?: string };
+        if (!record || record.questionId !== item.questionId) return;
+        answeredQuestions.set(item.attemptId, item.question);
+        await cacheAnsweredQuestion(item.attemptId, item.question).catch(
+          () => undefined,
+        );
+      }),
+    );
   }
   value.records = value.records.map((record) => {
     const wire = record as typeof record & { questionId?: string };
     if (wire.question) return wire;
-    const question = questions.get(wire.questionId || "");
-    if (!question)
-      throw new Error("本地题库缓存缺少历史题目，请重新载入题库。");
+    const question =
+      bankQuestions.get(wire.questionId || "") ||
+      answeredQuestions.get(wire.attemptId) ||
+      unavailableQuestion(wire.questionId || "未知");
     return { ...wire, question };
   });
   return value;

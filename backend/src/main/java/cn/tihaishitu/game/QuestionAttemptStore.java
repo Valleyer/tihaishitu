@@ -10,13 +10,17 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
 public class QuestionAttemptStore {
     public record Snapshot(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
                            String status, String gradingMode, String gradingSource, String assessment) {}
+    public record HistorySnapshot(String id, String questionId, String status, JsonNode question) {}
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
@@ -51,6 +55,25 @@ public class QuestionAttemptStore {
                 result.getString("assessment")), id, gameId);
         if (values.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "这道题已经失效，请重新载入当前进度。");
         return values.get(0);
+    }
+
+    public Map<String, HistorySnapshot> findForHistory(String gameId, Collection<String> attemptIds) {
+        if (attemptIds.isEmpty()) return Map.of();
+        Map<String, HistorySnapshot> values = new LinkedHashMap<>();
+        Object[] args = new Object[attemptIds.size() + 1];
+        args[0] = gameId;
+        int index = 1;
+        for (String attemptId : attemptIds) args[index++] = attemptId;
+        jdbc.query("""
+                SELECT id, question_id, status, question_snapshot_json
+                  FROM study_attempt
+                 WHERE game_id = ? AND id IN (%s)
+                """.formatted(placeholders(attemptIds.size())), result -> {
+            String id = result.getString("id");
+            values.put(id, new HistorySnapshot(id, result.getString("question_id"),
+                    result.getString("status"), readOrNull(result.getString("question_snapshot_json"))));
+        }, args);
+        return values;
     }
 
     public boolean recordAnswer(Snapshot snapshot, JsonNode submitted, boolean correct) {
@@ -117,5 +140,17 @@ public class QuestionAttemptStore {
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("数据库中的答题快照损坏。", error);
         }
+    }
+
+    private JsonNode readOrNull(String value) {
+        try {
+            return objectMapper.readTree(value);
+        } catch (JsonProcessingException error) {
+            return null;
+        }
+    }
+
+    private static String placeholders(int count) {
+        return String.join(",", java.util.Collections.nCopies(count, "?"));
     }
 }

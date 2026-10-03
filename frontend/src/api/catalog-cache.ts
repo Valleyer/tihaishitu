@@ -9,6 +9,10 @@ interface CachedBank {
   revision: number;
   bank: Bank;
 }
+export interface CachedAnsweredQuestion {
+  id: string;
+  question: Question;
+}
 
 function database(): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -26,13 +30,18 @@ function database(): Promise<IDBDatabase> {
 
 /**
  * 全局动态题池不再把题面重复写进每条作答记录。题目完成后才缓存已公开的
- * 完整题目，历史记录随后只凭 UUID 从浏览器恢复，避免重复占用网络流量。
+ * 完整题目，历史记录随后凭 attempt UUID 从浏览器恢复，避免重复占用网络流量。
  */
-export async function cacheAnsweredQuestion(question: Question): Promise<void> {
+export async function cacheAnsweredQuestion(
+  attemptId: string,
+  question: Question,
+): Promise<void> {
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(QUESTION_STORE, "readwrite");
-    transaction.objectStore(QUESTION_STORE).put(question);
+    transaction
+      .objectStore(QUESTION_STORE)
+      .put({ id: attemptId, question } satisfies CachedAnsweredQuestion);
     transaction.onerror = () => reject(transaction.error);
     transaction.oncomplete = () => resolve();
   }).finally(() => db.close());
@@ -40,18 +49,19 @@ export async function cacheAnsweredQuestion(question: Question): Promise<void> {
 
 export async function loadAnsweredQuestions(
   ids: string[],
-): Promise<Question[]> {
+): Promise<CachedAnsweredQuestion[]> {
   if (!ids.length) return [];
   const db = await database();
-  return new Promise<Question[]>((resolve, reject) => {
+  return new Promise<CachedAnsweredQuestion[]>((resolve, reject) => {
     const transaction = db.transaction(QUESTION_STORE);
     const store = transaction.objectStore(QUESTION_STORE);
-    const result: Question[] = [];
+    const result: CachedAnsweredQuestion[] = [];
     ids.forEach((id) => {
       const request = store.get(id);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        if (request.result) result.push(request.result as Question);
+        if (request.result)
+          result.push(request.result as CachedAnsweredQuestion);
       };
     });
     transaction.onerror = () => reject(transaction.error);

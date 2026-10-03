@@ -26,6 +26,7 @@ API_PROXY_TARGET=http://localhost:12345
 | GET | /bootstrap | 无 | Bootstrap |
 | POST | /games | NewGame | Game |
 | GET | /games/{id} | 无 | Game |
+| POST | /games/{id}/history/questions | {attemptIds: UUID[]} | 批量恢复该存档已完成 attempt 的完整历史题目 |
 | DELETE | /games/{id} | 无 | 204 |
 | GET | /question-banks/{uuid} | 无 | Bank，带 revision 与缓存响应头 |
 | POST | /games/{id}/answers | {attemptId, questionId, answer} | Game |
@@ -38,6 +39,8 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /games/{id}/chapter | {chapterId} | Game |
 | GET | /games/{id}/export | 无 | JSON 字符串 |
 | POST | /games/import | {json: "备份全文"} | 新 Game |
+
+历史题目恢复接口先校验 `attemptId` 存在于该 Game 的 compact records 中，只返回已评分的 `study_attempt` 快照；导入存档缺少 attempt 行时才按 record 中的 Question UUID 回退到当前全局题目（包括 archived）。active attempt、其他 Game 的 attempt 与未作答题目不会返回答案。前端只在文集缓存、内存与 IndexedDB 均未命中时发起一次批量恢复；仍无法恢复的单题显示占位内容，不影响整个 Game 加载。
 
 管理写接口使用独立前缀 `/api/v1/admin`，只有服务端配置 `APP_ADMIN_KEY` 后才启用，请求头必须带 `X-Admin-Key`：
 

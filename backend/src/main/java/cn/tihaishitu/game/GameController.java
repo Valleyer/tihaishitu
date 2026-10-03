@@ -18,10 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class GameController {
     private final GameService service;
     private final GameActionService actions;
+    private final HistoryQuestionService historyQuestions;
 
-    public GameController(GameService service, GameActionService actions) {
+    public GameController(GameService service, GameActionService actions,
+                          HistoryQuestionService historyQuestions) {
         this.service = service;
         this.actions = actions;
+        this.historyQuestions = historyQuestions;
     }
 
     @PostMapping
@@ -33,6 +36,12 @@ public class GameController {
     @GetMapping("/{id}")
     JsonNode find(@PathVariable String id) {
         return service.find(id);
+    }
+
+    @PostMapping("/{id}/history/questions")
+    JsonNode historyQuestions(@PathVariable String id,
+                              @Valid @RequestBody HistoryQuestionsRequest request) {
+        return historyQuestions.recover(id, request);
     }
 
     @DeleteMapping("/{id}")
