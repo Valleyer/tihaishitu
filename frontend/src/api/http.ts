@@ -14,19 +14,23 @@ import type {
 import {
   cacheAnsweredQuestion,
   loadAnsweredQuestions,
-  loadCachedBanks,
 } from "./catalog-cache";
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(
   /\/$/,
   "",
 );
-async function request<T>(
+export class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
+}
+export async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
   const response = await fetch(baseUrl + path, {
     method,
+    credentials: "include",
     headers: {
       Accept: "application/json",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -36,12 +40,12 @@ async function request<T>(
   });
   if (!response.ok) {
     const error = await response.json().catch(() => null);
-    throw new Error(error?.message || "请求失败（" + response.status + "）");
+    throw new HttpError(response.status, error?.message || "请求失败（" + response.status + "）");
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
-const gamePath = (id: string) => "/games/" + encodeURIComponent(id);
+const gamePath = (_id: string) => "/worlds/ancient-official";
 const HISTORY_RECOVERY_BATCH_SIZE = 500;
 let cachedBanks: Bank[] = [];
 const answeredQuestions = new Map<string, Question>();
@@ -131,7 +135,7 @@ async function hydrateGame(value: Game): Promise<Game> {
       await Promise.all(
         batches.map((attemptIds) =>
           request<HistoryQuestionResult>(
-            gamePath(value.id) + "/history/questions",
+            "/learner/history/questions",
             "POST",
             { attemptIds },
           ).catch(() => ({ questions: [] })),
@@ -186,22 +190,28 @@ export const httpApi: GameApi = {
     gameRequest(gamePath(id) + "/bonds", "POST", { npcId, milestone }),
   bootstrap: async () => {
     const data = await request<
-      Omit<Bootstrap, "banks"> & {
+      {
+        learner: { id: string; username: string; displayName: string };
+        studyProfile: { selectedBookIds: string[] };
+        worlds: unknown[];
         bankManifest: QuestionBankManifest[];
-        banks?: Bank[];
+        questionCatalog: Bootstrap["questionCatalog"];
       }
     >("/bootstrap");
-    const banks = data.bankManifest
-      ? await loadCachedBanks(data.bankManifest, (id) =>
-          request<Bank>("/question-banks/" + encodeURIComponent(id)),
-        )
-      : data.banks || [];
+    // Learning Hub 只需要清单；题目正文按知识点/题目详情或正式发卷按需取得，
+    // 不在进入主世界时下载整本文集。
+    const banks: Bank[] = data.bankManifest.map((bank) => ({
+      id: bank.id, name: bank.name, description: bank.description,
+      enabled: bank.enabled, weight: bank.weight, knowledgePoints: [], questions: [],
+    }));
     cachedBanks = banks;
-    return { ...data, banks };
+    return { saves: [], activeId: null, legacyNotice: false, questionCatalog: data.questionCatalog, banks };
   },
-  createGame: (config) => gameRequest("/games", "POST", config),
+  createGame: (config) => gameRequest(gamePath("") + "/initialize", "POST", {
+    characterName: config.name, gender: config.gender, origin: config.origin,
+  }),
   getGame: (id) => gameRequest(gamePath(id)),
-  deleteGame: (id) => request(gamePath(id), "DELETE"),
+  deleteGame: async () => { throw new Error("联机世界不支持删除人生进度。"); },
   answer: (id, input) => gameRequest(gamePath(id) + "/answers", "POST", input),
   reveal: (id, attemptId, questionId) =>
     gameRequest(gamePath(id) + "/answers/reveal", "POST", {
@@ -220,14 +230,13 @@ export const httpApi: GameApi = {
     gameRequest(gamePath(id) + "/choices", "POST", { eventId, choiceId }),
   saveNote: (id, questionId, note) =>
     gameRequest(gamePath(id) + "/notes", "PUT", { questionId, note }),
-  configure: (id, bankIds, weights) =>
-    gameRequest(gamePath(id) + "/configuration", "PUT", { bankIds, weights }),
+  configure: async () => { throw new Error("请在主世界的学习方向中调整文集。"); },
   acknowledgeChapter: (id, chapterId) =>
     gameRequest(gamePath(id) + "/chapter", "POST", { chapterId }),
   putBank: (bank) =>
     request("/question-banks/" + encodeURIComponent(bank.id), "PUT", bank),
   deleteBank: (id) =>
     request("/question-banks/" + encodeURIComponent(id), "DELETE"),
-  exportSave: (id) => request(gamePath(id) + "/export"),
-  importSave: (json) => gameRequest("/games/import", "POST", { json }),
+  exportSave: async () => { throw new Error("联机世界由服务器实时保存。"); },
+  importSave: async () => { throw new Error("联机世界不支持导入个人存档。"); },
 };

@@ -1,10 +1,13 @@
 package cn.tihaishitu.config;
 
 import cn.tihaishitu.manage.ManageUserStore;
+import cn.tihaishitu.learner.LearnerSessionFilter;
+import cn.tihaishitu.learner.LearnerSessionProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -23,6 +26,7 @@ import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(LearnerSessionProperties.class)
 public class SecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -51,13 +55,15 @@ public class SecurityConfiguration {
 
     @Bean
     SecurityFilterChain securityFilterChain(
-            HttpSecurity http, ObjectMapper mapper, ActiveManageAccountFilter activeManageAccountFilter) throws Exception {
+            HttpSecurity http, ObjectMapper mapper, ActiveManageAccountFilter activeManageAccountFilter,
+            LearnerSessionFilter learnerSessionFilter) throws Exception {
         CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
         http
                 .cors(cors -> {})
                 .csrf(configurer -> configurer
                         .csrfTokenRepository(csrf)
-                        .ignoringRequestMatchers("/api/v1/games/**", "/api/v1/admin/**"))
+                        .ignoringRequestMatchers("/api/v1/games/**", "/api/v1/admin/**",
+                                "/api/v1/learner/**", "/api/v1/worlds/**"))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/manage/auth/login", "/api/v1/manage/auth/csrf").permitAll()
@@ -67,6 +73,7 @@ public class SecurityConfiguration {
                         .authenticationEntryPoint((request, response, error) -> writeError(response, mapper, 401, "请先登录管理后台。"))
                         .accessDeniedHandler((request, response, error) -> writeError(response, mapper, 403, "当前账号没有此操作权限。")))
                 .logout(logout -> logout.disable())
+                .addFilterAfter(learnerSessionFilter, SecurityContextHolderFilter.class)
                 .addFilterAfter(activeManageAccountFilter, SecurityContextHolderFilter.class);
         return http.build();
     }

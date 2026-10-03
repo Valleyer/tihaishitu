@@ -6,6 +6,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import cn.tihaishitu.learner.LearnerAuthService;
+import jakarta.servlet.http.Cookie;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -71,7 +73,7 @@ class CatalogAdminIntegrationTest {
                 .andExpect(jsonPath("$.weight").value(7))
                 .andExpect(jsonPath("$.enabled").value(true));
 
-        mvc.perform(get("/api/v1/bootstrap"))
+        mvc.perform(get("/api/v1/bootstrap").cookie(register("catalog_admin_viewer")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bankManifest[?(@.id == '" + BANK_ID + "')].revision")
                         .value(org.hamcrest.Matchers.contains(2)));
@@ -91,5 +93,11 @@ class CatalogAdminIntegrationTest {
                         .header("X-Admin-Key", "test-secret")
                         .contentType(MediaType.APPLICATION_JSON).content(invalid))
                 .andExpect(status().isBadRequest());
+    }
+
+    private Cookie register(String username) throws Exception {
+        return mvc.perform(post("/api/v1/learner/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"displayName\":\"测试\",\"password\":\"password-123\"}"))
+                .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 }

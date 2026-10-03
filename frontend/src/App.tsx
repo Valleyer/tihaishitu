@@ -73,11 +73,9 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
 const dock = [
   { id: "study", icon: "书", label: "读书" },
   { id: "people", icon: "人", label: "故人" },
-  { id: "library", icon: "册", label: "藏书阁" },
   { id: "review", icon: "卷", label: "旧案" },
   { id: "stats", icon: "业", label: "修业" },
   { id: "bag", icon: "囊", label: "行囊" },
-  { id: "saves", icon: "档", label: "存档" },
 ] as const;
 function App() {
   const [data, setData] = useState<Bootstrap | null>(null),
@@ -99,8 +97,16 @@ function App() {
     let active = true;
     api
       .bootstrap()
-      .then((value) => {
-        if (active) setData(value);
+      .then(async (value) => {
+        if (!active) return;
+        setData(value);
+        try {
+          const current = await api.getGame("ancient-official");
+          if (active) setGame(current);
+        } catch (reason) {
+          const status = (reason as { status?: number }).status;
+          if (active && status !== 404) setError(String((reason as Error).message || reason));
+        }
       })
       .catch((reason) => {
         if (active) setError(String(reason.message || reason));
@@ -305,24 +311,7 @@ function App() {
               >
                 初入此世 <span>→</span>
               </button>
-              {!!data?.saves.length && (
-                <button
-                  className="outline-button"
-                  disabled={busy}
-                  onClick={() => enter(data.activeId || data.saves[0].id)}
-                >
-                  续写前尘
-                </button>
-              )}
-              <div>
-                <button disabled={!data} onClick={() => show("saves")}>
-                  读取存档
-                </button>
-                <i>·</i>
-                <button disabled={!data} onClick={() => show("library")}>
-                  整理书卷
-                </button>
-              </div>
+              <p>此世界进度由服务器实时保存，每位学习者只有一段人生。</p>
             </div>
             {!data && !error && <p role="status">正在展开山河卷……</p>}
             {error && !panel && warning}
@@ -350,7 +339,7 @@ function App() {
       ) : (
         <>
           <header className="world-header">
-            <button className="wordmark" onClick={() => show("saves")}>
+            <button className="wordmark" onClick={() => window.location.assign("/")}>
               <span className="small-seal">题</span>
               {gameDesign.title}
             </button>
@@ -363,12 +352,10 @@ function App() {
               {settingsButton}
               <button
                 onClick={() => {
-                  setGame(null);
-                  setError("");
-                  void sync();
+                  window.location.assign("/");
                 }}
               >
-                离席
+                主世界
               </button>
             </div>
           </header>

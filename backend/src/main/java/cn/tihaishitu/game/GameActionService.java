@@ -3,6 +3,9 @@ package cn.tihaishitu.game;
 import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.learner.StudyProfileService;
+import cn.tihaishitu.world.WorldActionContext;
+import cn.tihaishitu.world.WorldStateStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -27,16 +30,21 @@ public class GameActionService {
     private final GameContent content;
     private final GameFactory factory;
     private final ObjectMapper mapper;
+    private final WorldStateStore worldStates;
+    private final StudyProfileService studyProfiles;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
-                             GameContent content, GameFactory factory, ObjectMapper mapper) {
+                             GameContent content, GameFactory factory, ObjectMapper mapper,
+                             WorldStateStore worldStates, StudyProfileService studyProfiles) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
         this.content = content;
         this.factory = factory;
         this.mapper = mapper;
+        this.worldStates = worldStates;
+        this.studyProfiles = studyProfiles;
     }
 
     @Transactional
@@ -107,8 +115,9 @@ public class GameActionService {
                 throw bad("须先取得本场应试资格。");
         });
         int rounds = activity.path("rounds").asInt(5);
-        KnowledgeQuestionPoolService.StudyPlan plan = questionPool.planKnowledgePoints(
-                selectedBookIds(game), rounds);
+        KnowledgeQuestionPoolService.StudyPlan plan = WorldActionContext.active()
+                ? studyProfiles.plan(rounds)
+                : questionPool.planKnowledgePoints(selectedBookIds(game), rounds);
         ObjectNode run = mapper.createObjectNode();
         run.put("id", UUID.randomUUID().toString());
         run.set("definition", activity.deepCopy());
@@ -433,6 +442,7 @@ public class GameActionService {
     }
 
     private Set<String> selectedBookIds(ObjectNode game) {
+        if (WorldActionContext.active()) return new LinkedHashSet<>(studyProfiles.rawCurrent().selectedBookIds());
         Set<String> selected = new LinkedHashSet<>();
         game.path("config").path("bankIds").forEach(id -> selected.add(id.asText()));
         return selected;
@@ -553,8 +563,15 @@ public class GameActionService {
         return (ObjectNode) run;
     }
     private ObjectNode adventure(ObjectNode game) { return (ObjectNode) game.path("adventure"); }
-    private ObjectNode game(String id) { return factory.hydrate(games.findObject(id)); }
-    private void persist(ObjectNode game) { games.save(game); }
+    private ObjectNode game(String id) {
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        return factory.hydrate(world == null ? games.findObject(id) : worldStates.find(world.learnerId(), world.worldId()));
+    }
+    private void persist(ObjectNode game) {
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        if (world == null) games.save(game);
+        else worldStates.save(world.learnerId(), world.worldId(), game);
+    }
     private void ensureNoActiveRun(ObjectNode game) { if (adventure(game).path("run").isObject()) throw bad("请先结束眼前的行程。"); }
     private ObjectNode npc(ObjectNode game, String id) {
         for (JsonNode value : game.path("npcs")) if (id.equals(value.path("id").asText())) return (ObjectNode) value;
