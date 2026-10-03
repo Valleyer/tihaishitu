@@ -56,7 +56,11 @@ public class CatalogStore {
                                    JOIN question_resource qr ON qr.id = bi.question_id
                                   WHERE bi.bank_id = b.id AND qr.status = 'published')
                             ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) END question_count,
-                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
+                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
+                            THEN (SELECT COUNT(*) FROM question_bank_knowledge bk
+                                   JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
+                                  WHERE bk.bank_id = b.id AND k.status = 'active')
+                            WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
                             THEN (SELECT COUNT(DISTINCT qk.knowledge_point_id)
                            FROM question_bank_item bi
                            JOIN question_resource qr ON qr.id = bi.question_id
@@ -101,6 +105,22 @@ public class CatalogStore {
         );
     }
 
+    public List<KnowledgePointDto> loadBookKnowledgePoints(String bankId) {
+        return jdbc.query(
+                """
+                SELECT k.id, k.name, k.subject_name, k.section_name, k.chapter_name,
+                       k.description, k.explanation, bk.sort_order
+                  FROM question_bank_knowledge bk
+                  JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
+                 WHERE bk.bank_id = ? AND k.status = 'active'
+                 ORDER BY bk.sort_order, k.id
+                """,
+                (result, row) -> knowledgePoint(result),
+                bankId
+        );
+    }
+
+    // Legacy gameplay compatibility: the current game payload still follows question_bank_item.
     private List<KnowledgePointDto> loadKnowledgePoints(String bankId) {
         if (!hasProjectedItems(bankId)) return loadLegacyKnowledgePoints(bankId);
         return jdbc.query(
@@ -114,13 +134,17 @@ public class CatalogStore {
                   WHERE bi.bank_id = ? AND q.status = 'published' AND k.status = 'active'
                  ORDER BY k.sort_order, k.id
                 """,
-                (result, row) -> new KnowledgePointDto(
-                        result.getString("id"), result.getString("name"),
-                        result.getString("subject_name"), result.getString("section_name"),
-                        result.getString("description"), result.getString("explanation"),
-                        null, List.of(), List.of(result.getString("chapter_name"))
-                ),
+                (result, row) -> knowledgePoint(result),
                 bankId
+        );
+    }
+
+    private static KnowledgePointDto knowledgePoint(ResultSet result) throws SQLException {
+        return new KnowledgePointDto(
+                result.getString("id"), result.getString("name"),
+                result.getString("subject_name"), result.getString("section_name"),
+                result.getString("description"), result.getString("explanation"),
+                null, List.of(), List.of(result.getString("chapter_name"))
         );
     }
 

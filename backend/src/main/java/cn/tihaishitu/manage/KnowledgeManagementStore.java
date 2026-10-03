@@ -115,6 +115,36 @@ public class KnowledgeManagementStore {
         if (!source.subject().equals(target.subject())) bad("只能合并同一学科的知识点。");
         if (reason == null || reason.isBlank()) bad("请填写合并原因。");
 
+        List<String> membershipBankIds = jdbc.query("""
+                SELECT bank_id
+                  FROM question_bank_knowledge
+                 WHERE knowledge_point_id = ?
+                 ORDER BY bank_id
+                """, (row, index) -> row.getString("bank_id"), sourceId);
+        Set<String> bankIds = new LinkedHashSet<>();
+        int migratedBookMemberships = 0;
+        int collapsedBookMemberships = 0;
+        for (String membershipBankId : membershipBankIds) {
+            bankIds.add(membershipBankId);
+            Integer targetMembership = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM question_bank_knowledge
+                     WHERE bank_id = ? AND knowledge_point_id = ?
+                    """, Integer.class, membershipBankId, targetId);
+            if (targetMembership == null || targetMembership == 0) {
+                jdbc.update("""
+                        UPDATE question_bank_knowledge SET knowledge_point_id = ?
+                         WHERE bank_id = ? AND knowledge_point_id = ?
+                        """, targetId, membershipBankId, sourceId);
+                migratedBookMemberships++;
+            } else {
+                jdbc.update("""
+                        DELETE FROM question_bank_knowledge
+                         WHERE bank_id = ? AND knowledge_point_id = ?
+                        """, membershipBankId, sourceId);
+                collapsedBookMemberships++;
+            }
+        }
+
         List<RelationRow> relations = jdbc.query("""
                 SELECT question_id, relation_role, sort_order
                   FROM question_resource_knowledge
@@ -154,7 +184,6 @@ public class KnowledgeManagementStore {
             }
         }
 
-        Set<String> bankIds = new LinkedHashSet<>();
         for (String questionId : questionIds) {
             bankIds.addAll(jdbc.query("SELECT bank_id FROM question_bank_item WHERE question_id = ?",
                     (row, index) -> row.getString("bank_id"), questionId));
@@ -195,6 +224,8 @@ public class KnowledgeManagementStore {
                 "collapsedRelations", collapsed,
                 "affectedQuestions", questionIds.size(),
                 "affectedBanks", bankIds.size(),
+                "migratedBookMemberships", migratedBookMemberships,
+                "collapsedBookMemberships", collapsedBookMemberships,
                 "reason", reason.trim(),
                 "historyId", historyId));
         return new KnowledgeMergeResult(historyId, find(sourceId).orElseThrow(), find(targetId).orElseThrow(),

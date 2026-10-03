@@ -73,8 +73,8 @@ class CatalogAdminIntegrationTest {
 
         mvc.perform(get("/api/v1/bootstrap"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.bankManifest[0].id").value(BANK_ID))
-                .andExpect(jsonPath("$.bankManifest[0].revision").value(2));
+                .andExpect(jsonPath("$.bankManifest[?(@.id == '" + BANK_ID + "')].revision")
+                        .value(org.hamcrest.Matchers.contains(2)));
     }
 
     @Test
