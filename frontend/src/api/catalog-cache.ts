@@ -1,12 +1,17 @@
-import type { Bank, QuestionBankManifest } from "../domain/types";
+import type { Bank, Question, QuestionBankManifest } from "../domain/types";
 
 const DATABASE = "tihaishitu:http-cache";
 const STORE = "question-banks";
-const VERSION = 1;
+const QUESTION_STORE = "answered-questions";
+const VERSION = 2;
 interface CachedBank {
   id: string;
   revision: number;
   bank: Bank;
+}
+export interface CachedAnsweredQuestion {
+  id: string;
+  question: Question;
 }
 
 function database(): Promise<IDBDatabase> {
@@ -16,9 +21,52 @@ function database(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE))
         request.result.createObjectStore(STORE, { keyPath: "id" });
+      if (!request.result.objectStoreNames.contains(QUESTION_STORE))
+        request.result.createObjectStore(QUESTION_STORE, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
   });
+}
+
+/**
+ * 全局动态题池不再把题面重复写进每条作答记录。题目完成后才缓存已公开的
+ * 完整题目，历史记录随后凭 attempt UUID 从浏览器恢复，避免重复占用网络流量。
+ */
+export async function cacheAnsweredQuestion(
+  attemptId: string,
+  question: Question,
+): Promise<void> {
+  const db = await database();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(QUESTION_STORE, "readwrite");
+    transaction
+      .objectStore(QUESTION_STORE)
+      .put({ id: attemptId, question } satisfies CachedAnsweredQuestion);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.oncomplete = () => resolve();
+  }).finally(() => db.close());
+}
+
+export async function loadAnsweredQuestions(
+  ids: string[],
+): Promise<CachedAnsweredQuestion[]> {
+  if (!ids.length) return [];
+  const db = await database();
+  return new Promise<CachedAnsweredQuestion[]>((resolve, reject) => {
+    const transaction = db.transaction(QUESTION_STORE);
+    const store = transaction.objectStore(QUESTION_STORE);
+    const result: CachedAnsweredQuestion[] = [];
+    ids.forEach((id) => {
+      const request = store.get(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        if (request.result)
+          result.push(request.result as CachedAnsweredQuestion);
+      };
+    });
+    transaction.onerror = () => reject(transaction.error);
+    transaction.oncomplete = () => resolve(result);
+  }).finally(() => db.close());
 }
 
 async function read(id: string): Promise<CachedBank | undefined> {
@@ -87,6 +135,8 @@ export async function loadCachedBanks(
       result.push(cached.bank);
     }
   }
-  removeMissing(new Set(manifests.map((item) => item.id))).catch(() => undefined);
+  removeMissing(new Set(manifests.map((item) => item.id))).catch(
+    () => undefined,
+  );
   return result;
 }

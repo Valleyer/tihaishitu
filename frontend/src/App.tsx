@@ -466,6 +466,12 @@ function App() {
                           )}
                           /{activityRun.definition.rounds}
                           {activityRun.training ? " · 诊断训练中" : " · 首次考核"}
+                          <b className="current-study">
+                            当前修习：
+                            {attempt.targetKnowledgePointName ||
+                              attempt.question.knowledgePoints[0]?.name ||
+                              "当前知识点"}
+                          </b>
                         </span>
                         <div>
                           <button onClick={() => setActivityOpen(false)}>

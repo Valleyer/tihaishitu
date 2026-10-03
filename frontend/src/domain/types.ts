@@ -142,6 +142,8 @@ export interface RevealedAnswer {
 }
 export interface Attempt {
   id: string;
+  targetKnowledgePointId?: string;
+  targetKnowledgePointName?: string;
   question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
   scene: Scene;
   result: Result | null;

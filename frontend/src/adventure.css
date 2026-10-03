@@ -272,6 +272,11 @@
   display: flex;
   gap: 8px;
 }
+.challenge-toolbar .current-study {
+  margin-left: 12px;
+  color: #d8bd73;
+  font-weight: 500;
+}
 .challenge-toolbar button {
   font-size: 10px;
   padding: 5px 9px;
