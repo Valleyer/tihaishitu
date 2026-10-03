@@ -1,6 +1,8 @@
 package cn.tihaishitu;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import cn.tihaishitu.learner.LearnerAuthService;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -25,11 +27,12 @@ class BackendApiIntegrationTest {
 
     @Test
     void bootstrapDeclaresServerCatalog() throws Exception {
-        mvc.perform(get("/api/v1/bootstrap"))
+        mvc.perform(get("/api/v1/bootstrap").cookie(register("bootstrap_user")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questionCatalog.source").value("server"))
                 .andExpect(jsonPath("$.questionCatalog.canEdit").value(false))
-                .andExpect(jsonPath("$.saves").isArray())
+                .andExpect(jsonPath("$.learner.username").value("bootstrap_user"))
+                .andExpect(jsonPath("$.worlds").isArray())
                 .andExpect(jsonPath("$.bankManifest").isArray());
     }
 
@@ -60,5 +63,11 @@ class BackendApiIntegrationTest {
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/games/{id}", id))
                 .andExpect(status().isNotFound());
+    }
+
+    private Cookie register(String username) throws Exception {
+        return mvc.perform(post("/api/v1/learner/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"displayName\":\"测试\",\"password\":\"password-123\"}"))
+                .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 }

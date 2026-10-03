@@ -2,7 +2,7 @@
 
 Java 17 + Spring Boot 后端已在 `backend` 目录开始实现，服务端口为 `12345`。统一接口在 `frontend/src/domain/types.ts` 的 `GameApi`，HTTP 路由映射在 `frontend/src/api/http.ts`。
 
-当前已实现启动数据、按修订下载并缓存文集、存档 CRUD 和下列游戏行为接口。普通用户题库改名、导入、修订与发布接口仍待管理员认证层完成。后端启动与数据库配置见 `backend/README.md`。
+正式产品已经切换为联机 Learner + Learning Hub + WorldState。`/games/**` 和 `game_save` 只保留旧数据兼容；新前端通过学习者 Cookie、Study Profile 和 `/worlds/ancient-official/**` 工作。后端启动与数据库配置见 `backend/README.md`。
 
 ## 切换方式
 
@@ -15,7 +15,7 @@ API_PROXY_TARGET=http://localhost:12345
 ~~~
 
 重启开发服务器。Vite 开发代理把 /api 请求交给 Java；部署时自行配置同源代理或 CORS。
-默认 local，不请求后端；HTTP 失败会直接展示错误，不自动降级或迁移存档。
+默认使用 HTTP 联机模式；如需运行旧本地兼容实现，可显式设置 `VITE_API_MODE=local`。
 
 ## 路由
 
@@ -23,7 +23,26 @@ API_PROXY_TARGET=http://localhost:12345
 
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
-| GET | /bootstrap | 无 | Bootstrap |
+| POST | /learner/auth/register | username, displayName, password | Learner + HttpOnly Cookie |
+| POST | /learner/auth/login | username, password | Learner + HttpOnly Cookie |
+| POST | /learner/auth/logout | 无 | 204 |
+| GET | /learner/me | 无 | 当前 Learner |
+| GET/PUT | /learner/study-profile | Study Focus | StudyProfile |
+| GET | /bootstrap | 无 | learner、studyProfile、worlds、bankManifest、questionCatalog |
+| GET | /learning/books | 无 | 可见文集 |
+| GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
+| GET | /learning/knowledge-points/{id} | 无 | active KnowledgePoint |
+| GET | /learning/knowledge-points/{id}/questions | 无 | published Questions |
+| GET | /learning/questions/{id} | 无 | 只读题目、答案与解析 |
+| POST | /worlds/ancient-official/initialize | characterName, gender, origin | 唯一 WorldState |
+| GET | /worlds/ancient-official | 无 | 当前 Learner 的 WorldState |
+| POST | /worlds/ancient-official/* | 动作参数 | 保存后的 WorldState |
+| POST | /learner/history/questions | {attemptIds: UUID[]} | 当前 Learner 已完成题目快照 |
+
+以下均为 Legacy Compatibility：
+
+| 方法 | 路径 | 请求体 | 成功返回 |
+| --- | --- | --- | --- |
 | POST | /games | NewGame | Game |
 | GET | /games/{id} | 无 | Game |
 | POST | /games/{id}/history/questions | {attemptIds: UUID[]} | 批量恢复该存档已完成 attempt 的完整历史题目 |
@@ -95,9 +114,9 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 }
 ~~~
 
-pace 为 normal / slow；difficulty 为 gentle / standard。
+pace 为 normal / slow；difficulty 为 gentle / standard。此段仅描述 Legacy Game。
 新建人生界面不再要求玩家选择文集或题量；客户端自动接入当前可用文集。`bankIds` 允许为空，因此没有可用文集时仍可进入世界，待题库接入后再参与答题活动。
-服务端 Bootstrap 为 `{saves, bankManifest, questionCatalog, activeId, legacyNotice}`；saves 中每项为 `{id,name,title,total,updatedAt}`。`bankManifest` 只包含文集 UUID、名称、修订号和题目/知识点数量。HTTP 前端把它与 IndexedDB 缓存比较，仅在文集 revision 变化时请求 `/question-banks/{uuid}`；合并后再向界面提供原有的 `banks` 字段。
+正式 Bootstrap 为 `{learner, studyProfile, worlds, bankManifest, questionCatalog}`，不再以 saves 或 activeId 为中心。
 
 `questionCatalog` 用于切换本地编辑题库与上线后的服务器统一题库：
 

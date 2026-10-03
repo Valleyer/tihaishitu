@@ -41,6 +41,10 @@ public class KnowledgeQuestionPoolService {
     }
 
     public StudyPlan planKnowledgePoints(Set<String> selectedBookIds, int count) {
+        return planKnowledgePoints(selectedBookIds, List.of(), count);
+    }
+
+    public StudyPlan planKnowledgePoints(Set<String> selectedBookIds, List<String> focusedKnowledgePointIds, int count) {
         List<KnowledgePointDto> scope = store.bookScope(selectedBookIds);
         Set<String> allowed = new LinkedHashSet<>();
         scope.forEach(point -> allowed.add(point.id()));
@@ -51,6 +55,14 @@ public class KnowledgeQuestionPoolService {
             throw bad("当前文集只有 " + planned.size() + " 个可用知识点，本活动需要 " + count + " 个。");
         }
         Collections.shuffle(planned);
+        if (focusedKnowledgePointIds != null && !focusedKnowledgePointIds.isEmpty()) {
+            Set<String> requested = new LinkedHashSet<>(focusedKnowledgePointIds);
+            List<String> focused = focusedKnowledgePointIds.stream().filter(playable::contains).distinct().toList();
+            planned.removeIf(requested::contains);
+            List<String> prioritized = new ArrayList<>(focused);
+            prioritized.addAll(planned);
+            planned = prioritized;
+        }
         return new StudyPlan(Collections.unmodifiableSet(allowed),
                 List.copyOf(planned.subList(0, count)));
     }

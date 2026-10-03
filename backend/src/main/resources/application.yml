@@ -60,3 +60,6 @@ app:
     admin-key: ${APP_ADMIN_KEY:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  learner-session:
+    secure: ${LEARNER_COOKIE_SECURE:false}
+    max-age-seconds: ${LEARNER_SESSION_MAX_AGE:2592000}
