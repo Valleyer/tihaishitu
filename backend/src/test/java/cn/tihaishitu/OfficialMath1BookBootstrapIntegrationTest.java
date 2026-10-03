@@ -33,6 +33,7 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(3);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(469);
+        assertThat(catalog.loadBookKnowledgePoints(OfficialMath1BookBootstrap.BOOK_ID)).hasSize(469);
         List<String> chapterIds = jdbc.query("""
                 SELECT id FROM question_bank_chapter WHERE bank_id = ? ORDER BY chapter_code
                 """, (result, row) -> result.getString("id"), OfficialMath1BookBootstrap.BOOK_ID);
@@ -82,7 +83,7 @@ class OfficialMath1BookBootstrapIntegrationTest {
     }
 
     @Test
-    void preservesExisting2026QuestionAndAssignsItsFirstCoreChapter() {
+    void preservesExisting2026QuestionWithoutAddingBookChapterSemantics() {
         String questionId = "e4659121-9b1a-405e-aad3-f9975c3fe50b";
         String knowledgeId = jdbc.queryForObject(
                 "SELECT id FROM global_knowledge_point WHERE code = 'M1-H01-001'", String.class);
@@ -99,16 +100,12 @@ class OfficialMath1BookBootstrapIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id = ?", questionId)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT content_markdown FROM question_resource WHERE id = ?",
                 String.class, questionId)).isEqualTo("2026 原题内容");
-        assertThat(jdbc.queryForObject("""
-                SELECT c.chapter_code
-                  FROM question_bank_item bi
-                  JOIN question_bank_chapter c ON c.id = bi.chapter_id
-                 WHERE bi.bank_id = ? AND bi.question_id = ?
-                """, String.class, OfficialMath1BookBootstrap.BOOK_ID, questionId)).isEqualTo("M1-H01");
+        assertThat(count("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ? AND question_id = ?",
+                OfficialMath1BookBootstrap.BOOK_ID, questionId)).isEqualTo(1);
     }
 
     @Test
-    void globalResourcesCanBeSharedByAnotherBookAndSurviveItsDeletion() {
+    void knowledgeCanBeSharedByAnotherBookWithoutCopyingGlobalResources() {
         String secondBook = UUID.randomUUID().toString();
         String secondRoot = UUID.randomUUID().toString();
         String secondChapter = UUID.randomUUID().toString();
@@ -118,8 +115,6 @@ class OfficialMath1BookBootstrapIntegrationTest {
         insertQuestion(questionId, "published", "共享资源题");
         jdbc.update("INSERT INTO question_resource_knowledge(question_id, knowledge_point_id, relation_role, sort_order) VALUES (?, ?, 'core', 0)",
                 questionId, knowledgeId);
-        jdbc.update("INSERT INTO question_bank_item(bank_id, question_id, sort_order) VALUES (?, ?, 0)",
-                OfficialMath1BookBootstrap.BOOK_ID, questionId);
         jdbc.update("INSERT INTO question_bank(id, name, description, enabled, weight_value) VALUES (?, '第二本书', '', TRUE, 1)", secondBook);
         jdbc.update("""
                 INSERT INTO question_bank_chapter(id, bank_id, chapter_code, name, description, sort_order)
@@ -129,46 +124,18 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 INSERT INTO question_bank_chapter(id, bank_id, parent_id, chapter_code, name, description, sort_order)
                 VALUES (?, ?, ?, 'CUSTOM-01', '自定义章节', '', 0)
                 """, secondChapter, secondBook, secondRoot);
-        jdbc.update("INSERT INTO question_bank_item(bank_id, question_id, chapter_id, sort_order) VALUES (?, ?, ?, 0)",
-                secondBook, questionId, secondChapter);
         jdbc.update("INSERT INTO question_bank_knowledge(bank_id, knowledge_point_id, chapter_id, sort_order) VALUES (?, ?, ?, 0)",
                 secondBook, knowledgeId, secondChapter);
 
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id = ?", questionId)).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM global_knowledge_point WHERE id = ?", knowledgeId)).isEqualTo(1);
-        assertThat(count("SELECT COUNT(*) FROM question_bank_item WHERE question_id = ?", questionId)).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE knowledge_point_id = ?", knowledgeId)).isEqualTo(2);
 
         jdbc.update("DELETE FROM question_bank WHERE id = ?", secondBook);
 
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id = ?", questionId)).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM global_knowledge_point WHERE id = ?", knowledgeId)).isEqualTo(1);
-        assertThat(count("SELECT COUNT(*) FROM question_bank_item WHERE question_id = ?", questionId)).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE knowledge_point_id = ?", knowledgeId)).isEqualTo(1);
-    }
-
-    @Test
-    void gameScopeContainsOnlyKnowledgeWithPublishedQuestions() {
-        String pendingPoint = jdbc.queryForObject(
-                "SELECT id FROM global_knowledge_point WHERE code = 'M1-P01-001'", String.class);
-        String publishedPoint = jdbc.queryForObject(
-                "SELECT id FROM global_knowledge_point WHERE code = 'M1-P01-002'", String.class);
-        addBookQuestion(UUID.randomUUID().toString(), pendingPoint, "pending_review", 0);
-        addBookQuestion(UUID.randomUUID().toString(), publishedPoint, "published", 1);
-
-        assertThat(catalog.loadBookKnowledgePoints(OfficialMath1BookBootstrap.BOOK_ID)).hasSize(469);
-        assertThat(catalog.loadPlayableKnowledgePoints(OfficialMath1BookBootstrap.BOOK_ID))
-                .extracting(point -> point.id())
-                .contains(publishedPoint)
-                .doesNotContain(pendingPoint);
-    }
-
-    private void addBookQuestion(String questionId, String knowledgeId, String status, int order) {
-        insertQuestion(questionId, status, "范围测试题");
-        jdbc.update("INSERT INTO question_resource_knowledge(question_id, knowledge_point_id, relation_role, sort_order) VALUES (?, ?, 'core', 0)",
-                questionId, knowledgeId);
-        jdbc.update("INSERT INTO question_bank_item(bank_id, question_id, sort_order) VALUES (?, ?, ?)",
-                OfficialMath1BookBootstrap.BOOK_ID, questionId, order);
     }
 
     private void insertQuestion(String id, String status, String content) {

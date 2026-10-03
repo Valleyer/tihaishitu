@@ -20,15 +20,6 @@ CREATE TABLE IF NOT EXISTS question_bank_chapter (
 CREATE INDEX idx_bank_chapter_parent
     ON question_bank_chapter(bank_id, parent_id, sort_order);
 
-ALTER TABLE question_bank_item ADD COLUMN chapter_id CHAR(36);
-
-CREATE INDEX idx_bank_item_chapter
-    ON question_bank_item(bank_id, chapter_id, sort_order);
-
-ALTER TABLE question_bank_item
-    ADD CONSTRAINT fk_bank_item_chapter FOREIGN KEY (bank_id, chapter_id)
-        REFERENCES question_bank_chapter(bank_id, id) ON DELETE CASCADE;
-
 CREATE TABLE IF NOT EXISTS question_bank_knowledge (
     bank_id CHAR(36) NOT NULL,
     knowledge_point_id CHAR(36) NOT NULL,

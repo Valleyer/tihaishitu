@@ -63,7 +63,8 @@ class FlywayMigrationIntegrationTest {
         assertThat(old.queryForObject("SELECT COUNT(*) FROM question_bank WHERE id = ?", Integer.class, bankId)).isEqualTo(1);
         assertThat(old.queryForObject("SELECT COUNT(*) FROM question_resource WHERE id = ?", Integer.class, questionId)).isEqualTo(1);
         assertThat(old.queryForObject("SELECT COUNT(*) FROM global_knowledge_point WHERE id = ?", Integer.class, knowledgeId)).isEqualTo(1);
-        assertThat(old.queryForObject("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ? AND question_id = ? AND chapter_id IS NULL", Integer.class, bankId, questionId)).isEqualTo(1);
+        assertThat(old.queryForObject("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ? AND question_id = ?", Integer.class, bankId, questionId)).isEqualTo(1);
+        assertThat(columnExists(old, "question_bank_item", "chapter_id")).isFalse();
     }
 
     private boolean tableExists(String name) {
@@ -71,6 +72,14 @@ class FlywayMigrationIntegrationTest {
                 "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = ?",
                 Integer.class,
                 name.toLowerCase());
+        return count != null && count > 0;
+    }
+
+    private boolean columnExists(JdbcTemplate template, String table, String column) {
+        Integer count = template.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                 WHERE LOWER(table_name) = LOWER(?) AND LOWER(column_name) = LOWER(?)
+                """, Integer.class, table, column);
         return count != null && count > 0;
     }
 }

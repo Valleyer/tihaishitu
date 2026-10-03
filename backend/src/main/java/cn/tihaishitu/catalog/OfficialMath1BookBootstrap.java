@@ -66,9 +66,8 @@ public class OfficialMath1BookBootstrap {
         ensureBook();
         Map<String, String> chapterIds = ensureChapters();
         int memberships = ensureKnowledgeMemberships(chapterIds);
-        int assignedQuestions = assignQuestionChapters(chapterIds);
-        log.info("官方《数学一》底座已就绪：{} 个章节，{} 个知识点，{} 道题完成主章节归位。",
-                chapterIds.size(), memberships, assignedQuestions);
+        log.info("官方《数学一》底座已就绪：{} 个章节，{} 个知识点。",
+                chapterIds.size(), memberships);
     }
 
     private void ensureBook() {
@@ -148,41 +147,6 @@ public class OfficialMath1BookBootstrap {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?", Integer.class, BOOK_ID);
         return count == null ? 0 : count;
-    }
-
-    private int assignQuestionChapters(Map<String, String> chapterIds) {
-        List<String> questionIds = jdbc.query("""
-                SELECT question_id FROM question_bank_item
-                 WHERE bank_id = ? AND chapter_id IS NULL
-                 ORDER BY sort_order, question_id
-                """, (result, row) -> result.getString("question_id"), BOOK_ID);
-        int assigned = 0;
-        for (String questionId : questionIds) {
-            List<String> codes = jdbc.query("""
-                    SELECT k.code
-                      FROM question_resource_knowledge qk
-                      JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
-                     WHERE qk.question_id = ? AND qk.relation_role = 'core'
-                     ORDER BY qk.sort_order, k.code
-                     LIMIT 1
-                    """, (result, row) -> result.getString("code"), questionId);
-            if (codes.isEmpty()) {
-                log.warn("官方《数学一》题目 {} 没有 core 知识点，未自动归入章节。", questionId);
-                continue;
-            }
-            String chapterCode = chapterCodeOrNull(codes.get(0));
-            String chapterId = chapterCode == null ? null : chapterIds.get(chapterCode);
-            if (chapterId == null) {
-                log.warn("官方《数学一》题目 {} 的首个 core 知识点 {} 无法匹配章节，未自动归位。",
-                        questionId, codes.get(0));
-                continue;
-            }
-            assigned += jdbc.update("""
-                    UPDATE question_bank_item SET chapter_id = ?
-                     WHERE bank_id = ? AND question_id = ? AND chapter_id IS NULL
-                    """, chapterId, BOOK_ID, questionId);
-        }
-        return assigned;
     }
 
     private static String chapterCode(String knowledgeCode) {

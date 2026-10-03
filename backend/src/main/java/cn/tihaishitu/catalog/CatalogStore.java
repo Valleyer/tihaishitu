@@ -98,7 +98,7 @@ public class CatalogStore {
                 bankId,
                 result.getString("name"),
                 result.getString("description"),
-                loadPlayableKnowledgePoints(bankId),
+                loadKnowledgePoints(bankId),
                 loadQuestions(bankId),
                 result.getBoolean("enabled"),
                 result.getInt("weight_value")
@@ -120,11 +120,9 @@ public class CatalogStore {
         );
     }
 
-    public List<KnowledgePointDto> loadPlayableKnowledgePoints(String bankId) {
+    // Legacy gameplay compatibility: the current game payload still follows question_bank_item.
+    private List<KnowledgePointDto> loadKnowledgePoints(String bankId) {
         if (!hasProjectedItems(bankId)) return loadLegacyKnowledgePoints(bankId);
-        String membershipJoin = hasBookKnowledgeMemberships(bankId)
-                ? "JOIN question_bank_knowledge bk ON bk.bank_id = bi.bank_id AND bk.knowledge_point_id = qk.knowledge_point_id"
-                : "";
         return jdbc.query(
                 """
                 SELECT DISTINCT k.id, k.name, k.subject_name, k.section_name, k.chapter_name,
@@ -132,11 +130,10 @@ public class CatalogStore {
                    FROM question_bank_item bi
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
-                   %s
                    JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
                   WHERE bi.bank_id = ? AND q.status = 'published' AND k.status = 'active'
                  ORDER BY k.sort_order, k.id
-                """.formatted(membershipJoin),
+                """,
                 (result, row) -> knowledgePoint(result),
                 bankId
         );
@@ -213,12 +210,6 @@ public class CatalogStore {
     private boolean hasProjectedItems(String bankId) {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ?",
                 Integer.class, bankId);
-        return count != null && count > 0;
-    }
-
-    private boolean hasBookKnowledgeMemberships(String bankId) {
-        Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?", Integer.class, bankId);
         return count != null && count > 0;
     }
 
