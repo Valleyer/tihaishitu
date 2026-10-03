@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Deprecated(forRemoval = false)
 public class GlobalQuestionBankImportService {
     private static final String SCHEMA_VERSION = "global-question-bank/v1";
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
@@ -57,6 +58,9 @@ public class GlobalQuestionBankImportService {
     public ImportResult importBank(ImportRequest request, String actorId) {
         ValidImport valid = validate(request);
         BankInput bank = valid.bank();
+        if (count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?", bank.id()) > 0) {
+            bad("该 Book 已使用 KnowledgePoint 学习路径，禁止旧版覆盖导入；请使用 global-question-batch/v2。");
+        }
         boolean publish = Boolean.TRUE.equals(request.publish());
         upsertBank(bank);
 

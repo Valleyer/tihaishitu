@@ -72,11 +72,14 @@ export type QuestionView = {
   knowledgePoints: QuestionRelation[];
 };
 
-export type QuestionBankImportResult = {
+export type QuestionBatchImportResult = {
   schemaVersion: string;
-  bankId: string;
-  bankName: string;
+  importId: string;
   published: boolean;
+  subject: string;
+  sourceType: string;
+  sourceName: string;
+  examYear?: number;
   questionCount: number;
   optionCount: number;
   relationCount: number;
@@ -204,8 +207,8 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ expectedRevision: question.revision, approve, comment }),
     }),
-  importQuestionBank: (payload: unknown) =>
-    request<QuestionBankImportResult>("/imports/question-bank", {
+  importQuestionBatch: (payload: unknown) =>
+    request<QuestionBatchImportResult>("/imports/questions", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

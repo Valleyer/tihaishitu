@@ -57,7 +57,7 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 | Java 接口与低流量缓存 | [接口契约](docs/api.md) |
 | 后端实施进度 | [后端开发记录](docs/后端开发记录.md) |
 | 本地背景与立绘 | [素材说明](docs/art-assets.md) |
-| 可直接导入的三题型题库 | [示例 JSON](frontend/public/examples/题库示例.json) |
+| 可直接导入的全局题目批次 | [V2 示例 JSON](frontend/public/examples/题库示例.json) |
 
 内容在 frontend/src/content，素材在 frontend/public/art，规则在 frontend/src/engine。
 关键代码配中文注释，JSON 字段说明见手册。
