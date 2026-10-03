@@ -27,7 +27,7 @@ public class BootstrapController {
                 LearnerContext.current(),
                 studyProfiles.current(),
                 worlds.forLearner(LearnerContext.learnerId()),
-                catalog.findManifests(),
+                catalog.findManifests().stream().filter(cn.tihaishitu.catalog.QuestionBankManifest::enabled).toList(),
                 catalog.descriptor()
         );
     }
