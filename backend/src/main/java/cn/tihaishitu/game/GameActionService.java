@@ -1,8 +1,6 @@
 package cn.tihaishitu.game;
 
-import cn.tihaishitu.catalog.CatalogService;
 import cn.tihaishitu.catalog.KnowledgePointDto;
-import cn.tihaishitu.catalog.QuestionBankDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,16 +23,17 @@ import java.util.UUID;
 public class GameActionService {
     private final GameStore games;
     private final QuestionAttemptStore attempts;
-    private final CatalogService catalog;
+    private final KnowledgeQuestionPoolService questionPool;
     private final GameContent content;
     private final GameFactory factory;
     private final ObjectMapper mapper;
 
-    public GameActionService(GameStore games, QuestionAttemptStore attempts, CatalogService catalog,
+    public GameActionService(GameStore games, QuestionAttemptStore attempts,
+                             KnowledgeQuestionPoolService questionPool,
                              GameContent content, GameFactory factory, ObjectMapper mapper) {
         this.games = games;
         this.attempts = attempts;
-        this.catalog = catalog;
+        this.questionPool = questionPool;
         this.content = content;
         this.factory = factory;
         this.mapper = mapper;
@@ -109,13 +107,16 @@ public class GameActionService {
                 throw bad("须先取得本场应试资格。");
         });
         int rounds = activity.path("rounds").asInt(5);
-        List<String> pointIds = planKnowledgePoints(game, rounds);
+        KnowledgeQuestionPoolService.StudyPlan plan = questionPool.planKnowledgePoints(
+                selectedBookIds(game), rounds);
         ObjectNode run = mapper.createObjectNode();
         run.put("id", UUID.randomUUID().toString());
         run.set("definition", activity.deepCopy());
         run.put("answered", 0);
         run.put("correct", 0);
-        run.set("knowledgePointIds", mapper.valueToTree(pointIds));
+        run.set("knowledgePointIds", mapper.valueToTree(plan.knowledgePointIds()));
+        // Phase C compatibility scope: selected Book knowledge does not imply user mastery.
+        run.set("allowedKnowledgePointIds", mapper.valueToTree(plan.allowedKnowledgePointIds()));
         run.put("knowledgePointIndex", 0);
         run.put("training", false);
         run.put("trainingAnswered", 0);
@@ -156,6 +157,7 @@ public class GameActionService {
         ObjectNode record = mapper.createObjectNode();
         record.put("attemptId", request.attemptId());
         record.put("questionId", request.questionId());
+        record.set("question", snapshot.question().deepCopy());
         record.set("answer", request.answer().deepCopy());
         record.put("correct", correct);
         record.put("at", Instant.now().toString());
@@ -181,7 +183,7 @@ public class GameActionService {
         ObjectNode reveal = mapper.createObjectNode();
         reveal.set("standard", snapshot.standard().deepCopy());
         reveal.put("explanation", snapshot.question().path("explanation").asText());
-        reveal.set("knowledgePoints", knowledgeDetails(game, snapshot.question()));
+        reveal.set("knowledgePoints", knowledgeDetails(snapshot.question()));
         current.set("reveal", reveal);
         persist(game);
         return game;
@@ -219,6 +221,7 @@ public class GameActionService {
         ObjectNode record = mapper.createObjectNode();
         record.put("attemptId", request.attemptId());
         record.put("questionId", request.questionId());
+        record.set("question", snapshot.question().deepCopy());
         record.put("answer", request.assessment());
         record.put("correct", correct);
         record.put("assessment", request.assessment());
@@ -372,25 +375,32 @@ public class GameActionService {
         String pointId = run.path("knowledgePointIds").path(index).asText();
         Set<String> seen = new HashSet<>();
         run.path("seenQuestionIds").forEach(id -> seen.add(id.asText()));
-        QuestionDto question = drawQuestion(game, pointId, run.path("training").asBoolean(), seen);
+        Set<String> allowed = allowedKnowledgePointIds(game, run);
+        QuestionDto question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
+                pointId, allowed, seen, null, run.path("training").asBoolean()
+                ? KnowledgeQuestionPoolService.Mode.TRAINING
+                : KnowledgeQuestionPoolService.Mode.NORMAL));
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
         ObjectNode visible = full.deepCopy();
         visible.remove(List.of("answer", "aliases", "keywords", "explanation"));
         ArrayNode knowledge = mapper.createArrayNode();
-        selectedBanks(game).stream().flatMap(bank -> bank.knowledgePoints().stream())
-                .filter(point -> question.knowledgePointIds().contains(point.id()))
-                .forEach(point -> {
-                    ObjectNode visiblePoint = mapper.valueToTree(point);
-                    if ("self_assessment".equals(full.path("gradingMode").asText("auto"))) {
-                        visiblePoint.put("description", "");
-                        visiblePoint.put("explanation", "");
-                    }
-                    knowledge.add(visiblePoint);
-                });
+        List<KnowledgePointDto> details = questionPool.knowledgeDetails(question.knowledgePointIds());
+        details.forEach(point -> {
+            ObjectNode visiblePoint = mapper.valueToTree(point);
+            if ("self_assessment".equals(full.path("gradingMode").asText("auto"))) {
+                visiblePoint.put("description", "");
+                visiblePoint.put("explanation", "");
+            }
+            knowledge.add(visiblePoint);
+        });
         visible.set("knowledgePoints", knowledge);
         ObjectNode attempt = mapper.createObjectNode();
         attempt.put("id", attemptId);
+        KnowledgePointDto target = details.stream().filter(point -> pointId.equals(point.id())).findFirst()
+                .orElseThrow(() -> bad("当前修习知识点已经停用或不存在。"));
+        attempt.put("targetKnowledgePointId", target.id());
+        attempt.put("targetKnowledgePointName", target.name());
         attempt.set("question", visible);
         attempt.set("scene", scene(question, run.path("definition")));
         attempt.putNull("result");
@@ -400,13 +410,11 @@ public class GameActionService {
         attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer());
     }
 
-    private ArrayNode knowledgeDetails(ObjectNode game, JsonNode question) {
+    private ArrayNode knowledgeDetails(JsonNode question) {
         Set<String> ids = new HashSet<>();
         question.path("knowledgePointIds").forEach(id -> ids.add(id.asText()));
         ArrayNode result = mapper.createArrayNode();
-        selectedBanks(game).stream().flatMap(bank -> bank.knowledgePoints().stream())
-                .filter(point -> ids.contains(point.id()))
-                .forEach(point -> result.add(mapper.valueToTree(point)));
+        questionPool.knowledgeDetails(ids).forEach(point -> result.add(mapper.valueToTree(point)));
         return result;
     }
 
@@ -426,30 +434,19 @@ public class GameActionService {
         return scene;
     }
 
-    private List<String> planKnowledgePoints(ObjectNode game, int count) {
-        List<String> ids = selectedBanks(game).stream().flatMap(bank -> bank.questions().stream())
-                .filter(QuestionDto::enabled).flatMap(question -> question.knowledgePointIds().stream())
-                .distinct().collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        if (ids.size() < count) throw bad("当前文集只有 " + ids.size() + " 个可用知识点，本活动需要 " + count + " 个。");
-        Collections.shuffle(ids);
-        return List.copyOf(ids.subList(0, count));
-    }
-
-    private QuestionDto drawQuestion(ObjectNode game, String pointId, boolean training, Set<String> seen) {
-        List<QuestionDto> available = selectedBanks(game).stream().flatMap(bank -> bank.questions().stream())
-                .filter(QuestionDto::enabled).filter(q -> q.knowledgePointIds().contains(pointId))
-                .filter(q -> !seen.contains(q.id())).filter(q -> !training || q.difficulty() <= 2).toList();
-        if (available.isEmpty()) available = selectedBanks(game).stream().flatMap(bank -> bank.questions().stream())
-                .filter(QuestionDto::enabled).filter(q -> q.knowledgePointIds().contains(pointId)).toList();
-        if (available.isEmpty()) throw bad("该知识点暂无可用题目。");
-        return available.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(available.size()));
-    }
-
-    private List<QuestionBankDto> selectedBanks(ObjectNode game) {
+    private Set<String> selectedBookIds(ObjectNode game) {
         Set<String> selected = new LinkedHashSet<>();
         game.path("config").path("bankIds").forEach(id -> selected.add(id.asText()));
-        List<QuestionBankDto> all = catalog.findAll();
-        return all.stream().filter(bank -> bank.enabled() && (selected.isEmpty() || selected.contains(bank.id()))).toList();
+        return selected;
+    }
+
+    private Set<String> allowedKnowledgePointIds(ObjectNode game, ObjectNode run) {
+        Set<String> allowed = new LinkedHashSet<>();
+        run.path("allowedKnowledgePointIds").forEach(id -> allowed.add(id.asText()));
+        if (!allowed.isEmpty()) return allowed;
+        allowed.addAll(questionPool.allowedKnowledgePointIds(selectedBookIds(game)));
+        run.set("allowedKnowledgePointIds", mapper.valueToTree(allowed));
+        return allowed;
     }
 
     private void settleRunAnswer(ObjectNode game, boolean correct, String questionId) {
