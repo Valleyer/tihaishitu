@@ -38,6 +38,7 @@ class KnowledgeMergeIntegrationTest {
     private String sourceId;
     private String targetId;
     private String bankId;
+    private String secondBankId;
 
     @BeforeEach
     void fixture() {
@@ -46,10 +47,21 @@ class KnowledgeMergeIntegrationTest {
         sourceId = UUID.randomUUID().toString();
         targetId = UUID.randomUUID().toString();
         bankId = UUID.randomUUID().toString();
+        secondBankId = UUID.randomUUID().toString();
         insertKnowledge(sourceId, "TEST-MERGE-SOURCE", "旧极值判定", "旧极值");
         insertKnowledge(targetId, "TEST-MERGE-TARGET", "无条件极值的极值点判定", "极值点判定");
         jdbc.update("INSERT INTO question_bank(id, name, description, enabled, weight_value, revision) VALUES (?, ?, '', TRUE, 1, 1)",
                 bankId, "合并测试文集");
+        jdbc.update("INSERT INTO question_bank(id, name, description, enabled, weight_value, revision) VALUES (?, ?, '', TRUE, 1, 1)",
+                secondBankId, "第二本合并测试文集");
+        String firstChapter = insertChapter(bankId, "MERGE-01");
+        String secondChapter = insertChapter(secondBankId, "MERGE-02");
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id, knowledge_point_id, chapter_id, sort_order) VALUES (?, ?, ?, 0)",
+                bankId, sourceId, firstChapter);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id, knowledge_point_id, chapter_id, sort_order) VALUES (?, ?, ?, 1)",
+                bankId, targetId, firstChapter);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id, knowledge_point_id, chapter_id, sort_order) VALUES (?, ?, ?, 0)",
+                secondBankId, sourceId, secondChapter);
         String migrateQuestion = insertQuestion("迁移关系题");
         String collapseQuestion = insertQuestion("折叠关系题");
         relation(migrateQuestion, sourceId, "auxiliary", 1);
@@ -91,6 +103,12 @@ class KnowledgeMergeIntegrationTest {
                 .isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT revision FROM question_bank WHERE id = ?", Long.class, bankId))
                 .isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT revision FROM question_bank WHERE id = ?", Long.class, secondBankId))
+                .isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_knowledge WHERE knowledge_point_id = ?", Integer.class, sourceId))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM question_bank_knowledge WHERE knowledge_point_id = ?", Integer.class, targetId))
+                .isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM knowledge_merge_history WHERE source_knowledge_id = ? AND target_knowledge_id = ?", Integer.class, sourceId, targetId))
                 .isEqualTo(1);
 
@@ -104,7 +122,9 @@ class KnowledgeMergeIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].entityId").value(sourceId))
-                .andExpect(jsonPath("$.content[0].metadata.targetId").value(targetId));
+                .andExpect(jsonPath("$.content[0].metadata.targetId").value(targetId))
+                .andExpect(jsonPath("$.content[0].metadata.migratedBookMemberships").value(1))
+                .andExpect(jsonPath("$.content[0].metadata.collapsedBookMemberships").value(1));
 
         mvc.perform(post("/api/v1/manage/knowledge-points/{id}/merge", sourceId)
                         .session(admin).with(csrf()).contentType("application/json").content(request))
@@ -131,6 +151,16 @@ class KnowledgeMergeIntegrationTest {
                     difficulty, status, revision)
                 VALUES (?, '数学一', 'custom', '合并测试', 'true_false', 'true_false', 'auto', ?, 'true', '', 1, 'published', 1)
                 """, id, content);
+        return id;
+    }
+
+    private String insertChapter(String ownerBankId, String code) {
+        String id = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO question_bank_chapter(
+                    id, bank_id, chapter_code, name, description, sort_order)
+                VALUES (?, ?, ?, '合并测试章节', '', 0)
+                """, id, ownerBankId, code);
         return id;
     }
 
