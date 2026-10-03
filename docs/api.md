@@ -44,10 +44,11 @@ API_PROXY_TARGET=http://localhost:12345
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
 | POST | /admin/question-banks/import | QuestionBankDto | 新增或修订后的 Bank |
-| POST | /admin/global-question-banks/import | global-question-bank/v1 | 幂等导入全服文集与独立题目 |
+| POST | /admin/questions/import | global-question-batch/v2 | 幂等导入全局题目批次，不写入 Book |
+| POST | /admin/global-question-banks/import | global-question-bank/v1 | 已弃用；仅兼容未采用 KnowledgePoint 路径的旧文集 |
 | PUT | /admin/question-banks/{uuid}/metadata | {name?,description?,enabled?,weight?} | 改名后的 Bank |
 
-导入同一文集 UUID 会原子替换该文集内容并递增 revision；其他文集不重写。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
+V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创建或修改任何 Book；旧 V1 仅供尚未采用 KnowledgePoint 路径的兼容文集使用。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
 
 ## 全服管理后台 API
 
@@ -67,7 +68,8 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
 | POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
-| POST | /manage/imports/question-bank | ADMIN | 事务校验并导入 global-question-bank/v1 文件 |
+| POST | /manage/imports/questions | ADMIN | 事务校验并导入 global-question-batch/v2 题目批次 |
+| POST | /manage/imports/question-bank | ADMIN | 已弃用；仅兼容旧版 global-question-bank/v1 文集导入 |
 | GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 

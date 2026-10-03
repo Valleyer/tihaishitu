@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Deprecated(forRemoval = false)
 public class GlobalQuestionBankImportController {
     private final GlobalQuestionBankImportService service;
     private final CatalogAdminGuard guard;

@@ -1,19 +1,15 @@
 {
-  "schemaVersion": "global-question-bank/v1",
+  "schemaVersion": "global-question-batch/v2",
   "publish": false,
-  "bank": {
-    "id": "bf9da9ac-9852-4f02-9582-19f199e158a9",
-    "name": "数学一 · 高斯公式专题",
-    "description": "演示客观题和原始解答题的全服文集",
-    "enabled": true,
-    "weight": 5
+  "batch": {
+    "subject": "数学一",
+    "sourceType": "custom",
+    "sourceName": "V2 格式示例"
   },
   "questions": [
     {
       "id": "d3ff9a34-4e4b-41b7-834b-e517de76ffba",
-      "subject": "数学一",
-      "sourceType": "custom",
-      "sourceName": "格式示例",
+      "questionNumber": "示例-1",
       "questionType": "true_false",
       "presentationType": "true_false",
       "gradingMode": "auto",
@@ -31,9 +27,7 @@
     },
     {
       "id": "27fc2ba7-156f-4786-9c48-f6e09da712d8",
-      "subject": "数学一",
-      "sourceType": "custom",
-      "sourceName": "格式示例",
+      "questionNumber": "示例-2",
       "questionType": "solution",
       "presentationType": "self_assessment",
       "gradingMode": "self_assessment",

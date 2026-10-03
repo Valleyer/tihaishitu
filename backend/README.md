@@ -81,13 +81,15 @@ API_PROXY_TARGET=http://localhost:12345
 - `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
 - `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
-- `POST /api/v1/admin/global-question-banks/import`：按稳定 UUID 与全局知识点 code 幂等导入正式题目资源
+- `POST /api/v1/admin/questions/import`：按 `global-question-batch/v2` 幂等导入全局题目资源，不写入 Book
+- `POST /api/v1/admin/global-question-banks/import`：已弃用的 V1 兼容接口；Knowledge-driven Book 会拒绝旧版覆盖导入
 - `PUT /api/v1/admin/question-banks/{uuid}/metadata`：改名、改简介、启停与调整权重
 - `POST /api/v1/manage/auth/login`、`POST /logout`、`GET /me`：管理后台 Session
 - `/api/v1/manage/knowledge-points`：全服知识点分页、code/name/alias 搜索和审核者维护
 - `POST /api/v1/manage/knowledge-points/{uuid}/merge`：管理员事务迁移知识点关系并保留旧知识点
 - `/api/v1/manage/questions`：独立题目草稿、知识点绑定、提交、审核和归档工作流
-- `POST /api/v1/manage/imports/question-bank`：管理员批量导入 `global-question-bank/v1` 文件
+- `POST /api/v1/manage/imports/questions`：管理员批量导入 `global-question-batch/v2` 题目批次
+- `POST /api/v1/manage/imports/question-bank`：已弃用的 V1 兼容接口
 - `/api/v1/manage/users`：管理员创建、禁用账号和分配角色
 - `GET /api/v1/manage/audit-logs`：管理员分页检索内容和权限变更记录
 
@@ -103,10 +105,11 @@ MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 RE
 - `knowledge_alias` 独立存储可搜索别名。正式 Math1 源为 469 条：高等数学 198、线性代数 136、概率论与数理统计 135。
 - `question_resource` 保存独立原题，分别记录 `question_type`、`presentation_type`、`grading_mode`。
 - `question_resource_knowledge` 保存题目与知识点的多对多关系及 core/auxiliary 角色。
-- `question_bank_item` 把文集定义为题目集合。旧 `knowledge_point/question_item` 表暂时作为现有游戏兼容层保留，不会在迁移中删除。
+- `question_bank_chapter/question_bank_knowledge` 让 Book 按章节组织 KnowledgePoint；Question 是 KnowledgePoint 的全局训练资源。
+- `question_bank_item` 仅作为旧游戏和 LegacyCatalog 的兼容关系保留，新版导入不会写入该表。旧 `knowledge_point/question_item` 表暂时保留，不会在迁移中删除。
 - `app_user/app_user_role/content_audit_log` 支撑 CONTRIBUTOR、REVIEWER、ADMIN 和内容审计。
 - `knowledge_merge_history` 永久记录源/目标、迁移与折叠关系数、操作者和原因。合并不会删除旧知识点；旧 code、名称与 alias 会加入目标知识点检索词，受影响文集 revision 会递增。
 
-全服批量导入先在内存中校验整批数据，再在单一事务中写入。它只接受 active 全局知识点的稳定 code，每题绑定 1–3 个知识点且至少一个 core；任一引用、答案或题型组合非法都会整批回滚。相同文集和题目 UUID 再次导入执行更新，适合由外部 AI 生成后反复修订。正式格式以 `docs/题库生成提示词.md` 和 `frontend/public/examples/题库示例.json` 为准。
+全服题目批次导入先在内存中校验整批数据，再在单一事务中写入。它只接受 active 且与批次科目一致的全局知识点稳定 code，每题绑定 1–3 个知识点且至少一个 core；任一引用、答案或题型组合非法都会整批回滚。相同 Question UUID 再次导入执行更新，真题还会校验科目、年份和题号的自然身份，防止不同 UUID 重复入库。正式格式以 `docs/题库生成提示词.md` 和 `frontend/public/examples/题库示例.json` 为准。
 
 知识点列表支持科目、分科、章节和状态组合筛选。题目编辑器允许调整 1–3 个知识点的 core/auxiliary 角色及展示顺序，保存时会把当前顺序归一化为连续的 `sortOrder`。

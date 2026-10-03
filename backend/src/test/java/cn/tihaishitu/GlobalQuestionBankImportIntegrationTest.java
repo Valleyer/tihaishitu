@@ -2,6 +2,7 @@ package cn.tihaishitu;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import cn.tihaishitu.catalog.OfficialMath1BookBootstrap;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -14,8 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -113,16 +112,29 @@ class GlobalQuestionBankImportIntegrationTest {
     }
 
     @Test
-    void publishedExampleFileIsAcceptedByTheRuntimeImporter() throws Exception {
-        String example = Files.readString(Path.of("../frontend/public/examples/题库示例.json"));
+    void v1RejectsDestructiveImportIntoKnowledgeDrivenBook() throws Exception {
+        String questionId = UUID.randomUUID().toString();
+        String solutionId = UUID.randomUUID().toString();
+        long memberships = count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
+                OfficialMath1BookBootstrap.BOOK_ID);
+        long items = count("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ?",
+                OfficialMath1BookBootstrap.BOOK_ID);
+
         mvc.perform(post("/api/v1/admin/global-question-banks/import")
                         .header("X-Admin-Key", "machine-import-key")
-                        .contentType("application/json").content(example))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.schemaVersion").value("global-question-bank/v1"))
-                .andExpect(jsonPath("$.questionCount").value(2))
-                .andExpect(jsonPath("$.optionCount").value(2))
-                .andExpect(jsonPath("$.relationCount").value(2));
+                        .contentType("application/json")
+                        .content(payload(OfficialMath1BookBootstrap.BOOK_ID, questionId, solutionId,
+                                false, "M1-H06-035")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(
+                        "global-question-batch/v2")));
+
+        assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(memberships);
+        assertThat(count("SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ?",
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(items);
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id IN (?, ?)",
+                questionId, solutionId)).isZero();
     }
 
     private MockHttpSession login() throws Exception {

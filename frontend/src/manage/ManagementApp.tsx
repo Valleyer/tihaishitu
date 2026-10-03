@@ -5,7 +5,7 @@ import {
   type AuditLogView,
   type KnowledgeView,
   type ManageUser,
-  type QuestionBankImportResult,
+  type QuestionBatchImportResult,
   type QuestionOption,
   type QuestionRelation,
   type QuestionView,
@@ -96,17 +96,19 @@ function Dashboard({ user }: { user: ManageUser }) {
 function ImportPage({ fail }: { fail: (value: string) => void }) {
   const [source, setSource] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<QuestionBankImportResult | null>(null);
-  let preview: { schemaVersion?: string; publish?: boolean; bank?: { name?: string; id?: string }; questions?: unknown[] } | null = null;
+  const [result, setResult] = useState<QuestionBatchImportResult | null>(null);
+  let preview: { schemaVersion?: string; publish?: boolean; batch?: { subject?: string; sourceType?: string; sourceName?: string; examYear?: number }; questions?: unknown[] } | null = null;
   let parseError = "";
   if (source.trim()) {
     try { preview = JSON.parse(source); }
     catch { parseError = "JSON 格式尚不完整。"; }
   }
+  const legacyFormat = preview?.schemaVersion === "global-question-bank/v1";
+  const supportedFormat = preview?.schemaVersion === "global-question-batch/v2";
   const submit = () => {
-    if (!preview) return;
+    if (!preview || !supportedFormat) return;
     setBusy(true); setResult(null);
-    manageApi.importQuestionBank(preview)
+    manageApi.importQuestionBatch(preview)
       .then(setResult).catch((error) => fail(error.message)).finally(() => setBusy(false));
   };
   const loadFile = (file?: File) => {
@@ -114,19 +116,21 @@ function ImportPage({ fail }: { fail: (value: string) => void }) {
     file.text().then((text) => { setSource(text); setResult(null); })
       .catch(() => fail("无法读取所选文件。"));
   };
-  return <section><PageTitle title="批量导入" detail="导入全服题目文集；UUID 相同的题目会幂等更新" />
+  return <section><PageTitle title="批量导入" detail="批量导入全服题目；题目通过 KnowledgePoint 自动成为学习资源" />
     <div className="import-workspace">
       <div className="manage-card import-source">
-        <div className="import-heading"><div><h2>题库 JSON</h2><p>格式版本固定为 <code>global-question-bank/v1</code>，知识点只引用全局稳定 code。</p></div>
+        <div className="import-heading"><div><h2>题目批次 JSON</h2><p>格式版本固定为 <code>global-question-batch/v2</code>，导入不会创建或修改 Book。</p></div>
           <label className="file-button">选择文件<input type="file" accept="application/json,.json" onChange={(event) => loadFile(event.target.files?.[0])} /></label></div>
-        <textarea rows={24} spellCheck={false} value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} placeholder="粘贴题库生成提示词产出的 JSON，或选择文件…" />
+        <textarea rows={24} spellCheck={false} value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} placeholder="粘贴题目批次 JSON，或选择文件…" />
       </div>
       <aside className="manage-card import-preview"><h2>导入预检</h2>
-        {!source && <Empty>选择文件或粘贴 JSON 后，这里会显示文集摘要。</Empty>}
+        {!source && <Empty>选择文件或粘贴 JSON 后，这里会显示题目批次摘要。</Empty>}
         {parseError && <p className="form-error">{parseError}</p>}
-        {preview && <dl><dt>格式</dt><dd>{preview.schemaVersion || "未提供"}</dd><dt>文集</dt><dd>{preview.bank?.name || "未提供"}</dd><dt>文集 UUID</dt><dd><code>{preview.bank?.id || "未提供"}</code></dd><dt>题目数</dt><dd>{Array.isArray(preview.questions) ? preview.questions.length : 0}</dd><dt>导入状态</dt><dd>{preview.publish ? "直接发布" : "进入待审核"}</dd></dl>}
-        <button className="primary" disabled={!preview || busy} onClick={submit}>{busy ? "导入中…" : "校验并导入"}</button>
-        {result && <div className="import-result"><b>导入完成</b><p>{result.bankName}</p><p>题目 {result.questionCount} 道；新建 {result.createdQuestions}，更新 {result.updatedQuestions}</p><p>选项 {result.optionCount} 条；知识点关系 {result.relationCount} 条</p></div>}
+        {legacyFormat && <p className="form-error">这是旧版文集导入格式。新版系统的题目已经与 Book 解耦，请使用 global-question-batch/v2。</p>}
+        {preview && !legacyFormat && !supportedFormat && <p className="form-error">格式必须为 global-question-batch/v2。</p>}
+        {preview && <dl><dt>格式</dt><dd>{preview.schemaVersion || "未提供"}</dd><dt>科目</dt><dd>{preview.batch?.subject || "未提供"}</dd><dt>来源类型</dt><dd>{preview.batch?.sourceType || "未提供"}</dd><dt>来源名称</dt><dd>{preview.batch?.sourceName || "未提供"}</dd><dt>年份</dt><dd>{preview.batch?.examYear ?? "—"}</dd><dt>题目数</dt><dd>{Array.isArray(preview.questions) ? preview.questions.length : 0}</dd><dt>导入状态</dt><dd>{preview.publish ? "直接发布" : "进入待审核"}</dd></dl>}
+        <button className="primary" disabled={!supportedFormat || busy} onClick={submit}>{busy ? "导入中…" : "校验并导入"}</button>
+        {result && <div className="import-result"><b>导入完成</b><p>{result.subject} · {result.sourceName}{result.examYear ? ` · ${result.examYear}` : ""}</p><p>题目 {result.questionCount} 道；新建 {result.createdQuestions}，更新 {result.updatedQuestions}</p><p>选项 {result.optionCount} 条；知识点关系 {result.relationCount} 条</p><small>导入编号：{result.importId}</small></div>}
       </aside>
     </div>
   </section>;
