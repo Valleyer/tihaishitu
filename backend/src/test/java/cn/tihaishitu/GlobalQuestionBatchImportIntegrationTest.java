@@ -146,6 +146,53 @@ class GlobalQuestionBatchImportIntegrationTest {
     }
 
     @Test
+    void existingRealExamUuidCannotBeMovedToAnotherExamIdentity() throws Exception {
+        String id = UUID.randomUUID().toString();
+        mvc.perform(post("/api/v1/admin/questions/import")
+                        .header("X-Admin-Key", "question-batch-key")
+                        .contentType("application/json")
+                        .content(batch(2025, false,
+                                List.of(singleChoice(id, "1", "2025 年原题", KNOWLEDGE_CODE)))))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/api/v1/admin/questions/import")
+                        .header("X-Admin-Key", "question-batch-key")
+                        .contentType("application/json")
+                        .content(batch(2026, false,
+                                List.of(singleChoice(id, "1", "不应覆盖的新题", KNOWLEDGE_CODE)))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Question UUID 已属于另一道题")));
+
+        Map<String, Object> stored = jdbc.queryForMap("""
+                SELECT exam_year, question_number, content_markdown
+                  FROM question_resource
+                 WHERE id = ?
+                """, id);
+        assertThat(stored.get("exam_year")).isEqualTo(2025);
+        assertThat(stored.get("question_number")).isEqualTo("1");
+        assertThat(stored.get("content_markdown")).isEqualTo("2025 年原题");
+    }
+
+    @Test
+    void unknownQuestionFieldRejectsWholeBatch() throws Exception {
+        String id = UUID.randomUUID().toString();
+        Map<String, Object> question = new LinkedHashMap<>(
+                singleChoice(id, "8", "带有未知字段的题目", KNOWLEDGE_CODE));
+        question.put("subject", "数学一");
+
+        mvc.perform(post("/api/v1/admin/questions/import")
+                        .header("X-Admin-Key", "question-batch-key")
+                        .contentType("application/json")
+                        .content(batch(2046, false, List.of(question))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("第 1 道题包含未知字段：subject")));
+
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id = ?", id)).isZero();
+    }
+
+    @Test
     void invalidLaterQuestionRollsBackWholeBatchAndBookFieldsAreRejected() throws Exception {
         String validId = UUID.randomUUID().toString();
         String invalidId = UUID.randomUUID().toString();

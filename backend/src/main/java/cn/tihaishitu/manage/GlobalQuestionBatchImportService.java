@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -23,6 +24,17 @@ public class GlobalQuestionBatchImportService {
 
     private static final Set<String> FORBIDDEN_BOOK_FIELDS = Set.of(
             "bank", "book", "targetBookId", "weight", "enabled", "chapter");
+    private static final Set<String> TOP_LEVEL_FIELDS = Set.of(
+            "schemaVersion", "publish", "batch", "questions");
+    private static final Set<String> BATCH_FIELDS = Set.of(
+            "subject", "sourceType", "sourceName", "examYear");
+    private static final Set<String> QUESTION_FIELDS = Set.of(
+            "id", "questionNumber", "questionType", "presentationType", "gradingMode",
+            "content", "standardAnswer", "analysis", "difficulty", "options", "knowledgePoints");
+    private static final Set<String> OPTION_FIELDS = Set.of(
+            "key", "text", "correct", "sortOrder");
+    private static final Set<String> KNOWLEDGE_FIELDS = Set.of(
+            "code", "role", "sortOrder");
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
             "single_choice", "multiple_choice", "true_false", "blank", "solution");
@@ -48,6 +60,8 @@ public class GlobalQuestionBatchImportService {
                                  List<ResolvedKnowledge> knowledgePoints) {}
     private record ValidImport(boolean publish, ValidBatch batch, List<ValidQuestion> questions) {}
     private record KnowledgeRef(String id, String subject) {}
+    private record ExistingQuestionIdentity(
+            String subject, String sourceType, Integer examYear, String questionNumber) {}
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -111,6 +125,7 @@ public class GlobalQuestionBatchImportService {
         if ("global-question-bank/v1".equals(document.path("schemaVersion").asText())) {
             bad("这是旧版文集导入格式，请使用 global-question-batch/v2。");
         }
+        validateSchemaFields(document);
         try {
             return mapper.treeToValue(document, ImportRequest.class);
         } catch (JsonProcessingException error) {
@@ -154,6 +169,7 @@ public class GlobalQuestionBatchImportService {
             if (question.difficulty() == null || question.difficulty() < 1 || question.difficulty() > 5) {
                 bad(at + "的 difficulty 必须为 1–5。");
             }
+            ensureExistingQuestionIdentityCompatible(batch, question);
             if ("real_exam".equals(batch.sourceType())) {
                 if (blank(question.questionNumber())) bad(at + "是真题，必须提供 questionNumber。");
                 String number = question.questionNumber().trim();
@@ -168,6 +184,83 @@ public class GlobalQuestionBatchImportService {
             validated.add(new ValidQuestion(question, options, points));
         }
         return new ValidImport(Boolean.TRUE.equals(request.publish()), batch, validated);
+    }
+
+    private void validateSchemaFields(JsonNode document) {
+        rejectUnknownFields(document, TOP_LEVEL_FIELDS, "题目批次");
+        JsonNode batch = document.get("batch");
+        if (batch != null && batch.isObject()) {
+            rejectUnknownFields(batch, BATCH_FIELDS, "batch");
+        }
+        JsonNode questions = document.get("questions");
+        if (questions == null || !questions.isArray()) return;
+        for (int questionIndex = 0; questionIndex < questions.size(); questionIndex++) {
+            JsonNode question = questions.get(questionIndex);
+            String at = "第 " + (questionIndex + 1) + " 道题";
+            if (!question.isObject()) continue;
+            rejectUnknownFields(question, QUESTION_FIELDS, at);
+            JsonNode options = question.get("options");
+            if (options != null && options.isArray()) {
+                for (int optionIndex = 0; optionIndex < options.size(); optionIndex++) {
+                    JsonNode option = options.get(optionIndex);
+                    if (option.isObject()) {
+                        rejectUnknownFields(option, OPTION_FIELDS,
+                                at + "的第 " + (optionIndex + 1) + " 个选项");
+                    }
+                }
+            }
+            JsonNode knowledgePoints = question.get("knowledgePoints");
+            if (knowledgePoints != null && knowledgePoints.isArray()) {
+                for (int relationIndex = 0; relationIndex < knowledgePoints.size(); relationIndex++) {
+                    JsonNode relation = knowledgePoints.get(relationIndex);
+                    if (relation.isObject()) {
+                        rejectUnknownFields(relation, KNOWLEDGE_FIELDS,
+                                at + "的第 " + (relationIndex + 1) + " 个知识点关系");
+                    }
+                }
+            }
+        }
+    }
+
+    private void rejectUnknownFields(JsonNode object, Set<String> allowed, String at) {
+        List<String> unknown = new ArrayList<>();
+        object.fieldNames().forEachRemaining(field -> {
+            if (!allowed.contains(field)) unknown.add(field);
+        });
+        if (!unknown.isEmpty()) {
+            bad(at + "包含未知字段：" + String.join("、", unknown) + "。");
+        }
+    }
+
+    private void ensureExistingQuestionIdentityCompatible(ValidBatch batch, QuestionInput question) {
+        List<ExistingQuestionIdentity> existing = jdbc.query("""
+                SELECT subject_name, source_type, exam_year, question_number
+                  FROM question_resource
+                 WHERE id = ?
+                """, (row, index) -> new ExistingQuestionIdentity(
+                row.getString("subject_name"), row.getString("source_type"),
+                row.getObject("exam_year", Integer.class), row.getString("question_number")),
+                question.id());
+        if (existing.isEmpty()) return;
+
+        ExistingQuestionIdentity identity = existing.get(0);
+        boolean eitherRealExam = "real_exam".equals(identity.sourceType())
+                || "real_exam".equals(batch.sourceType());
+        boolean compatible;
+        if (eitherRealExam) {
+            compatible = "real_exam".equals(identity.sourceType())
+                    && "real_exam".equals(batch.sourceType())
+                    && Objects.equals(identity.subject(), batch.subject())
+                    && Objects.equals(identity.examYear(), batch.examYear())
+                    && Objects.equals(normalizeIdentity(identity.questionNumber()),
+                    normalizeIdentity(question.questionNumber()));
+        } else {
+            compatible = Objects.equals(identity.subject(), batch.subject())
+                    && Objects.equals(identity.sourceType(), batch.sourceType());
+        }
+        if (!compatible) {
+            bad("Question UUID 已属于另一道题，不能通过批量导入改变其稳定身份。");
+        }
     }
 
     private void validateQuestionType(QuestionInput question, String at) {
@@ -366,6 +459,10 @@ public class GlobalQuestionBatchImportService {
 
     private static String nullable(String value) {
         return blank(value) ? null : value.trim();
+    }
+
+    private static String normalizeIdentity(String value) {
+        return blank(value) ? null : value.strip();
     }
 
     private static void bad(String message) {
