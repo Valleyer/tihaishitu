@@ -192,19 +192,29 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
   </div>;
 }
 
-function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
+export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
   const [query, setQuery] = useState(""); const [status, setStatus] = useState(reviewOnly ? "pending_review" : "");
   const [items, setItems] = useState<QuestionView[]>([]); const [selected, setSelected] = useState<QuestionView | null>(null);
   const [creating, setCreating] = useState(false);
-  const load = useCallback(() => manageApi.questions({ query, status: reviewOnly ? "pending_review" : status, size: 50 })
-    .then((page) => setItems(page.content)).catch((e) => fail(e.message)), [query, status, reviewOnly, fail]);
+  const [pagination, setPagination] = useState({ page: 0, reviewOnly });
+  const page = pagination.reviewOnly === reviewOnly ? pagination.page : 0;
+  const [totalPages, setTotalPages] = useState(0); const [totalElements, setTotalElements] = useState(0);
+  const load = useCallback(() => manageApi.questions({ query, status: reviewOnly ? "pending_review" : status, page, size: 20 })
+    .then((result) => {
+      setTotalPages(result.totalPages); setTotalElements(result.totalElements);
+      if (page > 0 && result.content.length === 0 && page >= result.totalPages) {
+        setItems([]); setPagination({ page: page - 1, reviewOnly }); return;
+      }
+      setItems(result.content);
+    }).catch((e) => fail(e.message)), [query, status, reviewOnly, page, fail]);
   useEffect(() => { void load(); }, [load]);
   return <section><PageTitle title={reviewOnly ? "审核中心" : "题目管理"} detail="原始题型、游戏展示与判题方式分开维护" />
-    <div className="manage-toolbar"><input placeholder="搜索题干 / 来源 / 题号" value={query} onChange={(e) => setQuery(e.target.value)} />
-      {!reviewOnly && <select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">全部状态</option>{["draft", "pending_review", "published", "rejected", "archived"].map((v) => <option key={v}>{v}</option>)}</select>}
+    <div className="manage-toolbar"><input placeholder="搜索题干 / 来源 / 题号" value={query} onChange={(e) => { setQuery(e.target.value); setPagination({ page: 0, reviewOnly }); }} />
+      {!reviewOnly && <select value={status} onChange={(e) => { setStatus(e.target.value); setPagination({ page: 0, reviewOnly }); }}><option value="">全部状态</option>{["draft", "pending_review", "published", "rejected", "archived"].map((v) => <option key={v}>{v}</option>)}</select>}
       <button onClick={load}>查询</button>{!reviewOnly && <button className="primary" onClick={() => { setCreating(true); setSelected(null); }}>新建题目</button>}</div>
-    <div className="split-workspace"><div className="data-table"><div className="table-head question-cols"><span>来源</span><span>原题型</span><span>判题</span><span>状态</span></div>
+    <div className="split-workspace"><div className="question-list-panel"><div className="data-table manage-question-list"><div className="table-head question-cols"><span>来源</span><span>原题型</span><span>判题</span><span>状态</span></div>
       {items.map((item) => <button className="table-row question-cols" key={item.id} onClick={() => { manageApi.question(item.id).then(setSelected).catch((e) => fail(e.message)); setCreating(false); }}><b>{item.examYear ? `${item.examYear} · ${item.questionNumber}` : item.sourceName || "自建题"}</b><span>{item.questionType}</span><span>{item.gradingMode}</span><i>{item.status}</i></button>)}</div>
+      <div className="manage-pagination"><span>{reviewOnly ? `待审核共 ${totalElements} 道` : `共 ${totalElements} 道`}</span><span>第 {totalPages === 0 ? 0 : page + 1} / {totalPages} 页</span><div><button disabled={page === 0} onClick={() => setPagination({ page: page - 1, reviewOnly })}>上一页</button><button disabled={totalPages === 0 || page >= totalPages - 1} onClick={() => setPagination({ page: page + 1, reviewOnly })}>下一页</button></div></div></div>
       <aside className="detail-panel wide">{(selected || creating) ? <QuestionEditor key={selected?.id || "new"} initial={selected} user={user} fail={fail} saved={(q) => { setSelected(q); setCreating(false); load(); }} /> : <Empty>选择题目查看，或新建草稿</Empty>}</aside></div>
   </section>;
 }
