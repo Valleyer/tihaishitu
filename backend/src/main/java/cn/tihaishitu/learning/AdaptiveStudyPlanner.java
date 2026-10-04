@@ -69,7 +69,8 @@ public class AdaptiveStudyPlanner {
         Comparator<String> priority = Comparator
                 .comparingInt((String id) -> focused.contains(id) ? 0 : 1)
                 .thenComparingInt(id -> AdaptiveSchedulingPolicy.targetPriority(
-                        stateByPoint.get(id), effectiveByPoint.getOrDefault(id, 0d)))
+                        stateByPoint.get(id), effectiveByPoint.getOrDefault(id, 0d),
+                        ReviewSchedulingPolicy.dueWithin24Hours(stateByPoint.get(id), now)))
                 .thenComparingDouble(id -> effectiveByPoint.getOrDefault(id, 0d))
                 .thenComparing(id -> lastEvidence(stateByPoint.get(id)), Comparator.nullsFirst(Comparator.naturalOrder()))
                 .thenComparingInt(id -> focusOrder.getOrDefault(id, Integer.MAX_VALUE));

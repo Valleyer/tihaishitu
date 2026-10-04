@@ -57,24 +57,24 @@ class AdaptiveStudyPlannerIntegrationTest {
     @Test
     void autoPriorityAndManualFocusComposeWithoutReplacingMasteryOrder() {
         String learner = learner();
-        String weak = knowledge("weak"), learning = knowledge("learning"), fresh = knowledge("new");
+        String weak = knowledge("weak"), review = knowledge("review"), fresh = knowledge("new");
         String ready = knowledge("ready"), proficient = knowledge("proficient");
-        String book = book(List.of(weak, learning, fresh, ready, proficient));
-        for (String point : List.of(weak, learning, fresh, ready, proficient))
+        String book = book(List.of(weak, review, fresh, ready, proficient));
+        for (String point : List.of(weak, review, fresh, ready, proficient))
             question(2, relation(point, "core"));
-        states.save(learner, weak, state(30, 365, 5, NOW));
-        states.save(learner, learning, state(60, 365, 4, NOW));
+        states.save(learner, weak, state(60, 365, 4, NOW));
+        states.save(learner, review, state(90, 10, 4, NOW.minusSeconds(75 * 3_600L)));
         states.save(learner, ready, state(75, 365, 4, NOW));
         states.save(learner, proficient, state(90, 365, 5, NOW));
         AdaptiveStudyPlanner planner = new AdaptiveStudyPlanner(pool, states);
 
         var automatic = planner.planAt(learner, Set.of(book), List.of(), false, 5, NOW);
         assertThat(automatic.targetKnowledgePointIds())
-                .containsExactly(weak, learning, fresh, ready, proficient);
+                .containsExactly(weak, review, fresh, ready, proficient);
 
-        var manual = planner.planAt(learner, Set.of(book), List.of(ready), true, 5, NOW);
+        var manual = planner.planAt(learner, Set.of(book), List.of(fresh, review), true, 5, NOW);
         assertThat(manual.targetKnowledgePointIds())
-                .containsExactly(ready, weak, learning, fresh, proficient);
+                .containsExactly(review, fresh, weak, ready, proficient);
     }
 
     private String learner() {

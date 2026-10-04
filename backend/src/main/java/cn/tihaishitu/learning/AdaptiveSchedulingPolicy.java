@@ -9,10 +9,12 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 public final class AdaptiveSchedulingPolicy {
     private AdaptiveSchedulingPolicy() {}
 
-    public static int targetPriority(KnowledgeMasteryModel.State state, double effectiveMastery) {
-        if (state == null || state.evidenceCount() == 0) return 1;
-        if (effectiveMastery < READY_THRESHOLD) return 0;
-        return effectiveMastery < PROFICIENT_THRESHOLD ? 2 : 3;
+    public static int targetPriority(KnowledgeMasteryModel.State state, double effectiveMastery,
+                                     boolean reviewDueWithin24Hours) {
+        if (state != null && state.evidenceCount() > 0 && effectiveMastery < READY_THRESHOLD) return 0;
+        if (reviewDueWithin24Hours) return 1;
+        if (state == null || state.evidenceCount() == 0) return 2;
+        return effectiveMastery < PROFICIENT_THRESHOLD ? 3 : 4;
     }
 
     public static int preferredDifficulty(KnowledgeMasteryModel.State state, double effectiveMastery,
