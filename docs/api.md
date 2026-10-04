@@ -148,7 +148,7 @@ reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)
 
 自动 Planner 的目标顺序为：已有证据且 effective mastery 低于 70、due/soon Review、未开始、70–85、85 以上。Manual Focus 仍先把 focused 与 non-focused 分区，再在各分区内应用同一顺序。Review target 继续使用原有 adaptive difficulty，答错仍按 Phase G diagnosis 处理，证据模式仍只有 `normal` 与 `training`。
 
-Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时间窗口并链接到知识点说明页。Hub 不创建正式答题 session、attempt 或 evidence；Review 的正确与错误都通过正式 World 的既有 Mastery 更新，自然推迟下一次 due 或回到薄弱学习队列。
+Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时间窗口并链接到知识点说明页。复习队列的读取与浏览本身不创建 attempt 或 evidence；进入 Phase J 的知识点专项后，正式作答仍通过共享 Question Engine 更新既有 Mastery，自然推迟下一次 due 或回到薄弱学习队列。
 
 ## Diagnostic State Machine V1
 
@@ -257,3 +257,24 @@ travel 校验地点属性条件，遇到满足前置的新故事时填写 advent
 正式 World 开始 `kind=exam` 的任务前要求对应考试为 `registered`，且 `clears[activityId]` 尚未完成。每个新 run 独立重置答题数、得分与 seen；开考时把 fee 扣入本轮 escrow。未满分或放下活动时原数退款，状态仍为 `registered`，可无限次重新开始；全对时费用提交，完整 `completionReward` 发放一次，`clears` 写为 1，考试状态推进到 `passed`。完成后后端拒绝再次 begin。`best` 只升不降；兼容字段 `attempts`、`lastScore` 不再记录正式任务失败履历。
 
 HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。`Game.adventure.exams` 与活动首次奖励记账一并返回，重复提交同一答题请求不得重复发取中帖或身份奖励。
+
+## Phase J V4：统一身份与正式 Practice API
+
+管理后台复用 Learner Session Cookie。`learner_account` 是唯一账号来源，`learner_account_role` 只附加管理权限；普通 Learner 访问 `/manage/**` 返回 403。未登录进入管理后台时，前端跳转到 `/login?next=/manage`。
+
+| Method | Path | Request | Response / 语义 |
+|---|---|---|---|
+| GET | /learner/wrong-questions | 无 | 按每道 Question 最近一次 graded 结果派生的待重做队列 |
+| POST | /learner/practice-sessions | intent, targetKnowledgePointId/sourceQuestionId | 开始知识点专项或错题练习 |
+| GET | /learner/practice-sessions/{id} | 无 | 恢复 Session 与 current attempt |
+| POST | /learner/practice-sessions/{id}/answers | attemptId, questionId, answer | 自动判题并进入共享学习流程 |
+| POST | /learner/practice-sessions/{id}/reveal | attemptId, questionId | 查看自评题参考答案 |
+| POST | /learner/practice-sessions/{id}/self-assess | attemptId, questionId, assessment | 提交自评 |
+| POST | /learner/practice-sessions/{id}/next | 无 | 继续 Diagnosis/Training，或同 K 再来一道 |
+| POST | /learner/practice-sessions/{id}/end | 无 | 结束 Practice Session |
+
+V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。
+
+Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Wrong Queue 使用 `(learner_id, question_id)` 的 latest graded attempt 派生；Wrong Practice 首题固定 source Question。Hub Practice 与 World 在 target 确定后调用同一 AdaptiveStudyPlanner question context、KnowledgeQuestionPoolService、rotation、grading、Evidence 与 Diagnosis 服务。Hub mutation 校验 learner/session/diagnosis owner，且不写 `learner_world_state`。
+
+World target 由 Selected Books scope 与 adaptive playable 集合求交后 shuffle，再 distinct 截取活动轮数；unstarted 不被排除，也不再按 weak/review/focus 排序。

@@ -99,3 +99,11 @@ build 包含配置引用、图片路径、题目知识点数量检查与类型�
 只改配置时可单独 npm run validate:content，不重复运行全套检查。
 
 前端默认使用 HTTP 联机模式；旧本地兼容模式需显式设置 `VITE_API_MODE=local`，详见接口契约。
+
+## Phase J V4：统一账号与正式 Hub Practice
+
+学习与管理现在共用唯一的 `learner_account` 身份和 Learner Session；`CONTRIBUTOR / REVIEWER / ADMIN` 只是附加权限，管理后台不再维护第二套登录页或管理账号来源。
+
+Learning Hub 新增 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。错题队列按 Learner + Question 最近一次 graded attempt 动态派生，latest wrong/partial 进入，later correct 移除，Wrong Practice 首题固定为原 Question。
+
+World target 从 Selected Books 范围内 active、adaptive playable 的 KnowledgePoint 随机抽取，包含 unstarted、weak 与 proficient，不使用 Review、Mastery 或 Manual Focus 排序。target 确定后，Hub 与 World 共用 dependency readiness、Adaptive Difficulty、Question Pool、Question Rotation、grading、Evidence、Diagnosis、Training 和 Mastery 更新。

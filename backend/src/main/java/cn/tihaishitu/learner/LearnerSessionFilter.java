@@ -1,11 +1,15 @@
 package cn.tihaishitu.learner;
 
+import cn.tihaishitu.manage.ManageUserStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -15,17 +19,26 @@ import java.util.Map;
 @Component
 public class LearnerSessionFilter extends OncePerRequestFilter {
     private final LearnerAuthService auth;
+    private final ManageUserStore users;
     private final ObjectMapper mapper;
 
-    public LearnerSessionFilter(LearnerAuthService auth, ObjectMapper mapper) {
+    public LearnerSessionFilter(LearnerAuthService auth, ManageUserStore users, ObjectMapper mapper) {
         this.auth = auth;
+        this.users = users;
         this.mapper = mapper;
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                               FilterChain chain) throws ServletException, IOException {
         LearnerContext.LearnerPrincipal learner = auth.resolve(request);
-        if (learner != null) LearnerContext.set(learner);
+        if (learner != null) {
+            LearnerContext.set(learner);
+            var authorities = users.roles(learner.id()).stream()
+                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .toList();
+            SecurityContextHolder.getContext().setAuthentication(
+                    UsernamePasswordAuthenticationToken.authenticated(learner.username(), learner.id(), authorities));
+        }
         try {
             if (requiresLearner(request.getRequestURI(), request.getMethod()) && learner == null) {
                 response.setStatus(401);
@@ -37,6 +50,7 @@ public class LearnerSessionFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
         } finally {
             LearnerContext.clear();
+            SecurityContextHolder.clearContext();
         }
     }
 

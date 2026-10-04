@@ -175,7 +175,7 @@ public class GameActionService {
         if (!currentQuestionId.equals(request.questionId())) throw bad("题目已经变化，请重新载入。");
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
-        boolean correct = sameAnswer(snapshot.standard(), request.answer());
+        boolean correct = QuestionGradingPolicy.matches(snapshot.standard(), request.answer());
         Instant occurredAt = Instant.now();
         if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
         DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
@@ -753,13 +753,6 @@ public class GameActionService {
     private static void addUnique(ArrayNode values, String value) {
         for (JsonNode item : values) if (value.equals(item.asText())) return;
         values.add(value);
-    }
-    private static boolean sameAnswer(JsonNode expected, JsonNode actual) {
-        if (expected.isArray() && actual.isArray()) {
-            Set<String> left = new HashSet<>(), right = new HashSet<>(); expected.forEach(v -> left.add(v.asText())); actual.forEach(v -> right.add(v.asText()));
-            return left.equals(right);
-        }
-        return expected.equals(actual);
     }
     private static ApiException bad(String message) { return new ApiException(HttpStatus.CONFLICT, message.trim()); }
 }

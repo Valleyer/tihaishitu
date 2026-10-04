@@ -42,6 +42,26 @@ public class AdaptiveStudyPlanner {
         return planAt(learnerId, selectedBookIds, focusedKnowledgePointIds, manualFocus, count, clock.instant());
     }
 
+    public AdaptiveStudyPlan randomPlan(String learnerId, Set<String> selectedBookIds, int count) {
+        List<KnowledgePointDto> scope = pool.bookScope(selectedBookIds);
+        Set<String> allowed = new LinkedHashSet<>();
+        scope.forEach(point -> allowed.add(point.id()));
+        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed);
+        Set<String> ready = readySet(allowed, effectiveMap(stateByPoint, clock.instant()));
+        Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
+        List<String> candidates = scope.stream().map(KnowledgePointDto::id)
+                .filter(playable::contains).distinct()
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        if (candidates.size() < count) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "当前学习范围只有 " + candidates.size() + " 个可挑战知识点，本活动需要 "
+                            + count + " 个不同知识点。");
+        }
+        Collections.shuffle(candidates);
+        return new AdaptiveStudyPlan(Collections.unmodifiableSet(allowed), Collections.unmodifiableSet(ready),
+                List.copyOf(candidates.subList(0, count)));
+    }
+
     AdaptiveStudyPlan planAt(String learnerId, Set<String> selectedBookIds,
                              List<String> focusedKnowledgePointIds, boolean manualFocus,
                              int count, Instant now) {

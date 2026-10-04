@@ -47,7 +47,7 @@ public class UserManagementController {
         }
         ManageUserView created = users.create(body.username().trim(), body.displayName().trim(),
                 encoder.encode(body.password()), body.roles());
-        audit.audit(audit.userId(authentication.getName()), "USER_CREATED", "app_user", created.id(),
+        audit.audit(audit.userId(authentication.getName()), "USER_CREATED", "learner_account", created.id(),
                 java.util.Map.of("roles", body.roles()));
         return created;
     }
@@ -66,13 +66,13 @@ public class UserManagementController {
         ManageUserView changed = users.update(id, body.displayName().trim(), body.status(), hash,
                 body.roles(), body.expectedRevision());
         if (changed == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "账号已被其他人修改，请重新加载。");
-        audit.audit(audit.userId(authentication.getName()), "USER_ROLE_UPDATED", "app_user", id,
+        audit.audit(audit.userId(authentication.getName()), "USER_ROLE_UPDATED", "learner_account", id,
                 java.util.Map.of("roles", body.roles(), "status", body.status()));
         return changed;
     }
 
     private static void validateRoles(Set<String> roles) {
-        if (roles == null || roles.isEmpty() || !ALLOWED_ROLES.containsAll(roles)) bad("至少选择一个合法角色。");
+        if (roles == null || !ALLOWED_ROLES.containsAll(roles)) bad("权限角色不合法。");
     }
     private static void bad(String message) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
 

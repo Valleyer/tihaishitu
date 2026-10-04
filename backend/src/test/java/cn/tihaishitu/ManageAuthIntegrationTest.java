@@ -1,6 +1,7 @@
 package cn.tihaishitu;
 
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -41,11 +42,11 @@ class ManageAuthIntegrationTest {
                 .andExpect(jsonPath("$.roles[?(@ == 'ADMIN')]").exists())
                 .andReturn();
 
-        MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
-        mvc.perform(get("/api/v1/manage/auth/me").session(session))
+        Cookie session = login.getResponse().getCookie(LearnerAuthService.COOKIE);
+        mvc.perform(get("/api/v1/manage/auth/me").cookie(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("chief-editor"));
-        mvc.perform(post("/api/v1/manage/auth/logout").session(session).with(csrf()))
+        mvc.perform(post("/api/v1/manage/auth/logout").cookie(session).with(csrf()))
                 .andExpect(status().isOk());
     }
 

@@ -36,7 +36,7 @@ class DiagnosticMergeIntegrationTest extends DiagnosticWorldTestSupport {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_diagnosis_dependency WHERE diagnosis_id=?", Integer.class, diagnosis)).isEqualTo(2);
 
         String actor = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,?,?,'x','active',1)",
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,?,'x','active',1)",
                 actor, "diagnostic-actor-" + actor, "诊断管理员");
         String source = scenario.dependencies().get(0), target = scenario.dependencies().get(1);
         management.merge(source, target, 1, "诊断依赖归一", actor);

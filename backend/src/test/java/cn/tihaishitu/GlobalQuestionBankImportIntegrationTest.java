@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -73,19 +74,19 @@ class GlobalQuestionBankImportIntegrationTest {
 
     @Test
     void browserImportRequiresAdminAndUnknownKnowledgeRollsBackWholeBatch() throws Exception {
-        MockHttpSession admin = login();
+        Cookie admin = login();
         String bankId = UUID.randomUUID().toString();
         String objectiveId = UUID.randomUUID().toString();
         String solutionId = UUID.randomUUID().toString();
 
         mvc.perform(post("/api/v1/manage/imports/question-bank")
-                        .session(admin).with(csrf()).contentType("application/json")
+                        .cookie(admin).with(csrf()).contentType("application/json")
                         .content(payload(bankId, objectiveId, solutionId, false, "UNKNOWN-CODE")))
                 .andExpect(status().isBadRequest());
         assertThat(count("SELECT COUNT(*) FROM question_bank WHERE id = ?", bankId)).isZero();
 
         mvc.perform(post("/api/v1/manage/imports/question-bank")
-                        .session(admin).with(csrf()).contentType("application/json")
+                        .cookie(admin).with(csrf()).contentType("application/json")
                         .content(payload(bankId, objectiveId, solutionId, false, "M1-H06-035")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.published").value(false))
@@ -99,7 +100,7 @@ class GlobalQuestionBankImportIntegrationTest {
         long bankRevision = count("SELECT revision FROM question_bank WHERE id = ?", bankId);
         long questionRevision = count("SELECT revision FROM question_resource WHERE id = ?", objectiveId);
         mvc.perform(post("/api/v1/manage/questions/{id}/review", objectiveId)
-                        .session(admin).with(csrf()).contentType("application/json")
+                        .cookie(admin).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + questionRevision
                                 + ",\"approve\":true,\"comment\":\"批量题目复核通过\"}"))
                 .andExpect(status().isOk())
@@ -137,12 +138,12 @@ class GlobalQuestionBankImportIntegrationTest {
                 questionId, solutionId)).isZero();
     }
 
-    private MockHttpSession login() throws Exception {
+    private Cookie login() throws Exception {
         var response = mvc.perform(post("/api/v1/manage/auth/login").with(csrf())
                         .contentType("application/json")
                         .content("{\"username\":\"import-admin\",\"password\":\"import-admin-test-password\"}"))
                 .andExpect(status().isOk()).andReturn();
-        return (MockHttpSession) response.getRequest().getSession(false);
+        return response.getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 
     private String payload(String bankId, String objectiveId, String solutionId,

@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 public class DiagnosticLearningStore {
-    public record Session(String id, String learnerId, String worldId, String rootAttemptId,
+    public record Session(String id, String learnerId, String worldId, String practiceSessionId, String rootAttemptId,
                           String targetKnowledgePointId, String status, String resolution,
                           boolean hasUnavailableDependency, long revision) {}
     public record Dependency(String diagnosisId, String knowledgePointId, int sortOrder, String status) {}
@@ -28,14 +28,14 @@ public class DiagnosticLearningStore {
                         rs.getString("merged_into_id")), id).stream().findFirst();
     }
 
-    public void createSession(String id, String learnerId, String worldId, String rootAttemptId,
+    public void createSession(String id, String learnerId, String worldId, String practiceSessionId, String rootAttemptId,
                               String targetId, String status, boolean hasUnavailable) {
         jdbc.update("""
                 INSERT INTO learner_diagnosis_session(
-                    id,learner_id,world_id,root_attempt_id,target_knowledge_point_id,status,
+                    id,learner_id,world_id,practice_session_id,root_attempt_id,target_knowledge_point_id,status,
                     has_unavailable_dependency,revision)
-                VALUES (?,?,?,?,?,?,?,1)
-                """, id, learnerId, worldId, rootAttemptId, targetId, status, hasUnavailable);
+                VALUES (?,?,?,?,?,?,?,?,1)
+                """, id, learnerId, worldId, practiceSessionId, rootAttemptId, targetId, status, hasUnavailable);
     }
 
     public void addDependency(String diagnosisId, String pointId, int sortOrder, String status) {
@@ -51,6 +51,11 @@ public class DiagnosticLearningStore {
 
     public Optional<Session> find(String id) {
         return sessions("WHERE id=?", id).stream().findFirst();
+    }
+
+    public Optional<Session> latestForPractice(String practiceSessionId) {
+        return sessions("WHERE practice_session_id=? ORDER BY created_at DESC LIMIT 1",
+                practiceSessionId).stream().findFirst();
     }
 
     public Session lock(String id) {
@@ -113,11 +118,11 @@ public class DiagnosticLearningStore {
 
     private List<Session> sessions(String predicate, Object... args) {
         return jdbc.query("""
-                SELECT id,learner_id,world_id,root_attempt_id,target_knowledge_point_id,status,resolution,
+                SELECT id,learner_id,world_id,practice_session_id,root_attempt_id,target_knowledge_point_id,status,resolution,
                        has_unavailable_dependency,revision
                   FROM learner_diagnosis_session %s
                 """.formatted(predicate), (rs, row) -> new Session(rs.getString("id"),
-                rs.getString("learner_id"), rs.getString("world_id"), rs.getString("root_attempt_id"),
+                rs.getString("learner_id"), rs.getString("world_id"), rs.getString("practice_session_id"), rs.getString("root_attempt_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("status"), rs.getString("resolution"),
                 rs.getBoolean("has_unavailable_dependency"), rs.getLong("revision")), args);
     }

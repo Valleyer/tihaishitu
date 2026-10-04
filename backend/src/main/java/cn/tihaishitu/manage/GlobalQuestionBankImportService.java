@@ -265,7 +265,7 @@ public class GlobalQuestionBankImportService {
         metadata.put("createdQuestions", created);
         metadata.put("updatedQuestions", updated);
         jdbc.update("""
-                INSERT INTO content_audit_log(id, actor_user_id, action_name, entity_type, entity_id, metadata_json)
+                INSERT INTO content_audit_log(id, actor_learner_id, action_name, entity_type, entity_id, metadata_json)
                 VALUES (?, ?, 'QUESTION_BANK_IMPORTED', 'question_bank', ?, ?)
                 """, UUID.randomUUID().toString(), actorId, bankId, json(metadata));
     }

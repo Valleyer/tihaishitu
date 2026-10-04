@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
 import { HttpError } from "../api/http";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type ReviewQueue, type ReviewQueueItem, type StudyProfile } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type PracticeSession, type ReviewQueue, type ReviewQueueItem, type StudyProfile, type WrongQuestion } from "./api";
 import "./platform.css";
 
 const go = (path: string) => window.location.assign(path);
@@ -17,12 +17,14 @@ function AuthPage({ register }: { register: boolean }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const requestedNext = new URLSearchParams(window.location.search).get("next");
+  const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/";
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError("");
     try {
       if (register) await platformApi.register(username, displayName, password);
       else await platformApi.login(username, password);
-      go("/");
+      go(next);
     } catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   };
@@ -43,7 +45,7 @@ function AuthPage({ register }: { register: boolean }) {
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
   return <div className="learning-hub">
     <header className="hub-header"><a className="hub-brand" href="/"><span>题</span>题海仕途</a>
-      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a><a href="/account">{data.learner.displayName}</a></nav>
+      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a><a href="/account">{data.learner.displayName}</a></nav>
     </header>
     {children}
   </div>;
@@ -58,6 +60,12 @@ function HubHome({ data }: { data: HubBootstrap }) {
       <p>文集决定完整学习范围，重点知识点只负责安排优先顺序。所有游戏世界共享同一份学习资源与学习身份。</p>
     </section>
     <div className="hub-grid">
+      <section className="hub-panel"><div className="panel-heading"><div><small>FORMAL PRACTICE</small><h2>专项练习</h2></div><a href="/books">选择知识点</a></div>
+        <p>选定一个知识点，完成每道正式题及其诊断或补救流程。没有固定题数和通关分数，进度直接体现在掌握度与记忆稳定度中。</p>
+      </section>
+      <section className="hub-panel"><div className="panel-heading"><div><small>WRONG PRACTICE</small><h2>错题练习</h2></div><a href="/wrong-questions">查看待重做</a></div>
+        <p>同一道题最近一次正式结果为错误或部分正确时出现在这里；重新做对后自动移除。</p>
+      </section>
       <section className="hub-panel"><div className="panel-heading"><div><small>MY STUDY</small><h2>我的学习</h2></div><a href="/study">调整学习方向</a></div>
         <p>当前模式：{data.studyProfile.focusMode === "manual" ? "手动重点" : "自动规划"} · {data.studyProfile.pace === "slow" ? "从容节奏" : "正常节奏"}</p>
         <div className="tag-row">{selected.map(book => <span key={book.id}>{book.name}</span>)}</div>
@@ -120,12 +128,14 @@ const reviewGroups: { status: ReviewQueueItem["status"]; title: string; descript
 
 function ReviewCard({ item }: { item: ReviewQueueItem }) {
   const due = item.status === "due" ? "现在" : new Date(item.reviewDueAt).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
-  return <a className="review-card" href={`/knowledge/${item.knowledgePointId}`}>
+  const start = async () => { const session = await platformApi.startKnowledgePractice(item.knowledgePointId); go(`/practice/${session.id}`); };
+  return <article className="review-card">
     <p className="eyebrow">{item.subject} · {item.section}{item.chapter ? ` · ${item.chapter}` : ""}</p>
     <h3>{item.name}</h3>
     <div className="review-metrics"><span>有效掌握度 <b>{Math.round(item.effectiveMastery)}%</b></span><span>记忆稳定度 <b>{item.stabilityDays.toFixed(1)} 天</b></span><span>目标难度 <b>{item.targetDifficulty}</b></span><span>建议巩固 <b>{due}</b></span></div>
-    <p className={item.playable ? "review-playable" : "review-waiting"}>{item.playable ? "当前可在正式世界中训练" : "暂待前置知识稳定后再安排"}</p>
-  </a>;
+    <p className={item.playable ? "review-playable" : "review-waiting"}>{item.playable ? "当前可以正式巩固" : "暂待前置知识稳定后再安排"}</p>
+    <button className="hub-primary" disabled={!item.playable} onClick={start}>现在巩固</button>
+  </article>;
 }
 
 function ReviewsPage({ data }: { data: HubBootstrap }) {
@@ -155,7 +165,47 @@ function BookPage({ data, id }: { data: HubBootstrap; id: string }) {
 function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
   const [point, setPoint] = useState<(KnowledgePoint & { books: {id:string;name:string}[] })>(); const [questions, setQuestions] = useState<BrowseQuestion[]>([]); const [state, setState] = useState<KnowledgeState>(); const [error, setError] = useState("");
   useEffect(() => { Promise.all([platformApi.knowledge(id), platformApi.knowledgeQuestions(id), platformApi.knowledgeState(id)]).then(([p,q,s]) => {setPoint(p);setQuestions(q);setState(s)}).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回知识图谱</a>{error && <p className="hub-error">{error}</p>}{point && <><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h1>{point.name}</h1>{state && <section className="hub-panel mastery-summary"><h2>当前状态</h2>{state.evidenceCount === 0 ? <p>尚未开始正式训练</p> : <><p className="mastery-score"><b>{bandLabel[state.band]}</b> · {Math.round(state.effectiveMastery)}%</p><p>记忆稳定度：{state.stabilityDays.toFixed(1)} 天</p><p>目标难度：{state.targetDifficulty}</p><p>最近练习：{state.lastEvidenceAt ? new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN") : "—"}</p></>}</section>}<section className="hub-panel rich"><RichText>{point.explanation || point.description}</RichText></section><h2>相关已发布题目</h2><div className="question-list">{questions.map(question => <a href={`/questions/${question.id}`} key={question.id}><span>{question.sourceName || question.sourceType}</span><b><RichText>{question.contentMarkdown}</RichText></b></a>)}</div></>}</main></Shell>;
+  const start = async () => { try { const session = await platformApi.startKnowledgePractice(id); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
+  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回知识图谱</a>{error && <p className="hub-error">{error}</p>}{point && <><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h1>{point.name}</h1><button className="hub-primary" onClick={start}>开始知识点专项练习</button>{state && <section className="hub-panel mastery-summary"><h2>当前状态</h2>{state.evidenceCount === 0 ? <p>尚未开始正式训练</p> : <><p className="mastery-score"><b>{bandLabel[state.band]}</b> · {Math.round(state.effectiveMastery)}%</p><p>记忆稳定度：{state.stabilityDays.toFixed(1)} 天</p><p>目标难度：{state.targetDifficulty}</p><p>最近练习：{state.lastEvidenceAt ? new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN") : "—"}</p></>}</section>}<section className="hub-panel rich"><RichText>{point.explanation || point.description}</RichText></section><h2>相关已发布题目</h2><div className="question-list">{questions.map(question => <a href={`/questions/${question.id}`} key={question.id}><span>{question.sourceName || question.sourceType}</span><b><RichText>{question.contentMarkdown}</RichText></b></a>)}</div></>}</main></Shell>;
+}
+
+function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
+  const [items, setItems] = useState<WrongQuestion[]>([]); const [error, setError] = useState("");
+  useEffect(() => { platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message)); }, []);
+  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
+  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><p className="eyebrow">WRONG PRACTICE</p><h1>错题练习</h1>
+    <p>这里只保留每道题最近一次正式作答仍需重做的项目，不展示错误次数或错误率。</p>{error && <p className="hub-error">{error}</p>}
+    {items.length === 0 && <section className="hub-panel"><h2>当前没有待重做题目</h2><p>之后若同一道题出现错误或部分正确，会自动出现在这里。</p></section>}
+    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><p className="eyebrow">{item.subject} · {item.chapter}</p><h2>{item.knowledgePointName}</h2><p>{item.summary}</p><small>最近一次：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small><button className="hub-primary" onClick={() => start(item.questionId)}>重做这道题</button></article>)}</div>
+  </main></Shell>;
+}
+
+function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
+  const [session, setSession] = useState<PracticeSession>(); const [selected, setSelected] = useState<string[]>([]); const [error, setError] = useState("");
+  const load = () => platformApi.practice(id).then(value => { setSession(value); setSelected([]); }).catch(reason => setError((reason as Error).message));
+  useEffect(() => { void load(); }, [id]);
+  if (!session) return <Shell data={data}><main className="hub-main narrow"><p>{error || "正在恢复专项练习…"}</p></main></Shell>;
+  const attempt = session.currentAttempt; const question = attempt.question;
+  const multiple = question.presentationType === "multiple_choice";
+  const practiceOptions = Object.keys(question.options || {}).length
+    ? question.options : question.presentationType === "true_false" ? { true: "正确", false: "错误" } : {};
+  const toggle = (key: string) => setSelected(values => multiple ? (values.includes(key) ? values.filter(value => value !== key) : [...values, key]) : [key]);
+  const submit = async () => { try {
+    const answer = question.presentationType === "true_false" ? selected[0] === "true" : multiple ? selected : selected[0];
+    setSession(await platformApi.answerPractice(session, answer));
+  } catch (reason) { setError((reason as Error).message); } };
+  const update = (action: Promise<PracticeSession>) => action.then(value => { setSession(value); setSelected([]); setError(""); }).catch(reason => setError((reason as Error).message));
+  const finish = async () => { try { await platformApi.endPractice(id); go(session.intent === "wrong_review" ? "/wrong-questions" : `/knowledge/${session.targetKnowledgePointId}`); } catch (reason) { setError((reason as Error).message); } };
+  return <Shell data={data}><main className="hub-main narrow practice-page"><button className="practice-exit" onClick={finish}>← 结束并返回</button><p className="eyebrow">{session.intent === "wrong_review" ? "错题重做" : "知识点专项"} · {attempt.targetKnowledgePointName}</p>
+    <h1>{attempt.evidenceMode === "training" ? "补救训练" : "正式练习"}</h1>{error && <p className="hub-error">{error}</p>}
+    <section className="hub-panel rich"><RichText>{question.question}</RichText><div className="practice-options">{Object.entries(practiceOptions).map(([key, text]) => <button className={selected.includes(key) ? "selected" : ""} disabled={attempt.status !== "active"} key={key} onClick={() => toggle(key)}><b>{key}.</b> {text}</button>)}</div></section>
+    {attempt.status === "active" && question.gradingMode === "auto" && <button className="hub-primary" disabled={!selected.length} onClick={submit}>提交答案</button>}
+    {attempt.status === "active" && question.gradingMode === "self_assessment" && <button className="hub-primary" onClick={() => update(platformApi.revealPractice(session))}>查看参考答案并自评</button>}
+    {attempt.answerRevealed && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(attempt.standard, null, 2)}</pre>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</section>}
+    {attempt.status === "revealed" && <div className="practice-assessment"><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div>}
+    {attempt.status === "graded" && <section className="hub-panel"><h2>{attempt.assessment === "correct" ? "本题已掌握" : attempt.assessment === "partial" ? "已有部分思路" : "错处已记录"}</h2><p>{session.flowComplete ? "当前知识点流程已经完成。" : "继续进入同一套诊断或补救流程。"}</p></section>}
+    {attempt.status === "graded" && <div className="practice-actions">{session.flowComplete ? <>{session.canRepeat && <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>再来一道同知识点</button>}<button onClick={finish}>结束专项</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续学习流程</button>}</div>}
+  </main></Shell>;
 }
 
 function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
@@ -175,6 +225,8 @@ function AuthenticatedPlatform() {
   if (path === "/worlds/ancient-official") return <div className="world-shell"><a className="world-shell-home" href="/">← 主世界</a><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
   if (path === "/reviews") return <ReviewsPage data={data} />;
+  if (path === "/wrong-questions") return <WrongQuestionsPage data={data} />;
+  if (path.startsWith("/practice/")) return <PracticePage data={data} id={idAfter("/practice/")} />;
   if (path === "/books") return <BooksPage data={data} />;
   if (path.startsWith("/books/")) return <BookPage data={data} id={idAfter("/books/")} />;
   if (path.startsWith("/knowledge/")) return <KnowledgePage data={data} id={idAfter("/knowledge/")} />;

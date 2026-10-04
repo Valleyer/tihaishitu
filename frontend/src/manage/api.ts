@@ -108,6 +108,11 @@ export type AuditLogView = {
   createdAt: string;
 };
 
+export class ManageHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
+}
+
 let csrf: { headerName: string; token: string } | null = null;
 
 async function ensureCsrf() {
@@ -135,7 +140,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.message || `请求失败（${response.status}）`);
+  if (!response.ok) throw new ManageHttpError(response.status, data?.message || `请求失败（${response.status}）`);
   return data as T;
 }
 
@@ -149,14 +154,6 @@ function params(values: Record<string, string | number | undefined>) {
 
 export const manageApi = {
   me: () => request<ManageUser>("/auth/me"),
-  async login(username: string, password: string) {
-    csrf = null;
-    await ensureCsrf();
-    return request<ManageUser>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-  },
   async logout() {
     await request<void>("/auth/logout", { method: "POST" });
     csrf = null;
