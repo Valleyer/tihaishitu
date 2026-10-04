@@ -103,7 +103,8 @@ it("共读按整轮评分加好感；副本专属奖励只发一次，装备能�
   game = await answerEvent(api, game);
   game = await api.beginActivity(game.id, "read-lu");
   game = await play(api, game, 4);
-  expect(game.npcs.find((n) => n.id === "lu")!.favorability).toBe(2);
+  // 送药际遇 +2 与本轮共读 +2 现在统一累计到同一个好感度字段。
+  expect(game.npcs.find((n) => n.id === "lu")!.favorability).toBe(4);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
   await expect(api.travel(game.id, "library")).rejects.toThrow("悟性");
