@@ -126,6 +126,14 @@ Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用
 
 Legacy `/games/**` 保持 Phase C 的 scope-only dependency 与原有随机/低难训练选择，不读取 Learner mastery。
 
+## Learner Question Rotation V1
+
+正式 Learner World 把 `study_attempt.created_at` 作为 Question Exposure 的事实来源：题目一经发出即计入，不要求存在 `answer_record`，因此 active、revealed 和 graded attempt 都有效。Exposure 以 `(learner_id, question_id)` 聚合，不按 World 隔离；Learning Hub 的知识点或题目浏览不会创建 attempt，也不会进入 Exposure 历史。Legacy `/games/**` 继续使用原有随机选择。
+
+当前 run 的 `seenQuestionIds` 仍是硬排除。对剩余合法候选，NORMAL 先完全沿用 Phase F 的 exact / nearest / lower tie 规则确定 difficulty；TRAINING 先沿用 `min(2, normalPreferred)`、低难优先和最低难 fallback。只有最终同 difficulty bucket 内会应用软轮换：never seen、最早 `lastExposedAt`、较少 `exposureCount`，完全相同时随机。
+
+Exposure 不删除候选，不设置固定 cooldown 或 blacklist。所有题都见过以后会选择最久未见的题，单题题库也可在新 run 中继续返回同一题，因此不会阻断 Task 无限重试或 Diagnosis。V10 只为 `study_attempt(learner_id, question_id, created_at)` 增加查询索引，不新增 Exposure 表、状态列、Evidence mode 或前端 Exposure UI。
+
 ## Forgetting-aware Review Queue V1
 
 Review Queue 是 `LearnerKnowledgeState` 的动态派生视图，不新增 Review 表、`next_review_at`、定时任务或 migration。只有 `evidenceCount > 0` 且最近证据后的原始 `masteryScore >= 70` 的状态具备复习资格；未开始和最新 mastery 低于 70 的知识点继续属于正常学习队列。

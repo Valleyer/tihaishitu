@@ -444,7 +444,7 @@ public class GameActionService {
                     diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), pointId);
                     continue;
                 }
-                question = questionPool.selectQuestionForLearner(request);
+                question = questionPool.selectQuestionForLearner(world.learnerId(), request);
                 break;
             }
         } else {
@@ -459,7 +459,7 @@ public class GameActionService {
                 var profile = studyProfiles.rawCurrent();
                 AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
                         world.learnerId(), allowed, pointId, profile.difficulty());
-                question = questionPool.selectQuestionForLearner(
+                question = questionPool.selectQuestionForLearner(world.learnerId(),
                         new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
                                 context.readyKnowledgePointIds(), seen, context.preferredDifficulty(), mode));
             }
