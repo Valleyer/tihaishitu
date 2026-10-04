@@ -42,6 +42,10 @@ public class LearnerStore {
                 .stream().findFirst();
     }
 
+    public void lockForUpdate(String id) {
+        jdbc.queryForObject("SELECT id FROM learner_account WHERE id = ? FOR UPDATE", String.class, id);
+    }
+
     public void touchLogin(String id) {
         jdbc.update("UPDATE learner_account SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", id);
     }

@@ -148,6 +148,7 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode answer(String gameId, AnswerRequest request) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
         String currentQuestionId = current.path("question").path("id").asText();
@@ -155,7 +156,6 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         boolean correct = sameAnswer(snapshot.standard(), request.answer());
-        knowledgeStates.lockForGrading(snapshot);
         Instant occurredAt = Instant.now();
         if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
         knowledgeStates.apply(snapshot, correct ? "correct" : "wrong", "automatic", occurredAt);
@@ -206,6 +206,7 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode selfAssess(String gameId, SelfAssessmentRequest request) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
         if (!request.questionId().equals(current.path("question").path("id").asText()))
@@ -213,7 +214,6 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         if (!current.path("result").isNull()) return game;
-        knowledgeStates.lockForGrading(snapshot);
         Instant occurredAt = Instant.now();
         if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
             throw bad("请先查看参考解答，或此题已经完成自评。");

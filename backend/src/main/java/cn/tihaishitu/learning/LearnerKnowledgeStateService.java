@@ -2,6 +2,8 @@ package cn.tihaishitu.learning;
 
 import cn.tihaishitu.game.QuestionAttemptStore;
 import cn.tihaishitu.learner.LearnerContext;
+import cn.tihaishitu.learner.LearnerStore;
+import cn.tihaishitu.world.WorldActionContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,14 +19,19 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 @Service
 public class LearnerKnowledgeStateService {
     private final LearnerKnowledgeStateStore store;
+    private final LearnerStore learners;
     private final KnowledgeMasteryModel model = new KnowledgeMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
-    public LearnerKnowledgeStateService(LearnerKnowledgeStateStore store) { this.store = store; }
+    public LearnerKnowledgeStateService(LearnerKnowledgeStateStore store, LearnerStore learners) {
+        this.store = store;
+        this.learners = learners;
+    }
 
-    /** Serializes final grading for one Learner before the attempt and aggregate facts are written. */
-    public void lockForGrading(QuestionAttemptStore.Snapshot attempt) {
-        if (attempt.learnerId() != null) store.lockLearner(attempt.learnerId());
+    /** Formal World grading acquires this lock before reading the final attempt snapshot. */
+    public void lockCurrentLearnerForGrading() {
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        if (world != null) learners.lockForUpdate(world.learnerId());
     }
 
     public void apply(QuestionAttemptStore.Snapshot attempt, String outcome, String gradingSource, Instant occurredAt) {
@@ -32,7 +39,7 @@ public class LearnerKnowledgeStateService {
         if (attempt.targetKnowledgePointId() == null || attempt.evidenceMode() == null
                 || attempt.questionDifficulty() == null)
             throw new IllegalStateException("正式学习 attempt 缺少知识证据上下文。");
-        store.lockLearner(attempt.learnerId());
+        learners.lockForUpdate(attempt.learnerId());
         if (store.evidenceExists(attempt.id())) return;
         var previous = store.find(attempt.learnerId(), attempt.targetKnowledgePointId())
                 .orElse(KnowledgeMasteryModel.State.initial());
@@ -61,7 +68,7 @@ public class LearnerKnowledgeStateService {
     @Transactional
     public void mergeKnowledge(String sourceId, String targetId) {
         List<String> learners = store.affectedLearners(sourceId, targetId);
-        learners.forEach(store::lockLearner);
+        learners.forEach(this.learners::lockForUpdate);
         store.canonicalizeForMerge(sourceId, targetId);
         for (String learnerId : learners) {
             var state = KnowledgeMasteryModel.State.initial();

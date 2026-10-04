@@ -19,10 +19,6 @@ public class LearnerKnowledgeStateStore {
     private final JdbcTemplate jdbc;
     public LearnerKnowledgeStateStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
-    public void lockLearner(String learnerId) {
-        jdbc.queryForObject("SELECT id FROM learner_account WHERE id = ? FOR UPDATE", String.class, learnerId);
-    }
-
     public Optional<KnowledgeMasteryModel.State> find(String learnerId, String pointId) {
         return jdbc.query("""
                 SELECT mastery_score, stability_days, target_difficulty, evidence_count, correct_streak,
@@ -108,9 +104,17 @@ public class LearnerKnowledgeStateStore {
 
     public List<String> affectedLearners(String sourceId, String targetId) {
         return jdbc.query("""
-                SELECT DISTINCT learner_id FROM learner_knowledge_evidence
-                 WHERE knowledge_point_id IN (?, ?)
-                """, (rs, row) -> rs.getString(1), sourceId, targetId);
+                SELECT learner_id FROM learner_knowledge_evidence WHERE knowledge_point_id IN (?, ?)
+                UNION
+                SELECT learner_id FROM learner_knowledge_state WHERE knowledge_point_id IN (?, ?)
+                UNION
+                SELECT learner_id FROM learner_focus_knowledge WHERE knowledge_point_id IN (?, ?)
+                UNION
+                SELECT learner_id FROM study_attempt
+                 WHERE learner_id IS NOT NULL AND target_knowledge_point_id IN (?, ?)
+                ORDER BY learner_id
+                """, (rs, row) -> rs.getString(1), sourceId, targetId, sourceId, targetId,
+                sourceId, targetId, sourceId, targetId);
     }
 
     public void canonicalizeForMerge(String sourceId, String targetId) {
@@ -131,6 +135,12 @@ public class LearnerKnowledgeStateStore {
                 jdbc.update("DELETE FROM learner_focus_knowledge WHERE learner_id = ? AND knowledge_point_id = ?",
                         focus.learnerId(), sourceId);
             }
+            int profileChanged = jdbc.update("""
+                    UPDATE learner_study_profile
+                       SET revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                     WHERE learner_id = ?
+                    """, focus.learnerId());
+            if (profileChanged != 1) throw new IllegalStateException("重点知识点所属学习档案不存在。");
         }
         jdbc.update("UPDATE learner_knowledge_evidence SET knowledge_point_id = ? WHERE knowledge_point_id = ?", targetId, sourceId);
         jdbc.update("UPDATE study_attempt SET target_knowledge_point_id = ? WHERE target_knowledge_point_id = ?", targetId, sourceId);

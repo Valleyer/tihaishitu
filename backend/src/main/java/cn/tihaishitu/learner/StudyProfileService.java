@@ -15,12 +15,14 @@ public class StudyProfileService {
     private final StudyProfileStore store;
     private final KnowledgeQuestionPoolStore poolStore;
     private final KnowledgeQuestionPoolService pool;
+    private final LearnerStore learners;
 
     public StudyProfileService(StudyProfileStore store, KnowledgeQuestionPoolStore poolStore,
-                               KnowledgeQuestionPoolService pool) {
+                               KnowledgeQuestionPoolService pool, LearnerStore learners) {
         this.store = store;
         this.poolStore = poolStore;
         this.pool = pool;
+        this.learners = learners;
     }
 
     public StudyProfileResponse current() { return response(store.find(LearnerContext.learnerId())); }
@@ -29,7 +31,10 @@ public class StudyProfileService {
     @Transactional
     public StudyProfileResponse update(UpdateStudyProfileRequest request) {
         String learnerId = LearnerContext.learnerId();
+        learners.lockForUpdate(learnerId);
         StudyProfileStore.Profile current = store.find(learnerId);
+        if (request.expectedRevision() != null && request.expectedRevision() != current.revision())
+            throw new ApiException(HttpStatus.CONFLICT, "学习设置已在其他页面更新，请刷新后重试。");
         long revision = request.expectedRevision() == null ? current.revision() : request.expectedRevision();
         String pace = allowed(request.pace(), Set.of("slow", "normal"), "学习节奏");
         String difficulty = allowed(request.difficulty(), Set.of("gentle", "standard"), "题目难度");

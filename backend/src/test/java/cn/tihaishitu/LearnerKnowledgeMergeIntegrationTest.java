@@ -1,10 +1,15 @@
 package cn.tihaishitu;
 
+import cn.tihaishitu.game.AnswerRequest;
+import cn.tihaishitu.game.GameActionService;
+import cn.tihaishitu.game.GameFactory;
 import cn.tihaishitu.game.QuestionAttemptStore;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.manage.KnowledgeManagementService;
 import cn.tihaishitu.world.WorldActionContext;
+import cn.tihaishitu.world.WorldStateStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,12 +26,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LearnerKnowledgeMergeIntegrationTest {
     @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper; @Autowired QuestionAttemptStore attempts;
     @Autowired LearnerKnowledgeStateService states; @Autowired KnowledgeManagementService management;
+    @Autowired GameActionService actions; @Autowired GameFactory factory; @Autowired WorldStateStore worldStates;
 
     @Test
     void crossWorldEvidenceSharesOneStateAndKnowledgeMergeCanonicalizesAndReplays() {
         String learner = UUID.randomUUID().toString(), source = UUID.randomUUID().toString(), target = UUID.randomUUID().toString();
         String actor = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,'merge-learner','合并学习者','x','active',1)", learner);
+        jdbc.update("INSERT INTO learner_study_profile(learner_id,pace,difficulty,focus_mode,revision) VALUES (?,'normal','standard','manual',1)", learner);
         jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,'merge-actor','管理员','x','active',1)", actor);
         insertKnowledge(source, "MERGE-STATE-SOURCE"); insertKnowledge(target, "MERGE-STATE-TARGET");
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,2)", learner, source);
@@ -52,6 +59,62 @@ class LearnerKnowledgeMergeIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT target_knowledge_point_id FROM study_attempt WHERE id=?", String.class, sourceAttempt)).isEqualTo(target);
         assertThat(jdbc.queryForObject("SELECT target_knowledge_point_id FROM study_attempt WHERE id=?", String.class, targetAttempt)).isEqualTo(target);
         assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT world_id) FROM learner_knowledge_evidence WHERE learner_id=? AND knowledge_point_id=?", Integer.class, learner, target)).isEqualTo(2);
+    }
+
+    @Test
+    void activeAttemptUsesCanonicalTargetWhenGradedAfterKnowledgeMerge() {
+        String learner = UUID.randomUUID().toString(), source = UUID.randomUUID().toString();
+        String target = UUID.randomUUID().toString(), actor = UUID.randomUUID().toString();
+        String world = "ancient-official", attemptId = UUID.randomUUID().toString();
+        String questionId = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,'并发学习者','x','active',1)",
+                learner, "active-merge-" + learner);
+        jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,?,'并发管理员','x','active',1)",
+                actor, "active-actor-" + actor);
+        insertKnowledge(source, "ACTIVE-MERGE-SOURCE");
+        insertKnowledge(target, "ACTIVE-MERGE-TARGET");
+
+        ObjectNode question = mapper.createObjectNode();
+        question.put("id", questionId);
+        question.put("gradingMode", "auto");
+        question.put("explanation", "解析");
+        question.set("aliases", mapper.createArrayNode());
+        WorldActionContext.run(learner, world, () -> {
+            attempts.create(attemptId, world, questionId, question, mapper.getNodeFactory().booleanNode(true),
+                    "auto", source, "normal", 3);
+            return null;
+        });
+        ObjectNode state = factory.createAncientOfficialState("并发学子", "男", "寒门读书人");
+        ObjectNode current = mapper.createObjectNode();
+        current.put("id", attemptId);
+        current.set("question", question.deepCopy());
+        current.putNull("result");
+        current.put("review", false);
+        state.set("attempt", current);
+        ObjectNode run = mapper.createObjectNode();
+        run.put("id", UUID.randomUUID().toString());
+        run.set("definition", mapper.createObjectNode().put("id", "concurrency-test").put("passScore", 60));
+        run.put("answered", 0);
+        run.put("correct", 0);
+        run.set("knowledgePointIds", mapper.valueToTree(java.util.List.of(source)));
+        run.put("knowledgePointIndex", 0);
+        run.put("training", false);
+        run.put("trainingAnswered", 0);
+        run.set("seenQuestionIds", mapper.createArrayNode());
+        run.put("status", "active");
+        state.with("adventure").set("run", run);
+        worldStates.insert(learner, world, state);
+
+        management.merge(source, target, 1, "合并 active attempt 目标", actor);
+        WorldActionContext.run(learner, world, () -> actions.answer(world,
+                new AnswerRequest(attemptId, questionId, mapper.getNodeFactory().booleanNode(true))));
+
+        assertThat(jdbc.queryForObject("SELECT target_knowledge_point_id FROM study_attempt WHERE id=?", String.class, attemptId))
+                .isEqualTo(target);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE learner_id=? AND knowledge_point_id=?", Integer.class, learner, source)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE learner_id=? AND knowledge_point_id=?", Integer.class, learner, target)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE learner_id=? AND knowledge_point_id=?", Integer.class, learner, source)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE learner_id=? AND knowledge_point_id=?", Integer.class, learner, target)).isEqualTo(1);
     }
 
     private String evidence(String learner, String world, String point, String mode, String outcome, Instant at) {
