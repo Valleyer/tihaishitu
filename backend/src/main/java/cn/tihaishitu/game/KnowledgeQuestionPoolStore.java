@@ -90,6 +90,41 @@ public class KnowledgeQuestionPoolStore {
                 (result, row) -> result.getString("knowledge_point_id"), args.toArray()));
     }
 
+    public Set<String> adaptivePlayableKnowledgePointIds(Set<String> allowedKnowledgePointIds,
+                                                          Set<String> readyKnowledgePointIds) {
+        if (allowedKnowledgePointIds.isEmpty()) return Set.of();
+        String allowedMarks = placeholders(allowedKnowledgePointIds.size());
+        String readiness = readyKnowledgePointIds.isEmpty()
+                ? "dependency.knowledge_point_id <> current_rel.knowledge_point_id"
+                : "(dependency.knowledge_point_id <> current_rel.knowledge_point_id "
+                + "AND dependency.knowledge_point_id NOT IN (" + placeholders(readyKnowledgePointIds.size()) + "))";
+        List<Object> args = new ArrayList<>();
+        args.addAll(allowedKnowledgePointIds);
+        args.addAll(allowedKnowledgePointIds);
+        args.addAll(readyKnowledgePointIds);
+        return new LinkedHashSet<>(jdbc.query("""
+                SELECT DISTINCT current_rel.knowledge_point_id
+                  FROM question_resource q
+                  JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
+                  JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
+                 WHERE q.status = 'published'
+                   AND current_rel.relation_role = 'core'
+                   AND current_rel.knowledge_point_id IN (%s)
+                   AND current_k.status = 'active'
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM question_resource_knowledge dependency
+                         LEFT JOIN global_knowledge_point dependency_k
+                           ON dependency_k.id = dependency.knowledge_point_id
+                        WHERE dependency.question_id = q.id
+                          AND (dependency_k.id IS NULL OR dependency_k.status <> 'active'
+                               OR dependency.knowledge_point_id NOT IN (%s)
+                               OR %s)
+                   )
+                """.formatted(allowedMarks, allowedMarks, readiness),
+                (result, row) -> result.getString("knowledge_point_id"), args.toArray()));
+    }
+
     public List<QuestionDto> candidatesForCore(
             String currentKnowledgePointId, Set<String> allowedKnowledgePointIds) {
         Set<String> allowed = new LinkedHashSet<>(allowedKnowledgePointIds);
@@ -120,17 +155,46 @@ public class KnowledgeQuestionPoolStore {
                    )
                  ORDER BY q.id
                 """.formatted(marks), (result, row) -> questionRow(result), args.toArray());
-        if (rows.isEmpty()) return List.of();
-        List<String> questionIds = rows.stream().map(QuestionRow::id).toList();
-        Map<String, Map<String, String>> options = loadOptions(questionIds);
-        Map<String, List<String>> knowledge = loadQuestionKnowledge(questionIds);
-        return rows.stream().map(row -> new QuestionDto(
-                row.id(), row.subject(), row.sourceType(), value(row.sourceName(), "全服题库"),
-                row.presentationType(), row.questionType(), row.presentationType(), row.gradingMode(),
-                row.content(), options.getOrDefault(row.id(), Map.of()), readTree(row.answer()), row.analysis(),
-                List.of(), List.of(), row.difficulty(), 3, List.of(),
-                knowledge.getOrDefault(row.id(), List.of()), true
-        )).toList();
+        return questions(rows);
+    }
+
+    public List<QuestionDto> adaptiveCandidatesForCore(String currentKnowledgePointId,
+                                                       Set<String> allowedKnowledgePointIds,
+                                                       Set<String> readyKnowledgePointIds) {
+        if (allowedKnowledgePointIds.isEmpty()) return List.of();
+        String allowedMarks = placeholders(allowedKnowledgePointIds.size());
+        String readiness = readyKnowledgePointIds.isEmpty()
+                ? "dependency.knowledge_point_id <> current_rel.knowledge_point_id"
+                : "(dependency.knowledge_point_id <> current_rel.knowledge_point_id "
+                + "AND dependency.knowledge_point_id NOT IN (" + placeholders(readyKnowledgePointIds.size()) + "))";
+        List<Object> args = new ArrayList<>();
+        args.add(currentKnowledgePointId);
+        args.addAll(allowedKnowledgePointIds);
+        args.addAll(readyKnowledgePointIds);
+        List<QuestionRow> rows = jdbc.query("""
+                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
+                       q.presentation_type, q.grading_mode, q.content_markdown,
+                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                  FROM question_resource q
+                  JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
+                  JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
+                 WHERE q.status = 'published'
+                   AND current_rel.knowledge_point_id = ?
+                   AND current_rel.relation_role = 'core'
+                   AND current_k.status = 'active'
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM question_resource_knowledge dependency
+                         LEFT JOIN global_knowledge_point dependency_k
+                           ON dependency_k.id = dependency.knowledge_point_id
+                        WHERE dependency.question_id = q.id
+                          AND (dependency_k.id IS NULL OR dependency_k.status <> 'active'
+                               OR dependency.knowledge_point_id NOT IN (%s)
+                               OR %s)
+                   )
+                 ORDER BY q.id
+                """.formatted(allowedMarks, readiness), (result, row) -> questionRow(result), args.toArray());
+        return questions(rows);
     }
 
     public List<KnowledgePointDto> knowledgeDetails(Collection<String> knowledgePointIds) {
@@ -175,6 +239,20 @@ public class KnowledgeQuestionPoolStore {
                 .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
                 .put(result.getString("option_key"), result.getString("option_text")), questionIds.toArray());
         return options;
+    }
+
+    private List<QuestionDto> questions(List<QuestionRow> rows) {
+        if (rows.isEmpty()) return List.of();
+        List<String> questionIds = rows.stream().map(QuestionRow::id).toList();
+        Map<String, Map<String, String>> options = loadOptions(questionIds);
+        Map<String, List<String>> knowledge = loadQuestionKnowledge(questionIds);
+        return rows.stream().map(row -> new QuestionDto(
+                row.id(), row.subject(), row.sourceType(), value(row.sourceName(), "全服题库"),
+                row.presentationType(), row.questionType(), row.presentationType(), row.gradingMode(),
+                row.content(), options.getOrDefault(row.id(), Map.of()), readTree(row.answer()), row.analysis(),
+                List.of(), List.of(), row.difficulty(), 3, List.of(),
+                knowledge.getOrDefault(row.id(), List.of()), true
+        )).toList();
     }
 
     private Map<String, List<String>> loadQuestionKnowledge(List<String> questionIds) {

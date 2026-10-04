@@ -111,9 +111,19 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 effectiveMastery = masteryScore × 2 ^ (-elapsedDays / stabilityDays)
 ```
 
-`stabilityDays` 是 0.5–365 天的记忆半衰期。服务端没有后台衰减任务；读取时计算有效值，下一条证据到来时先计算惰性遗忘，再应用新证据。ready 阈值为 70，但本阶段该值和 `targetDifficulty` 只展示与保存，不参与题池选择、依赖范围或复习调度。
+`stabilityDays` 是 0.5–365 天的记忆半衰期。服务端没有后台衰减任务；读取时计算有效值，下一条证据到来时先计算惰性遗忘，再应用新证据。ready 阈值保持为 70；正式 World 的 Adaptive Scheduling V1 会消费 `effectiveMastery`、`targetDifficulty` 与 Study Profile，但不会修改 Mastery V1 参数。
 
 V1 quality 为 automatic correct 1.00、automatic wrong 0、self correct 0.90、self partial 0.50、self wrong 0；source factor 为 automatic 1.00 / self 0.85，mode factor 为 normal 1.00 / training 0.55。高难题答对证据更强，低难题答错证据更强。Learning Hub 浏览题目、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
+
+## Adaptive Scheduling V1
+
+正式 World 开始活动时先从 Selected Books 得到冻结的 allowed KnowledgePoint scope。某个目标知识点只有在至少存在一道满足以下条件的 published Question 时才可进入本轮计划：目标是该题的 core；题目的全部 KnowledgePoint 都处于 allowed scope 且为 active；除目标本身之外的其他 core/auxiliary KnowledgePoint 均满足 `effectiveMastery >= 70`。目标自身不要求 ready，因此全新知识点仍可由单知识点题目启动。无 state 的依赖视为不 ready；空 ready set 只允许没有其他依赖的题目。
+
+Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用虚拟初始状态且不写库。自动目标优先级依次为：已有证据且有效掌握度低于 70、未开始、70–85、85 以上；同层优先有效掌握度更低、证据更早的知识点。Manual Focus 整体优先于非 Focus，但仍受相同 dependency、scope、published 与 seen 约束。可训练的不同目标不足活动轮数时返回明确的 400，不会放宽依赖规则。
+
+每次正式 draw 都在当前 run 冻结的 allowed scope 内重新计算 ready，并读取当前目标 state。难度上限为：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–85 为 4，85 以上为 5；`standard` 使用 `min(targetDifficulty, masteryCap)`，`gentle` 再下调一级但不低于 1。NORMAL 优先精确难度，否则选择距离最近的难度，距离相同取较低值；TRAINING 使用 `min(2, normalPreferred)`，优先不高于 2 的最近难度，没有低难题时使用全部合法候选中的最低难度。seen Question 永不因难度匹配而复用。
+
+Legacy `/games/**` 保持 Phase C 的 scope-only dependency 与原有随机/低难训练选择，不读取 Learner mastery。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。

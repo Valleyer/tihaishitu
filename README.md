@@ -16,10 +16,13 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **养成**：26 件装备、消耗品和信物可收入行囊，装备加成实际参与解锁条件。
 - **Learning Hub**：统一选择文集与重点知识点，浏览章节、知识点和已发布题目。
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
+- **自适应学习 V1**：正式 World 优先巩固尚未基本掌握的知识点，并按当前掌握状态与学习设置选择合适难度；Selected Books 始终是学习范围的硬边界。
 
 判断、单选、多选继续支持，选项每次发卷打乱。正式联机流程中每位 Learner 在每个 World 只有一份服务端权威状态；旧多存档只保留兼容数据。
 
 掌握度 V1 保留每次正式判定的 Knowledge Evidence，并以 `stabilityDays` 为半衰期在读取时惰性计算遗忘；数据库中的 `masteryScore` 表示最近一条证据发生时的基础值。该模型可解释、可版本化、可调参，不声称是心理测量学上的最终模型。题目浏览、查看答案和 reveal 不产生证据。
+
+Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。当前目标知识点可以尚未掌握，但题目关联的其他 core/auxiliary 知识点必须达到基本掌握；手动 Study Focus 只提高目标优先级，不绕过依赖、文集范围、发布状态或本轮去重。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
 当前已完成青溪求学、县试、赴府、府城游历与府试主干，共 44 项可配置活动。[具体里程碑](docs/releases.md)。
 

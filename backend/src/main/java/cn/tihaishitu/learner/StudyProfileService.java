@@ -4,6 +4,7 @@ import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.game.KnowledgeQuestionPoolService;
 import cn.tihaishitu.game.KnowledgeQuestionPoolStore;
+import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,13 +17,16 @@ public class StudyProfileService {
     private final KnowledgeQuestionPoolStore poolStore;
     private final KnowledgeQuestionPoolService pool;
     private final LearnerStore learners;
+    private final AdaptiveStudyPlanner adaptivePlanner;
 
     public StudyProfileService(StudyProfileStore store, KnowledgeQuestionPoolStore poolStore,
-                               KnowledgeQuestionPoolService pool, LearnerStore learners) {
+                               KnowledgeQuestionPoolService pool, LearnerStore learners,
+                               AdaptiveStudyPlanner adaptivePlanner) {
         this.store = store;
         this.poolStore = poolStore;
         this.pool = pool;
         this.learners = learners;
+        this.adaptivePlanner = adaptivePlanner;
     }
 
     public StudyProfileResponse current() { return response(store.find(LearnerContext.learnerId())); }
@@ -67,8 +71,11 @@ public class StudyProfileService {
 
     public KnowledgeQuestionPoolService.StudyPlan plan(int count) {
         StudyProfileStore.Profile profile = rawCurrent();
-        return pool.planKnowledgePoints(new LinkedHashSet<>(profile.selectedBookIds()),
-                "manual".equals(profile.focusMode()) ? profile.focusedKnowledgePointIds() : List.of(), count);
+        AdaptiveStudyPlanner.AdaptiveStudyPlan plan = adaptivePlanner.plan(LearnerContext.learnerId(),
+                new LinkedHashSet<>(profile.selectedBookIds()), profile.focusedKnowledgePointIds(),
+                "manual".equals(profile.focusMode()), count);
+        return new KnowledgeQuestionPoolService.StudyPlan(
+                plan.allowedKnowledgePointIds(), plan.targetKnowledgePointIds());
     }
 
     private StudyProfileResponse response(StudyProfileStore.Profile profile) {

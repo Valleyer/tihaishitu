@@ -32,6 +32,23 @@ public class KnowledgeQuestionPoolService {
         }
     }
 
+    public record AdaptiveQuestionPoolRequest(
+            String currentKnowledgePointId,
+            Set<String> allowedKnowledgePointIds,
+            Set<String> readyKnowledgePointIds,
+            Set<String> seenQuestionIds,
+            int preferredDifficulty,
+            Mode mode) {
+        public AdaptiveQuestionPoolRequest {
+            allowedKnowledgePointIds = allowedKnowledgePointIds == null
+                    ? Set.of() : Set.copyOf(allowedKnowledgePointIds);
+            readyKnowledgePointIds = readyKnowledgePointIds == null
+                    ? Set.of() : Set.copyOf(readyKnowledgePointIds);
+            seenQuestionIds = seenQuestionIds == null ? Set.of() : Set.copyOf(seenQuestionIds);
+            mode = mode == null ? Mode.NORMAL : mode;
+        }
+    }
+
     public record StudyPlan(Set<String> allowedKnowledgePointIds, List<String> knowledgePointIds) {}
 
     private final KnowledgeQuestionPoolStore store;
@@ -96,12 +113,47 @@ public class KnowledgeQuestionPoolService {
         return random(candidates.stream().filter(question -> question.difficulty() == minimum).toList());
     }
 
+    public List<QuestionDto> eligibleQuestionsForLearner(AdaptiveQuestionPoolRequest request) {
+        if (request.currentKnowledgePointId() == null || request.currentKnowledgePointId().isBlank()) {
+            throw bad("当前修习知识点不能为空。");
+        }
+        return store.adaptiveCandidatesForCore(request.currentKnowledgePointId(),
+                        request.allowedKnowledgePointIds(), request.readyKnowledgePointIds()).stream()
+                .filter(question -> !request.seenQuestionIds().contains(question.id()))
+                .toList();
+    }
+
+    public QuestionDto selectQuestionForLearner(AdaptiveQuestionPoolRequest request) {
+        List<QuestionDto> candidates = eligibleQuestionsForLearner(request);
+        if (candidates.isEmpty()) {
+            throw bad("该知识点当前可用题目已用尽，或前置知识尚未达到基本掌握。请结束或退出本轮训练。");
+        }
+        if (request.mode() == Mode.NORMAL) {
+            return selectNearest(candidates, request.preferredDifficulty());
+        }
+        int remedialPreferred = Math.min(2, request.preferredDifficulty());
+        List<QuestionDto> remedial = candidates.stream().filter(question -> question.difficulty() <= 2).toList();
+        if (!remedial.isEmpty()) return selectNearest(remedial, remedialPreferred);
+        int minimum = candidates.stream().mapToInt(QuestionDto::difficulty).min().orElseThrow();
+        return random(candidates.stream().filter(question -> question.difficulty() == minimum).toList());
+    }
+
     public List<KnowledgePointDto> knowledgeDetails(Collection<String> knowledgePointIds) {
         return store.knowledgeDetails(new LinkedHashSet<>(knowledgePointIds));
     }
 
     private static QuestionDto random(List<QuestionDto> candidates) {
         return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+    }
+
+    private static QuestionDto selectNearest(List<QuestionDto> candidates, int preferredDifficulty) {
+        int selectedDifficulty = candidates.stream().mapToInt(QuestionDto::difficulty).boxed()
+                .min(java.util.Comparator.comparingInt((Integer difficulty) ->
+                                Math.abs(difficulty - preferredDifficulty))
+                        .thenComparingInt(Integer::intValue))
+                .orElseThrow();
+        return random(candidates.stream()
+                .filter(question -> question.difficulty() == selectedDifficulty).toList());
     }
 
     private static ApiException bad(String message) {
