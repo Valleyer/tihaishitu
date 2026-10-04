@@ -26,6 +26,7 @@ class DiagnosticMergeIntegrationTest extends DiagnosticWorldTestSupport {
         Scenario scenario = scenario(2, false);
         Cookie cookie = register("diagnostic-merge-route");
         configureLearner("diagnostic-merge-route", scenario);
+        forceScenarioPlan(scenario);
         initialize(cookie);
 
         JsonNode game = begin(cookie, "read");

@@ -21,6 +21,7 @@ class DiagnosticTargetAttributionIntegrationTest extends DiagnosticWorldTestSupp
         Scenario scenario = scenario(2, true);
         Cookie cookie = register("diagnostic-target-route");
         configureLearner("diagnostic-target-route", scenario);
+        forceScenarioPlan(scenario);
         initialize(cookie);
 
         JsonNode game = begin(cookie, "read");
