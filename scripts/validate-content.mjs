@@ -47,11 +47,16 @@ chapters.forEach((c, i) => {
     i === 0 || c.threshold > chapters[i - 1].threshold,
     "章节题数门槛必须递增",
   );
-  check(c.knowledge >= 0 && c.trust >= 0, c.id + " 的门槛不能为负");
+  check(c.knowledge >= 0 && c.favorability >= 0, c.id + " 的门槛不能为负");
 });
-characters.forEach((n) =>
-  check(n.portrait in portraits.portraits, n.id + " 的立绘未配置"),
-);
+characters.forEach((n) => {
+  check(n.portrait in portraits.portraits, n.id + " 的立绘未配置");
+  check(
+    Number.isFinite(n.favorability) && n.favorability >= 0 && n.favorability <= 100,
+    n.id + " 的好感度应为 0–100",
+  );
+  check(n.affinity === undefined && n.trust === undefined, n.id + " 仍在使用旧关系字段");
+});
 scenes.groups.forEach((g) => {
   check(g.scenes.length > 0, "剧情组 " + g.id + " 为空");
   g.scenes.forEach((s) => {
@@ -66,7 +71,7 @@ scenes.groups.forEach((g) => {
 events.forEach((e) => {
   check(e.options.length >= 2, e.id + " 至少需要两个回应");
   e.options.forEach((o) => {
-    for (const k of ["trust", "affinity"])
+    for (const k of ["favorability"])
       for (const id of Object.keys(o.effects[k] || {}))
         check(
           characters.some((n) => n.id === id),
@@ -192,7 +197,7 @@ const checkReward = (reward, source) => {
       itemIds.includes(id) && Number.isInteger(value) && value > 0,
       source + " 道具奖励无效：" + id,
     );
-  for (const key of ["affinity", "trust"])
+  for (const key of ["favorability"])
     for (const [id, value] of Object.entries(reward[key] || {}))
       check(
         npcIds.includes(id) && Number.isFinite(value) && value >= 0,
@@ -207,7 +212,7 @@ const checkGate = (gate, source) => {
       attrIds.includes(id) && Number.isFinite(min) && min >= 0,
       source + " 属性门槛无效：" + id,
     );
-  for (const [id, min] of Object.entries(gate.affinity || {}))
+  for (const [id, min] of Object.entries(gate.favorability || {}))
     check(
       npcIds.includes(id) && Number.isFinite(min) && min >= 0,
       source + " 好感门槛无效：" + id,
@@ -219,6 +224,7 @@ for (const a of activities) {
     ["study", "companion", "dungeon", "story", "exam"].includes(a.kind),
     a.id + " 活动类型无效",
   );
+  check(["task", "repeatable"].includes(a.activityMode), a.id + " 缺少 activityMode");
   check(
     Number.isInteger(a.rounds) && a.rounds > 0 && a.rounds <= 50,
     a.id + " 轮数须为 1–50",
@@ -269,8 +275,14 @@ for (const c of companions) {
       activities.some((a) => a.id === id && a.npcId === c.npcId),
       "共读活动引用无效：" + id,
     );
-  for (const t of c.topics) check(t.lines.length > 0, "人物话题不能为空");
-  for (const m of c.milestones) checkReward(m.reward, c.npcId);
+  for (const t of c.topics) {
+    check(t.lines.length > 0, "人物话题不能为空");
+    check(Number.isFinite(t.minFavorability), "人物话题缺少好感度门槛");
+  }
+  for (const m of c.milestones) {
+    check(Number.isFinite(m.favorability), "人物心意缺少好感度门槛");
+    checkReward(m.reward, c.npcId);
+  }
 }
 for (const item of items) {
   if (item.kind === "equipment") {
