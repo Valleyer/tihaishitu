@@ -93,7 +93,7 @@ it("活动结束后触发城中际遇，选择会开启对应人物支线", asyn
   expect(game.event).toBeNull();
   expect(game.flags).toContain("medicine-entrusted");
 });
-it("共读按整轮评分加好感；副本专属奖励只发一次，装备能解锁地点", async () => {
+it("共读按整轮评分加好感；副本完成后奖励一次并永久结案", async () => {
   const { api } = setup();
   let game = await api.createGame(config);
   game = await api.beginActivity(game.id, "read-lu");
@@ -108,15 +108,17 @@ it("共读按整轮评分加好感；副本专属奖励只发一次，装备能�
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
   await expect(api.travel(game.id, "library")).rejects.toThrow("悟性");
-  for (let repeat = 0; repeat < 2; repeat++) {
-    game = await api.beginActivity(game.id, "trial-ink");
-    game = await play(api, game, 5);
-    game = await api.finishActivity(game.id, game.adventure!.run!.id);
-    game = await answerEvent(api, game);
-  }
+  game = await api.beginActivity(game.id, "trial-ink");
+  game = await play(api, game, 5);
+  game = await api.finishActivity(game.id, game.adventure!.run!.id);
+  game = await answerEvent(api, game);
   expect(game.adventure!.inventory.inkstone).toBe(1);
+  expect(game.adventure!.clears["trial-ink"]).toBe(1);
+  await expect(api.beginActivity(game.id, "trial-ink")).rejects.toThrow(
+    "这项任务已经完成",
+  );
   game = await api.useItem(game.id, "inkstone");
-  expect(effectiveAttribute(game, "insight")).toBe(9);
+  expect(effectiveAttribute(game, "insight")).toBe(6);
   expect((await api.travel(game.id, "library")).adventure!.locationId).toBe(
     "library",
   );
