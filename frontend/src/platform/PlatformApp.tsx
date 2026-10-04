@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
 import { HttpError } from "../api/http";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type StudyProfile } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type ReviewQueue, type ReviewQueueItem, type StudyProfile } from "./api";
 import "./platform.css";
 
 const go = (path: string) => window.location.assign(path);
@@ -43,7 +43,7 @@ function AuthPage({ register }: { register: boolean }) {
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
   return <div className="learning-hub">
     <header className="hub-header"><a className="hub-brand" href="/"><span>题</span>题海仕途</a>
-      <nav><a href="/study">学习方向</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a><a href="/account">{data.learner.displayName}</a></nav>
+      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a><a href="/account">{data.learner.displayName}</a></nav>
     </header>
     {children}
   </div>;
@@ -51,6 +51,8 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
 
 function HubHome({ data }: { data: HubBootstrap }) {
   const selected = data.bankManifest.filter(book => data.studyProfile.selectedBookIds.includes(book.id));
+  const [reviews, setReviews] = useState<ReviewQueue | null>();
+  useEffect(() => { platformApi.reviewQueue().then(setReviews).catch(() => setReviews(null)); }, []);
   return <Shell data={data}><main className="hub-main">
     <section className="hub-hero"><p className="eyebrow">Learning Hub · 学习主世界</p><h1>{data.learner.displayName}，今日从哪里继续？</h1>
       <p>文集决定完整学习范围，重点知识点只负责安排优先顺序。所有游戏世界共享同一份学习资源与学习身份。</p>
@@ -65,6 +67,13 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <p>{data.bankManifest.length} 本可用文集，题目和知识点由服务器统一维护。浏览行为不会产生答题记录。</p>
       </section>
     </div>
+    <section className="hub-panel review-summary"><div className="panel-heading"><div><small>REVIEW PLAN</small><h2>今日巩固</h2></div><a href="/reviews">查看复习安排</a></div>
+      {reviews ? <div className="review-summary-grid">
+        <p><b>{reviews.summary.due}</b><span>今日适合巩固</span></p>
+        <p><b>{reviews.summary.soon}</b><span>24 小时内进入窗口</span></p>
+        <p><b>{reviews.summary.upcoming}</b><span>未来 7 天可提前查看</span></p>
+      </div> : <p>{reviews === null ? "复习安排暂时未能载入，可以稍后再看。" : "正在根据当前掌握度与记忆稳定度整理复习安排…"}</p>}
+    </section>
     <section className="world-gallery" id="worlds"><div className="panel-heading"><div><small>WORLD GALLERY</small><h2>游戏世界</h2></div></div>
       <div className="world-cards">{data.worlds.map(world => <article key={world.id} className={world.enabled ? "world-card enabled" : "world-card"}>
         <p>{world.enabled ? "现已开放" : "筹备中"}</p><h3>{world.name}</h3><span>{world.description}</span>
@@ -103,6 +112,34 @@ function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise
 
 function BooksPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><h1>文集与知识图谱</h1><div className="book-list">{data.bankManifest.map(book => <a className="hub-panel" href={`/books/${book.id}`} key={book.id}><h2>{book.name}</h2><p>{book.description}</p><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</small></a>)}</div></main></Shell>; }
 
+const reviewGroups: { status: ReviewQueueItem["status"]; title: string; description: string }[] = [
+  { status: "due", title: "现在适合巩固", description: "这些知识点已经进入合适的巩固窗口。" },
+  { status: "soon", title: "24 小时内", description: "提前留意这些知识点，可以在记忆边界前自然回顾。" },
+  { status: "upcoming", title: "未来 7 天", description: "接下来一周可能进入巩固窗口的知识点。" },
+];
+
+function ReviewCard({ item }: { item: ReviewQueueItem }) {
+  const due = item.status === "due" ? "现在" : new Date(item.reviewDueAt).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
+  return <a className="review-card" href={`/knowledge/${item.knowledgePointId}`}>
+    <p className="eyebrow">{item.subject} · {item.section}{item.chapter ? ` · ${item.chapter}` : ""}</p>
+    <h3>{item.name}</h3>
+    <div className="review-metrics"><span>有效掌握度 <b>{Math.round(item.effectiveMastery)}%</b></span><span>记忆稳定度 <b>{item.stabilityDays.toFixed(1)} 天</b></span><span>目标难度 <b>{item.targetDifficulty}</b></span><span>建议巩固 <b>{due}</b></span></div>
+    <p className={item.playable ? "review-playable" : "review-waiting"}>{item.playable ? "当前可在正式世界中训练" : "暂待前置知识稳定后再安排"}</p>
+  </a>;
+}
+
+function ReviewsPage({ data }: { data: HubBootstrap }) {
+  const [queue, setQueue] = useState<ReviewQueue>(); const [error, setError] = useState("");
+  useEffect(() => { platformApi.reviewQueue().then(setQueue).catch(reason => setError((reason as Error).message)); }, []);
+  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><p className="eyebrow">REVIEW PLAN</p><h1>复习安排</h1>
+    <p>复习时间由现有掌握度、记忆稳定度和最近正式练习动态推导。这里用于规划，正式作答仍在游戏世界中进行。</p>
+    {error && <p className="hub-error">{error}</p>}
+    {!queue && !error && <p>正在整理复习安排…</p>}
+    {queue && queue.items.length === 0 && <section className="hub-panel"><h2>当前安排从容</h2><p>未来 7 天暂时没有需要特别安排的知识点，继续按现有学习方向前进即可。</p></section>}
+    {queue && reviewGroups.map(group => { const items = queue.items.filter(item => item.status === group.status); return <section className="review-group" key={group.status}><div><h2>{group.title}</h2><p>{group.description}</p></div>{items.length ? <div className="review-cards">{items.map(item => <ReviewCard item={item} key={item.knowledgePointId} />)}</div> : <p className="hub-panel">这一时段暂无安排。</p>}</section> })}
+  </main></Shell>;
+}
+
 const bandLabel: Record<KnowledgeState["band"], string> = { unstarted: "未开始", unmastered: "未掌握", learning: "学习中", ready: "基本掌握", proficient: "熟练掌握" };
 
 function ChapterSection({ chapter, states }: { chapter: BookDetail["chapters"][number]; states: Map<string, KnowledgeState> }) {
@@ -137,6 +174,7 @@ function AuthenticatedPlatform() {
   if (!data) return <main className="hub-loading">{error || "正在载入学习主世界…"}</main>;
   if (path === "/worlds/ancient-official") return <div className="world-shell"><a className="world-shell-home" href="/">← 主世界</a><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
+  if (path === "/reviews") return <ReviewsPage data={data} />;
   if (path === "/books") return <BooksPage data={data} />;
   if (path.startsWith("/books/")) return <BookPage data={data} id={idAfter("/books/")} />;
   if (path.startsWith("/knowledge/")) return <KnowledgePage data={data} id={idAfter("/knowledge/")} />;

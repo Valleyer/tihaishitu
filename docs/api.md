@@ -30,6 +30,7 @@ API_PROXY_TARGET=http://localhost:12345
 | GET/PUT | /learner/study-profile | Study Focus | StudyProfile |
 | GET | /learner/knowledge-states/{knowledgePointId} | 无 | 当前 Learner 的 Knowledge State；无证据时返回未开始虚拟状态且不写库 |
 | GET | /learner/knowledge-states?bookId={bookId} | 无 | enabled Book 全部 active KnowledgePoint 的批量状态 |
+| GET | /learner/review-queue | 无 | 当前 Selected Books 范围内动态派生的 7 天复习安排；只读且不写库 |
 | GET | /bootstrap | 无 | learner、studyProfile、worlds、bankManifest、questionCatalog |
 | GET | /learning/books | 无 | 可见文集 |
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
@@ -124,6 +125,22 @@ Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用
 每次正式 draw 都在当前 run 冻结的 allowed scope 内重新计算 ready，并读取当前目标 state。难度上限为：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–85 为 4，85 以上为 5；`standard` 使用 `min(targetDifficulty, masteryCap)`，`gentle` 再下调一级但不低于 1。NORMAL 优先精确难度，否则选择距离最近的难度，距离相同取较低值；TRAINING 使用 `min(2, normalPreferred)`，优先不高于 2 的最近难度，没有低难题时使用全部合法候选中的最低难度。seen Question 永不因难度匹配而复用。
 
 Legacy `/games/**` 保持 Phase C 的 scope-only dependency 与原有随机/低难训练选择，不读取 Learner mastery。
+
+## Forgetting-aware Review Queue V1
+
+Review Queue 是 `LearnerKnowledgeState` 的动态派生视图，不新增 Review 表、`next_review_at`、定时任务或 migration。只有 `evidenceCount > 0` 且最近证据后的原始 `masteryScore >= 70` 的状态具备复习资格；未开始和最新 mastery 低于 70 的知识点继续属于正常学习队列。
+
+建议复习时间沿用 Mastery V1 的半衰期模型反推：
+
+```text
+reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)
+```
+
+`reviewDueAt <= now` 返回 `due`，未来 24 小时内返回 `soon`，24 小时以后至 7 天内返回 `upcoming`，更远的状态不进入默认列表。API 只读取当前 Learner 的 Selected Books，按 KnowledgePoint ID 去重，批量读取状态，并复用 Phase F 的 effective mastery readiness 与 adaptive playable 查询；`playable=false` 表示当前题库或前置状态暂时无法安全安排该目标。
+
+自动 Planner 的目标顺序为：已有证据且 effective mastery 低于 70、due/soon Review、未开始、70–85、85 以上。Manual Focus 仍先把 focused 与 non-focused 分区，再在各分区内应用同一顺序。Review target 继续使用原有 adaptive difficulty，答错仍按 Phase G diagnosis 处理，证据模式仍只有 `normal` 与 `training`。
+
+Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时间窗口并链接到知识点说明页。Hub 不创建正式答题 session、attempt 或 evidence；Review 的正确与错误都通过正式 World 的既有 Mastery 更新，自然推迟下一次 due 或回到薄弱学习队列。
 
 ## Diagnostic State Machine V1
 

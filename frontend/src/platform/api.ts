@@ -30,6 +30,16 @@ export interface KnowledgeState {
   targetDifficulty: number; evidenceCount: number; correctStreak: number; wrongStreak: number;
   lastOutcome?: string; lastEvidenceAt?: string; lastCorrectAt?: string; modelVersion: string; revision: number;
 }
+export interface ReviewQueueItem {
+  knowledgePointId: string; name: string; subject: string; section: string; chapter: string;
+  effectiveMastery: number; stabilityDays: number; targetDifficulty: number;
+  lastEvidenceAt: string; reviewDueAt: string; status: "due" | "soon" | "upcoming"; playable: boolean;
+}
+export interface ReviewQueue {
+  generatedAt: string;
+  summary: { due: number; soon: number; upcoming: number; playableDueOrSoon: number };
+  items: ReviewQueueItem[];
+}
 
 export const platformApi = {
   register: (username: string, displayName: string, password: string) =>
@@ -50,6 +60,7 @@ export const platformApi = {
     "/learner/knowledge-states/" + encodeURIComponent(id)),
   knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
     "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
+  reviewQueue: () => request<ReviewQueue>("/learner/review-queue"),
   updateProfile: (profile: StudyProfile, selectedBookIds: string[], focusedKnowledgePointIds: string[]) =>
     request<StudyProfile>("/learner/study-profile", "PUT", {
       pace: profile.pace, difficulty: profile.difficulty, focusMode: profile.focusMode,
