@@ -133,7 +133,7 @@ normal composite Question 的 wrong/partial 会从 root `question_snapshot_json.
 
 `study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据强度仍只使用既有 normal/training；Mastery V1 和 Adaptive Scheduling V1 参数未改变。所有诊断题继续受冻结 Selected Book scope、published、实时 readiness 和 run seen 约束。Probe 无合法 unseen 候选时标为 unavailable；不会回退已见题、未发布题或未 ready 的依赖题。
 
-根正式题一旦答错，本轮对应知识点的游戏分已经失去。后续 probe、remediation 和 recheck 不增加 `run.correct`；`diagnosticAnswered` 统计 probe/recheck，`trainingAnswered` 统计补强。新 run 会重置 answered、correct 与 seen，可重新取得满分。正式 World 的长期考试/挑战状态不累计失败或应试次数，只让 bestScore 上升，并让 passed/cleared 与首次通关奖励保持永久、单次和单调；已通过活动仍可重刷。当前 run 可以显示本次未通关，但不会形成长期失败履历。
+根正式题一旦答错，本轮对应知识点的游戏分已经失去。后续 probe、remediation 和 recheck 不增加 `run.correct`；`diagnosticAnswered` 统计 probe/recheck，`trainingAnswered` 统计补强。新 run 会重置 answered、correct 与 seen，可重新取得满分。正式 World 的长期考试/任务状态不累计失败或应试次数，只让 bestScore 上升；passed/cleared 与一次性奖励保持永久、单次和单调。未完成任务可以重新开始，完成后永久关闭且不能重进。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。
@@ -227,8 +227,8 @@ travel 校验地点属性条件，遇到满足前置的新故事时填写 advent
 
 ## V6 县试事务
 
-报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程、报名资格和银两充足。只允许从 `unregistered` 进入 `registered`，扣费、状态与札记必须一次保存。
+报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程与报名资格。只允许从 `unregistered` 进入 `registered`；报名只确认资格，不扣费。
 
-正式 World 开始 `kind=exam` 的活动前允许对应考试为 `registered` 或 `passed`，因此取中后仍可重刷。每个新 run 独立重置答题数、得分与 seen；最后一题判卷时只提高 `best`，达标后把状态单调推进到 `passed`，后续低分不会降级。正式 World 不再递增兼容字段 `attempts`，也不把 `lastScore` 用作长期失败记录；旧字段无需清洗。未满分不扣数值、不取消资格、不再次收费，可无限次重试。首次通关奖励与 cleared 标记只写一次，活动中途放下不改变考试状态。
+正式 World 开始 `kind=exam` 的任务前要求对应考试为 `registered`，且 `clears[activityId]` 尚未完成。每个新 run 独立重置答题数、得分与 seen；开考时把 fee 扣入本轮 escrow。未满分或放下活动时原数退款，状态仍为 `registered`，可无限次重新开始；全对时费用提交，完整 `completionReward` 发放一次，`clears` 写为 1，考试状态推进到 `passed`。完成后后端拒绝再次 begin。`best` 只升不降；兼容字段 `attempts`、`lastScore` 不再记录正式任务失败履历。
 
 HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。`Game.adventure.exams` 与活动首次奖励记账一并返回，重复提交同一答题请求不得重复发取中帖或身份奖励。

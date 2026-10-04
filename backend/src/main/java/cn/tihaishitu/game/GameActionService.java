@@ -83,7 +83,7 @@ public class GameActionService {
         JsonNode topic = find(companion.path("topics"), topicId)
                 .orElseThrow(() -> bad("这个话题尚未开启。"));
         ObjectNode npc = npc(game, npcId);
-        if (npc.path("affinity").asInt() < topic.path("minAffinity").asInt()) throw bad("还需要一些共同经历。");
+        if (npc.path("favorability").asInt() < topic.path("minFavorability").asInt()) throw bad("还需要一些共同经历。");
         npc.put("met", true);
         ObjectNode conversations = adventure(game).with("conversations");
         conversations.put(npcId + ":" + topicId, conversations.path(npcId + ":" + topicId).asInt() + 1);
@@ -101,12 +101,8 @@ public class GameActionService {
         ObjectNode record = (ObjectNode) adventure(game).with("exams").path(examId);
         if (!"unregistered".equals(record.path("status").asText())) throw bad("名帖已经递入试院。");
         assertRequirements(game, exam.path("requirements"));
-        int fee = exam.path("fee").asInt();
-        ObjectNode player = (ObjectNode) game.path("player");
-        if (player.path("coins").asInt() < fee) throw bad("报名银两不足。");
-        player.put("coins", player.path("coins").asInt() - fee);
         record.put("status", "registered");
-        journal(game, exam.path("name").asText() + " · 投递名帖", "名帖与报名银一并递入试院，你已在应试名册之中。");
+        journal(game, exam.path("name").asText() + " · 投递名帖", "名帖已经验明，你已取得本场应试资格。开考时才暂收报名银。");
         persist(game);
         return game;
     }
@@ -117,17 +113,26 @@ public class GameActionService {
         ObjectNode activity = content.activity(activityId)
                 .orElseThrow(() -> bad("这项活动暂不可用。"));
         ensureNoActiveRun(game);
+        ObjectNode state = adventure(game);
+        boolean task = "task".equals(activity.path("activityMode").asText());
+        if (task && state.path("clears").path(activityId).asInt() > 0)
+            throw bad("这项任务已经完成。 ");
         if (activity.hasNonNull("locationId") &&
                 !adventure(game).path("locationId").asText().equals(activity.path("locationId").asText()))
             throw bad("请先前往活动所在地点。");
         assertRequirements(game, activity.path("requirements"));
         content.examForActivity(activityId).ifPresent(exam -> {
             String status = adventure(game).path("exams").path(exam.path("id").asText()).path("status").asText();
-            boolean eligible = "registered".equals(status)
-                    || (WorldActionContext.active() && "passed".equals(status));
-            if (activityId.equals(exam.path("activityId").asText()) && !eligible)
+            if (activityId.equals(exam.path("activityId").asText()) && !"registered".equals(status))
                 throw bad("须先取得本场应试资格。");
         });
+        int entryCost = task ? content.examForActivity(activityId)
+                .filter(exam -> activityId.equals(exam.path("activityId").asText()))
+                .map(exam -> exam.path("fee").asInt())
+                .orElse(activity.path("entryCost").asInt()) : 0;
+        ObjectNode player = (ObjectNode) game.path("player");
+        if (player.path("coins").asInt() < entryCost) throw bad("入场银两不足。");
+        player.put("coins", player.path("coins").asInt() - entryCost);
         int rounds = activity.path("rounds").asInt(5);
         KnowledgeQuestionPoolService.StudyPlan plan = WorldActionContext.active()
                 ? studyProfiles.plan(rounds)
@@ -151,6 +156,9 @@ public class GameActionService {
         run.put("grade", "");
         run.set("rewards", mapper.createArrayNode());
         run.put("response", "");
+        run.put("entryCost", entryCost);
+        run.put("costCommitted", false);
+        run.put("costRefunded", false);
         adventure(game).set("run", run);
         adventure(game).putNull("encounter");
         drawAttempt(game, run);
@@ -305,6 +313,7 @@ public class GameActionService {
         if (run.isMissingNode() || run.isNull() || !runId.equals(run.path("id").asText())) throw bad("行程已变化。");
         if (WorldActionContext.active() && run.hasNonNull("diagnosisSessionId"))
             diagnostics.abandon(run.path("diagnosisSessionId").asText());
+        refundEscrow(game, (ObjectNode) run);
         adventure(game).putNull("run");
         game.putNull("attempt");
         persist(game);
@@ -382,7 +391,7 @@ public class GameActionService {
         if (milestone.isMissingNode()) throw bad("这份心意尚不存在。");
         if (!adventure(game).path("locationId").asText().equals(companion.path("locationId").asText()))
             throw bad("去当面领取这份心意吧。");
-        if (npc(game, npcId).path("affinity").asInt() < milestone.path("affinity").asInt())
+        if (npc(game, npcId).path("favorability").asInt() < milestone.path("favorability").asInt())
             throw bad("还需要一些共同经历。");
         String key = "bond:" + npcId + ":" + milestoneIndex;
         ArrayNode claims = adventure(game).withArray("rewardClaims");
@@ -584,22 +593,34 @@ public class GameActionService {
         int score = Math.round(run.path("correct").asInt() * 100f / run.path("knowledgePointIds").size());
         run.put("score", score);
         run.put("status", "settled");
+        boolean task = "task".equals(run.path("definition").path("activityMode").asText());
+        boolean completed = score >= run.path("definition").path("passScore").asInt();
         JsonNode selected = mapper.missingNode();
         for (JsonNode tier : run.path("definition").path("tiers"))
             if (tier.path("minScore").asInt() <= score &&
                     (selected.isMissingNode() || tier.path("minScore").asInt() > selected.path("minScore").asInt())) selected = tier;
         run.put("grade", selected.path("label").asText(score >= 60 ? "过关" : "未过关"));
-        run.put("response", selected.path("dialogue").asText());
+        run.put("response", task
+                ? run.path("definition").path(completed ? "successDialogue" : "failureDialogue").asText()
+                : selected.path("dialogue").asText());
         ArrayNode rewards = mapper.createArrayNode();
-        grantRewards(game, selected.path("rewards"), rewards);
         String activityId = run.path("definition").path("id").asText();
         ObjectNode bestScores = adventure(game).with("best");
         bestScores.put(activityId, Math.max(bestScores.path(activityId).asInt(), score));
         ObjectNode clears = adventure(game).with("clears");
-        if (score >= run.path("definition").path("passScore").asInt()) {
+        if (task) {
+            if (completed) {
+                if (clears.path(activityId).asInt() == 0)
+                    grantRewards(game, run.path("definition").path("completionReward"), rewards);
+                clears.put(activityId, 1);
+                run.put("costCommitted", true);
+            } else refundEscrow(game, run);
+        } else {
+            grantRewards(game, selected.path("rewards"), rewards);
+        }
+        if (!task && completed) {
             boolean first = clears.path(activityId).asInt() == 0;
-            if (WorldActionContext.active()) clears.put(activityId, 1);
-            else clears.put(activityId, clears.path(activityId).asInt() + 1);
+            clears.put(activityId, clears.path(activityId).asInt() + 1);
             if (first) grantRewards(game, selected.path("firstRewards"), rewards);
         }
         run.set("rewards", rewards);
@@ -607,15 +628,23 @@ public class GameActionService {
             if (!activityId.equals(exam.path("activityId").asText())) return;
             ObjectNode record = (ObjectNode) adventure(game).with("exams").path(exam.path("id").asText());
             record.put("best", Math.max(record.path("best").asInt(), score));
-            boolean passed = score >= run.path("definition").path("passScore").asInt();
-            if (WorldActionContext.active()) {
-                if (passed) record.put("status", "passed");
+            if (task) {
+                if (completed) record.put("status", "passed");
+                else if (!"passed".equals(record.path("status").asText())) record.put("status", "registered");
             } else {
                 record.put("attempts", record.path("attempts").asInt() + 1);
                 record.put("lastScore", score);
-                record.put("status", passed ? "passed" : "registered");
+                if (completed) record.put("status", "passed");
             }
         });
+    }
+
+    private void refundEscrow(ObjectNode game, ObjectNode run) {
+        int entryCost = run.path("entryCost").asInt();
+        if (entryCost <= 0 || run.path("costCommitted").asBoolean() || run.path("costRefunded").asBoolean()) return;
+        ObjectNode player = (ObjectNode) game.path("player");
+        player.put("coins", player.path("coins").asInt() + entryCost);
+        run.put("costRefunded", true);
     }
 
     private static String story(boolean correct, DiagnosticLearningService.GradingResult diagnosis) {
@@ -663,9 +692,11 @@ public class GameActionService {
         reward.path("attributes").fields().forEachRemaining(entry -> attrs.put(entry.getKey(), attrs.path(entry.getKey()).asInt() + entry.getValue().asInt()));
         ObjectNode inventory = adventure(game).with("inventory");
         reward.path("items").fields().forEachRemaining(entry -> inventory.put(entry.getKey(), inventory.path(entry.getKey()).asInt() + entry.getValue().asInt()));
-        for (String key : List.of("affinity", "trust")) reward.path(key).fields().forEachRemaining(entry -> {
+        reward.path("favorability").fields().forEachRemaining(entry -> {
             ObjectNode npc = npc(game, entry.getKey());
-            npc.put(key, Math.max(0, Math.min(100, npc.path(key).asInt() + entry.getValue().asInt())));
+            npc.put("met", true);
+            npc.put("favorability", Math.max(0, Math.min(100,
+                    npc.path("favorability").asInt() + entry.getValue().asInt())));
         });
         reward.path("flags").forEach(flag -> addUnique(game.withArray("flags"), flag.asText()));
         if (reward.hasNonNull("title")) player.put("title", reward.path("title").asText());
@@ -676,6 +707,10 @@ public class GameActionService {
         if (game.path("player").path("reputation").asInt() < requirements.path("reputation").asInt()) throw bad("声望尚未达到要求。");
         requirements.path("attributes").fields().forEachRemaining(entry -> {
             if (adventure(game).path("attributes").path(entry.getKey()).asInt() < entry.getValue().asInt()) throw bad("本领尚未达到要求。");
+        });
+        requirements.path("favorability").fields().forEachRemaining(entry -> {
+            if (npc(game, entry.getKey()).path("favorability").asInt() < entry.getValue().asInt())
+                throw bad("好感度尚未达到要求。");
         });
         Set<String> flags = new HashSet<>(); game.path("flags").forEach(flag -> flags.add(flag.asText()));
         requirements.path("flags").forEach(flag -> { if (!flags.contains(flag.asText())) throw bad("前置故事尚未完成。"); });

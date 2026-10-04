@@ -9,6 +9,7 @@ import {
   adventureDesign,
   companions,
   exams,
+  favorabilityLevel,
   items,
   mapDesign,
 } from "../content";
@@ -53,7 +54,8 @@ export function WorldHub({
     (a) =>
       a.locationId === location.id &&
       a.kind !== "companion" &&
-      !examActivityIds.has(a.id),
+      !examActivityIds.has(a.id) &&
+      !(a.activityMode === "task" && (state.clears[a.id] || 0) > 0),
   );
   const [page, setPage] = useState(0),
     current = Math.min(page, Math.max(0, Math.ceil(local.length / 2) - 1));
@@ -123,12 +125,10 @@ export function WorldHub({
         ) : (
           <div className="opportunity-grid">
             {local.slice(current * 2, current * 2 + 2).map((activity) => {
-              const issues = activityIssues(game, activity),
-                done =
-                  (state.clears[activity.id] || 0) > 0 && !activity.repeatable;
+              const issues = activityIssues(game, activity);
               return (
                 <button
-                  className={"opportunity " + (done ? "completed" : "")}
+                  className="opportunity"
                   key={activity.id}
                   onClick={() => inspect(activity.id)}
                 >
@@ -138,7 +138,6 @@ export function WorldHub({
                       : activity.kind === "story"
                         ? "✦ 支线任务"
                         : "◇ 挑战副本"}
-                    {done ? " · 已完成" : ""}
                   </small>
                   <h3>{activity.name}</h3>
                   <p>{activity.invitation}</p>
@@ -244,7 +243,11 @@ export function ActivityDetail({
     <div className="activity-detail">
       <small>
         {adventureDesign.rankNames[activity.kind]} · {activity.rounds} 个知识点 ·{" "}
-        {activity.passScore} 分达标
+        {activity.activityMode === "task"
+          ? activity.quest === "main"
+            ? "10/10 完成"
+            : "答对 3/5 完成"
+          : activity.passScore + " 分获得本轮收获"}
       </small>
       <h2>{activity.name}</h2>
       <p>{activity.description}</p>
@@ -334,12 +337,7 @@ export function ExamPanel({
     issues = requirementIssues(game, exam.requirements),
     atExam = game.adventure!.locationId === exam.locationId,
     shortOfMoney = game.player.coins < exam.fee,
-    missing = [
-      ...issues,
-      ...(shortOfMoney
-        ? ["银两 " + game.player.coins + "/" + exam.fee]
-        : []),
-    ];
+    missing = issues;
   const statusName = {
     unregistered: "尚未报名",
     registered: "候场应试",
@@ -347,10 +345,8 @@ export function ExamPanel({
     passed: "红榜取中",
   }[record.status];
   const action = () => {
-    if (record.status === "passed") {
-      if (atExam) inspect(exam.activityId);
-      else travel(exam.locationId);
-    } else if (record.status === "preparing") inspect(exam.activityId);
+    if (record.status === "passed") return;
+    else if (record.status === "preparing") inspect(exam.activityId);
     else if (record.status === "registered") inspect(exam.activityId);
     else if (missing.length) {
       // 报名差距在点击查验时集中提示，不把一长串数值常驻在面板上。
@@ -360,9 +356,7 @@ export function ExamPanel({
   };
   const actionText =
     record.status === "passed"
-      ? atExam
-        ? "再次入号，刷新最高分"
-        : "返回试院，再次挑战"
+      ? "本场已取中"
       : record.status === "preparing"
         ? "再次入号，应试十题"
         : record.status === "registered"
@@ -371,7 +365,7 @@ export function ExamPanel({
             ? "查验报名条件"
             : !atExam
               ? "前往试院报名"
-              : "缴银递帖，正式报名";
+              : "验明资格，递帖报名";
   return (
     <div className="exam-panel">
       <nav className="exam-tabs" aria-label="科举阶段">
@@ -410,13 +404,13 @@ export function ExamPanel({
         </article>
         <article className={record.status === "passed" ? "done" : ""}>
           <b>叁 · 十题定榜</b>
-          <p>十题全对取中 · 最高 {record.best || "—"} 分 · 可随时再次应试</p>
+          <p>十题全对取中 · 最高 {record.best || "—"} 分 · 取中后永久结案</p>
         </article>
       </div>
-      <button className="gold-button full" disabled={busy || !!game.adventure!.run} onClick={action}>
+      <button className="gold-button full" disabled={busy || !!game.adventure!.run || record.status === "passed"} onClick={action}>
         {actionText} →
       </button>
-      <p className="hint">报名不立刻发卷。未能全对只记录错题，不扣奖励、不重复收报名银，可直接再次应试。</p>
+      <p className="hint">报名只确认资格；开考时暂收报名银。未能全对或中途退出会原数退回，可重新开始；取中后任务永久结案。</p>
     </div>
   );
 }
@@ -451,7 +445,7 @@ export function NpcPanel({
   const topic = companion.topics.find((t) => t.id === topicId),
     greeting = [...companion.greetings]
       .reverse()
-      .find((g) => npc.affinity >= g.minAffinity)?.text;
+      .find((g) => npc.favorability >= g.minFavorability)?.text;
   return (
     <div className="companion-panel">
       <div className="companion-tabs">
@@ -489,9 +483,9 @@ export function NpcPanel({
           <h2>{npc.name}</h2>
           <p>{companion.personality}</p>
           <div className="bond-meter">
-            <span>好感 {npc.affinity}</span>
-            <meter min={0} max={100} value={npc.affinity} />
-            <small>信任 {npc.trust}</small>
+            <span>好感度 {npc.favorability}</span>
+            <meter min={0} max={100} value={npc.favorability} />
+            <small>{favorabilityLevel(npc.favorability)}</small>
           </div>
           <div className="dialogue-box">
             <small>
@@ -536,7 +530,7 @@ export function NpcPanel({
         <div className="conversation-options">
           {companion.topics.map((t) => (
             <button
-              disabled={busy || npc.affinity < t.minAffinity}
+              disabled={busy || npc.favorability < t.minFavorability}
               key={t.id}
               onClick={() => {
                 setTopic(t.id);
@@ -546,8 +540,8 @@ export function NpcPanel({
             >
               {t.label}
               <small>
-                {npc.affinity < t.minAffinity
-                  ? "好感 " + t.minAffinity + " 解锁"
+                {npc.favorability < t.minFavorability
+                  ? "好感度 " + t.minFavorability + " 解锁"
                   : "聊一聊"}
               </small>
             </button>
@@ -573,12 +567,12 @@ export function NpcPanel({
               <div>
                 <b>{m.title}</b>
                 <small>
-                  好感 {m.affinity} · {rewardLines(m.reward).join(" · ")}
+                  好感度 {m.favorability} · {rewardLines(m.reward).join(" · ")}
                 </small>
                 {got && <p>{m.dialogue}</p>}
               </div>
               <button
-                disabled={busy || got || !here || npc.affinity < m.affinity}
+                disabled={busy || got || !here || npc.favorability < m.favorability}
                 onClick={() => claim(npc.id, index)}
               >
                 {got ? "已珍藏" : "领取心意"}

@@ -4,7 +4,7 @@
  */
 import type { Game } from "../domain/types";
 import { displayAnswer } from "../engine/OptionShuffler";
-import { gameDesign } from "../content";
+import { favorabilityLevel, gameDesign } from "../content";
 import { statistics } from "../engine/StatisticsSystem";
 import {
   isLearningMastered,
@@ -30,22 +30,11 @@ export function People({ game }: { game: Game }) {
             {npc.met && (
               <>
                 <div className="relation-line">
-                  <span>好感</span>
-                  <meter min={0} max={100} value={npc.affinity} />
-                  <b>{npc.affinity}</b>
+                  <span>好感度</span>
+                  <meter min={0} max={100} value={npc.favorability} />
+                  <b>{npc.favorability}</b>
                 </div>
-                <div className="relation-line">
-                  <span>信任</span>
-                  <meter min={0} max={100} value={npc.trust} />
-                  <b>{npc.trust}</b>
-                </div>
-                <small>
-                  {npc.trust >= 20
-                    ? "已有信任"
-                    : npc.trust >= 5
-                      ? "渐有来往"
-                      : "初识，尚待相知"}
-                </small>
+                <small>{favorabilityLevel(npc.favorability)}</small>
               </>
             )}
           </div>

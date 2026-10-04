@@ -76,9 +76,7 @@ defaultWeights 是比例，不要求加起来等于 100。例如数学一 7、40
 | highFrequencyThreshold、highFrequencyBonus | 高频加成条件与数值 |
 | maxGain、wrongGain | 单题答对上限与答错收益 |
 | reputationEvery | 累计题数到该值的整数倍且本题答对时，声望 +1 |
-| trustGain | 答对时当前 NPC 的信任增量 |
-| trustLossOnRepeatedWrong | 持重模式同题再次答错时的信任扣减 |
-| relationshipMax | 信任和好感的上限 |
+| relationshipMax | 好感度上限 |
 
 ### 复习 review
 
@@ -106,7 +104,7 @@ limits.questionsPerBank 是题库题数上限，limits.noteLength 是每题批�
 | id | 稳定编号，例 chapter-0 |
 | title、subtitle、place | 标题、副题与地点文字；实际地点优先关联 maps |
 | threshold | 进入本章要求的累计完成题数，不是本章内题数 |
-| knowledge、trust | 进入本章要求的学识与所有 NPC 信任总和 |
+| knowledge、favorability | 进入本章要求的学识与所有 NPC 好感度总和 |
 | playerTitle | 进入本章后的玩家身份 |
 | goal | 在本章页面展示的下一阶段目标文字，需与下一章门槛保持一致 |
 | sceneGroup | 引用 scenes.groups 内的数字 id |
@@ -115,7 +113,7 @@ limits.questionsPerBank 是题库题数上限，limits.noteLength 是每题批�
 | intro.lines | 章首逐句对话数组 |
 | intro.action | 最后一句后的进入按钮文字 |
 
-晋章必须同时达到下一章的 threshold、knowledge、trust。每次答题最多前进一章。际遇加成后会在下一次答题结算时检查晋章。章首介绍显示在下一份课卷开始前，避免打断本题批卷结果。
+晋章必须同时达到下一章的 threshold、knowledge、favorability。每次答题最多前进一章。际遇加成后会在下一次答题结算时检查晋章。章首介绍显示在下一份课卷开始前，避免打断本题批卷结果。
 
 例：希望第 2 章在 20 题开始，把该章 threshold 改成 20，并同步修改前一章 goal 及相关对白里的“十二页”。不要只改文字，数字门槛不会跟着文字自动推断。
 
@@ -123,9 +121,9 @@ limits.questionsPerBank 是题库题数上限，limits.noteLength 是每题批�
 
 ## 五、characters.json：人物
 
-每位 NPC 有 id、name、role、description、affinity、trust、met、portrait。
+每位 NPC 有 id、name、role、description、favorability、met、portrait。
 
-- affinity：好感初值；trust：信任初值；met：开局是否已经相识。
+- favorability：0–100 的好感度初值；met：开局是否已经相识。旧存档缺少该字段时取 `max(affinity, trust)`。
 - portrait 是 portraits.json 中 portraits 的键，例如 tutor、friend。
 - 多个人可以引用同一立绘，新增人物不一定要新增图片。
 - 在 scenes 中让人物出场后，met 自动为 true；际遇关系奖励也会让玩家认识该人物。
@@ -156,7 +154,7 @@ context 是“前情”里的背景补充；dialogue 是主要显示的 NPC 对�
 
 memories 的每项用 npcId + flag 关联人物共同经历，dialogue 是满足条件后的对白。效果优先级：复习对白 > 已命中共同经历 > 日常重复对白 > 首次场景对白。多段记忆同时命中时使用数组里第一项。
 
-剧情组按“累计完成题数 - 本章 threshold”定位，若学识或信任导致延后入章，可能跳过组内部分初次场景；这是当前 V1 的轻量推进方式。复杂剧情树、必须逐个完成的关卡需要后续扩展引擎。
+剧情组按“累计完成题数 - 本章 threshold”定位，若学识或好感度导致延后入章，可能跳过组内部分初次场景；这是当前 V1 的轻量推进方式。复杂剧情树、必须逐个完成的关卡需要后续扩展引擎。
 
 ## 七、events.json：选择与后果
 
@@ -175,20 +173,20 @@ memories 的每项用 npcId + flag 关联人物共同经历，dialogue 是满足
       "id": "accept",
       "text": "接卷道谢，约好日后归还",
       "hint": "学识 +2，顾怀安好感 +1",
-      "effects": { "knowledge": 2, "affinity": { "gu": 1 }, "flags": ["borrowed-gu-book"] }
+      "effects": { "knowledge": 2, "favorability": { "gu": 1 }, "flags": ["borrowed-gu-book"] }
     },
     {
       "id": "decline",
       "text": "请他先留着，自己把旧卷读完",
-      "hint": "顾怀安信任 +1",
-      "effects": { "trust": { "gu": 1 } }
+      "hint": "顾怀安好感度 +1",
+      "effects": { "favorability": { "gu": 1 } }
     }
   ]
 }
 ~~~
 
-effects 支持 knowledge、coins、reputation、trust、affinity、flags。
-前三项直接填增减数；trust 和 affinity 用人物 id 对应增减数；flags 是共同经历字符串数组。
+effects 支持 knowledge、coins、reputation、favorability、flags。
+前三项直接填增减数；favorability 用人物 id 对应增减数；flags 是共同经历字符串数组。旧 `trust`/`affinity` 仍可读取并按同一人物取最大值兼容。
 数值最低为 0，人物关系封顶取 growth.relationshipMax。
 
 hint 只是给玩家看的说明，**真正结算读取 effects**。改奖励时两者都要改。

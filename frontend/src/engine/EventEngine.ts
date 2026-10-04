@@ -24,17 +24,16 @@ export function applyChoice(game: Game, eventId: string, choiceId: string) {
   const effects = option.effects;
   for (const key of ["knowledge", "coins", "reputation"] as const)
     game.player[key] = Math.max(0, game.player[key] + (effects[key] || 0));
-  for (const key of ["trust", "affinity"] as const)
-    for (const [id, gain] of Object.entries(effects[key] || {})) {
-      const npc = game.npcs.find((npc) => npc.id === id);
-      if (npc) {
-        npc.met = true;
-        npc[key] = Math.min(
-          gameDesign.growth.relationshipMax,
-          Math.max(0, npc[key] + gain),
-        );
-      }
+  for (const [id, gain] of Object.entries(effects.favorability || {})) {
+    const npc = game.npcs.find((npc) => npc.id === id);
+    if (npc) {
+      npc.met = true;
+      npc.favorability = Math.min(
+        gameDesign.growth.relationshipMax,
+        Math.max(0, npc.favorability + gain),
+      );
     }
+  }
   game.flags.push(...(effects.flags || []), "event:" + eventId);
   game.journal.push({
     id: crypto.randomUUID(),

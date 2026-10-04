@@ -7,11 +7,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.MediaType;
 import cn.tihaishitu.world.WorldRegistry;
 import cn.tihaishitu.world.WorldStateStore;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -78,7 +82,7 @@ class DiagnosticLearningIntegrationTest extends DiagnosticWorldTestSupport {
     }
 
     @Test
-    void formalExamRetriesKeepOnlyBestAndPermanentPassWithoutAttemptHistory() throws Exception {
+    void formalExamRetriesKeepOnlyBestAndCompletedTaskPermanentlyCloses() throws Exception {
         ExamScenario scenario = examScenario();
         Cookie cookie = register("positive-exam-retries");
         String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username=?", String.class,
@@ -111,14 +115,9 @@ class DiagnosticLearningIntegrationTest extends DiagnosticWorldTestSupport {
         assertThat(second.path("adventure").path("inventory").path("county-pass-note").asInt()).isOne();
         second = finish(cookie, second);
 
-        JsonNode third = completeExam(cookie, begin(cookie, "county-exam-paper"), true);
-        JsonNode thirdRecord = third.path("adventure").path("exams").path("county-exam");
-        assertThat(third.path("adventure").path("run").path("score").asInt()).isEqualTo(90);
-        assertThat(thirdRecord.path("status").asText()).isEqualTo("passed");
-        assertThat(thirdRecord.path("best").asInt()).isEqualTo(100);
-        assertThat(thirdRecord.path("attempts").asInt()).isZero();
-        assertThat(third.path("adventure").path("clears").path("county-exam-paper").asInt()).isOne();
-        assertThat(third.path("adventure").path("inventory").path("county-pass-note").asInt()).isOne();
+        mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"activityId\":\"county-exam-paper\"}"))
+                .andExpect(status().isConflict());
     }
 
     private JsonNode completeExam(Cookie cookie, JsonNode game, boolean missFirst) throws Exception {

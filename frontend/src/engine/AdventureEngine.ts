@@ -52,11 +52,43 @@ export function hydrateAdventure(game: Game) {
   // 旧版落榜要求先温卷；新版主线考试不惩罚，名帖保留并可直接重试。
   for (const record of Object.values(game.adventure.exams))
     if (record.status === "preparing") record.status = "registered";
+  for (const npc of game.npcs) {
+    const legacy = npc as typeof npc & { affinity?: number; trust?: number };
+    npc.favorability = Math.max(
+      0,
+      Math.min(
+        100,
+        Number.isFinite(npc.favorability)
+          ? npc.favorability
+          : Math.max(legacy.affinity || 0, legacy.trust || 0),
+      ),
+    );
+    delete legacy.affinity;
+    delete legacy.trust;
+  }
   for (const character of characterDesign)
     if (!game.npcs.some((n) => n.id === character.id))
       game.npcs.push(structuredClone(character));
   for (const attribute of adventureDesign.attributes)
     game.adventure.attributes[attribute.id] ??= 0;
+  for (const [id, count] of Object.entries(game.adventure.clears))
+    if (count > 0 && activities.find((activity) => activity.id === id)?.activityMode === "task")
+      game.adventure.clears[id] = 1;
+  if (game.adventure.run) {
+    const run = game.adventure.run;
+    const canonical = activities.find((activity) => activity.id === run.definition.id);
+    run.entryCost ??= 0;
+    run.costCommitted ??= false;
+    run.costRefunded ??= false;
+    if (canonical)
+      run.definition = {
+        ...run.definition,
+        activityMode: canonical.activityMode,
+        completionReward: canonical.completionReward,
+        successDialogue: canonical.successDialogue,
+        failureDialogue: canonical.failureDialogue,
+      };
+  }
 }
 export const attributeName = (id: string) =>
   adventureDesign.attributes.find((a) => a.id === id)?.name || id;
@@ -88,11 +120,11 @@ export function requirementIssues(
       issues.push(
         attributeName(id) + " " + effectiveAttribute(game, id) + "/" + min,
       );
-  for (const [id, min] of Object.entries(requirements.affinity || {})) {
+  for (const [id, min] of Object.entries(requirements.favorability || {})) {
     const npc = game.npcs.find((n) => n.id === id);
-    if ((npc?.affinity || 0) < min)
+    if ((npc?.favorability || 0) < min)
       issues.push(
-        (npc?.name || id) + "好感 " + (npc?.affinity || 0) + "/" + min,
+        (npc?.name || id) + "好感度 " + (npc?.favorability || 0) + "/" + min,
       );
   }
   for (const id of requirements.items || [])
@@ -113,8 +145,8 @@ export function activityIssues(game: Game, activity: Activity) {
     (l) => l.id === activity.locationId,
   );
   if (location) issues.push(...requirementIssues(game, location.requirements));
-  if (!activity.repeatable && (game.adventure?.clears[activity.id] || 0) > 0)
-    issues.push("这段故事已完成");
+  if (activity.activityMode === "task" && (game.adventure?.clears[activity.id] || 0) > 0)
+    issues.push("这项任务已完成");
   return [...new Set(issues)];
 }
 /** 奖励预览和实际结算共用同一套字段，不根据文案猜奖励。 */
@@ -129,14 +161,8 @@ export function rewardLines(reward: Rewards): string[] {
     if (reward[key]) lines.push(label + " +" + reward[key]);
   for (const [id, value] of Object.entries(reward.attributes || {}))
     lines.push(attributeName(id) + " +" + value);
-  for (const key of ["affinity", "trust"] as const)
-    for (const [id, value] of Object.entries(reward[key] || {}))
-      lines.push(
-        (characterDesign.find((n) => n.id === id)?.name || id) +
-          (key === "affinity" ? "好感" : "信任") +
-          " +" +
-          value,
-      );
+  for (const [id, value] of Object.entries(reward.favorability || {}))
+    lines.push((characterDesign.find((n) => n.id === id)?.name || id) + "好感度 +" + value);
   for (const [id, value] of Object.entries(reward.items || {}))
     lines.push(itemName(id) + " ×" + value);
   return lines;
@@ -147,24 +173,23 @@ export function grantRewards(game: Game, reward: Rewards): string[] {
     game.player[key] = Math.max(0, game.player[key] + (reward[key] || 0));
   for (const [id, value] of Object.entries(reward.attributes || {}))
     state.attributes[id] = (state.attributes[id] || 0) + value;
-  for (const key of ["affinity", "trust"] as const)
-    for (const [id, value] of Object.entries(reward[key] || {})) {
-      const npc = game.npcs.find((n) => n.id === id);
-      if (npc) {
-        npc.met = true;
-        npc[key] = Math.max(
-          0,
-          Math.min(gameDesign.growth.relationshipMax, npc[key] + value),
-        );
-      }
+  for (const [id, value] of Object.entries(reward.favorability || {})) {
+    const npc = game.npcs.find((n) => n.id === id);
+    if (npc) {
+      npc.met = true;
+      npc.favorability = Math.max(
+        0,
+        Math.min(gameDesign.growth.relationshipMax, npc.favorability + value),
+      );
     }
+  }
   for (const [id, value] of Object.entries(reward.items || {}))
     state.inventory[id] = (state.inventory[id] || 0) + value;
   game.flags = [...new Set([...game.flags, ...(reward.flags || [])])];
   if (reward.title) game.player.title = reward.title;
   return rewardLines(reward);
 }
-/** 报名只扣一次银两；落榜完成备考后直接恢复应试资格。 */
+/** 报名只确认资格；报名银在开考时进入本轮托管。 */
 export function registerExam(game: Game, id: string) {
   const exam = exams.find((e) => e.id === id);
   if (!exam) throw new Error("这场考试尚未开放。");
@@ -175,16 +200,13 @@ export function registerExam(game: Game, id: string) {
     throw new Error(record.status === "passed" ? "你已经取中。" : "名帖已经递入试院。");
   const issues = requirementIssues(game, exam.requirements);
   if (issues.length) throw new Error(issues.join("；"));
-  if (game.player.coins < exam.fee)
-    throw new Error("报名需银两 " + exam.fee + " 两，眼下还差 " + (exam.fee - game.player.coins) + " 两。");
-  game.player.coins -= exam.fee;
   record.status = "registered";
   game.journal.push({
     id: crypto.randomUUID(),
     day: game.records.length,
     kind: "milestone",
     title: exam.name + " · 投递名帖",
-    text: "名帖与报名银一并递入试院。三日后点名，你已在应试名册之中。",
+    text: "名帖已经验明。开考时才暂收报名银，未完成或中途退出会原数退回。",
   });
 }
 export function beginRun(game: Game, id: string) {
@@ -192,6 +214,8 @@ export function beginRun(game: Game, id: string) {
   if (!activity) throw new Error("这项活动暂不可用。");
   if (game.adventure!.run)
     throw new Error("还有一段未结束的行程，请先继续或收起。");
+  if (activity.activityMode === "task" && (game.adventure!.clears[id] || 0) > 0)
+    throw new Error("这项任务已经完成。");
   const exam = exams.find((e) => e.activityId === id);
   if (exam && game.adventure!.exams[exam.id].status !== "registered")
     throw new Error("须先取得本场应试资格。落榜后需完成温卷再来。");
@@ -202,6 +226,9 @@ export function beginRun(game: Game, id: string) {
   if (issues.length) throw new Error(issues.join("；"));
   if (activity.locationId && game.adventure!.locationId !== activity.locationId)
     throw new Error("请先前往活动所在地点。");
+  const entryCost = activity.activityMode === "task" ? exam?.fee || activity.entryCost || 0 : 0;
+  if (game.player.coins < entryCost) throw new Error("入场银两不足。");
+  game.player.coins -= entryCost;
   game.adventure!.run = {
     id: crypto.randomUUID(),
     definition: structuredClone(activity),
@@ -219,6 +246,9 @@ export function beginRun(game: Game, id: string) {
     grade: "",
     rewards: [],
     response: "",
+    entryCost,
+    costCommitted: false,
+    costRefunded: false,
   };
   game.adventure!.encounter = null;
   // 兼容旧际遇：先在世界中回应，不让它中途截断一轮挑战。
@@ -256,32 +286,51 @@ export function settleRunAnswer(
   );
   const tier = tiers.filter((t) => run.score >= t.minScore).at(-1)!;
   run.grade = tier.label;
-  run.response = tier.dialogue;
-  run.rewards = grantRewards(game, tier.rewards);
-  // 各成绩档首次奖励独立记账：先拿合格，以后提升到出众，仍可取得专属物品。
-  for (const reached of tiers.filter((t) => run.score >= t.minScore)) {
-    const key = run.definition.id + ":" + reached.minScore;
-    if (reached.firstRewards && !state.rewardClaims.includes(key)) {
-      run.rewards.push(...grantRewards(game, reached.firstRewards));
-      state.rewardClaims.push(key);
+  const task = run.definition.activityMode === "task";
+  const completed = run.score >= run.definition.passScore;
+  run.response = task
+    ? completed
+      ? run.definition.successDialogue || tier.dialogue
+      : run.definition.failureDialogue || tier.dialogue
+    : tier.dialogue;
+  run.rewards = [];
+  if (task) {
+    if (completed) {
+      if (!(state.clears[run.definition.id] > 0))
+        run.rewards = grantRewards(game, run.definition.completionReward || {});
+      state.clears[run.definition.id] = 1;
+      run.costCommitted = true;
+    } else refundRunCost(game, run);
+  } else {
+    run.rewards = grantRewards(game, tier.rewards);
+    for (const reached of tiers.filter((t) => run.score >= t.minScore)) {
+      const key = run.definition.id + ":" + reached.minScore;
+      if (reached.firstRewards && !state.rewardClaims.includes(key)) {
+        run.rewards.push(...grantRewards(game, reached.firstRewards));
+        state.rewardClaims.push(key);
+      }
     }
   }
   state.best[run.definition.id] = Math.max(
     state.best[run.definition.id] || 0,
     run.score,
   );
-  if (run.score >= run.definition.passScore)
+  if (!task && completed)
     state.clears[run.definition.id] =
       (state.clears[run.definition.id] || 0) + 1;
   // 考试结算在普通活动奖励之后落档，确保揭榜、身份和奖励是一次事务。
   const exam = exams.find((e) => e.activityId === run.definition.id);
   if (exam) {
     const record = state.exams[exam.id];
-    record.attempts++;
-    record.lastScore = run.score;
     record.best = Math.max(record.best, run.score);
-    record.status =
-      run.score >= run.definition.passScore ? "passed" : "registered";
+    if (task) {
+      if (completed) record.status = "passed";
+      else if (record.status !== "passed") record.status = "registered";
+    } else {
+      record.attempts++;
+      record.lastScore = run.score;
+      if (completed) record.status = "passed";
+    }
   }
   const preparation = exams.find(
     (e) => e.preparationActivityId === run.definition.id,
@@ -295,18 +344,25 @@ export function settleRunAnswer(
     run.response += " 名帖仍在册中，明日便可再入试院。";
   }
   run.status = "settled";
-  game.journal.push({
-    id: crypto.randomUUID(),
-    day: game.records.length,
-    kind: "milestone",
-    title: run.definition.name + " · " + run.grade,
-    text:
-      run.score +
-      " 分。" +
-      run.response +
-      " " +
-      (run.rewards.join("，") || "记下疑处，下回再来。"),
-  });
+  if (!task || completed)
+    game.journal.push({
+      id: crypto.randomUUID(),
+      day: game.records.length,
+      kind: "milestone",
+      title: run.definition.name + " · " + run.grade,
+      text:
+        run.score +
+        " 分。" +
+        run.response +
+        " " +
+        (run.rewards.join("，") || "今日又有所得。"),
+    });
+}
+
+export function refundRunCost(game: Game, run = game.adventure?.run) {
+  if (!run || run.entryCost <= 0 || run.costCommitted || run.costRefunded) return;
+  game.player.coins += run.entryCost;
+  run.costRefunded = true;
 }
 export function travelTo(game: Game, id: string) {
   const state = game.adventure!;
@@ -338,7 +394,7 @@ export function interact(game: Game, npcId: string, topicId: string) {
   if (!companion || !npc || !topic) throw new Error("这段话题尚不可用。");
   if (game.adventure!.locationId !== companion.locationId)
     throw new Error("先到故人所在的地方拜访吧。");
-  if (npc.affinity < topic.minAffinity) throw new Error("交情还未到这一步。");
+  if (npc.favorability < topic.minFavorability) throw new Error("交情还未到这一步。");
   npc.met = true;
   const key = npcId + ":" + topicId;
   game.adventure!.conversations[key] =
@@ -376,7 +432,7 @@ export function claimRelationship(game: Game, npcId: string, index: number) {
     throw new Error("去当面领取这份心意吧。");
   const key = "bond:" + npcId + ":" + index;
   if (game.adventure!.rewardClaims.includes(key)) return;
-  if (npc.affinity < milestone.affinity)
+  if (npc.favorability < milestone.favorability)
     throw new Error("还需要一些共同经历。");
   grantRewards(game, milestone.reward);
   game.adventure!.rewardClaims.push(key);

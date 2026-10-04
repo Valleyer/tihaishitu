@@ -12,6 +12,13 @@
     "mainRounds": 10,
     "mainPassScore": 100
   },
+  "favorabilityLevels": [
+    { "min": 0, "max": 9, "name": "初识" },
+    { "min": 10, "max": 29, "name": "熟识" },
+    { "min": 30, "max": 49, "name": "亲近" },
+    { "min": 50, "max": 79, "name": "知己" },
+    { "min": 80, "max": 100, "name": "莫逆" }
+  ],
   "attributes": [
     {
       "id": "insight",

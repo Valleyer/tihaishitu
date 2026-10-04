@@ -93,8 +93,7 @@ export interface Npc {
   name: string;
   role: string;
   description: string;
-  affinity: number;
-  trust: number;
+  favorability: number;
   met: boolean;
 }
 export interface Player {

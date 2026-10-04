@@ -151,7 +151,7 @@ export function parseBackup(text: string): Backup {
     characterDesign.some(
       (character) =>
         !game.npcs.some(
-          (n) => n.id === character.id && finite(n.trust) && finite(n.affinity),
+          (n) => n.id === character.id && finite(n.favorability) && n.favorability <= 100,
         ),
     )
   )

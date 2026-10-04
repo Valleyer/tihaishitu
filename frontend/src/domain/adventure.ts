@@ -3,7 +3,7 @@ export interface Requirements {
   knowledge?: number;
   reputation?: number;
   attributes?: Record<string, number>;
-  affinity?: Record<string, number>;
+  favorability?: Record<string, number>;
   items?: string[];
   flags?: string[];
 }
@@ -34,8 +34,7 @@ export interface Rewards {
   coins?: number;
   reputation?: number;
   attributes?: Record<string, number>;
-  affinity?: Record<string, number>;
-  trust?: Record<string, number>;
+  favorability?: Record<string, number>;
   items?: Record<string, number>;
   flags?: string[];
   /** 身份称号属于一次性进阶奖励，例如县试取中。 */
@@ -62,8 +61,13 @@ export interface Activity {
   rounds: number;
   passScore: number;
   repeatable: boolean;
+  activityMode: "task" | "repeatable";
   requirements: Requirements;
   tiers: RewardTier[];
+  completionReward?: Rewards;
+  successDialogue?: string;
+  failureDialogue?: string;
+  entryCost?: number;
   reviewOnly?: boolean;
 }
 export type ExamStatus = "unregistered" | "registered" | "preparing" | "passed";
@@ -116,6 +120,9 @@ export interface ActivityRun {
   grade: string;
   rewards: string[];
   response: string;
+  entryCost: number;
+  costCommitted: boolean;
+  costRefunded: boolean;
 }
 export interface Adventure {
   version: 6;
@@ -149,11 +156,11 @@ export interface Companion {
   npcId: string;
   locationId: string;
   personality: string;
-  greetings: { minAffinity: number; text: string }[];
-  topics: { id: string; label: string; minAffinity: number; lines: string[] }[];
+  greetings: { minFavorability: number; text: string }[];
+  topics: { id: string; label: string; minFavorability: number; lines: string[] }[];
   activities: string[];
   milestones: {
-    affinity: number;
+    favorability: number;
     title: string;
     reward: Rewards;
     dialogue: string;

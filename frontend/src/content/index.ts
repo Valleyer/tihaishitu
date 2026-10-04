@@ -1,8 +1,4 @@
-/**
- * 可配置内容的统一入口。JSON 不能写注释，字段说明与示例见 docs/configuration-guide.md。
- * id 是关联键，修改文字不必改 id；修改章节顺序或删除人物后建议新开存档。
- * 内容只在这里导入；界面与规则引擎统一引用，避免多处维护同一套设定。
- */
+/** Config boundary: all legacy relationship and activity shapes become canonical here. */
 import gameData from "./game.json";
 import chapterData from "./chapters.json";
 import characterData from "./characters.json";
@@ -27,23 +23,68 @@ import type {
   Exam,
   Item,
   MapRegion,
+  Requirements,
   Rewards,
   WorldLocation,
 } from "../domain/adventure";
+import type { Bank, ChoiceEvent, Npc } from "../domain/types";
 import { hydrateBankKnowledge } from "../engine/QuestionBankManager";
 
-/**
- * 普通活动统一为五题两档；科举正试统一为十题全对取中。
- * 配置中旧有的 80 分首次奖励合并到完美档，避免升级后丢失专属物品。
- * 0 分档只保留失败对白供结算使用，界面不会把它展示成奖励档。
- */
-function mergeRewards(values: (Rewards | undefined)[]): Rewards | undefined {
+type LegacyRewards = Rewards & {
+  affinity?: Record<string, number>;
+  trust?: Record<string, number>;
+};
+type LegacyRequirements = Requirements & {
+  affinity?: Record<string, number>;
+  trust?: Record<string, number>;
+};
+
+function normalizeReward(reward?: LegacyRewards): Rewards {
+  if (!reward) return {};
+  const { affinity, trust, ...current } = reward;
+  const favorability = { ...(current.favorability || {}) };
+  for (const source of [affinity, trust])
+    for (const [id, amount] of Object.entries(source || {}))
+      favorability[id] = Math.max(favorability[id] || 0, amount);
+  return { ...current, ...(Object.keys(favorability).length ? { favorability } : {}) };
+}
+
+function normalizeRequirements(requirements: LegacyRequirements = {}): Requirements {
+  const { affinity, trust, ...current } = requirements;
+  const favorability = { ...(current.favorability || {}) };
+  for (const source of [affinity, trust])
+    for (const [id, amount] of Object.entries(source || {}))
+      favorability[id] = Math.max(favorability[id] || 0, amount);
+  return { ...current, ...(Object.keys(favorability).length ? { favorability } : {}) };
+}
+
+/** Same-key legacy rewards use maxima so old tiers cannot stack into an inflated task payout. */
+function mergeRewards(values: (LegacyRewards | undefined)[]): Rewards {
   const merged: Rewards = {};
-  for (const reward of values) {
-    if (!reward) continue;
+  for (const source of values) {
+    const reward = normalizeReward(source);
+    for (const key of ["knowledge", "coins", "reputation"] as const)
+      if (reward[key] !== undefined)
+        merged[key] = Math.max(merged[key] || 0, reward[key]!);
+    for (const key of ["attributes", "favorability", "items"] as const)
+      for (const [id, amount] of Object.entries(reward[key] || {})) {
+        merged[key] ??= {};
+        merged[key]![id] = Math.max(merged[key]![id] || 0, amount);
+      }
+    if (reward.flags)
+      merged.flags = [...new Set([...(merged.flags || []), ...reward.flags])];
+    if (reward.title) merged.title = reward.title;
+  }
+  return merged;
+}
+
+function mergeRepeatableFirstRewards(values: (LegacyRewards | undefined)[]): Rewards | undefined {
+  const merged: Rewards = {};
+  for (const source of values) {
+    const reward = normalizeReward(source);
     for (const key of ["knowledge", "coins", "reputation"] as const)
       if (reward[key]) merged[key] = (merged[key] || 0) + reward[key]!;
-    for (const key of ["attributes", "affinity", "trust", "items"] as const)
+    for (const key of ["attributes", "favorability", "items"] as const)
       for (const [id, amount] of Object.entries(reward[key] || {})) {
         merged[key] ??= {};
         merged[key]![id] = (merged[key]![id] || 0) + amount;
@@ -54,70 +95,101 @@ function mergeRewards(values: (Rewards | undefined)[]): Rewards | undefined {
   }
   return Object.keys(merged).length ? merged : undefined;
 }
+
 function normalizeActivity(activity: Activity): Activity {
-  // 所有玩法共用这里的全局答题规格。内容作者只需在 adventure.json 改一次，
-  // 人物共读、副本、支线与后续科举主线便会保持一致。
   const rules = adventureData.answerRules;
-  const tiers = [...activity.tiers].sort((a, b) => a.minScore - b.minScore),
-    zero = tiers.find((tier) => tier.minScore === 0) || tiers[0],
-    positive = tiers.filter((tier) => tier.minScore > 0),
-    base = tiers.find((tier) => tier.minScore === 60) || positive[0] || zero,
-    perfect = tiers.find((tier) => tier.minScore === 100) || positive.at(-1) || base,
-    perfectFirst = mergeRewards(
-      tiers.filter((tier) => tier.minScore > 60).map((tier) => tier.firstRewards),
-    ),
-    mainFirst = mergeRewards(
-      // 主线现在只有“全对”一个成功档，旧及格档中的身份、道具和开放标记也要一并迁入。
-      tiers.filter((tier) => tier.minScore > 0).map((tier) => tier.firstRewards),
+  const tiers = [...activity.tiers].sort((a, b) => a.minScore - b.minScore);
+  const zero = tiers.find((tier) => tier.minScore === 0) || tiers[0];
+  const positive = tiers.filter((tier) => tier.minScore > 0);
+  const base = tiers.find((tier) => tier.minScore === 60) || positive[0] || zero;
+  const perfect = tiers.find((tier) => tier.minScore === 100) || positive.at(-1) || base;
+  const main = activity.kind === "exam" || activity.quest === "main";
+  const task =
+    activity.activityMode === "task" ||
+    (activity.activityMode !== "repeatable" &&
+      !activity.repeatable &&
+      (main || activity.quest === "side" || ["dungeon", "story"].includes(activity.kind)));
+  const common = {
+    ...activity,
+    activityMode: task ? ("task" as const) : ("repeatable" as const),
+    repeatable: !task,
+    requirements: normalizeRequirements(activity.requirements as LegacyRequirements),
+  };
+  if (task) {
+    const passScore = main ? rules.mainPassScore : rules.ordinaryPassScore;
+    const completionReward = mergeRewards(
+      positive.flatMap((tier) => [
+        tier.rewards as LegacyRewards,
+        tier.firstRewards as LegacyRewards | undefined,
+      ]),
     );
-  if (activity.kind === "exam" || activity.quest === "main")
     return {
-      ...activity,
-      quest: "main",
-      rounds: rules.mainRounds,
-      passScore: rules.mainPassScore,
+      ...common,
+      ...(main ? { quest: "main" as const } : {}),
+      rounds: main ? rules.mainRounds : rules.ordinaryRounds,
+      passScore,
+      completionReward,
+      successDialogue: perfect.dialogue,
+      failureDialogue: zero.dialogue,
       tiers: [
-        {
-          ...zero,
-          minScore: 0,
-          label: "未取中",
-          rewards: {},
-          firstRewards: undefined,
-        },
+        { ...zero, minScore: 0, label: main ? "尚未完成" : "继续努力", rewards: {}, firstRewards: undefined },
         {
           ...perfect,
-          minScore: rules.mainPassScore,
-          label: activity.kind === "exam" ? "全对取中" : "全对完成",
-          firstRewards: mainFirst,
+          minScore: passScore,
+          label: main ? (activity.kind === "exam" ? "全对取中" : "全对完成") : "任务完成",
+          rewards: completionReward,
+          firstRewards: undefined,
         },
       ],
     };
+  }
   return {
-    ...activity,
+    ...common,
     rounds: rules.ordinaryRounds,
     passScore: rules.ordinaryPassScore,
     tiers: [
-      {
-        ...zero,
-        minScore: 0,
-        label: "未过关",
-        rewards: {},
-        firstRewards: undefined,
-      },
+      { ...zero, minScore: 0, label: "继续修习", rewards: {}, firstRewards: undefined },
       {
         ...base,
         minScore: rules.ordinaryPassScore,
-        label: "基础过关",
+        label: "基础收获",
+        rewards: normalizeReward(base.rewards as LegacyRewards),
+        firstRewards: base.firstRewards
+          ? normalizeReward(base.firstRewards as LegacyRewards)
+          : undefined,
       },
       {
         ...perfect,
         minScore: rules.perfectScore,
-        label: "完美过关",
-        firstRewards: perfectFirst,
+        label: "圆满收获",
+        rewards: normalizeReward(perfect.rewards as LegacyRewards),
+        firstRewards: mergeRepeatableFirstRewards(
+          tiers.filter((tier) => tier.minScore > 60).map((tier) => tier.firstRewards as LegacyRewards),
+        ),
       },
     ],
   };
 }
+
+const normalizeCompanion = (companion: Companion): Companion => ({
+  ...companion,
+  greetings: companion.greetings.map((entry) => ({
+    text: entry.text,
+    minFavorability: entry.minFavorability ?? (entry as unknown as { minAffinity: number }).minAffinity ?? 0,
+  })),
+  topics: companion.topics.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    lines: entry.lines,
+    minFavorability: entry.minFavorability ?? (entry as unknown as { minAffinity: number }).minAffinity ?? 0,
+  })),
+  milestones: companion.milestones.map((entry) => ({
+    ...entry,
+    favorability: entry.favorability ?? (entry as unknown as { affinity: number }).affinity ?? 0,
+    reward: normalizeReward(entry.reward as LegacyRewards),
+  })),
+});
+
 export const activities = [
   ...(activityData as unknown as Activity[]),
   ...(activityV7Data as unknown as Activity[]),
@@ -126,42 +198,46 @@ export const activities = [
 export const companions = [
   ...(companionData as unknown as Companion[]),
   ...(companionV8Data as unknown as Companion[]),
-];
+].map(normalizeCompanion);
 export const items = [
   ...(itemData as unknown as Item[]),
   ...(itemV7Data as unknown as Item[]),
   ...(itemV8Data as unknown as Item[]),
-];
+].map((item) => ({ ...item, use: item.use ? normalizeReward(item.use as LegacyRewards) : undefined }));
 export const adventureDesign = adventureData;
-export const exams = examData as unknown as Exam[];
-import type { Bank, ChoiceEvent, Npc } from "../domain/types";
+export const exams = (examData as unknown as Exam[]).map((exam) => ({
+  ...exam,
+  requirements: normalizeRequirements(exam.requirements as LegacyRequirements),
+}));
 export const gameDesign = gameData;
 export const chapterDesign = chapterData;
-export const characterDesign = characterData as (Npc & { portrait: string })[];
+export const characterDesign = (characterData as unknown as (Npc & {
+  portrait: string;
+  affinity?: number;
+  trust?: number;
+})[]).map(({ affinity, trust, ...npc }) => ({
+  ...npc,
+  favorability: Math.max(npc.favorability || 0, affinity || 0, trust || 0),
+}));
 export const sceneDesign = sceneData;
-export interface EventEffects {
-  knowledge?: number;
-  coins?: number;
-  reputation?: number;
-  trust?: Record<string, number>;
-  affinity?: Record<string, number>;
-  flags?: string[];
-}
-export const eventDesign = eventData as (Omit<ChoiceEvent, "options"> & {
+export interface EventEffects extends Rewards {}
+export const eventDesign = (eventData as unknown as (Omit<ChoiceEvent, "options"> & {
   at: number;
   speaker: string;
   npcId: string;
-  options: (ChoiceEvent["options"][number] & { effects: EventEffects })[];
-})[];
-export const mapDesign = mapData as unknown as {
-  regions: MapRegion[];
-  locations: WorldLocation[];
+  options: (ChoiceEvent["options"][number] & { effects: LegacyRewards })[];
+})[]).map((event) => ({
+  ...event,
+  options: event.options.map((option) => ({ ...option, effects: normalizeReward(option.effects) })),
+}));
+const rawMap = mapData as unknown as { regions: MapRegion[]; locations: WorldLocation[] };
+export const mapDesign = {
+  regions: rawMap.regions.map((region) => ({ ...region, requirements: normalizeRequirements(region.requirements as LegacyRequirements) })),
+  locations: rawMap.locations.map((location) => ({ ...location, requirements: normalizeRequirements(location.requirements as LegacyRequirements) })),
 };
 export const portraitDesign = portraitData;
-export const bankDesign = (bankData as unknown as Bank[]).map(
-  hydrateBankKnowledge,
-);
+export const bankDesign = (bankData as unknown as Bank[]).map(hydrateBankKnowledge);
 export const locationFor = (chapter: number) =>
-  mapDesign.locations.find(
-    (location) => location.id === chapterDesign[chapter].locationId,
-  ) || mapDesign.locations[0];
+  mapDesign.locations.find((location) => location.id === chapterDesign[chapter].locationId) || mapDesign.locations[0];
+export const favorabilityLevel = (value: number) =>
+  adventureData.favorabilityLevels.find((level) => value >= level.min && value <= level.max)?.name || "初识";

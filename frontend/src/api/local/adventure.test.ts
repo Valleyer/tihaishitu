@@ -98,12 +98,12 @@ it("共读按整轮评分加好感；副本专属奖励只发一次，装备能�
   let game = await api.createGame(config);
   game = await api.beginActivity(game.id, "read-lu");
   game = await play(api, game, 2);
-  expect(game.npcs.find((n) => n.id === "lu")!.affinity).toBe(0);
+  expect(game.npcs.find((n) => n.id === "lu")!.favorability).toBe(0);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
   game = await api.beginActivity(game.id, "read-lu");
   game = await play(api, game, 4);
-  expect(game.npcs.find((n) => n.id === "lu")!.affinity).toBe(2);
+  expect(game.npcs.find((n) => n.id === "lu")!.favorability).toBe(2);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
   await expect(api.travel(game.id, "library")).rejects.toThrow("悟性");
@@ -139,7 +139,7 @@ it("旧人生保留历史与关系并回到世界；探索进度随备份保留"
   expect(restored.adventure!.locationId).toBe("east-hall");
   expect(restored.adventure!.visited).toContain("east-hall");
 });
-it("县试十题全对取中，未全对可直接无限重试", async () => {
+it("县试未完成可重试，取中后任务永久结案", async () => {
   const { api, storage } = setup();
   let game = await api.createGame(config);
   // 只准备考试门槛，避免测试重复模拟日常刷题；正式应试仍走真实发题与判分。
@@ -156,12 +156,13 @@ it("县试十题全对取中，未全对可直接无限重试", async () => {
   game = await api.travel(game.id, "exam-street");
   const coins = game.player.coins;
   game = await api.registerExam(game.id, "county-exam");
-  expect(game.player.coins).toBe(coins - 12);
+  expect(game.player.coins).toBe(coins);
   expect(game.adventure!.exams["county-exam"].status).toBe("registered");
 
   game = await api.beginActivity(game.id, "county-exam-paper");
   game = await play(api, game, 9);
   expect(game.adventure!.exams["county-exam"].status).toBe("registered");
+  expect(game.player.coins).toBe(coins);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
 
@@ -171,5 +172,7 @@ it("县试十题全对取中，未全对可直接无限重试", async () => {
   expect(game.player.title).toBe("青溪县试案首");
   expect(game.flags).toContain("county-exam-passed");
   expect(game.adventure!.inventory["county-pass-note"]).toBe(1);
-  expect(game.adventure!.exams["county-exam"].attempts).toBe(2);
+  expect(game.adventure!.exams["county-exam"].attempts).toBe(0);
+  game = await api.finishActivity(game.id, game.adventure!.run!.id);
+  await expect(api.beginActivity(game.id, "county-exam-paper")).rejects.toThrow("已经完成");
 });
