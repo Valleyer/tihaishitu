@@ -24,6 +24,12 @@ export interface HubBootstrap {
   learner: Learner; studyProfile: StudyProfile; worlds: WorldDefinition[];
   bankManifest: BookSummary[]; questionCatalog: { source: string; canEdit: boolean; revision?: string };
 }
+export interface KnowledgeState {
+  knowledgePointId: string; masteryScore: number; effectiveMastery: number; stabilityDays: number;
+  band: "unstarted" | "unmastered" | "learning" | "ready" | "proficient"; ready: boolean;
+  targetDifficulty: number; evidenceCount: number; correctStreak: number; wrongStreak: number;
+  lastOutcome?: string; lastEvidenceAt?: string; lastCorrectAt?: string; modelVersion: string; revision: number;
+}
 
 export const platformApi = {
   register: (username: string, displayName: string, password: string) =>
@@ -40,6 +46,10 @@ export const platformApi = {
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),
   question: (id: string) => request<BrowseQuestion>("/learning/questions/" + encodeURIComponent(id)),
+  knowledgeState: (id: string) => request<KnowledgeState>(
+    "/learner/knowledge-states/" + encodeURIComponent(id)),
+  knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
+    "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
   updateProfile: (profile: StudyProfile, selectedBookIds: string[], focusedKnowledgePointIds: string[]) =>
     request<StudyProfile>("/learner/study-profile", "PUT", {
       pace: profile.pace, difficulty: profile.difficulty, focusMode: profile.focusMode,

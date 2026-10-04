@@ -21,7 +21,8 @@ import java.util.UUID;
 public class QuestionAttemptStore {
     public record Snapshot(String id, String gameId, String learnerId, String worldId,
                            String questionId, JsonNode question, JsonNode standard,
-                           String status, String gradingMode, String gradingSource, String assessment) {}
+                           String status, String gradingMode, String gradingSource, String assessment,
+                           String targetKnowledgePointId, String evidenceMode, Integer questionDifficulty) {}
     public record HistorySnapshot(String id, String questionId, String status, JsonNode question) {}
 
     private final JdbcTemplate jdbc;
@@ -38,13 +39,21 @@ public class QuestionAttemptStore {
 
     public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
                        String gradingMode) {
+        create(id, gameId, questionId, question, standard, gradingMode, null, null, null);
+    }
+
+    public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
+                       String gradingMode, String targetKnowledgePointId, String evidenceMode,
+                       Integer questionDifficulty) {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         jdbc.update("""
                 INSERT INTO study_attempt(id, game_id, learner_id, world_id, question_id,
-                                          question_snapshot_json, standard_answer_json, status, grading_mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+                                          question_snapshot_json, standard_answer_json, status, grading_mode,
+                                          target_knowledge_point_id, evidence_mode, question_difficulty)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
                 """, id, world == null ? gameId : null, world == null ? null : world.learnerId(),
-                world == null ? null : world.worldId(), questionId, json(question), json(standard), gradingMode);
+                world == null ? null : world.worldId(), questionId, json(question), json(standard), gradingMode,
+                targetKnowledgePointId, evidenceMode, questionDifficulty);
     }
 
     public Snapshot find(String id, String gameId) {
@@ -53,13 +62,15 @@ public class QuestionAttemptStore {
         Object[] args = world == null ? new Object[]{id, gameId} : new Object[]{id, world.learnerId(), world.worldId()};
         List<Snapshot> values = jdbc.query("""
                 SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
-                       standard_answer_json, status, grading_mode, grading_source, assessment
+                       standard_answer_json, status, grading_mode, grading_source, assessment,
+                       target_knowledge_point_id, evidence_mode, question_difficulty
                   FROM study_attempt WHERE %s
                 """.formatted(predicate), (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
                 result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
                 read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
                 result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
-                result.getString("assessment")), args);
+                result.getString("assessment"), result.getString("target_knowledge_point_id"),
+                result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class)), args);
         if (values.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "这道题已经失效，请重新载入当前进度。");
         return values.get(0);
     }
@@ -103,6 +114,10 @@ public class QuestionAttemptStore {
     }
 
     public boolean recordAnswer(Snapshot snapshot, JsonNode submitted, boolean correct) {
+        return recordAnswer(snapshot, submitted, correct, Instant.now());
+    }
+
+    public boolean recordAnswer(Snapshot snapshot, JsonNode submitted, boolean correct, Instant occurredAt) {
         if (!"auto".equals(snapshot.gradingMode()))
             throw new ApiException(HttpStatus.CONFLICT, "这是一道自评题，请先查看参考解答后自评。");
         if (!"active".equals(snapshot.status())) return false;
@@ -110,7 +125,7 @@ public class QuestionAttemptStore {
         int changed = jdbc.update("""
                 UPDATE study_attempt SET status = 'graded', answered_at = ?, grading_source = 'automatic', assessment = ?
                  WHERE id = ? AND status = 'active'
-                """, Timestamp.from(Instant.now()), assessment, snapshot.id());
+                """, Timestamp.from(occurredAt), assessment, snapshot.id());
         if (changed == 0) return false;
         jdbc.update("""
                 INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
@@ -133,6 +148,10 @@ public class QuestionAttemptStore {
     }
 
     public boolean recordSelfAssessment(Snapshot snapshot, String assessment) {
+        return recordSelfAssessment(snapshot, assessment, Instant.now());
+    }
+
+    public boolean recordSelfAssessment(Snapshot snapshot, String assessment, Instant occurredAt) {
         if (!"self_assessment".equals(snapshot.gradingMode()))
             throw new ApiException(HttpStatus.CONFLICT, "这不是一道自评题。");
         if (!java.util.Set.of("correct", "partial", "wrong").contains(assessment))
@@ -142,7 +161,7 @@ public class QuestionAttemptStore {
         int changed = jdbc.update("""
                 UPDATE study_attempt SET status = 'graded', answered_at = ?, grading_source = 'self', assessment = ?
                  WHERE id = ? AND status = 'revealed'
-                """, Timestamp.from(Instant.now()), assessment, snapshot.id());
+                """, Timestamp.from(occurredAt), assessment, snapshot.id());
         if (changed == 0) return false;
         jdbc.update("""
                 INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
