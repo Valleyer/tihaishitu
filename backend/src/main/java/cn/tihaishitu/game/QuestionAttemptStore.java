@@ -1,6 +1,7 @@
 package cn.tihaishitu.game;
 
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.world.WorldActionContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +19,8 @@ import java.util.UUID;
 
 @Repository
 public class QuestionAttemptStore {
-    public record Snapshot(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
+    public record Snapshot(String id, String gameId, String learnerId, String worldId,
+                           String questionId, JsonNode question, JsonNode standard,
                            String status, String gradingMode, String gradingSource, String assessment) {}
     public record HistorySnapshot(String id, String questionId, String status, JsonNode question) {}
 
@@ -36,23 +38,28 @@ public class QuestionAttemptStore {
 
     public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
                        String gradingMode) {
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         jdbc.update("""
-                INSERT INTO study_attempt(id, game_id, question_id, question_snapshot_json, standard_answer_json,
-                                          status, grading_mode)
-                VALUES (?, ?, ?, ?, ?, 'active', ?)
-                """, id, gameId, questionId, json(question), json(standard), gradingMode);
+                INSERT INTO study_attempt(id, game_id, learner_id, world_id, question_id,
+                                          question_snapshot_json, standard_answer_json, status, grading_mode)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+                """, id, world == null ? gameId : null, world == null ? null : world.learnerId(),
+                world == null ? null : world.worldId(), questionId, json(question), json(standard), gradingMode);
     }
 
     public Snapshot find(String id, String gameId) {
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        String predicate = world == null ? "id = ? AND game_id = ?" : "id = ? AND learner_id = ? AND world_id = ?";
+        Object[] args = world == null ? new Object[]{id, gameId} : new Object[]{id, world.learnerId(), world.worldId()};
         List<Snapshot> values = jdbc.query("""
-                SELECT id, game_id, question_id, question_snapshot_json, standard_answer_json, status,
-                       grading_mode, grading_source, assessment
-                  FROM study_attempt WHERE id = ? AND game_id = ?
-                """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
-                result.getString("question_id"), read(result.getString("question_snapshot_json")),
-                read(result.getString("standard_answer_json")), result.getString("status"),
-                result.getString("grading_mode"), result.getString("grading_source"),
-                result.getString("assessment")), id, gameId);
+                SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
+                       standard_answer_json, status, grading_mode, grading_source, assessment
+                  FROM study_attempt WHERE %s
+                """.formatted(predicate), (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
+                result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
+                read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
+                result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
+                result.getString("assessment")), args);
         if (values.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "这道题已经失效，请重新载入当前进度。");
         return values.get(0);
     }
@@ -76,6 +83,25 @@ public class QuestionAttemptStore {
         return values;
     }
 
+    public Map<String, HistorySnapshot> findForLearnerHistory(String learnerId, Collection<String> attemptIds) {
+        if (attemptIds.isEmpty()) return Map.of();
+        Map<String, HistorySnapshot> values = new LinkedHashMap<>();
+        Object[] args = new Object[attemptIds.size() + 1];
+        args[0] = learnerId;
+        int index = 1;
+        for (String attemptId : attemptIds) args[index++] = attemptId;
+        jdbc.query("""
+                SELECT id, question_id, status, question_snapshot_json
+                  FROM study_attempt
+                 WHERE learner_id = ? AND status = 'graded' AND id IN (%s)
+                """.formatted(placeholders(attemptIds.size())), result -> {
+            String id = result.getString("id");
+            values.put(id, new HistorySnapshot(id, result.getString("question_id"),
+                    result.getString("status"), readOrNull(result.getString("question_snapshot_json"))));
+        }, args);
+        return values;
+    }
+
     public boolean recordAnswer(Snapshot snapshot, JsonNode submitted, boolean correct) {
         if (!"auto".equals(snapshot.gradingMode()))
             throw new ApiException(HttpStatus.CONFLICT, "这是一道自评题，请先查看参考解答后自评。");
@@ -87,10 +113,11 @@ public class QuestionAttemptStore {
                 """, Timestamp.from(Instant.now()), assessment, snapshot.id());
         if (changed == 0) return false;
         jdbc.update("""
-                INSERT INTO answer_record(id, game_id, attempt_id, question_id, submitted_answer_json, correct,
-                                          grading_source, assessment)
-                VALUES (?, ?, ?, ?, ?, ?, 'automatic', ?)
-                """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.id(), snapshot.questionId(),
+                INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
+                                          submitted_answer_json, correct, grading_source, assessment)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'automatic', ?)
+                """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
+                snapshot.id(), snapshot.questionId(),
                 json(submitted), correct, assessment);
         return true;
     }
@@ -118,10 +145,11 @@ public class QuestionAttemptStore {
                 """, Timestamp.from(Instant.now()), assessment, snapshot.id());
         if (changed == 0) return false;
         jdbc.update("""
-                INSERT INTO answer_record(id, game_id, attempt_id, question_id, submitted_answer_json, correct,
-                                          grading_source, assessment)
-                VALUES (?, ?, ?, ?, ?, ?, 'self', ?)
-                """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.id(), snapshot.questionId(),
+                INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
+                                          submitted_answer_json, correct, grading_source, assessment)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'self', ?)
+                """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
+                snapshot.id(), snapshot.questionId(),
                 json(assessment), correct, assessment);
         return true;
     }

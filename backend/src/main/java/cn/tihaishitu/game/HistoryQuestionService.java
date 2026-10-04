@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import cn.tihaishitu.learner.LearnerContext;
 
 @Service
 public class HistoryQuestionService {
@@ -21,6 +22,26 @@ public class HistoryQuestionService {
         this.games = games;
         this.attempts = attempts;
         this.mapper = mapper;
+    }
+
+    @Transactional(readOnly = true)
+    public ObjectNode recoverForLearner(HistoryQuestionsRequest request) {
+        String learnerId = LearnerContext.learnerId();
+        var requested = new LinkedHashSet<>(request.attemptIds());
+        Map<String, QuestionAttemptStore.HistorySnapshot> snapshots =
+                attempts.findForLearnerHistory(learnerId, requested);
+        ArrayNode recovered = mapper.createArrayNode();
+        for (String attemptId : requested) {
+            QuestionAttemptStore.HistorySnapshot snapshot = snapshots.get(attemptId);
+            if (snapshot == null || snapshot.question() == null) continue;
+            ObjectNode item = recovered.addObject();
+            item.put("attemptId", attemptId);
+            item.put("questionId", snapshot.questionId());
+            item.set("question", snapshot.question());
+        }
+        ObjectNode response = mapper.createObjectNode();
+        response.set("questions", recovered);
+        return response;
     }
 
     @Transactional(readOnly = true)

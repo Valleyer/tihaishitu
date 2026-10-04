@@ -12,9 +12,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.UUID;
+import cn.tihaishitu.learner.LearnerAuthService;
+import jakarta.servlet.http.Cookie;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.http.MediaType;
@@ -55,7 +58,7 @@ class CatalogSeedIntegrationTest {
 
     @Test
     void builtInCatalogIsSeededWithUuidKeysAndAvailableByManifest() throws Exception {
-        String body = mvc.perform(get("/api/v1/bootstrap"))
+        String body = mvc.perform(get("/api/v1/bootstrap").cookie(register("seed_user")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bankManifest").isNotEmpty())
                 .andReturn().getResponse().getContentAsString();
@@ -97,5 +100,11 @@ class CatalogSeedIntegrationTest {
                 .andExpect(jsonPath("$.attempt.result.correct").value(true))
                 .andExpect(jsonPath("$.records[0].questionId").value(questionId))
                 .andExpect(jsonPath("$.records[0].question").doesNotExist());
+    }
+
+    private Cookie register(String username) throws Exception {
+        return mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"displayName\":\"测试\",\"password\":\"password-123\"}"))
+                .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 }
