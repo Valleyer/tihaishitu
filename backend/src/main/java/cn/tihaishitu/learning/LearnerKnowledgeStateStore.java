@@ -7,6 +7,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +27,21 @@ public class LearnerKnowledgeStateStore {
                        wrong_streak, last_outcome, last_evidence_at, last_correct_at, model_version, revision
                   FROM learner_knowledge_state WHERE learner_id = ? AND knowledge_point_id = ?
                 """, (rs, row) -> state(rs), learnerId, pointId).stream().findFirst();
+    }
+
+    public List<StateRow> findForKnowledgePoints(String learnerId, Collection<String> pointIds) {
+        if (pointIds.isEmpty()) return List.of();
+        List<Object> args = new ArrayList<>();
+        args.add(learnerId);
+        args.addAll(pointIds);
+        return jdbc.query("""
+                SELECT knowledge_point_id, mastery_score, stability_days, target_difficulty,
+                       evidence_count, correct_streak, wrong_streak, last_outcome, last_evidence_at,
+                       last_correct_at, model_version, revision
+                  FROM learner_knowledge_state
+                 WHERE learner_id = ? AND knowledge_point_id IN (%s)
+                """.formatted(placeholders(pointIds.size())), (rs, row) ->
+                new StateRow(rs.getString("knowledge_point_id"), state(rs)), args.toArray());
     }
 
     public List<StateRow> findForBook(String learnerId, String bookId) {
@@ -186,6 +203,9 @@ public class LearnerKnowledgeStateStore {
         Timestamp value = rs.getTimestamp(column); return value == null ? null : value.toInstant();
     }
     private static Timestamp timestamp(Instant value) { return value == null ? null : Timestamp.from(value); }
+    private static String placeholders(int count) {
+        return String.join(",", java.util.Collections.nCopies(count, "?"));
+    }
     public record StateRow(String knowledgePointId, KnowledgeMasteryModel.State state) {}
     private record FocusRow(String learnerId, int sortOrder) {}
 }

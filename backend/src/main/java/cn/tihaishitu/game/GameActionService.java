@@ -4,6 +4,7 @@ import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.learner.StudyProfileService;
+import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.world.WorldActionContext;
 import cn.tihaishitu.world.WorldStateStore;
@@ -34,12 +35,14 @@ public class GameActionService {
     private final WorldStateStore worldStates;
     private final StudyProfileService studyProfiles;
     private final LearnerKnowledgeStateService knowledgeStates;
+    private final AdaptiveStudyPlanner adaptivePlanner;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
                              GameContent content, GameFactory factory, ObjectMapper mapper,
                              WorldStateStore worldStates, StudyProfileService studyProfiles,
-                             LearnerKnowledgeStateService knowledgeStates) {
+                             LearnerKnowledgeStateService knowledgeStates,
+                             AdaptiveStudyPlanner adaptivePlanner) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -49,6 +52,7 @@ public class GameActionService {
         this.worldStates = worldStates;
         this.studyProfiles = studyProfiles;
         this.knowledgeStates = knowledgeStates;
+        this.adaptivePlanner = adaptivePlanner;
     }
 
     @Transactional
@@ -128,7 +132,7 @@ public class GameActionService {
         run.put("answered", 0);
         run.put("correct", 0);
         run.set("knowledgePointIds", mapper.valueToTree(plan.knowledgePointIds()));
-        // Phase C compatibility scope: selected Book knowledge does not imply user mastery.
+        // Freeze the selected Book boundary; formal draws recompute readiness inside this scope.
         run.set("allowedKnowledgePointIds", mapper.valueToTree(plan.allowedKnowledgePointIds()));
         run.put("knowledgePointIndex", 0);
         run.put("training", false);
@@ -393,10 +397,22 @@ public class GameActionService {
         Set<String> seen = new HashSet<>();
         run.path("seenQuestionIds").forEach(id -> seen.add(id.asText()));
         Set<String> allowed = allowedKnowledgePointIds(game, run);
-        QuestionDto question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
-                pointId, allowed, seen, null, run.path("training").asBoolean()
+        KnowledgeQuestionPoolService.Mode mode = run.path("training").asBoolean()
                 ? KnowledgeQuestionPoolService.Mode.TRAINING
-                : KnowledgeQuestionPoolService.Mode.NORMAL));
+                : KnowledgeQuestionPoolService.Mode.NORMAL;
+        WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        QuestionDto question;
+        if (world == null) {
+            question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
+                    pointId, allowed, seen, null, mode));
+        } else {
+            var profile = studyProfiles.rawCurrent();
+            AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
+                    world.learnerId(), allowed, pointId, profile.difficulty());
+            question = questionPool.selectQuestionForLearner(
+                    new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
+                            context.readyKnowledgePointIds(), seen, context.preferredDifficulty(), mode));
+        }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
         ObjectNode visible = full.deepCopy();

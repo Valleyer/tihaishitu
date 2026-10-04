@@ -49,6 +49,12 @@ class LearnerKnowledgeStateIntegrationTest {
         }
         Cookie learner = register();
         String learnerId = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='state-user'", String.class);
+        jdbc.update("""
+                INSERT INTO learner_knowledge_state(learner_id,knowledge_point_id,mastery_score,stability_days,
+                    target_difficulty,evidence_count,correct_streak,wrong_streak,last_outcome,last_evidence_at,
+                    last_correct_at,model_version,revision)
+                VALUES (?,?,100,365,2,1,0,0,'correct',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'v1',1)
+                """, learnerId, k2);
         jdbc.update("UPDATE learner_study_profile SET focus_mode='manual' WHERE learner_id=?", learnerId);
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,0)", learnerId, k1);
         mvc.perform(get("/api/v1/learner/knowledge-states/{id}", k1).cookie(learner))
@@ -56,7 +62,7 @@ class LearnerKnowledgeStateIntegrationTest {
                 .andExpect(jsonPath("$.evidenceCount").value(0));
         mvc.perform(get("/api/v1/learner/knowledge-states").param("bookId", book).cookie(learner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(6));
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isZero();
         initialize(learner);
         JsonNode game = json(mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(learner)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"activityId\":\"read\"}"))
@@ -78,7 +84,7 @@ class LearnerKnowledgeStateIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, k2)).isZero();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k2)).isZero();
+        assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k2)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(2);
         mvc.perform(get("/api/v1/learner/knowledge-states/{id}", k1).cookie(learner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.evidenceCount").value(2))
