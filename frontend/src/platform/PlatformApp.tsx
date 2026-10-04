@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
 import { HttpError } from "../api/http";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type StudyProfile } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type StudyProfile } from "./api";
 import "./platform.css";
 
 const go = (path: string) => window.location.assign(path);
@@ -103,20 +103,22 @@ function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise
 
 function BooksPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><h1>文集与知识图谱</h1><div className="book-list">{data.bankManifest.map(book => <a className="hub-panel" href={`/books/${book.id}`} key={book.id}><h2>{book.name}</h2><p>{book.description}</p><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</small></a>)}</div></main></Shell>; }
 
-function ChapterSection({ chapter }: { chapter: BookDetail["chapters"][number] }) {
-  return <section className="hub-panel"><small>{chapter.code}</small><h2>{chapter.name}</h2><p>{chapter.description}</p><div className="knowledge-links">{chapter.knowledgePoints.map(point => <a href={`/knowledge/${point.id}`} key={point.id}>{point.name}<small>{point.description}</small></a>)}</div>{chapter.children?.map(child => <ChapterSection chapter={child} key={child.id} />)}</section>;
+const bandLabel: Record<KnowledgeState["band"], string> = { unstarted: "未开始", unmastered: "未掌握", learning: "学习中", ready: "基本掌握", proficient: "熟练掌握" };
+
+function ChapterSection({ chapter, states }: { chapter: BookDetail["chapters"][number]; states: Map<string, KnowledgeState> }) {
+  return <section className="hub-panel"><small>{chapter.code}</small><h2>{chapter.name}</h2><p>{chapter.description}</p><div className="knowledge-links">{chapter.knowledgePoints.map(point => { const state = states.get(point.id); return <a href={`/knowledge/${point.id}`} key={point.id}>{point.name}<small>{point.description}</small><span className={`mastery-band ${state?.band || "unstarted"}`}>{bandLabel[state?.band || "unstarted"]}{state?.evidenceCount ? ` · ${Math.round(state.effectiveMastery)}%` : ""}</span></a> })}</div>{chapter.children?.map(child => <ChapterSection chapter={child} states={states} key={child.id} />)}</section>;
 }
 
 function BookPage({ data, id }: { data: HubBootstrap; id: string }) {
-  const [book, setBook] = useState<BookDetail>(); const [error, setError] = useState("");
-  useEffect(() => { platformApi.book(id).then(setBook).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回文集</a>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} key={chapter.id} />)}</>}</main></Shell>;
+  const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
+  useEffect(() => { Promise.all([platformApi.book(id), platformApi.knowledgeStatesForBook(id)]).then(([value, stateList]) => { setBook(value); setStates(new Map(stateList.map(state => [state.knowledgePointId, state]))) }).catch(e => setError(e.message)); }, [id]);
+  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回文集</a>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} states={states} key={chapter.id} />)}</>}</main></Shell>;
 }
 
 function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
-  const [point, setPoint] = useState<(KnowledgePoint & { books: {id:string;name:string}[] })>(); const [questions, setQuestions] = useState<BrowseQuestion[]>([]); const [error, setError] = useState("");
-  useEffect(() => { Promise.all([platformApi.knowledge(id), platformApi.knowledgeQuestions(id)]).then(([p,q]) => {setPoint(p);setQuestions(q)}).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回知识图谱</a>{error && <p className="hub-error">{error}</p>}{point && <><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h1>{point.name}</h1><section className="hub-panel rich"><RichText>{point.explanation || point.description}</RichText></section><h2>相关已发布题目</h2><div className="question-list">{questions.map(question => <a href={`/questions/${question.id}`} key={question.id}><span>{question.sourceName || question.sourceType}</span><b><RichText>{question.contentMarkdown}</RichText></b></a>)}</div></>}</main></Shell>;
+  const [point, setPoint] = useState<(KnowledgePoint & { books: {id:string;name:string}[] })>(); const [questions, setQuestions] = useState<BrowseQuestion[]>([]); const [state, setState] = useState<KnowledgeState>(); const [error, setError] = useState("");
+  useEffect(() => { Promise.all([platformApi.knowledge(id), platformApi.knowledgeQuestions(id), platformApi.knowledgeState(id)]).then(([p,q,s]) => {setPoint(p);setQuestions(q);setState(s)}).catch(e => setError(e.message)); }, [id]);
+  return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回知识图谱</a>{error && <p className="hub-error">{error}</p>}{point && <><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h1>{point.name}</h1>{state && <section className="hub-panel mastery-summary"><h2>当前状态</h2>{state.evidenceCount === 0 ? <p>尚未开始正式训练</p> : <><p className="mastery-score"><b>{bandLabel[state.band]}</b> · {Math.round(state.effectiveMastery)}%</p><p>记忆稳定度：{state.stabilityDays.toFixed(1)} 天</p><p>目标难度：{state.targetDifficulty}</p><p>最近练习：{state.lastEvidenceAt ? new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN") : "—"}</p></>}</section>}<section className="hub-panel rich"><RichText>{point.explanation || point.description}</RichText></section><h2>相关已发布题目</h2><div className="question-list">{questions.map(question => <a href={`/questions/${question.id}`} key={question.id}><span>{question.sourceName || question.sourceType}</span><b><RichText>{question.contentMarkdown}</RichText></b></a>)}</div></>}</main></Shell>;
 }
 
 function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {

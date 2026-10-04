@@ -4,6 +4,7 @@ import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.learner.StudyProfileService;
+import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.world.WorldActionContext;
 import cn.tihaishitu.world.WorldStateStore;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -32,11 +33,13 @@ public class GameActionService {
     private final ObjectMapper mapper;
     private final WorldStateStore worldStates;
     private final StudyProfileService studyProfiles;
+    private final LearnerKnowledgeStateService knowledgeStates;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
                              GameContent content, GameFactory factory, ObjectMapper mapper,
-                             WorldStateStore worldStates, StudyProfileService studyProfiles) {
+                             WorldStateStore worldStates, StudyProfileService studyProfiles,
+                             LearnerKnowledgeStateService knowledgeStates) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -45,6 +48,7 @@ public class GameActionService {
         this.mapper = mapper;
         this.worldStates = worldStates;
         this.studyProfiles = studyProfiles;
+        this.knowledgeStates = knowledgeStates;
     }
 
     @Transactional
@@ -144,6 +148,7 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode answer(String gameId, AnswerRequest request) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
         String currentQuestionId = current.path("question").path("id").asText();
@@ -151,7 +156,9 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         boolean correct = sameAnswer(snapshot.standard(), request.answer());
-        if (!attempts.recordAnswer(snapshot, request.answer(), correct)) return game;
+        Instant occurredAt = Instant.now();
+        if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
+        knowledgeStates.apply(snapshot, correct ? "correct" : "wrong", "automatic", occurredAt);
 
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -199,6 +206,7 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode selfAssess(String gameId, SelfAssessmentRequest request) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
         if (!request.questionId().equals(current.path("question").path("id").asText()))
@@ -206,9 +214,11 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         if (!current.path("result").isNull()) return game;
-        if (!attempts.recordSelfAssessment(snapshot, request.assessment())) {
+        Instant occurredAt = Instant.now();
+        if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
             throw bad("请先查看参考解答，或此题已经完成自评。");
         }
+        knowledgeStates.apply(snapshot, request.assessment(), "self", occurredAt);
         boolean correct = "correct".equals(request.assessment());
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -414,7 +424,9 @@ public class GameActionService {
         attempt.putNull("reveal");
         attempt.put("review", run.path("training").asBoolean());
         game.set("attempt", attempt);
-        attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer());
+        attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer(),
+                full.path("gradingMode").asText("auto"), target.id(),
+                run.path("training").asBoolean() ? "training" : "normal", question.difficulty());
     }
 
     private ArrayNode knowledgeDetails(JsonNode question) {

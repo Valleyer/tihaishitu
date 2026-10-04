@@ -28,6 +28,8 @@ API_PROXY_TARGET=http://localhost:12345
 | POST | /learner/auth/logout | 无 | 204 |
 | GET | /learner/me | 无 | 当前 Learner |
 | GET/PUT | /learner/study-profile | Study Focus | StudyProfile |
+| GET | /learner/knowledge-states/{knowledgePointId} | 无 | 当前 Learner 的 Knowledge State；无证据时返回未开始虚拟状态且不写库 |
+| GET | /learner/knowledge-states?bookId={bookId} | 无 | enabled Book 全部 active KnowledgePoint 的批量状态 |
 | GET | /bootstrap | 无 | learner、studyProfile、worlds、bankManifest、questionCatalog |
 | GET | /learning/books | 无 | 可见文集 |
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
@@ -96,6 +98,22 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 
 知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。知识点合并会把源记录标为 deprecated 并写入 `merged_into_id`，逐题迁移关系；目标关系已存在时折叠为一条，任一原关系为 core 则保留 core。源记录、合并历史和审计记录均不删除。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
+
+知识点合并还会在同一事务中迁移 Learner Focus、attempt target 和 Knowledge Evidence。若源与目标同时已有状态，服务端将两边 evidence 归一到目标知识点，按 `occurredAt, id` 使用 V1 模型重放并重建唯一目标状态。
+
+## Learner Knowledge State V1
+
+正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（normal/training）与 1–5 级题目难度。自动判题或 self-assess 最终进入 graded 后，只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态。
+
+`masteryScore` 是 `lastEvidenceAt` 时刻的基础掌握值。读取时的有效掌握度为：
+
+```text
+effectiveMastery = masteryScore × 2 ^ (-elapsedDays / stabilityDays)
+```
+
+`stabilityDays` 是 0.5–365 天的记忆半衰期。服务端没有后台衰减任务；读取时计算有效值，下一条证据到来时先计算惰性遗忘，再应用新证据。ready 阈值为 70，但本阶段该值和 `targetDifficulty` 只展示与保存，不参与题池选择、依赖范围或复习调度。
+
+V1 quality 为 automatic correct 1.00、automatic wrong 0、self correct 0.90、self partial 0.50、self wrong 0；source factor 为 automatic 1.00 / self 0.85，mode factor 为 normal 1.00 / training 0.55。高难题答对证据更强，低难题答错证据更强。Learning Hub 浏览题目、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。

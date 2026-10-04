@@ -25,9 +25,11 @@ public class KnowledgeManagementController {
     private static final Set<String> ROLES = Set.of("core", "auxiliary");
     private static final Set<String> STATUSES = Set.of("active", "deprecated");
     private final KnowledgeManagementStore store;
+    private final KnowledgeManagementService service;
 
-    public KnowledgeManagementController(KnowledgeManagementStore store) {
+    public KnowledgeManagementController(KnowledgeManagementStore store, KnowledgeManagementService service) {
         this.store = store;
+        this.service = service;
     }
 
     @GetMapping
@@ -65,7 +67,7 @@ public class KnowledgeManagementController {
     @PreAuthorize("hasRole('ADMIN')")
     KnowledgeManagementStore.KnowledgeMergeResult merge(
             @PathVariable String id, @Valid @RequestBody MergeRequest body, Authentication authentication) {
-        return store.merge(id, body.targetId().trim(), body.expectedRevision(), body.reason(),
+        return service.merge(id, body.targetId().trim(), body.expectedRevision(), body.reason(),
                 store.userId(authentication.getName()));
     }
 
