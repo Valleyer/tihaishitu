@@ -36,7 +36,6 @@ public class GameFactory {
     }
 
     public ObjectNode create(NewGameRequest request) {
-        String now = Instant.now().toString();
         List<String> bankIds = request.bankIds().isEmpty()
                 ? catalog.findAll().stream().filter(bank -> bank.enabled() && bank.weight() > 0)
                         .map(bank -> bank.id()).toList()
@@ -51,13 +50,28 @@ public class GameFactory {
         config.put("pace", valid(request.pace(), List.of("slow", "normal"), "normal"));
         config.put("difficulty", valid(request.difficulty(), List.of("gentle", "standard"), "gentle"));
 
+        ObjectNode game = createState(request.name().trim(), config.path("gender").asText(), config.path("origin").asText());
+        game.set("config", config);
+        return game;
+    }
+
+    public ObjectNode createAncientOfficialState(String name, String gender, String origin) {
+        String normalizedName = name.trim();
+        String normalizedGender = defaultText(gender, "不设定");
+        String normalizedOrigin = defaultText(origin, "寒门读书人");
+        return createState(normalizedName, normalizedGender, normalizedOrigin);
+    }
+
+    private ObjectNode createState(String name, String gender, String origin) {
+        String now = Instant.now().toString();
+
         ObjectNode player = objectMapper.createObjectNode();
-        player.put("name", request.name().trim());
-        player.put("gender", config.path("gender").asText());
-        player.put("origin", config.path("origin").asText());
+        player.put("name", name);
+        player.put("gender", gender);
+        player.put("origin", origin);
         player.put("knowledge", 0);
         player.put("reputation", 0);
-        player.put("coins", originCoins(config.path("origin").asText()));
+        player.put("coins", originCoins(origin));
         player.put("title", chapters.path(0).path("playerTitle").asText("寒门书生"));
 
         ObjectNode game = objectMapper.createObjectNode();
@@ -65,7 +79,6 @@ public class GameFactory {
         game.put("version", 2);
         game.put("createdAt", now);
         game.put("updatedAt", now);
-        game.set("config", config);
         game.set("player", player);
         game.set("npcs", characters.deepCopy());
         game.set("records", objectMapper.createArrayNode());

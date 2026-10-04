@@ -42,7 +42,8 @@ public class LearnerSessionFilter extends OncePerRequestFilter {
 
     private static boolean requiresLearner(String uri, String method) {
         if (!uri.startsWith("/api/v1/")) return false;
-        if (uri.equals("/api/v1/learner/auth/register") || uri.equals("/api/v1/learner/auth/login")) return false;
+        if (uri.equals("/api/v1/learner/auth/register") || uri.equals("/api/v1/learner/auth/login")
+                || uri.equals("/api/v1/learner/auth/csrf")) return false;
         return uri.equals("/api/v1/bootstrap") || uri.startsWith("/api/v1/learner/")
                 || uri.startsWith("/api/v1/learning/") || uri.startsWith("/api/v1/worlds/");
     }

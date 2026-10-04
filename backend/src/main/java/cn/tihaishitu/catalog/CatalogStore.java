@@ -51,10 +51,12 @@ public class CatalogStore {
         return jdbc.query(
                 """
                 SELECT b.id, b.name, b.description, b.enabled, b.weight_value, b.revision,
-                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
-                            THEN (SELECT COUNT(*) FROM question_bank_item bi
-                                   JOIN question_resource qr ON qr.id = bi.question_id
-                                  WHERE bi.bank_id = b.id AND qr.status = 'published')
+                       CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
+                            THEN (SELECT COUNT(DISTINCT qr.id)
+                                    FROM question_bank_knowledge bk
+                                    JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
+                                    JOIN question_resource qr ON qr.id = qk.question_id
+                                   WHERE bk.bank_id = b.id AND qr.status = 'published')
                             ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) END question_count,
                        CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
                             THEN (SELECT COUNT(*) FROM question_bank_knowledge bk

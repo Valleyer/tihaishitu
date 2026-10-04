@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,7 +31,7 @@ class WorldStateIntegrationTest {
     @Test void oneWorldStatePerLearnerAndInitializationIsIdempotencyProtected() throws Exception {
         Cookie first = register("world_a"), second = register("world_b");
         initialize(first, "甲生"); initialize(second, "乙生");
-        mvc.perform(post("/api/v1/worlds/ancient-official/initialize").cookie(first).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/worlds/ancient-official/initialize").with(csrf()).cookie(first).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"characterName\":\"重来\",\"gender\":\"男\",\"origin\":\"寒门读书人\"}"))
                 .andExpect(status().isConflict());
         mvc.perform(get("/api/v1/worlds/ancient-official").cookie(first)).andExpect(status().isOk())
@@ -55,10 +56,10 @@ class WorldStateIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT world_id FROM answer_record WHERE attempt_id = ?", String.class, attemptId))
                 .isEqualTo(WorldRegistry.ANCIENT_OFFICIAL);
     }
-    private void initialize(Cookie cookie,String name) throws Exception { mvc.perform(post("/api/v1/worlds/ancient-official/initialize").cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+    private void initialize(Cookie cookie,String name) throws Exception { mvc.perform(post("/api/v1/worlds/ancient-official/initialize").with(csrf()).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
             .content("{\"characterName\":\"%s\",\"gender\":\"男\",\"origin\":\"寒门读书人\"}".formatted(name)))
             .andExpect(status().isCreated()); }
-    private Cookie register(String username) throws Exception { return mvc.perform(post("/api/v1/learner/auth/register").contentType(MediaType.APPLICATION_JSON)
+    private Cookie register(String username) throws Exception { return mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content("{\"username\":\"%s\",\"displayName\":\"%s\",\"password\":\"password-123\"}".formatted(username,username)))
             .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE); }
 }

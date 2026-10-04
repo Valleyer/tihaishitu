@@ -11,44 +11,32 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import cn.tihaishitu.learner.LearnerContext;
-import cn.tihaishitu.world.WorldRegistry;
-import cn.tihaishitu.world.WorldStateStore;
 
 @Service
 public class HistoryQuestionService {
     private final GameStore games;
     private final QuestionAttemptStore attempts;
     private final ObjectMapper mapper;
-    private final WorldStateStore worldStates;
 
-    public HistoryQuestionService(GameStore games, QuestionAttemptStore attempts, ObjectMapper mapper,
-                                  WorldStateStore worldStates) {
+    public HistoryQuestionService(GameStore games, QuestionAttemptStore attempts, ObjectMapper mapper) {
         this.games = games;
         this.attempts = attempts;
         this.mapper = mapper;
-        this.worldStates = worldStates;
     }
 
     @Transactional(readOnly = true)
     public ObjectNode recoverForLearner(HistoryQuestionsRequest request) {
         String learnerId = LearnerContext.learnerId();
-        ObjectNode world = worldStates.find(learnerId, WorldRegistry.ANCIENT_OFFICIAL);
-        Map<String, String> recordedQuestions = recordedQuestions(world);
-        var requested = new LinkedHashSet<String>();
-        request.attemptIds().forEach(attemptId -> {
-            if (recordedQuestions.containsKey(attemptId)) requested.add(attemptId);
-        });
+        var requested = new LinkedHashSet<>(request.attemptIds());
         Map<String, QuestionAttemptStore.HistorySnapshot> snapshots =
                 attempts.findForLearnerHistory(learnerId, requested);
         ArrayNode recovered = mapper.createArrayNode();
         for (String attemptId : requested) {
-            String questionId = recordedQuestions.get(attemptId);
             QuestionAttemptStore.HistorySnapshot snapshot = snapshots.get(attemptId);
-            if (snapshot == null || !"graded".equals(snapshot.status())
-                    || !questionId.equals(snapshot.questionId()) || snapshot.question() == null) continue;
+            if (snapshot == null || snapshot.question() == null) continue;
             ObjectNode item = recovered.addObject();
             item.put("attemptId", attemptId);
-            item.put("questionId", questionId);
+            item.put("questionId", snapshot.questionId());
             item.set("question", snapshot.question());
         }
         ObjectNode response = mapper.createObjectNode();

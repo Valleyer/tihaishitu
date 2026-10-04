@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,10 +36,10 @@ class StudyFocusIntegrationTest {
         String learnerId = jdbc.queryForObject("SELECT id FROM learner_account WHERE username = 'focus_user'", String.class);
         jdbc.update("DELETE FROM learner_selected_book WHERE learner_id = ?", learnerId);
 
-        mvc.perform(put("/api/v1/learner/study-profile").cookie(learner).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(put("/api/v1/learner/study-profile").with(csrf()).cookie(learner).contentType(MediaType.APPLICATION_JSON)
                 .content(profile(1, List.of(firstBook, secondBook), List.of(secondPoint))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.focusedKnowledgePoints[0].id").value(secondPoint));
-        mvc.perform(put("/api/v1/learner/study-profile").cookie(learner).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(put("/api/v1/learner/study-profile").with(csrf()).cookie(learner).contentType(MediaType.APPLICATION_JSON)
                 .content(profile(2, List.of(firstBook), List.of(secondPoint))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.focusedKnowledgePoints").isEmpty());
 
@@ -52,7 +53,7 @@ class StudyFocusIntegrationTest {
                 "pace", "normal", "difficulty", "standard", "focusMode", "manual", "expectedRevision", revision,
                 "selectedBookIds", books, "focusedKnowledgePointIds", focus));
     }
-    private Cookie register() throws Exception { return mvc.perform(post("/api/v1/learner/auth/register").contentType(MediaType.APPLICATION_JSON)
+    private Cookie register() throws Exception { return mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content("{\"username\":\"focus_user\",\"displayName\":\"专注者\",\"password\":\"password-123\"}"))
             .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE); }
     private String knowledge(String name) { String id=UUID.randomUUID().toString(); jdbc.update("""

@@ -2,15 +2,12 @@ package cn.tihaishitu.world;
 
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.game.GameFactory;
-import cn.tihaishitu.game.NewGameRequest;
 import cn.tihaishitu.learner.LearnerContext;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
 
 @Service
 public class AncientOfficialWorldService {
@@ -27,9 +24,8 @@ public class AncientOfficialWorldService {
             throw new ApiException(HttpStatus.CONFLICT, "这个世界已经初始化，不能重复创建。");
         if (request.characterName() == null || request.characterName().isBlank() || request.characterName().trim().length() > 12)
             throw new ApiException(HttpStatus.BAD_REQUEST, "角色姓名须为 1–12 个字。");
-        ObjectNode state = factory.create(new NewGameRequest(request.characterName().trim(), request.gender(), request.origin(),
-                List.of(), Map.of(), "normal", "standard"));
-        state.remove("config");
+        ObjectNode state = factory.createAncientOfficialState(
+                request.characterName().trim(), request.gender(), request.origin());
         state.put("id", WorldRegistry.ANCIENT_OFFICIAL);
         state.put("worldId", WorldRegistry.ANCIENT_OFFICIAL);
         state.put("revision", 0);

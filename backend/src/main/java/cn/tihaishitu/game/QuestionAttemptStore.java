@@ -93,7 +93,7 @@ public class QuestionAttemptStore {
         jdbc.query("""
                 SELECT id, question_id, status, question_snapshot_json
                   FROM study_attempt
-                 WHERE learner_id = ? AND id IN (%s)
+                 WHERE learner_id = ? AND status = 'graded' AND id IN (%s)
                 """.formatted(placeholders(attemptIds.size())), result -> {
             String id = result.getString("id");
             values.put(id, new HistorySnapshot(id, result.getString("question_id"),

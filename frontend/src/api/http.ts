@@ -23,17 +23,48 @@ export class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
+const csrfCookieName = "XSRF-TOKEN";
+const csrfHeaderName = "X-XSRF-TOKEN";
+let csrfRequest: Promise<void> | null = null;
+function csrfToken(): string | null {
+  const prefix = csrfCookieName + "=";
+  const value = document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+}
+async function ensureCsrfToken(): Promise<string> {
+  const current = csrfToken();
+  if (current) return current;
+  csrfRequest ||= fetch(baseUrl + "/learner/auth/csrf", {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(15000),
+  }).then(async (response) => {
+    if (!response.ok) throw new HttpError(response.status, "无法取得安全令牌。");
+  }).finally(() => { csrfRequest = null; });
+  await csrfRequest;
+  const issued = csrfToken();
+  if (!issued) throw new HttpError(0, "浏览器未保存安全令牌。");
+  return issued;
+}
 export async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
+  const normalizedMethod = method.toUpperCase();
+  const csrf = ["POST", "PUT", "DELETE"].includes(normalizedMethod)
+    ? await ensureCsrfToken()
+    : null;
   const response = await fetch(baseUrl + path, {
-    method,
+    method: normalizedMethod,
     credentials: "include",
     headers: {
       Accept: "application/json",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(csrf ? { [csrfHeaderName]: csrf } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(15000),

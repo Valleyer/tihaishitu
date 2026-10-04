@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -66,7 +67,7 @@ class BackendApiIntegrationTest {
     }
 
     private Cookie register(String username) throws Exception {
-        return mvc.perform(post("/api/v1/learner/auth/register").contentType(MediaType.APPLICATION_JSON)
+        return mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"displayName\":\"测试\",\"password\":\"password-123\"}"))
                 .andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
     }
