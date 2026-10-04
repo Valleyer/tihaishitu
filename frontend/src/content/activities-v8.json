@@ -1,29 +1,29 @@
 [
   {
-    "id":"story-linchuan-arrival","kind":"story","quest":"main","name":"府城初夜","subtitle":"主线任务 · 客栈投宿","description":"初到临川，投宿名册上却没有你的名字。要在宵禁前查清驿递与客栈两边的凭据，才算真正落脚。","invitation":"“县试取中帖是真的，投宿回单也是真的。少掉的名字，究竟去了哪一页？”","npcId":"pei","locationId":"prefecture-inn","rounds":10,"passScore":100,"repeatable":false,"requirements":{"flags":["prefecture-road-opened"]},
+    "id":"story-linchuan-arrival","kind":"story","activityMode":"task","quest":"main","name":"府城初夜","subtitle":"主线任务 · 客栈投宿","description":"初到临川，投宿名册上却没有你的名字。要在宵禁前查清驿递与客栈两边的凭据，才算真正落脚。","invitation":"“县试取中帖是真的，投宿回单也是真的。少掉的名字，究竟去了哪一页？”","npcId":"pei","locationId":"prefecture-inn","rounds":10,"passScore":100,"repeatable":false,"requirements":{"flags":["prefecture-road-opened"]},
     "tiers":[
       {"minScore":0,"label":"暂候核验","rewards":{},"dialogue":"夜色已深，掌柜先留下一盏灯。错处都已记下，查明后可继续，不会失去任何东西。"},
-      {"minScore":100,"label":"府城落脚","rewards":{"coins":20,"reputation":2,"attributes":{"insight":1,"eloquence":1},"affinity":{"pei":2},"flags":["linchuan-arrived"]},"firstRewards":{"items":{"linchuan-guide":1}},"dialogue":"缺页从驿递夹袋中找回。裴照替你补录名册：‘进了府城，先别急着证明自己，先把每张凭据看清。’"}
+      {"minScore":100,"label":"府城落脚","rewards":{"coins":20,"reputation":2,"attributes":{"insight":1,"eloquence":1},"favorability":{"pei":2},"flags":["linchuan-arrived"]},"firstRewards":{"items":{"linchuan-guide":1}},"dialogue":"缺页从驿递夹袋中找回。裴照替你补录名册：‘进了府城，先别急着证明自己，先把每张凭据看清。’"}
     ]
   },
   {
-    "id":"trial-inn-rumors","kind":"dungeon","name":"一炉杂谈","subtitle":"南门客栈副本 · 传言辨真","description":"各县举子把考题传得有鼻有眼。你要从来路、时间和彼此矛盾处辨明哪些值得记下。","invitation":"“消息可以听，不能照单全收。把每句话的来处先写在旁边。”","npcId":"pei","locationId":"prefecture-inn","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"trial-inn-rumors","kind":"dungeon","activityMode":"task","name":"一炉杂谈","subtitle":"南门客栈副本 · 传言辨真","description":"各县举子把考题传得有鼻有眼。你要从来路、时间和彼此矛盾处辨明哪些值得记下。","invitation":"“消息可以听，不能照单全收。把每句话的来处先写在旁边。”","npcId":"pei","locationId":"prefecture-inn","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"传言未明","rewards":{},"dialogue":"真假仍混在一起。众人继续烤火，你可以逐条查过再来。"},
       {"minScore":60,"label":"去伪存真","rewards":{"coins":14,"knowledge":6,"attributes":{"insight":1}},"dialogue":"几条互相矛盾的传言被划去，余下的只作参考，不再扰乱温习。"},
-      {"minScore":100,"label":"来路皆明","rewards":{"coins":24,"knowledge":10,"attributes":{"insight":2},"affinity":{"pei":2}},"dialogue":"每条消息都找到了源头。裴照收起纸页：‘会判断信息，比早知道一道题更有用。’"}
+      {"minScore":100,"label":"来路皆明","rewards":{"coins":24,"knowledge":10,"attributes":{"insight":2},"favorability":{"pei":2}},"dialogue":"每条消息都找到了源头。裴照收起纸页：‘会判断信息，比早知道一道题更有用。’"}
     ]
   },
   {
-    "id":"read-pei","kind":"companion","name":"拆题共读","subtitle":"与裴照共读 · 错处追问","description":"不追求一次做完许多题，只选最含混的几个知识点，从简单同类题逐级核实。","invitation":"“你说不会还不够。我们要找出，究竟从哪一步开始不会。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"read-pei","kind":"companion","activityMode":"repeatable","name":"拆题共读","subtitle":"与裴照共读 · 错处追问","description":"不追求一次做完许多题，只选最含混的几个知识点，从简单同类题逐级核实。","invitation":"“你说不会还不够。我们要找出，究竟从哪一步开始不会。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"留下疑处","rewards":{},"dialogue":"裴照把错处另列成签：‘今日没弄懂也不罚，明日从这里继续。’"},
-      {"minScore":60,"label":"拆出关节","rewards":{"knowledge":7,"affinity":{"pei":2},"attributes":{"insight":1}},"dialogue":"几个含混概念被逐一分开，你终于能准确说出自己方才错在哪里。"},
-      {"minScore":100,"label":"举一反三","rewards":{"knowledge":12,"affinity":{"pei":4},"attributes":{"insight":2}},"dialogue":"换了题面与数字，你仍能认出同一知识点。裴照点头，把下一叠题签交给你。"}
+      {"minScore":60,"label":"拆出关节","rewards":{"knowledge":7,"favorability":{"pei":2},"attributes":{"insight":1}},"dialogue":"几个含混概念被逐一分开，你终于能准确说出自己方才错在哪里。"},
+      {"minScore":100,"label":"举一反三","rewards":{"knowledge":12,"favorability":{"pei":4},"attributes":{"insight":2}},"dialogue":"换了题面与数字，你仍能认出同一知识点。裴照点头，把下一叠题签交给你。"}
     ]
   },
   {
-    "id":"trial-open-debate","kind":"dungeon","name":"水榭论题","subtitle":"清晖书院副本 · 立论与诘问","description":"书院水榭公开论题。每一段论证都要经受追问，不能只报结论。","invitation":"“答案写在末尾，理由写在路上。今日只看你走的路。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"trial-open-debate","kind":"dungeon","activityMode":"task","name":"水榭论题","subtitle":"清晖书院副本 · 立论与诘问","description":"书院水榭公开论题。每一段论证都要经受追问，不能只报结论。","invitation":"“答案写在末尾，理由写在路上。今日只看你走的路。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"论题未决","rewards":{},"dialogue":"有几处论证仍跳了步骤，听者把疑问留在案上，等你补完。"},
       {"minScore":60,"label":"立论有据","rewards":{"coins":16,"reputation":2,"attributes":{"eloquence":2}},"dialogue":"你的论证经住了第一轮追问，水榭中有人开始认真记下你的名字。"},
@@ -31,31 +31,31 @@
     ]
   },
   {
-    "id":"read-su","kind":"companion","name":"书价与河程","subtitle":"与苏明绮共读 · 纸上民生","description":"从一批书的纸价、运费与损耗里，读出抽象算理怎样落到真实生活。","invitation":"“同一道算题，写在卷上是分数，写在货单上便是许多人一月的饭钱。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"read-su","kind":"companion","activityMode":"repeatable","name":"书价与河程","subtitle":"与苏明绮共读 · 纸上民生","description":"从一批书的纸价、运费与损耗里，读出抽象算理怎样落到真实生活。","invitation":"“同一道算题，写在卷上是分数，写在货单上便是许多人一月的饭钱。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"账页留白","rewards":{},"dialogue":"苏明绮收起账页：‘算不清就先别签字。纸留着，明日还在。’"},
-      {"minScore":60,"label":"账目相合","rewards":{"coins":18,"affinity":{"su":2},"attributes":{"craft":1}},"dialogue":"纸价、河程与损耗终于相合，你第一次看懂一册书如何从作坊走到读者手里。"},
-      {"minScore":100,"label":"纸墨皆有来处","rewards":{"coins":30,"affinity":{"su":4},"attributes":{"craft":3}},"dialogue":"你连被忽略的雨损也算了进去。苏明绮笑道：‘现在这册账，敢给船家和读书人一起看。’"}
+      {"minScore":60,"label":"账目相合","rewards":{"coins":18,"favorability":{"su":2},"attributes":{"craft":1}},"dialogue":"纸价、河程与损耗终于相合，你第一次看懂一册书如何从作坊走到读者手里。"},
+      {"minScore":100,"label":"纸墨皆有来处","rewards":{"coins":30,"favorability":{"su":4},"attributes":{"craft":3}},"dialogue":"你连被忽略的雨损也算了进去。苏明绮笑道：‘现在这册账，敢给船家和读书人一起看。’"}
     ]
   },
   {
-    "id":"story-wharf-ledger","kind":"story","name":"三船一印","subtitle":"漕运码头支线 · 粮册疑云","description":"三艘粮船用了同一枚封泥印，仓吏却说只是匆忙中拿错。苏明绮请你核对船期、载重与税册。","invitation":"“一枚印可以拿错，三条船的数却不会一起说谎。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"story-wharf-ledger","kind":"story","activityMode":"task","name":"三船一印","subtitle":"漕运码头支线 · 粮册疑云","description":"三艘粮船用了同一枚封泥印，仓吏却说只是匆忙中拿错。苏明绮请你核对船期、载重与税册。","invitation":"“一枚印可以拿错，三条船的数却不会一起说谎。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"暂封粮册","rewards":{},"dialogue":"凭据尚未闭合，粮船暂缓出仓。没人催你用猜测定案。"},
-      {"minScore":60,"label":"账船相验","rewards":{"coins":22,"reputation":2,"attributes":{"craft":2},"trust":{"su":2},"flags":["wharf-ledger-cleared"]},"dialogue":"船期与载重对上，错印背后的调包路线第一次显出轮廓。"},
-      {"minScore":100,"label":"三册同证","rewards":{"coins":36,"reputation":4,"attributes":{"craft":3,"insight":1},"trust":{"su":4},"flags":["wharf-ledger-cleared"]},"dialogue":"税册、船簿与仓单彼此印证。苏明绮把一张浸水旧图推来：‘这事的根，在府衙文库。’"}
+      {"minScore":60,"label":"账船相验","rewards":{"coins":22,"reputation":2,"attributes":{"craft":2},"favorability":{"su":2},"flags":["wharf-ledger-cleared"]},"dialogue":"船期与载重对上，错印背后的调包路线第一次显出轮廓。"},
+      {"minScore":100,"label":"三册同证","rewards":{"coins":36,"reputation":4,"attributes":{"craft":3,"insight":1},"favorability":{"su":4},"flags":["wharf-ledger-cleared"]},"dialogue":"税册、船簿与仓单彼此印证。苏明绮把一张浸水旧图推来：‘这事的根，在府衙文库。’"}
     ]
   },
   {
-    "id":"trial-cargo-seals","kind":"dungeon","name":"百箱验封","subtitle":"漕运码头副本 · 数目与封泥","description":"雨季将至，百只书箱与粮箱必须在开船前核清封泥、数目与去处。","invitation":"“快不是少看几眼，是知道哪几眼不能省。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["wharf-ledger-cleared"]},
+    "id":"trial-cargo-seals","kind":"dungeon","activityMode":"task","name":"百箱验封","subtitle":"漕运码头副本 · 数目与封泥","description":"雨季将至，百只书箱与粮箱必须在开船前核清封泥、数目与去处。","invitation":"“快不是少看几眼，是知道哪几眼不能省。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["wharf-ledger-cleared"]},
     "tiers":[
       {"minScore":0,"label":"暂缓开船","rewards":{},"dialogue":"疑箱被留在岸上，错处记入清单，不让一只含混的箱子上船。"},
-      {"minScore":60,"label":"箱册相符","rewards":{"coins":20,"attributes":{"craft":2},"affinity":{"su":1}},"dialogue":"大部分箱册已经对应，船工按新次序重新装舱。"},
-      {"minScore":100,"label":"百箱无误","rewards":{"coins":34,"reputation":2,"attributes":{"craft":3},"affinity":{"su":2}},"dialogue":"最后一枚封泥也找到来处。开船鼓响时，整张清单没有一处待核。"}
+      {"minScore":60,"label":"箱册相符","rewards":{"coins":20,"attributes":{"craft":2},"favorability":{"su":1}},"dialogue":"大部分箱册已经对应，船工按新次序重新装舱。"},
+      {"minScore":100,"label":"百箱无误","rewards":{"coins":34,"reputation":2,"attributes":{"craft":3},"favorability":{"su":2}},"dialogue":"最后一枚封泥也找到来处。开船鼓响时，整张清单没有一处待核。"}
     ]
   },
   {
-    "id":"story-river-map","kind":"story","name":"纸上的旧河","subtitle":"府衙文库支线 · 河工旧案","description":"文库旧图年年标着已疏浚，船家却年年在同一处搁浅。被浸湿的残页可能藏着被改写的河道。","invitation":"“图上没有这一道弯，可河就在城外。究竟是谁要人只信纸，不信脚下？”","npcId":"su","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["wharf-ledger-cleared"]},
+    "id":"story-river-map","kind":"story","activityMode":"task","name":"纸上的旧河","subtitle":"府衙文库支线 · 河工旧案","description":"文库旧图年年标着已疏浚，船家却年年在同一处搁浅。被浸湿的残页可能藏着被改写的河道。","invitation":"“图上没有这一道弯，可河就在城外。究竟是谁要人只信纸，不信脚下？”","npcId":"su","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["wharf-ledger-cleared"]},
     "tiers":[
       {"minScore":0,"label":"残图未合","rewards":{},"dialogue":"几张残页仍无法严丝合缝。文库准你封存原件，随时回来续查。"},
       {"minScore":60,"label":"旧河复位","rewards":{"knowledge":8,"reputation":3,"attributes":{"insight":2},"flags":["river-map-restored"]},"firstRewards":{"items":{"river-map-fragment":1}},"dialogue":"纸纹、里程与旧碑记载对上，消失在图上的河弯重新出现。"},
@@ -63,7 +63,7 @@
     ]
   },
   {
-    "id":"trial-archive-night","kind":"dungeon","name":"文库夜校","subtitle":"府衙文库副本 · 旧案互证","description":"趁夜把河工旧案按年代、经手人与实地记录重新编次，找出互相矛盾的卷页。","invitation":"“卷宗不会自己说话。把相隔十年的两页放到一起，它们才会彼此作证。”","npcId":"pei","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["river-map-restored"]},
+    "id":"trial-archive-night","kind":"dungeon","activityMode":"task","name":"文库夜校","subtitle":"府衙文库副本 · 旧案互证","description":"趁夜把河工旧案按年代、经手人与实地记录重新编次，找出互相矛盾的卷页。","invitation":"“卷宗不会自己说话。把相隔十年的两页放到一起，它们才会彼此作证。”","npcId":"pei","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["river-map-restored"]},
     "tiers":[
       {"minScore":0,"label":"卷次未定","rewards":{},"dialogue":"天色将明，未核完的卷页原样封回，待下次继续。"},
       {"minScore":60,"label":"旧案成序","rewards":{"coins":18,"knowledge":8,"attributes":{"insight":1}},"dialogue":"散乱卷页按证据关系重新成序，几处多年未见的矛盾被标了出来。"},
@@ -71,7 +71,7 @@
     ]
   },
   {
-    "id":"prefecture-exam-review","kind":"study","name":"府试会读","subtitle":"府试备考 · 十个知识点","description":"裴照按十个细分知识点排卷。这里只诊断与训练，不设每日题量。","invitation":"“今日做一道也可，做百道也可。真正要记的是哪些知识点已经掌握，哪些还需再问。”","npcId":"pei","locationId":"prefecture-exam-street","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"prefecture-exam-review","kind":"study","activityMode":"repeatable","name":"府试会读","subtitle":"府试备考 · 十个知识点","description":"裴照按十个细分知识点排卷。这里只诊断与训练，不设每日题量。","invitation":"“今日做一道也可，做百道也可。真正要记的是哪些知识点已经掌握，哪些还需再问。”","npcId":"pei","locationId":"prefecture-exam-street","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"疑处已记","rewards":{},"dialogue":"未掌握的知识点已记入疑难卷宗，没有惩罚，随时可以继续。"},
       {"minScore":60,"label":"温习有得","rewards":{"knowledge":8,"attributes":{"insight":1}},"dialogue":"五个知识点逐一核过，含混处也找到对应的基础训练题。"},
@@ -79,10 +79,10 @@
     ]
   },
   {
-    "id":"prefecture-exam-paper","kind":"exam","quest":"main","name":"临川府试","subtitle":"童试第二关 · 十个知识点全对","description":"府城贡院开卷。十个知识点各占十分，首题全部答对方可取中；未全对只记错题，可无限次再试。","invitation":"“点名，验帖，入号。此卷十问，全对取中。”","npcId":"pei","locationId":"prefecture-exam-street","rounds":10,"passScore":100,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"prefecture-exam-paper","kind":"exam","activityMode":"task","quest":"main","name":"临川府试","subtitle":"童试第二关 · 十个知识点全对","description":"府城贡院开卷。十个知识点各占十分，首题全部答对方可取中；未全对只记错题，可无限次再试。","invitation":"“点名，验帖，入号。此卷十问，全对取中。”","npcId":"pei","locationId":"prefecture-exam-street","rounds":10,"passScore":100,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"暂未取中","rewards":{},"dialogue":"本次未能十问全对。榜房只记下需要继续训练的知识点，不扣任何数值，也不限制再次挑战。"},
-      {"minScore":100,"label":"府试取中","rewards":{"coins":50,"reputation":8,"attributes":{"insight":3,"eloquence":3,"craft":3},"affinity":{"pei":3,"su":2},"flags":["prefecture-exam-passed"]},"firstRewards":{"items":{"prefecture-pass-note":1},"title":"府试取中"},"dialogue":"十问皆明，红印落在名帖右下。府试取中，你已取得继续参加院试的资格。"}
+      {"minScore":100,"label":"府试取中","rewards":{"coins":50,"reputation":8,"attributes":{"insight":3,"eloquence":3,"craft":3},"favorability":{"pei":3,"su":2},"flags":["prefecture-exam-passed"]},"firstRewards":{"items":{"prefecture-pass-note":1},"title":"府试取中"},"dialogue":"十问皆明，红印落在名帖右下。府试取中，你已取得继续参加院试的资格。"}
     ]
   }
 ]

@@ -8,6 +8,7 @@ import {
   purchase,
   claimRelationship,
   registerExam as registerForExam,
+  refundRunCost,
 } from "../../engine/AdventureEngine";
 /**
  * 本地版 GameApi：浏览器 localStorage 是唯一持久化来源。
@@ -313,6 +314,7 @@ export function createLocalApi(
       if (!run) return structuredClone(game);
       if (run.id !== runId) throw new Error("行程已变化。");
       // 中途退出保留已答题目的学识与错题记录，但不发整轮奖励。
+      refundRunCost(game, run);
       game.adventure!.run = null;
       game.attempt = null;
       delete db.snapshots[id];
@@ -490,7 +492,7 @@ export function createLocalApi(
       attempt.result.story = correct
         ? attempt.scene.success
         : attempt.scene.failure;
-      // 好感与信任只在整轮共读达标后发放，单题不再增减人物关系。
+      // 好感度只在整轮共读达标后发放，单题不再增减人物关系。
       settleRunAnswer(game, correct, full.id);
       game.journal.push({
         id: crypto.randomUUID(),

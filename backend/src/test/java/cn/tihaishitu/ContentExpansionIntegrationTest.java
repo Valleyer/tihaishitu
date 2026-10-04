@@ -32,7 +32,20 @@ class ContentExpansionIntegrationTest {
         ObjectNode ordinary = content.activity("story-wharf-ledger").orElseThrow();
         assertThat(ordinary.path("rounds").asInt()).isEqualTo(5);
         assertThat(ordinary.path("passScore").asInt()).isEqualTo(60);
-        assertThat(ordinary.path("tiers").size()).isEqualTo(3);
+        assertThat(ordinary.path("activityMode").asText()).isEqualTo("task");
+        assertThat(ordinary.path("tiers").size()).isEqualTo(2);
+
+        ObjectNode dungeon = content.activity("trial-archive-night").orElseThrow();
+        assertThat(dungeon.path("activityMode").asText()).isEqualTo("task");
+        assertThat(dungeon.path("repeatable").asBoolean()).isFalse();
+        assertThat(dungeon.path("rounds").asInt()).isEqualTo(5);
+        assertThat(dungeon.path("passScore").asInt()).isEqualTo(60);
+        assertThat(dungeon.path("tiers").size()).isEqualTo(2);
+
+        assertThat(content.activity("read").orElseThrow().path("activityMode").asText())
+                .isEqualTo("repeatable");
+        assertThat(content.activity("read-lu").orElseThrow().path("activityMode").asText())
+                .isEqualTo("repeatable");
 
         ObjectNode main = content.activity("prefecture-exam-paper").orElseThrow();
         assertThat(main.path("rounds").asInt()).isEqualTo(10);

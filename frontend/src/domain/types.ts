@@ -93,8 +93,7 @@ export interface Npc {
   name: string;
   role: string;
   description: string;
-  affinity: number;
-  trust: number;
+  favorability: number;
   met: boolean;
 }
 export interface Player {
@@ -144,6 +143,7 @@ export interface Attempt {
   id: string;
   targetKnowledgePointId?: string;
   targetKnowledgePointName?: string;
+  learningPurpose?: "查根问底" | "补基础" | "回卷再试" | "温故补缺" | null;
   question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
   scene: Scene;
   result: Result | null;

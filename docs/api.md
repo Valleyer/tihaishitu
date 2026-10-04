@@ -103,7 +103,7 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 
 ## Learner Knowledge State V1
 
-正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（normal/training）与 1–5 级题目难度。自动判题或 self-assess 最终进入 graded 后，只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态。
+正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（normal/training）与 1–5 级题目难度。清晰可归因的 graded attempt 只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。normal composite wrong/partial 是明确例外：raw `study_attempt` 与 `answer_record` 立即保存，根 target evidence 延迟到诊断确认。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态或诊断会话。
 
 `masteryScore` 是 `lastEvidenceAt` 时刻的基础掌握值。读取时的有效掌握度为：
 
@@ -124,6 +124,16 @@ Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用
 每次正式 draw 都在当前 run 冻结的 allowed scope 内重新计算 ready，并读取当前目标 state。难度上限为：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–85 为 4，85 以上为 5；`standard` 使用 `min(targetDifficulty, masteryCap)`，`gentle` 再下调一级但不低于 1。NORMAL 优先精确难度，否则选择距离最近的难度，距离相同取较低值；TRAINING 使用 `min(2, normalPreferred)`，优先不高于 2 的最近难度，没有低难题时使用全部合法候选中的最低难度。seen Question 永不因难度匹配而复用。
 
 Legacy `/games/**` 保持 Phase C 的 scope-only dependency 与原有随机/低难训练选择，不读取 Learner mastery。
+
+## Diagnostic State Machine V1
+
+normal composite Question 的 wrong/partial 会从 root `question_snapshot_json.knowledgePointIds` 取得发题当时的依赖关系，而不查询当前 Question relation。依赖在创建会话前沿 KnowledgePoint merge chain 解析到 active canonical id、去重并排除 canonical target；按有效掌握度更低、最后证据更早、快照稳定顺序排列。`learner_diagnosis_session` 保存根 attempt、原目标、状态、resolution 与 revision，`learner_diagnosis_dependency` 保存有序 dependency 状态；WorldState 只保留 `diagnosisSessionId` 指针和题数，不复制诊断事实。
+
+状态机使用 `diagnosing_dependencies → remediating_dependency → rechecking_target → remediating_target → resolved`，并支持 `abandoned`。dependency probe 使用 normal evidence、目标例外与 Phase F 实时 readiness，难度先按当前 Profile/状态计算再 cap 到 3；wrong/partial 立即成为该 dependency 的正常证据并停止探查其他依赖，training remediation 答对后回到原 target。所有 dependency 均通过时，才用 root 原始 assessment、grading source 与 answeredAt 延迟写入 target negative evidence；存在 unavailable dependency 时改走 target recheck，根错误永远不强行归因。用户 abandon 同样保留 raw answer 而不补根 evidence。
+
+`study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据强度仍只使用既有 normal/training；Mastery V1 和 Adaptive Scheduling V1 参数未改变。所有诊断题继续受冻结 Selected Book scope、published、实时 readiness 和 run seen 约束。Probe 无合法 unseen 候选时标为 unavailable；不会回退已见题、未发布题或未 ready 的依赖题。
+
+根正式题一旦答错，本轮对应知识点的游戏分已经失去。后续 probe、remediation 和 recheck 不增加 `run.correct`；`diagnosticAnswered` 统计 probe/recheck，`trainingAnswered` 统计补强。新 run 会重置 answered、correct 与 seen，可重新取得满分。正式 World 的长期考试/任务状态不累计失败或应试次数，只让 bestScore 上升；passed/cleared 与一次性奖励保持永久、单次和单调。未完成任务可以重新开始，完成后永久关闭且不能重进。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。
@@ -174,7 +184,7 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 每次发卷生成新 attemptId，保存题目与答案快照；重新读取同一课卷不再洗牌。
 - 普通活动开始时冻结 5 个互不相同的知识点，主线活动冻结 10 个；一轮内不能用同一知识点重复占分。
 - 每个知识点首题决定该点得分。首题答错后继续返回该知识点的低难度题，答对后才推进；训练题不补回首题失分。
-- ActivityRun 返回 knowledgePointIds、knowledgePointIndex、training、trainingAnswered 与 seenQuestionIds，客户端只负责展示，不自行推断进度。
+- ActivityRun 返回 knowledgePointIds、knowledgePointIndex、training、trainingAnswered、diagnosticAnswered、diagnosisSessionId 与 seenQuestionIds，客户端只负责展示，不自行推断诊断事实或进度。
 - 同一 attemptId 重复提交不重复奖励。已换题时旧答题请求返回明确错误。
 - next 的旧 attemptId 重试返回当前进度，不连续跳题。
 - 未判完题、未处理际遇时不允许跳过。
@@ -217,8 +227,8 @@ travel 校验地点属性条件，遇到满足前置的新故事时填写 advent
 
 ## V6 县试事务
 
-报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程、报名资格和银两充足。只允许从 `unregistered` 进入 `registered`，扣费、状态与札记必须一次保存。
+报名接口校验考试存在、玩家位于报名地点、当前没有未结束行程与报名资格。只允许从 `unregistered` 进入 `registered`；报名只确认资格，不扣费。
 
-开始 `kind=exam` 的活动前校验对应考试为 `registered`。最后一题判卷时，在同一事务内更新 attempts、lastScore、best 与状态；100 分进入 `passed`，未满分仍保持 `registered`，不扣数值、不取消资格、不再次收费，可直接无限次重试。活动中途放下不改变考试状态。
+正式 World 开始 `kind=exam` 的任务前要求对应考试为 `registered`，且 `clears[activityId]` 尚未完成。每个新 run 独立重置答题数、得分与 seen；开考时把 fee 扣入本轮 escrow。未满分或放下活动时原数退款，状态仍为 `registered`，可无限次重新开始；全对时费用提交，完整 `completionReward` 发放一次，`clears` 写为 1，考试状态推进到 `passed`。完成后后端拒绝再次 begin。`best` 只升不降；兼容字段 `attempts`、`lastScore` 不再记录正式任务失败履历。
 
 HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。`Game.adventure.exams` 与活动首次奖励记账一并返回，重复提交同一答题请求不得重复发取中帖或身份奖励。

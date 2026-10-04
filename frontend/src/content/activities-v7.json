@@ -2,7 +2,7 @@
   {
     "id": "trial-bamboo-game",
     "kind": "dungeon",
-    "name": "竹窗残局",
+    "activityMode": "task",    "name": "竹窗残局",
     "subtitle": "东斋副本 · 棋局问心",
     "description": "顾怀安留下半盘残局。棋子每走一步，都要答清一段经义与算理。",
     "invitation": "“输赢不急。先让我看看，你遇到死局时会怎么想。”",
@@ -10,18 +10,18 @@
     "locationId": "east-hall",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {},
     "tiers": [
       {"minScore": 0, "label": "暂收棋子", "rewards": {}, "dialogue": "“局还在，想明白再来。”"},
-      {"minScore": 60, "label": "看破一隅", "rewards": {"coins": 10, "affinity": {"gu": 2}, "attributes": {"craft": 1}}, "dialogue": "“能看见三步以后，已经不易。”"},
-      {"minScore": 100, "label": "满盘皆明", "rewards": {"coins": 22, "affinity": {"gu": 4}, "attributes": {"craft": 2, "insight": 1}}, "firstRewards": {"items": {"bamboo-token": 1}}, "dialogue": "“这枚竹棋子归你。下回换我先手。”"}
+      {"minScore": 60, "label": "看破一隅", "rewards": {"coins": 10, "favorability": {"gu": 2}, "attributes": {"craft": 1}}, "dialogue": "“能看见三步以后，已经不易。”"},
+      {"minScore": 100, "label": "满盘皆明", "rewards": {"coins": 22, "favorability": {"gu": 4}, "attributes": {"craft": 2, "insight": 1}}, "firstRewards": {"items": {"bamboo-token": 1}}, "dialogue": "“这枚竹棋子归你。下回换我先手。”"}
     ]
   },
   {
     "id": "story-missing-catalog",
     "kind": "story",
-    "name": "不在册中的书",
+    "activityMode": "task",    "name": "不在册中的书",
     "subtitle": "藏书楼支线 · 失落书目",
     "description": "藏书楼盘点时多出一卷无名旧书，书目却被人从总册中整页割走。",
     "invitation": "“书是真的，册子也是真的。奇怪的是，它们偏偏不肯彼此作证。”",
@@ -40,7 +40,7 @@
   {
     "id": "trial-hundred-scrolls",
     "kind": "dungeon",
-    "name": "百卷辨伪",
+    "activityMode": "task",    "name": "百卷辨伪",
     "subtitle": "藏书楼副本 · 真伪之间",
     "description": "十只书箱混入重抄本与伪卷。你要从纸墨、避讳和版式里辨出真本。",
     "invitation": "“看懂一句是学问，看出一句为何被改，才算本事。”",
@@ -48,7 +48,7 @@
     "locationId": "library",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["catalog-restored"]},
     "tiers": [
       {"minScore": 0, "label": "暂封书箱", "rewards": {}, "dialogue": "书箱重新封好，错处已经记下。"},
@@ -59,7 +59,7 @@
   {
     "id": "study-night-watch",
     "kind": "study",
-    "name": "子夜温书",
+    "activityMode": "repeatable",    "name": "子夜温书",
     "subtitle": "夜读斋修习 · 五题一卷",
     "description": "夜读斋无人催促。把白日没有读透的地方重新铺开，慢慢读到灯花结穗。",
     "invitation": "“今夜只与昨日的自己较量。”",
@@ -77,7 +77,7 @@
   {
     "id": "story-candle-letter",
     "kind": "story",
-    "name": "灯芯里的字",
+    "activityMode": "task",    "name": "灯芯里的字",
     "subtitle": "夜读斋支线 · 无名来信",
     "description": "换灯芯时，一张卷得极细的纸从铜盏底座滑出，上面只写了半首旧诗。",
     "invitation": "“写信的人不敢署名，却笃定读信的人认得这半首诗。”",
@@ -89,14 +89,14 @@
     "requirements": {"knowledge": 50},
     "tiers": [
       {"minScore": 0, "label": "诗意未解", "rewards": {}, "dialogue": "纸条收进书中，今夜不必强解。"},
-      {"minScore": 60, "label": "寻到旧韵", "rewards": {"coins": 12, "affinity": {"lin": 2}, "attributes": {"eloquence": 1}}, "firstRewards": {"flags": ["candle-letter-read"]}, "dialogue": "旧诗指向试院失物簿，一段被忘掉的姓名重新出现。"},
-      {"minScore": 100, "label": "续成全诗", "rewards": {"coins": 20, "affinity": {"lin": 4}, "attributes": {"eloquence": 3}}, "firstRewards": {"items": {"night-lamp": 1}}, "dialogue": "你补全最后两句，灯火忽然显得比往常更亮。"}
+      {"minScore": 60, "label": "寻到旧韵", "rewards": {"coins": 12, "favorability": {"lin": 2}, "attributes": {"eloquence": 1}}, "firstRewards": {"flags": ["candle-letter-read"]}, "dialogue": "旧诗指向试院失物簿，一段被忘掉的姓名重新出现。"},
+      {"minScore": 100, "label": "续成全诗", "rewards": {"coins": 20, "favorability": {"lin": 4}, "attributes": {"eloquence": 3}}, "firstRewards": {"items": {"night-lamp": 1}}, "dialogue": "你补全最后两句，灯火忽然显得比往常更亮。"}
     ]
   },
   {
     "id": "trial-old-exam",
     "kind": "dungeon",
-    "name": "旧卷五更",
+    "activityMode": "task",    "name": "旧卷五更",
     "subtitle": "夜读斋副本 · 限时重审",
     "description": "五更鼓响前重审一套旧卷，只看真实掌握，不看从前名次。",
     "invitation": "“错过的题不会追你，可你总要回头看它一眼。”",
@@ -104,7 +104,7 @@
     "locationId": "night-study",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["candle-letter-read"]},
     "tiers": [
       {"minScore": 0, "label": "五更未竟", "rewards": {}, "dialogue": "鼓声到了，旧卷仍替你保留。"},
@@ -115,7 +115,7 @@
   {
     "id": "story-post-horse",
     "kind": "story",
-    "name": "驿马不归",
+    "activityMode": "task",    "name": "驿马不归",
     "subtitle": "清溪驿路支线 · 山雨将至",
     "description": "一匹送公文的驿马迟迟未归，山道上只找到断裂的缰绳和半枚泥印。",
     "invitation": "“丢马是小，丢了马背上的文书，整条驿路都得停。”",
@@ -134,7 +134,7 @@
   {
     "id": "trial-rain-pass",
     "kind": "dungeon",
-    "name": "雨关递卷",
+    "activityMode": "task",    "name": "雨关递卷",
     "subtitle": "清溪驿路副本 · 风雨护牒",
     "description": "山雨封路，必须在驿亭闭门前把府试投牒送过三道关卡。",
     "invitation": "“路不好走，卷不能湿。你若要去府城，就从这一关开始。”",
@@ -142,7 +142,7 @@
     "locationId": "prefecture-road",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["post-horse-found"]},
     "tiers": [
       {"minScore": 0, "label": "暂避山雨", "rewards": {}, "dialogue": "投牒收回油纸包，等下一阵雨势转小。"},

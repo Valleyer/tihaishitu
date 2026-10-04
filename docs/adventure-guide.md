@@ -58,6 +58,7 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
   "locationId": "old-school",
   "rounds": 5,
   "passScore": 60,
+  "activityMode": "repeatable",
   "repeatable": true,
   "requirements": {"attributes": {"insight": 4}},
   "tiers": [
@@ -83,7 +84,8 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
 | locationId | 可选；有此字段就必须到达该地点才能开始 |
 | rounds | 一轮题数，配置检查允许 1–50 |
 | passScore | 通关分数，达到后 clears 次数增加 |
-| repeatable | false 时通关后不能重复；未达标可以再试 |
+| activityMode | `task` 为一次性任务，`repeatable` 为可重复活动；旧配置会按 kind/quest/repeatable 兼容归一 |
+| repeatable | 兼容字段；运行时以 activityMode 为准 |
 | requirements | 开始所需属性、道具或剧情前置，见下一节 |
 | tiers | 分数档与奖励，必须有 0 分兜底档 |
 | reviewOnly | true 只抽错题；没有错题时明确提示，不扣资源、不开始空活动 |
@@ -91,19 +93,20 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
 普通题目仍从玩家在藏书阁启用的题库抽取，科目权重、掌握题排除和复习逻辑继续生效。活动不自带一套偷偷替换的题库。
 同一轮开始时会保存活动定义快照；中途改配置不会改变已承诺的轮数和奖励，新一轮才使用新配置。
 
-全局规格写在 `adventure.json.answerRules`：普通读书、人物共读、副本和支线任务统一五题、60 分基础过关、100 分完美过关；`kind: "exam"` 或 `quest: "main"` 的科举与核心主线统一十题、100 分全对过关。代码会把旧活动配置自动归一成这套规则，因此以后调整统一题数时优先改全局规则。
+全局规格写在 `adventure.json.answerRules`：可重复读书、人物共读和副本仍按成绩档结算；一次性支线任务固定五题，答对至少三题完成；`kind: "exam"` 或 `quest: "main"` 的一次性主线固定十题且必须全对。旧配置会在加载时归一为明确的 `activityMode`。
 
 ### 计分与奖励
 
 分数 = 四舍五入（答对题数 / 总题数 × 100）。多选全部一致才算正确，不部分给分。
-普通五题可以得到 0/20/40/60/80/100，80 分按 60 分基础档结算；满分才发完美档。主线十题只有 100 分算作过关。
+普通五题可以得到 0/20/40/60/80/100。可重复活动仍按本轮最高成绩档结算。一次性支线在 60/80/100 时都发同一份完整奖励；主线十题只有 100 分完成。
 
-- rewards：只发本次达到的**最高一档**，不是把所有低档基础奖励累加。
+- repeatable 的 rewards：只发本次达到的**最高一档**，不是把所有低档基础奖励累加。
+- task 的 completionReward：把旧成功 tiers 的 rewards/firstRewards 折叠成一份；同 key 取最大值，不同 key 与 flags 合并，完成后只发一次。
 - firstRewards：首次达到对应档位时结算。当前普通活动只保留 60 分基础档与 100 分完美档；专属物品建议放在 100 分档。
 - 旧配置中曾放在 80 分档的专属首奖会自动合并到 100 分完美档，避免升级后丢失奖励。
 - 首次奖励以 活动id:分数门槛 记账。改活动 id 或门槛会被视为新奖励，请谨慎对待旧存档。
-- 一轮未达标只保留题目累计次数、错误次数、错误率、学识与错题记录，不扣任何属性或资源，也不自动加共读好感。
-- 中途放下不发整轮奖励。已经完成结算的奖励不会因放下而撤回。
+- Task 未完成只保留学习层答题/evidence/mastery/diagnosis，不发整轮奖励、不降低好感度，也不形成游戏失败履历；可无限次重新开始。
+- Task 的入场费用在 begin 时托管，未完成或中途放下原数退回，完成时提交。完成后 clears 固定为 1，入口关闭。
 
 ## 4. 解锁门槛 requirements
 
@@ -112,7 +115,7 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
   "knowledge": 50,
   "reputation": 3,
   "attributes": {"insight": 6, "craft": 4},
-  "affinity": {"shen": 12},
+  "favorability": {"shen": 12},
   "items": ["shen-pass"],
   "flags": ["debt-cleared"]
 }
@@ -122,7 +125,7 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
 
 - knowledge：学识；reputation：声望。
 - attributes：本领，当前内置 insight 悟性 / eloquence 辞采 / craft 筹算。
-- affinity：指定人物好感。
+- favorability：指定人物好感度。
 - items：背包必须拥有的道具，不要求装备，也不消耗。
 - flags：完成前置剧情后获得的标记。
 - 属性门槛取“基础本领 + 当前装备加成”。
@@ -140,8 +143,7 @@ V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本�
   "coins": 20,
   "reputation": 2,
   "attributes": {"craft": 3},
-  "affinity": {"gu": 4},
-  "trust": {"gu": 2},
+  "favorability": {"gu": 4},
   "items": {"gu-knot": 1},
   "flags": ["helped-gu"]
 }
@@ -159,7 +161,7 @@ coins 是游戏货币原有字段，现在显示为“银两”。旧存档保�
 - npcId：人物编号，关联 characters.json。
 - locationId：固定拜访地点，应与 maps 中 npcs 一致。
 - personality：性格描述。
-- greetings：按 minAffinity 分层的问候，按门槛从低到高排序。
+- greetings：按 minFavorability 分层的问候，按门槛从低到高排序。
 - topics：对话话题数组。
 - activities：共读活动 id 数组，活动中的 npcId 应与当前人物一致。
 - milestones：好感达到门槛后可领取的一次性礼物。
@@ -170,7 +172,7 @@ coins 是游戏货币原有字段，现在显示为“银两”。旧存档保�
 {
   "id": "old-days",
   "label": "说说你的旧事？",
-  "minAffinity": 10,
+  "minFavorability": 10,
   "lines": ["“那时，我也和你一样。”", "“可有些路，只能自己走一遍。”"]
 }
 ~~~
@@ -181,7 +183,7 @@ coins 是游戏货币原有字段，现在显示为“银两”。旧存档保�
 
 ~~~json
 {
-  "affinity": 12,
+  "favorability": 12,
   "title": "以身作保",
   "reward": {"items": {"shen-pass": 1}},
   "dialogue": "“拿着这帖去内库。出了岔子，来找我。”"
@@ -191,7 +193,8 @@ coins 是游戏货币原有字段，现在显示为“银两”。旧存档保�
 必须在人物所在地点当面领取；每档按 人物id:数组下标 记账。已发布的礼物数组尽量只在末尾追加，不要重排旧档。
 当前陆承明、顾怀安、沈砚、林知微各有分层问候、四个主题话题、一种共读与一份关系礼物。
 
-共读好感来自活动的整轮奖励。V1 每答对一题自动增加随机 NPC 信任的逻辑已经移除。
+共读好感度来自活动的整轮奖励。旧 `affinity`/`trust` 奖励在加载时按同一人物取最大值转成 `favorability`，不会相加膨胀。
+好感度固定为 0–100，等级统一从 `adventure.json.favorabilityLevels` 读取：0–9 初识、10–29 熟识、30–49 亲近、50–79 知己、80–100 莫逆。
 
 ## 7. 地图、被动剧情与连环委托
 

@@ -22,7 +22,8 @@ public class QuestionAttemptStore {
     public record Snapshot(String id, String gameId, String learnerId, String worldId,
                            String questionId, JsonNode question, JsonNode standard,
                            String status, String gradingMode, String gradingSource, String assessment,
-                           String targetKnowledgePointId, String evidenceMode, Integer questionDifficulty) {}
+                           String targetKnowledgePointId, String evidenceMode, Integer questionDifficulty,
+                           Instant answeredAt, String diagnosisSessionId, String diagnosisRole) {}
     public record HistorySnapshot(String id, String questionId, String status, JsonNode question) {}
 
     private final JdbcTemplate jdbc;
@@ -45,15 +46,23 @@ public class QuestionAttemptStore {
     public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
                        String gradingMode, String targetKnowledgePointId, String evidenceMode,
                        Integer questionDifficulty) {
+        create(id, gameId, questionId, question, standard, gradingMode, targetKnowledgePointId,
+                evidenceMode, questionDifficulty, null, null);
+    }
+
+    public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
+                       String gradingMode, String targetKnowledgePointId, String evidenceMode,
+                       Integer questionDifficulty, String diagnosisSessionId, String diagnosisRole) {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         jdbc.update("""
                 INSERT INTO study_attempt(id, game_id, learner_id, world_id, question_id,
                                           question_snapshot_json, standard_answer_json, status, grading_mode,
-                                          target_knowledge_point_id, evidence_mode, question_difficulty)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+                                          target_knowledge_point_id, evidence_mode, question_difficulty,
+                                          diagnosis_session_id, diagnosis_role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
                 """, id, world == null ? gameId : null, world == null ? null : world.learnerId(),
                 world == null ? null : world.worldId(), questionId, json(question), json(standard), gradingMode,
-                targetKnowledgePointId, evidenceMode, questionDifficulty);
+                targetKnowledgePointId, evidenceMode, questionDifficulty, diagnosisSessionId, diagnosisRole);
     }
 
     public Snapshot find(String id, String gameId) {
@@ -63,14 +72,17 @@ public class QuestionAttemptStore {
         List<Snapshot> values = jdbc.query("""
                 SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
-                       target_knowledge_point_id, evidence_mode, question_difficulty
+                       target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
+                       diagnosis_session_id, diagnosis_role
                   FROM study_attempt WHERE %s
                 """.formatted(predicate), (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
                 result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
                 read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
                 result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
                 result.getString("assessment"), result.getString("target_knowledge_point_id"),
-                result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class)), args);
+                result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class),
+                instant(result.getTimestamp("answered_at")), result.getString("diagnosis_session_id"),
+                result.getString("diagnosis_role")), args);
         if (values.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "这道题已经失效，请重新载入当前进度。");
         return values.get(0);
     }
@@ -195,6 +207,29 @@ public class QuestionAttemptStore {
         } catch (JsonProcessingException error) {
             return null;
         }
+    }
+
+    public Snapshot findForDiagnosis(String id, String learnerId, String worldId) {
+        List<Snapshot> values = jdbc.query("""
+                SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
+                       standard_answer_json, status, grading_mode, grading_source, assessment,
+                       target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
+                       diagnosis_session_id, diagnosis_role
+                  FROM study_attempt WHERE id=? AND learner_id=? AND world_id=?
+                """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
+                result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
+                read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
+                result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
+                result.getString("assessment"), result.getString("target_knowledge_point_id"),
+                result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class),
+                instant(result.getTimestamp("answered_at")), result.getString("diagnosis_session_id"),
+                result.getString("diagnosis_role")), id, learnerId, worldId);
+        if (values.isEmpty()) throw new IllegalStateException("诊断根答题记录不存在。 ");
+        return values.get(0);
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
     }
 
     private static String placeholders(int count) {

@@ -12,7 +12,7 @@
 | `frontend/src/content/items.json`、`items-v8.json` | 取中帖、府试投牒等功名物品 |
 | `frontend/src/content/maps.json` | 多张大地图、试院地点与取中后开放区域 |
 | `frontend/src/domain/adventure.ts` | 考试配置和存档字段类型 |
-| `frontend/src/engine/AdventureEngine.ts` | 报名扣费、应试资格、揭榜和重考状态机 |
+| `frontend/src/engine/AdventureEngine.ts` | 报名资格、开考费用托管、揭榜和重考状态机 |
 
 JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置引用错误会直接指出所属考试或活动。
 
@@ -35,7 +35,7 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
   "dialogues": {
     "unregistered": "报名之前的说明",
     "registered": "已经报名、等待应试",
-    "preparing": "落榜后需要温卷",
+    "preparing": "旧存档兼容状态，读取后转为 registered",
     "passed": "取中后的说明"
   }
 }
@@ -44,7 +44,7 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 - `id`：稳定编号，存档用它记录考试进度，发布后不要改旧 id。
 - `activityId`：必须指向 `kind: "exam"` 的正式考试活动。
 - `preparationActivityId`：旧存档兼容字段；当前规则下未全对可直接重试，不再强制进入备考活动。
-- `fee`：只在第一次报名时扣除，之后重试不再收费。
+- `fee`：报名时不扣；每个新 run 开始时暂收，未完成或放下时退款，完成时提交。
 - `requirements`：报名资格，支持学识、声望、属性、好感、物品与剧情标记。
 - `dialogues`：四种状态在县试面板和侧栏目标中显示。
 
@@ -65,7 +65,7 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 }
 ~~~
 
-`title` 会直接更新人物志中的身份称号。首次奖励有独立记账，不会因刷新、重复提交或以后重考而重复取得。题目从藏书阁当前启用的题库中抽取，并继续服从题库权重、掌握题排除和选项随机规则。
+`title` 会直接更新人物志中的身份称号。旧成绩档的 `rewards` 与 `firstRewards` 会折叠成一个 `completionReward`：同一数值键取最大值，不同键和 flags 合并，称号取最高档。完成奖励只发一次。题目从藏书阁当前启用的题库中抽取，并继续服从题库权重、掌握题排除和选项随机规则。
 
 ## 四、未全对与重考
 
@@ -74,10 +74,10 @@ JSON 中不能写注释。修改后先运行 `npm run validate:content`，配置
 1. 已答题目正常累计次数、错误次数与错误率。
 2. 错题会进入旧案，并参与藏书阁的掌握题过滤。
 3. 考试状态仍为 `registered`，正试入口立即可用。
-4. 不扣属性、银两、声望、道具或报名资格，报名费不重复扣除。
+4. 不扣属性、声望、道具或报名资格；本轮暂收的报名费原数退回。
 5. 重试次数不设上限。
 
-中途放下正试不会判定失败，也不会消耗资格；只有答完十题并结算才判断是否全对。旧存档若保存了 `preparing` 状态，读取时会自动迁移为 `registered`。
+中途放下正试不会判定失败，也不会消耗资格，暂收费用会原数退回。取中后任务永久结案，入口禁用且后端拒绝再次开始。旧存档若保存了 `preparing` 状态，读取时会自动迁移为 `registered`。
 
 ## 五、取中后开放新地图
 

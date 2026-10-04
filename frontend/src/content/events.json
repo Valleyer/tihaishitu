@@ -8,9 +8,9 @@
       {
         "id": "deliver",
         "text": "接过药包，当面盯着先生服下",
-        "hint": "陆承明信任 +2，开启送药支线",
+        "hint": "陆承明好感度 +2，开启送药支线",
         "effects": {
-          "trust": {
+          "favorability": {
             "lu": 2
           },
           "flags": [
@@ -50,9 +50,9 @@
       {
         "id": "sort",
         "text": "替先生整理课卷",
-        "hint": "陆承明信任 +2",
+        "hint": "陆承明好感度 +2",
         "effects": {
-          "trust": {
+          "favorability": {
             "lu": 2
           }
         }
@@ -70,9 +70,9 @@
       {
         "id": "wade",
         "text": "挽起衣摆下水，先把散开的书逐本捞回",
-        "hint": "顾怀安好感 +2，开启晒书支线",
+        "hint": "顾怀安好感度 +2，开启晒书支线",
         "effects": {
-          "affinity": {
+          "favorability": {
             "gu": 2
           },
           "flags": [
@@ -83,9 +83,9 @@
       {
         "id": "rope",
         "text": "借来船绳拦在下游，再按目录清点",
-        "hint": "顾怀安信任 +2，开启晒书支线",
+        "hint": "顾怀安好感度 +2，开启晒书支线",
         "effects": {
-          "trust": {
+          "favorability": {
             "gu": 2
           },
           "flags": [
@@ -106,9 +106,9 @@
       {
         "id": "help",
         "text": "接过卷子，约好回来时再谈",
-        "hint": "顾怀安好感 +3，留下共同经历",
+        "hint": "顾怀安好感度 +3，留下共同经历",
         "effects": {
-          "affinity": {
+          "favorability": {
             "gu": 3
           },
           "flags": [
@@ -119,9 +119,9 @@
       {
         "id": "stay",
         "text": "劝他先回信，课业各自慢慢补",
-        "hint": "顾怀安信任 +2",
+        "hint": "顾怀安好感度 +2",
         "effects": {
-          "trust": {
+          "favorability": {
             "gu": 2
           }
         }
@@ -168,9 +168,9 @@
       {
         "id": "accept",
         "text": "应下此事，约好散学后前往",
-        "hint": "沈砚信任 +3，留下经手记录",
+        "hint": "沈砚好感度 +3，留下经手记录",
         "effects": {
-          "trust": {
+          "favorability": {
             "shen": 3
           },
           "flags": [
@@ -181,10 +181,10 @@
       {
         "id": "defer",
         "text": "先顾课业，答应核对书院的副本",
-        "hint": "学识 +3，沈砚好感 +1",
+        "hint": "学识 +3，沈砚好感度 +1",
         "effects": {
           "knowledge": 3,
-          "affinity": {
+          "favorability": {
             "shen": 1
           }
         }
@@ -202,9 +202,9 @@
       {
         "id": "stay",
         "text": "留在侧房守到三更，把原册逐页封好",
-        "hint": "沈砚信任 +3，开启守夜支线",
+        "hint": "沈砚好感度 +3，开启守夜支线",
         "effects": {
-          "trust": {
+          "favorability": {
             "shen": 3
           },
           "flags": [
@@ -215,9 +215,9 @@
       {
         "id": "copy",
         "text": "先誊出关键页，分别交给书院与县仓留底",
-        "hint": "沈砚好感 +2，开启守夜支线",
+        "hint": "沈砚好感度 +2，开启守夜支线",
         "effects": {
-          "affinity": {
+          "favorability": {
             "shen": 2
           },
           "flags": [
@@ -246,10 +246,10 @@
       {
         "id": "share",
         "text": "买些纸，分给书院同窗",
-        "hint": "声望 +2，顾怀安好感 +2",
+        "hint": "声望 +2，顾怀安好感度 +2",
         "effects": {
           "reputation": 2,
-          "affinity": {
+          "favorability": {
             "gu": 2
           }
         }
@@ -267,9 +267,9 @@
       {
         "id": "compare",
         "text": "把两张字据按日期和印记逐项对照",
-        "hint": "林知微信任 +2，开启灯市支线",
+        "hint": "林知微好感度 +2，开启灯市支线",
         "effects": {
-          "trust": {
+          "favorability": {
             "lin": 2
           },
           "flags": [
@@ -280,9 +280,9 @@
       {
         "id": "listen",
         "text": "先让双方各自说完，再指出前后矛盾",
-        "hint": "林知微好感 +2，开启灯市支线",
+        "hint": "林知微好感度 +2，开启灯市支线",
         "effects": {
-          "affinity": {
+          "favorability": {
             "lin": 2
           },
           "flags": [
@@ -335,9 +335,9 @@
       {
         "id": "sign",
         "text": "落下姓名，与同窗共勉",
-        "hint": "顾怀安信任 +3，留下灯下之约",
+        "hint": "顾怀安好感度 +3，留下灯下之约",
         "effects": {
-          "trust": {
+          "favorability": {
             "gu": 3
           },
           "flags": [
@@ -360,8 +360,8 @@
   {
     "id":"linchuan-rain","at":260,"title":"府城第一场雨","text":"南门客栈的瓦沟忽然漫水。裴照抱着一摞题签进门，看见你仍在核对投宿名册：‘府城比青溪大，但错一行名字，还是会让一个人无处落脚。’",
     "options":[
-      {"id":"finish","text":"先把缺失的名字逐一补齐，再谈备考","hint":"裴照信任 +2，声望 +1","effects":{"trust":{"pei":2},"reputation":1}},
-      {"id":"share","text":"请同住举子一起核对，让每个人确认自己的记录","hint":"裴照好感 +2，学识 +3","effects":{"affinity":{"pei":2},"knowledge":3}}
+      {"id":"finish","text":"先把缺失的名字逐一补齐，再谈备考","hint":"裴照好感度 +2，声望 +1","effects":{"favorability":{"pei":2},"reputation":1}},
+      {"id":"share","text":"请同住举子一起核对，让每个人确认自己的记录","hint":"裴照好感度 +2，学识 +3","effects":{"favorability":{"pei":2},"knowledge":3}}
     ],
     "speaker":"裴照","npcId":"pei"
   },
@@ -369,7 +369,7 @@
     "id":"wharf-supper","at":320,"title":"码头收工饭","text":"苏明绮把核完的账尺搁到一旁，请船工、抄手和你围坐吃面。席上没人谈大道理，只把今日少损了多少粮、早开了多少时辰说得清清楚楚。",
     "options":[
       {"id":"listen","text":"听船工讲纸上看不见的水路规矩","hint":"筹算 +2","effects":{"flags":["heard-river-workers"]}},
-      {"id":"record","text":"把每条经验写在账页背面，留给下一班抄手","hint":"苏明绮信任 +2，声望 +2","effects":{"trust":{"su":2},"reputation":2}}
+      {"id":"record","text":"把每条经验写在账页背面，留给下一班抄手","hint":"苏明绮好感度 +2，声望 +2","effects":{"favorability":{"su":2},"reputation":2}}
     ],
     "speaker":"苏明绮","npcId":"su"
   },

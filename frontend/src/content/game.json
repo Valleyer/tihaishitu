@@ -71,8 +71,6 @@
     "maxGain": 8,
     "wrongGain": 1,
     "reputationEvery": 12,
-    "trustGain": 1,
-    "trustLossOnRepeatedWrong": 1,
     "relationshipMax": 100
   },
   "review": {

@@ -1,6 +1,6 @@
 /**
  * 每次正式判题只结算一次成长。答错仍可积累基础学识，不直接终止人生。
- * 晋章同时要求累计课业、学识、全体人物信任总和达标，不能仅靠题数跳级。
+ * 晋章同时要求累计课业、学识、全体人物好感度总和达标，不能仅靠题数跳级。
  * 此版止于县试备考；称号来自章节配置，尚未实现正式科举与升官。
  */
 import type { Change, Game } from "../domain/types";
@@ -38,12 +38,12 @@ export function settleProgress(
     increase("声望", before, game.player.reputation);
   }
   const next = chapters[game.chapter + 1];
-  const trust = game.npcs.reduce((sum, n) => sum + n.trust, 0);
+  const favorability = game.npcs.reduce((sum, n) => sum + n.favorability, 0);
   if (
     next &&
     total >= next.threshold &&
     game.player.knowledge >= next.knowledge &&
-    trust >= next.trust
+    favorability >= next.favorability
   ) {
     game.chapter++;
     game.player.title = next.playerTitle;

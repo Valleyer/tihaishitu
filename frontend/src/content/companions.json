@@ -5,15 +5,15 @@
     "personality": "惜才、严谨，不肯用一句好听话代替真本事。",
     "greetings": [
       {
-        "minAffinity": 0,
+        "minFavorability": 0,
         "text": "“门没有关。想问什么，进来坐。”"
       },
       {
-        "minAffinity": 10,
+        "minFavorability": 10,
         "text": "“这卷边的批注，我特意给你留了空白。”"
       },
       {
-        "minAffinity": 30,
+        "minFavorability": 30,
         "text": "“你如今所问的，已有自己的分量了。”"
       }
     ],
@@ -21,7 +21,7 @@
       {
         "id": "teacher",
         "label": "先生当年为何留在青溪？",
-        "minAffinity": 0,
+        "minFavorability": 0,
         "lines": [
           "“年轻时也想过做大事。后来发现，教会一个人辨明是非，也算一桩大事。”",
           "“不要急着让天下知道你。先让自己知道，手里这支笔该写什么。”"
@@ -30,7 +30,7 @@
       {
         "id": "regret",
         "label": "可曾后悔没有入仕？",
-        "minAffinity": 10,
+        "minFavorability": 10,
         "lines": [
           "“也有过。故人升迁时，夜里翻书的声音都显得轻了。”",
           "“可第二日，你们还是会来敲门。门里有人等着，总不是坏事。”"
@@ -39,7 +39,7 @@
       {
         "id": "rest",
         "label": "先生为何总不肯歇一歇？",
-        "minAffinity": 5,
+        "minFavorability": 5,
         "lines": [
           "“年轻时总觉得，停一日便会被旁人赶过。后来教书，又怕少讲一句，误了学生。”",
           "“那夜你端着药守在门边，我才明白：有人劝你歇下，并不是嫌你走得慢。”"
@@ -48,7 +48,7 @@
       {
         "id": "farther",
         "label": "若学生走得比先生更远呢？",
-        "minAffinity": 25,
+        "minFavorability": 25,
         "lines": [
           "“那正是先生该高兴的事。教人不是在身后拴一根绳。”",
           "“只是走得远了，也要记得辨路。官印、声名、掌声，都不能替你辨是非。”"
@@ -60,7 +60,7 @@
     ],
     "milestones": [
       {
-        "affinity": 12,
+        "favorability": 12,
         "title": "先生的私藏",
         "reward": {
           "items": {
@@ -77,15 +77,15 @@
     "personality": "嘴上轻松，心里怕辜负家人；对肯陪他做完事的人格外认真。",
     "greetings": [
       {
-        "minAffinity": 0,
+        "minFavorability": 0,
         "text": "“来得巧，我正愁没人听我抱怨。”"
       },
       {
-        "minAffinity": 10,
+        "minFavorability": 10,
         "text": "“窗边的位置替你留着，茶也还温。”"
       },
       {
-        "minAffinity": 30,
+        "minFavorability": 30,
         "text": "“旁人问我前程，我只想问你今天可有空。”"
       }
     ],
@@ -93,7 +93,7 @@
       {
         "id": "home",
         "label": "府城的日子是什么样？",
-        "minAffinity": 0,
+        "minFavorability": 0,
         "lines": [
           "“热闹，太热闹。人人都知道顾家，却未必记得顾怀安。”",
           "“在青溪就好些。卷子做错，先生只骂我，不骂我家的门楣。”"
@@ -102,7 +102,7 @@
       {
         "id": "promise",
         "label": "若你我都考中了呢？",
-        "minAffinity": 10,
+        "minFavorability": 10,
         "lines": [
           "“那我请你吃一顿最贵的酒席——不，先还你这些日子的人情。”",
           "“你别笑。别人陪我热闹，你陪我熬过了几盏灯。”"
@@ -111,7 +111,7 @@
       {
         "id": "books",
         "label": "那箱落水的书很贵重吗？",
-        "minAffinity": 5,
+        "minFavorability": 5,
         "lines": [
           "“贵。不是因为纸墨，是每一本都有人替我选好，仿佛连我该读什么也早已决定。”",
           "“可那日你陪我一页页晒，我忽然觉得，这些书第一次真成了我的。”"
@@ -120,7 +120,7 @@
       {
         "id": "fear",
         "label": "你最怕辜负谁？",
-        "minAffinity": 25,
+        "minFavorability": 25,
         "lines": [
           "“从前想说家里。如今倒更怕辜负那个认真读完一卷的自己。”",
           "“还有你。你见过我最狼狈的时候，我总得活得配得上那点信任。”"
@@ -132,7 +132,7 @@
     ],
     "milestones": [
       {
-        "affinity": 12,
+        "favorability": 12,
         "title": "同窗之约",
         "reward": {
           "items": {
@@ -149,15 +149,15 @@
     "personality": "寡言谨慎，先核凭据再谈人情；敬重不怕麻烦的实干者。",
     "greetings": [
       {
-        "minAffinity": 0,
+        "minFavorability": 0,
         "text": "“先坐。桌上原册别动，副本在右手边。”"
       },
       {
-        "minAffinity": 10,
+        "minFavorability": 10,
         "text": "“这次不用誊副本了。原册，你看吧。”"
       },
       {
-        "minAffinity": 30,
+        "minFavorability": 30,
         "text": "“你办的事，我不必再留第二份底稿。”"
       }
     ],
@@ -165,7 +165,7 @@
       {
         "id": "work",
         "label": "为何总留一份底稿？",
-        "minAffinity": 0,
+        "minFavorability": 0,
         "lines": [
           "“数字能改，口供也能改。只有昨日留下的纸，还肯说昨日的话。”",
           "“替人办事，可以慢一点，不能少一个凭据。”"
@@ -174,7 +174,7 @@
       {
         "id": "trust",
         "label": "你真正信得过谁？",
-        "minAffinity": 10,
+        "minFavorability": 10,
         "lines": [
           "“能把小事做到底的人。”",
           "“县里并不缺会说漂亮话的人。缺的是到最后还肯核一遍账的人。”"
@@ -183,7 +183,7 @@
       {
         "id": "ink",
         "label": "手上的墨怎么总也洗不净？",
-        "minAffinity": 5,
+        "minFavorability": 5,
         "lines": [
           "“誊错一笔便要整页重来。日子久了，墨进了指纹。”",
           "“有人觉得书吏只是替官府写字。可百姓认的，就是纸上这几个洗不掉的字。”"
@@ -192,7 +192,7 @@
       {
         "id": "ambition",
         "label": "你也想过离开侧房吗？",
-        "minAffinity": 25,
+        "minFavorability": 25,
         "lines": [
           "“想过。不是为了换一身官服，是想有一日不必明知账有问题，还只能把疑处压在最下面。”",
           "“若真有那日，我希望身边还有人敢提醒我：先看凭据。”"
@@ -204,7 +204,7 @@
     ],
     "milestones": [
       {
-        "affinity": 12,
+        "favorability": 12,
         "title": "以身作保",
         "reward": {
           "items": {
@@ -221,15 +221,15 @@
     "personality": "聪慧清醒，爱诗也爱辩理；不以输赢伤人，却不肯把答案让给谁。",
     "greetings": [
       {
-        "minAffinity": 0,
+        "minFavorability": 0,
         "text": "“猜灯谜？先说好，我可不会因为你初来便相让。”"
       },
       {
-        "minAffinity": 10,
+        "minFavorability": 10,
         "text": "“上次未讲完的那句诗，我又想到另一种解法。”"
       },
       {
-        "minAffinity": 30,
+        "minFavorability": 30,
         "text": "“有些话别人不懂，我想，你会懂。”"
       }
     ],
@@ -237,7 +237,7 @@
       {
         "id": "poem",
         "label": "你读诗，是为了什么？",
-        "minAffinity": 0,
+        "minFavorability": 0,
         "lines": [
           "“为了在别人说不清的时候，替自己把话说清。”",
           "“可我也读账册。风月与米粮，并没有哪一样低人一等。”"
@@ -246,7 +246,7 @@
       {
         "id": "future",
         "label": "若有一天离开青溪？",
-        "minAffinity": 10,
+        "minFavorability": 10,
         "lines": [
           "“我想沿河去看所有写在诗里的地方。”",
           "“倘若你愿同行，先陪我把这页读完。山河不急着走，眼前的人也一样。”"
@@ -255,7 +255,7 @@
       {
         "id": "ledger",
         "label": "才女为何也爱看账册？",
-        "minAffinity": 5,
+        "minFavorability": 5,
         "lines": [
           "“因为诗里说人间烟火，账册里才写一斗米究竟落到谁家。”",
           "“只谈风月容易，只谈生计也容易。难的是承认它们本就在同一个人身上。”"
@@ -264,7 +264,7 @@
       {
         "id": "kindness",
         "label": "为何总替争执的人留台阶？",
-        "minAffinity": 25,
+        "minFavorability": 25,
         "lines": [
           "“因为赢一句话很容易，叫人明日还能见面却难。”",
           "“我不是怕得罪人。只是道理若不能让日子继续过下去，便还没有讲完。”"
@@ -276,7 +276,7 @@
     ],
     "milestones": [
       {
-        "affinity": 12,
+        "favorability": 12,
         "title": "兰叶寄心",
         "reward": {
           "items": {

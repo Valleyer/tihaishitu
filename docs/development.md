@@ -50,7 +50,7 @@ hydrateAdventure 升级旧存档并补入新增人物。parseBackup 验证新探
 | OptionShuffler | 保留键的洗牌、按本次顺序显示答案 |
 | AnswerValidator | 判断、单选、多选判分 |
 | StoryEngine | 游戏日历、当前场景、对白与记忆 |
-| ProgressionSystem | 学识、信任、声望与晋章 |
+| ProgressionSystem | 学识、好感度、声望与晋章 |
 | EventEngine | 际遇触发与选项后果 |
 | SpacedRepetitionEngine | 每道题的学习记录及下次优先复习时间 |
 | StatisticsSystem | 从历史记录汇总现实日期统计 |

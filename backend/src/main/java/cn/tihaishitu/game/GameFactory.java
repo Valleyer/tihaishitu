@@ -19,15 +19,17 @@ import java.util.UUID;
 public class GameFactory {
     private final ObjectMapper objectMapper;
     private final CatalogService catalog;
+    private final GameContent content;
     private final JsonNode gameDesign;
     private final JsonNode chapters;
     private final JsonNode characters;
     private final JsonNode adventureDesign;
     private final JsonNode exams;
 
-    public GameFactory(ObjectMapper objectMapper, CatalogService catalog) throws IOException {
+    public GameFactory(ObjectMapper objectMapper, CatalogService catalog, GameContent content) throws IOException {
         this.objectMapper = objectMapper;
         this.catalog = catalog;
+        this.content = content;
         this.gameDesign = resource("content/game.json");
         this.chapters = resource("content/chapters.json");
         this.characters = resource("content/characters.json");
@@ -80,7 +82,7 @@ public class GameFactory {
         game.put("createdAt", now);
         game.put("updatedAt", now);
         game.set("player", player);
-        game.set("npcs", characters.deepCopy());
+        game.set("npcs", canonicalCharacters());
         game.set("records", objectMapper.createArrayNode());
         game.set("learning", objectMapper.createObjectNode());
         game.set("journal", initialJournal());
@@ -101,11 +103,20 @@ public class GameFactory {
     public ObjectNode hydrate(ObjectNode game) {
         if (!game.path("npcs").isArray()) game.set("npcs", objectMapper.createArrayNode());
         ArrayNode savedNpcs = (ArrayNode) game.path("npcs");
+        savedNpcs.forEach(saved -> normalizeFavorability((ObjectNode) saved));
         characters.forEach(character -> {
             boolean exists = false;
-            for (JsonNode saved : savedNpcs)
-                if (saved.path("id").asText().equals(character.path("id").asText())) { exists = true; break; }
-            if (!exists) savedNpcs.add(character.deepCopy());
+            for (JsonNode saved : savedNpcs) {
+                if (!saved.path("id").asText().equals(character.path("id").asText())) continue;
+                normalizeFavorability((ObjectNode) saved);
+                exists = true;
+                break;
+            }
+            if (!exists) {
+                ObjectNode added = character.deepCopy();
+                normalizeFavorability(added);
+                savedNpcs.add(added);
+            }
         });
         if (!game.path("adventure").isObject()) game.set("adventure", initialAdventure());
         ObjectNode adventure = (ObjectNode) game.path("adventure");
@@ -115,7 +126,46 @@ public class GameFactory {
             String id = exam.path("id").asText();
             if (!records.path(id).isObject()) records.set(id, blankExamRecord());
         });
+        if (!adventure.path("clears").isObject()) adventure.set("clears", objectMapper.createObjectNode());
+        ObjectNode clears = (ObjectNode) adventure.path("clears");
+        List<String> completedIds = new java.util.ArrayList<>();
+        clears.fields().forEachRemaining(entry -> {
+            if (entry.getValue().asInt() > 0) completedIds.add(entry.getKey());
+        });
+        completedIds.forEach(id -> content.activity(id).ifPresent(activity -> {
+            if ("task".equals(activity.path("activityMode").asText())) clears.put(id, 1);
+        }));
+        if (adventure.path("run").isObject()) {
+            ObjectNode run = (ObjectNode) adventure.path("run");
+            run.put("entryCost", run.path("entryCost").asInt());
+            run.put("costCommitted", run.path("costCommitted").asBoolean());
+            run.put("costRefunded", run.path("costRefunded").asBoolean());
+            content.activity(run.path("definition").path("id").asText()).ifPresent(activity -> {
+                ObjectNode definition = (ObjectNode) run.path("definition");
+                for (String key : List.of("activityMode", "completionReward", "successDialogue", "failureDialogue"))
+                    if (activity.has(key)) definition.set(key, activity.path(key).deepCopy());
+            });
+        }
         return game;
+    }
+
+    private ArrayNode canonicalCharacters() {
+        ArrayNode result = objectMapper.createArrayNode();
+        characters.forEach(character -> {
+            ObjectNode npc = character.deepCopy();
+            normalizeFavorability(npc);
+            result.add(npc);
+        });
+        return result;
+    }
+
+    /** Older saves used two relationship tracks; the stronger one becomes the single durable value. */
+    private static void normalizeFavorability(ObjectNode npc) {
+        int value = npc.has("favorability")
+                ? npc.path("favorability").asInt()
+                : Math.max(npc.path("affinity").asInt(), npc.path("trust").asInt());
+        npc.put("favorability", Math.max(0, Math.min(100, value)));
+        npc.remove(List.of("affinity", "trust"));
     }
 
     private ObjectNode blankExamRecord() {

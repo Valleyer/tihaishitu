@@ -129,9 +129,17 @@ public class LearnerKnowledgeStateStore {
                 UNION
                 SELECT learner_id FROM study_attempt
                  WHERE learner_id IS NOT NULL AND target_knowledge_point_id IN (?, ?)
+                UNION
+                SELECT learner_id FROM learner_diagnosis_session
+                 WHERE target_knowledge_point_id IN (?, ?)
+                UNION
+                SELECT s.learner_id
+                  FROM learner_diagnosis_dependency d
+                  JOIN learner_diagnosis_session s ON s.id=d.diagnosis_id
+                 WHERE d.knowledge_point_id IN (?, ?)
                 ORDER BY learner_id
                 """, (rs, row) -> rs.getString(1), sourceId, targetId, sourceId, targetId,
-                sourceId, targetId, sourceId, targetId);
+                sourceId, targetId, sourceId, targetId, sourceId, targetId, sourceId, targetId);
     }
 
     public void canonicalizeForMerge(String sourceId, String targetId) {
@@ -161,7 +169,53 @@ public class LearnerKnowledgeStateStore {
         }
         jdbc.update("UPDATE learner_knowledge_evidence SET knowledge_point_id = ? WHERE knowledge_point_id = ?", targetId, sourceId);
         jdbc.update("UPDATE study_attempt SET target_knowledge_point_id = ? WHERE target_knowledge_point_id = ?", targetId, sourceId);
+        canonicalizeDiagnosisDependencies(sourceId, targetId);
+        jdbc.update("UPDATE learner_diagnosis_session SET target_knowledge_point_id=? WHERE target_knowledge_point_id=?",
+                targetId, sourceId);
+        jdbc.update("""
+                DELETE FROM learner_diagnosis_dependency
+                 WHERE EXISTS (
+                     SELECT 1 FROM learner_diagnosis_session s
+                      WHERE s.id=learner_diagnosis_dependency.diagnosis_id
+                        AND s.target_knowledge_point_id=learner_diagnosis_dependency.knowledge_point_id)
+                """);
         jdbc.update("DELETE FROM learner_knowledge_state WHERE knowledge_point_id = ?", sourceId);
+    }
+
+    private void canonicalizeDiagnosisDependencies(String sourceId, String targetId) {
+        List<DiagnosisDependencyRow> rows = jdbc.query("""
+                SELECT diagnosis_id,sort_order,status FROM learner_diagnosis_dependency
+                 WHERE knowledge_point_id=? ORDER BY diagnosis_id
+                """, (rs, row) -> new DiagnosisDependencyRow(rs.getString("diagnosis_id"),
+                rs.getInt("sort_order"), rs.getString("status")), sourceId);
+        for (DiagnosisDependencyRow source : rows) {
+            List<DiagnosisDependencyRow> targets = jdbc.query("""
+                    SELECT diagnosis_id,sort_order,status FROM learner_diagnosis_dependency
+                     WHERE diagnosis_id=? AND knowledge_point_id=?
+                    """, (rs, row) -> new DiagnosisDependencyRow(rs.getString("diagnosis_id"),
+                    rs.getInt("sort_order"), rs.getString("status")), source.diagnosisId(), targetId);
+            if (targets.isEmpty()) {
+                jdbc.update("""
+                        UPDATE learner_diagnosis_dependency SET knowledge_point_id=?,updated_at=CURRENT_TIMESTAMP
+                         WHERE diagnosis_id=? AND knowledge_point_id=?
+                        """, targetId, source.diagnosisId(), sourceId);
+            } else {
+                DiagnosisDependencyRow target = targets.get(0);
+                jdbc.update("""
+                        UPDATE learner_diagnosis_dependency
+                           SET sort_order=?,status=?,updated_at=CURRENT_TIMESTAMP
+                         WHERE diagnosis_id=? AND knowledge_point_id=?
+                        """, Math.min(source.sortOrder(), target.sortOrder()),
+                        conservativeStatus(source.status(), target.status()), source.diagnosisId(), targetId);
+                jdbc.update("DELETE FROM learner_diagnosis_dependency WHERE diagnosis_id=? AND knowledge_point_id=?",
+                        source.diagnosisId(), sourceId);
+            }
+        }
+    }
+
+    private static String conservativeStatus(String left, String right) {
+        List<String> priority = List.of("failed", "remediated", "pending", "unavailable", "passed");
+        return priority.indexOf(left) <= priority.indexOf(right) ? left : right;
     }
 
     public List<EvidenceRow> evidenceForReplay(String learnerId, String pointId) {
@@ -208,4 +262,5 @@ public class LearnerKnowledgeStateStore {
     }
     public record StateRow(String knowledgePointId, KnowledgeMasteryModel.State state) {}
     private record FocusRow(String learnerId, int sortOrder) {}
+    private record DiagnosisDependencyRow(String diagnosisId, int sortOrder, String status) {}
 }
