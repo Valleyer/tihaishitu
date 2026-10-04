@@ -450,11 +450,11 @@
   },
   {
     "requirements": {},
-    "repeatable": true,
+    "repeatable": false,
     "passScore": 60,
     "id": "trial-ink",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "旧塾夜试",
+    "activityMode": "task",    "name": "旧塾夜试",
     "subtitle": "副本 · 五关连试",
     "locationId": "old-school",
     "rounds": 5,
@@ -517,11 +517,11 @@
         "craft": 4
       }
     },
-    "repeatable": true,
+    "repeatable": false,
     "passScore": 60,
     "id": "trial-ledger",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "漕仓疑账",
+    "activityMode": "task",    "name": "漕仓疑账",
     "subtitle": "副本 · 五关连试",
     "locationId": "county-office",
     "rounds": 5,
@@ -584,11 +584,11 @@
         "eloquence": 4
       }
     },
-    "repeatable": true,
+    "repeatable": false,
     "passScore": 60,
     "id": "trial-rain",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "听雨雅集",
+    "activityMode": "task",    "name": "听雨雅集",
     "subtitle": "副本 · 五关连试",
     "locationId": "exam-street",
     "rounds": 5,
@@ -654,11 +654,11 @@
         "inkstone"
       ]
     },
-    "repeatable": true,
+    "repeatable": false,
     "passScore": 60,
     "id": "trial-seal",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "藏书楼秘卷",
+    "activityMode": "task",    "name": "藏书楼秘卷",
     "subtitle": "副本 · 五关连试",
     "locationId": "library",
     "rounds": 5,
@@ -888,14 +888,14 @@
   {
     "id": "trial-archive",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "内库尘封卷",
+    "activityMode": "task",    "name": "内库尘封卷",
     "subtitle": "隐秘副本 · 故人作保",
     "locationId": "county-office",
     "description": "通行帖上的落款是沈砚。内库门开，一幅遗失多年的河防图藏在五册旧卷之间。",
     "invitation": "“沈书吏既肯作保，便请你进来。卷不可外借，能读明白，就把图带走。”",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {
       "items": [
         "shen-pass"

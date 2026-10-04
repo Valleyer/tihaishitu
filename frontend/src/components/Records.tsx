@@ -6,10 +6,7 @@ import type { Game } from "../domain/types";
 import { displayAnswer } from "../engine/OptionShuffler";
 import { favorabilityLevel, gameDesign } from "../content";
 import { statistics } from "../engine/StatisticsSystem";
-import {
-  isLearningMastered,
-  learningErrorRate,
-} from "../engine/SpacedRepetitionEngine";
+import { isLearningMastered } from "../engine/SpacedRepetitionEngine";
 import { Portrait } from "./Portrait";
 import { RichText } from "./RichText";
 export function People({ game }: { game: Game }) {
@@ -111,8 +108,7 @@ export function Reviews({
           return (
             <article className="review-entry" key={id}>
               <small>
-                {question.subject} · 累计作答 {record.attempts} 次 · 错误{" "}
-                {record.wrong} 次 · 错误率 {learningErrorRate(record)}%
+                {question.subject} · 待重审
               </small>
               <RichText className="review-question">{question.question}</RichText>
               <details>
@@ -129,7 +125,7 @@ export function Reviews({
                 <RichText>{question.explanation}</RichText>
               </details>
               <div className="hint">
-                已复习 {record.reviewCount} 次 · 最近作答{" "}
+                已重审 {record.reviewCount} 次 · 最近修习{" "}
                 {new Date(record.lastAt).toLocaleDateString()} ·{" "}
                 {Math.max(0, record.dueAt - game.records.length)}{" "}
                 次课业后进入优先复习
@@ -143,14 +139,15 @@ export function Reviews({
 }
 export function Statistics({ game }: { game: Game }) {
   const stats = statistics(game),
-    max = Math.max(1, ...stats.days.map((d) => d.count));
+    max = Math.max(1, ...stats.days.map((d) => d.count)),
+    recent = stats.days.reduce((total, day) => total + day.count, 0);
   return (
     <>
       <div className="stat-grid">
         {[
           ["累计课业", stats.total],
           ["今日修习", stats.today],
-          ["正确率", stats.total ? stats.accuracy + "%" : "—"],
+          ["近七日修习", recent],
           ["连续修习", stats.consecutive + " 天"],
         ].map(([label, value]) => (
           <div key={label}>
@@ -176,24 +173,19 @@ export function Statistics({ game }: { game: Game }) {
         Object.entries(stats.subjects).map(([name, value]) => (
           <div className="subject-row" key={name}>
             <span>{name}</span>
-            <meter min={0} max={value.total} value={value.correct} />
-            <b>{Math.round((value.correct / value.total) * 100)}%</b>
-            <small>
-              {value.correct}/{value.total} 题
-            </small>
+            <b>已修习 {value.total} 题</b>
           </div>
         ))
       ) : (
         <p className="hint">第一份答卷之后，这里便会留下痕迹。</p>
       )}
-      <h3 className="section-title">薄弱章节 · 由低到高</h3>
+      <h3 className="section-title">修习足迹</h3>
       {Object.entries(stats.chapters)
-        .sort((a, b) => a[1].correct / a[1].total - b[1].correct / b[1].total)
+        .sort((a, b) => b[1].total - a[1].total)
         .map(([name, value]) => (
           <div className="subject-row" key={name}>
             <span>{name}</span>
-            <b>{Math.round((value.correct / value.total) * 100)}%</b>
-            <small>{value.total} 题</small>
+            <b>已修习 {value.total} 题</b>
           </div>
         ))}
     </>

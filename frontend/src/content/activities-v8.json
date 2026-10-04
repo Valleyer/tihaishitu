@@ -7,7 +7,7 @@
     ]
   },
   {
-    "id":"trial-inn-rumors","kind":"dungeon","activityMode":"repeatable","name":"一炉杂谈","subtitle":"南门客栈副本 · 传言辨真","description":"各县举子把考题传得有鼻有眼。你要从来路、时间和彼此矛盾处辨明哪些值得记下。","invitation":"“消息可以听，不能照单全收。把每句话的来处先写在旁边。”","npcId":"pei","locationId":"prefecture-inn","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"trial-inn-rumors","kind":"dungeon","activityMode":"task","name":"一炉杂谈","subtitle":"南门客栈副本 · 传言辨真","description":"各县举子把考题传得有鼻有眼。你要从来路、时间和彼此矛盾处辨明哪些值得记下。","invitation":"“消息可以听，不能照单全收。把每句话的来处先写在旁边。”","npcId":"pei","locationId":"prefecture-inn","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"传言未明","rewards":{},"dialogue":"真假仍混在一起。众人继续烤火，你可以逐条查过再来。"},
       {"minScore":60,"label":"去伪存真","rewards":{"coins":14,"knowledge":6,"attributes":{"insight":1}},"dialogue":"几条互相矛盾的传言被划去，余下的只作参考，不再扰乱温习。"},
@@ -23,7 +23,7 @@
     ]
   },
   {
-    "id":"trial-open-debate","kind":"dungeon","activityMode":"repeatable","name":"水榭论题","subtitle":"清晖书院副本 · 立论与诘问","description":"书院水榭公开论题。每一段论证都要经受追问，不能只报结论。","invitation":"“答案写在末尾，理由写在路上。今日只看你走的路。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["linchuan-arrived"]},
+    "id":"trial-open-debate","kind":"dungeon","activityMode":"task","name":"水榭论题","subtitle":"清晖书院副本 · 立论与诘问","description":"书院水榭公开论题。每一段论证都要经受追问，不能只报结论。","invitation":"“答案写在末尾，理由写在路上。今日只看你走的路。”","npcId":"pei","locationId":"qinghui-academy","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["linchuan-arrived"]},
     "tiers":[
       {"minScore":0,"label":"论题未决","rewards":{},"dialogue":"有几处论证仍跳了步骤，听者把疑问留在案上，等你补完。"},
       {"minScore":60,"label":"立论有据","rewards":{"coins":16,"reputation":2,"attributes":{"eloquence":2}},"dialogue":"你的论证经住了第一轮追问，水榭中有人开始认真记下你的名字。"},
@@ -47,7 +47,7 @@
     ]
   },
   {
-    "id":"trial-cargo-seals","kind":"dungeon","activityMode":"repeatable","name":"百箱验封","subtitle":"漕运码头副本 · 数目与封泥","description":"雨季将至，百只书箱与粮箱必须在开船前核清封泥、数目与去处。","invitation":"“快不是少看几眼，是知道哪几眼不能省。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["wharf-ledger-cleared"]},
+    "id":"trial-cargo-seals","kind":"dungeon","activityMode":"task","name":"百箱验封","subtitle":"漕运码头副本 · 数目与封泥","description":"雨季将至，百只书箱与粮箱必须在开船前核清封泥、数目与去处。","invitation":"“快不是少看几眼，是知道哪几眼不能省。”","npcId":"su","locationId":"prefecture-wharf","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["wharf-ledger-cleared"]},
     "tiers":[
       {"minScore":0,"label":"暂缓开船","rewards":{},"dialogue":"疑箱被留在岸上，错处记入清单，不让一只含混的箱子上船。"},
       {"minScore":60,"label":"箱册相符","rewards":{"coins":20,"attributes":{"craft":2},"favorability":{"su":1}},"dialogue":"大部分箱册已经对应，船工按新次序重新装舱。"},
@@ -63,7 +63,7 @@
     ]
   },
   {
-    "id":"trial-archive-night","kind":"dungeon","activityMode":"repeatable","name":"文库夜校","subtitle":"府衙文库副本 · 旧案互证","description":"趁夜把河工旧案按年代、经手人与实地记录重新编次，找出互相矛盾的卷页。","invitation":"“卷宗不会自己说话。把相隔十年的两页放到一起，它们才会彼此作证。”","npcId":"pei","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":true,"requirements":{"flags":["river-map-restored"]},
+    "id":"trial-archive-night","kind":"dungeon","activityMode":"task","name":"文库夜校","subtitle":"府衙文库副本 · 旧案互证","description":"趁夜把河工旧案按年代、经手人与实地记录重新编次，找出互相矛盾的卷页。","invitation":"“卷宗不会自己说话。把相隔十年的两页放到一起，它们才会彼此作证。”","npcId":"pei","locationId":"prefecture-archive","rounds":5,"passScore":60,"repeatable":false,"requirements":{"flags":["river-map-restored"]},
     "tiers":[
       {"minScore":0,"label":"卷次未定","rewards":{},"dialogue":"天色将明，未核完的卷页原样封回，待下次继续。"},
       {"minScore":60,"label":"旧案成序","rewards":{"coins":18,"knowledge":8,"attributes":{"insight":1}},"dialogue":"散乱卷页按证据关系重新成序，几处多年未见的矛盾被标了出来。"},

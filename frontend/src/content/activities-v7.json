@@ -2,7 +2,7 @@
   {
     "id": "trial-bamboo-game",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "竹窗残局",
+    "activityMode": "task",    "name": "竹窗残局",
     "subtitle": "东斋副本 · 棋局问心",
     "description": "顾怀安留下半盘残局。棋子每走一步，都要答清一段经义与算理。",
     "invitation": "“输赢不急。先让我看看，你遇到死局时会怎么想。”",
@@ -10,7 +10,7 @@
     "locationId": "east-hall",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {},
     "tiers": [
       {"minScore": 0, "label": "暂收棋子", "rewards": {}, "dialogue": "“局还在，想明白再来。”"},
@@ -40,7 +40,7 @@
   {
     "id": "trial-hundred-scrolls",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "百卷辨伪",
+    "activityMode": "task",    "name": "百卷辨伪",
     "subtitle": "藏书楼副本 · 真伪之间",
     "description": "十只书箱混入重抄本与伪卷。你要从纸墨、避讳和版式里辨出真本。",
     "invitation": "“看懂一句是学问，看出一句为何被改，才算本事。”",
@@ -48,7 +48,7 @@
     "locationId": "library",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["catalog-restored"]},
     "tiers": [
       {"minScore": 0, "label": "暂封书箱", "rewards": {}, "dialogue": "书箱重新封好，错处已经记下。"},
@@ -96,7 +96,7 @@
   {
     "id": "trial-old-exam",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "旧卷五更",
+    "activityMode": "task",    "name": "旧卷五更",
     "subtitle": "夜读斋副本 · 限时重审",
     "description": "五更鼓响前重审一套旧卷，只看真实掌握，不看从前名次。",
     "invitation": "“错过的题不会追你，可你总要回头看它一眼。”",
@@ -104,7 +104,7 @@
     "locationId": "night-study",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["candle-letter-read"]},
     "tiers": [
       {"minScore": 0, "label": "五更未竟", "rewards": {}, "dialogue": "鼓声到了，旧卷仍替你保留。"},
@@ -134,7 +134,7 @@
   {
     "id": "trial-rain-pass",
     "kind": "dungeon",
-    "activityMode": "repeatable",    "name": "雨关递卷",
+    "activityMode": "task",    "name": "雨关递卷",
     "subtitle": "清溪驿路副本 · 风雨护牒",
     "description": "山雨封路，必须在驿亭闭门前把府试投牒送过三道关卡。",
     "invitation": "“路不好走，卷不能湿。你若要去府城，就从这一关开始。”",
@@ -142,7 +142,7 @@
     "locationId": "prefecture-road",
     "rounds": 5,
     "passScore": 60,
-    "repeatable": true,
+    "repeatable": false,
     "requirements": {"flags": ["post-horse-found"]},
     "tiers": [
       {"minScore": 0, "label": "暂避山雨", "rewards": {}, "dialogue": "投牒收回油纸包，等下一阵雨势转小。"},

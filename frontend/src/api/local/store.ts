@@ -492,7 +492,7 @@ export function createLocalApi(
       attempt.result.story = correct
         ? attempt.scene.success
         : attempt.scene.failure;
-      // 好感与信任只在整轮共读达标后发放，单题不再增减人物关系。
+      // 好感度只在整轮共读达标后发放，单题不再增减人物关系。
       settleRunAnswer(game, correct, full.id);
       game.journal.push({
         id: crypto.randomUUID(),
