@@ -38,7 +38,6 @@ class LearnerKnowledgeStateIntegrationTest {
         insertQuestion(q1, 3); insertQuestion(q2, 2);
         for (String q : new String[]{q1, q2}) {
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", q, k1);
-            jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)", q, k2);
         }
         for (int index = 3; index <= 6; index++) {
             String point = UUID.randomUUID().toString(), question = UUID.randomUUID().toString();

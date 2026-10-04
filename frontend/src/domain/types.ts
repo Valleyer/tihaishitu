@@ -144,6 +144,7 @@ export interface Attempt {
   id: string;
   targetKnowledgePointId?: string;
   targetKnowledgePointName?: string;
+  learningPurpose?: "查根问底" | "补基础" | "回卷再试" | "温故补缺" | null;
   question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
   scene: Scene;
   result: Result | null;

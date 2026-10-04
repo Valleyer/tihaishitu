@@ -5,6 +5,7 @@ import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.learner.StudyProfileService;
 import cn.tihaishitu.learning.AdaptiveStudyPlanner;
+import cn.tihaishitu.learning.DiagnosticLearningService;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.world.WorldActionContext;
 import cn.tihaishitu.world.WorldStateStore;
@@ -36,13 +37,15 @@ public class GameActionService {
     private final StudyProfileService studyProfiles;
     private final LearnerKnowledgeStateService knowledgeStates;
     private final AdaptiveStudyPlanner adaptivePlanner;
+    private final DiagnosticLearningService diagnostics;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
                              GameContent content, GameFactory factory, ObjectMapper mapper,
                              WorldStateStore worldStates, StudyProfileService studyProfiles,
                              LearnerKnowledgeStateService knowledgeStates,
-                             AdaptiveStudyPlanner adaptivePlanner) {
+                             AdaptiveStudyPlanner adaptivePlanner,
+                             DiagnosticLearningService diagnostics) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -53,6 +56,7 @@ public class GameActionService {
         this.studyProfiles = studyProfiles;
         this.knowledgeStates = knowledgeStates;
         this.adaptivePlanner = adaptivePlanner;
+        this.diagnostics = diagnostics;
     }
 
     @Transactional
@@ -119,7 +123,9 @@ public class GameActionService {
         assertRequirements(game, activity.path("requirements"));
         content.examForActivity(activityId).ifPresent(exam -> {
             String status = adventure(game).path("exams").path(exam.path("id").asText()).path("status").asText();
-            if (activityId.equals(exam.path("activityId").asText()) && !"registered".equals(status))
+            boolean eligible = "registered".equals(status)
+                    || (WorldActionContext.active() && "passed".equals(status));
+            if (activityId.equals(exam.path("activityId").asText()) && !eligible)
                 throw bad("须先取得本场应试资格。");
         });
         int rounds = activity.path("rounds").asInt(5);
@@ -137,6 +143,8 @@ public class GameActionService {
         run.put("knowledgePointIndex", 0);
         run.put("training", false);
         run.put("trainingAnswered", 0);
+        run.put("diagnosticAnswered", 0);
+        run.putNull("diagnosisSessionId");
         run.set("seenQuestionIds", mapper.createArrayNode());
         run.put("status", "active");
         run.put("score", 0);
@@ -162,7 +170,9 @@ public class GameActionService {
         boolean correct = sameAnswer(snapshot.standard(), request.answer());
         Instant occurredAt = Instant.now();
         if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
-        knowledgeStates.apply(snapshot, correct ? "correct" : "wrong", "automatic", occurredAt);
+        DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
+                correct ? "correct" : "wrong", "automatic", occurredAt,
+                frozenAllowedKnowledgePointIds(activeRun(game)));
 
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -170,7 +180,7 @@ public class GameActionService {
         result.set("standard", snapshot.standard().deepCopy());
         result.put("explanation", snapshot.question().path("explanation").asText());
         result.set("aliases", snapshot.question().path("aliases").deepCopy());
-        result.put("story", correct ? "此题已解，卷上添了一笔笃定。" : "错处已经记下，接下来会从同一知识点查漏补缺。");
+        result.put("story", story(correct, diagnosis));
         result.set("changes", mapper.createArrayNode());
         current.set("result", result);
 
@@ -183,7 +193,7 @@ public class GameActionService {
         record.put("review", current.path("review").asBoolean());
         game.withArray("records").add(record);
         updateLearning(game, request.questionId(), request.answer(), correct);
-        settleRunAnswer(game, correct, request.questionId());
+        settleRunAnswer(game, correct, request.questionId(), diagnosis);
         persist(game);
         return game;
     }
@@ -222,7 +232,8 @@ public class GameActionService {
         if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
             throw bad("请先查看参考解答，或此题已经完成自评。");
         }
-        knowledgeStates.apply(snapshot, request.assessment(), "self", occurredAt);
+        DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
+                request.assessment(), "self", occurredAt, frozenAllowedKnowledgePointIds(activeRun(game)));
         boolean correct = "correct".equals(request.assessment());
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -232,7 +243,9 @@ public class GameActionService {
         result.set("standard", snapshot.standard().deepCopy());
         result.put("explanation", snapshot.question().path("explanation").asText());
         result.set("aliases", snapshot.question().path("aliases").deepCopy());
-        result.put("story", switch (request.assessment()) {
+        result.put("story", diagnosis.diagnosisStarted()
+                ? "此题牵涉前置知识，先查根问底，再决定错处归因。"
+                : switch (request.assessment()) {
             case "correct" -> "自校无误，此题已经完整掌握。";
             case "partial" -> "思路已有根基，尚有步骤需要补全。";
             default -> "错处已经记下，接下来会从同一知识点查漏补缺。";
@@ -254,13 +267,14 @@ public class GameActionService {
         ObjectNode learning = (ObjectNode) game.with("learning").path(request.questionId());
         if ("partial".equals(request.assessment()))
             learning.put("partial", learning.path("partial").asInt() + 1);
-        settleRunAnswer(game, correct, request.questionId());
+        settleRunAnswer(game, correct, request.questionId(), diagnosis);
         persist(game);
         return game;
     }
 
     @Transactional
     public ObjectNode next(String gameId, NextQuestionRequest request) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode current = requireCurrentAttempt(game, request.attemptId());
         if (current.path("result").isNull()) throw bad("请先完成当前题目。");
@@ -285,9 +299,12 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode abandon(String gameId, String runId) {
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         JsonNode run = adventure(game).path("run");
         if (run.isMissingNode() || run.isNull() || !runId.equals(run.path("id").asText())) throw bad("行程已变化。");
+        if (WorldActionContext.active() && run.hasNonNull("diagnosisSessionId"))
+            diagnostics.abandon(run.path("diagnosisSessionId").asText());
         adventure(game).putNull("run");
         game.putNull("attempt");
         persist(game);
@@ -392,26 +409,51 @@ public class GameActionService {
     }
 
     private void drawAttempt(ObjectNode game, ObjectNode run) {
-        int index = run.path("knowledgePointIndex").asInt();
-        String pointId = run.path("knowledgePointIds").path(index).asText();
         Set<String> seen = new HashSet<>();
         run.path("seenQuestionIds").forEach(id -> seen.add(id.asText()));
         Set<String> allowed = allowedKnowledgePointIds(game, run);
-        KnowledgeQuestionPoolService.Mode mode = run.path("training").asBoolean()
-                ? KnowledgeQuestionPoolService.Mode.TRAINING
-                : KnowledgeQuestionPoolService.Mode.NORMAL;
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        DiagnosticLearningService.Directive directive = null;
+        String pointId;
+        KnowledgeQuestionPoolService.Mode mode;
         QuestionDto question;
-        if (world == null) {
+        if (world != null && run.hasNonNull("diagnosisSessionId")) {
+            while (true) {
+                directive = diagnostics.nextDirective(run.path("diagnosisSessionId").asText());
+                pointId = directive.targetKnowledgePointId();
+                mode = "training".equals(directive.evidenceMode())
+                        ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL;
+                var profile = studyProfiles.rawCurrent();
+                AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
+                        world.learnerId(), allowed, pointId, profile.difficulty());
+                int preferred = DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
+                        ? Math.min(3, context.preferredDifficulty()) : context.preferredDifficulty();
+                var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
+                        context.readyKnowledgePointIds(), seen, preferred, mode);
+                if (DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
+                        && questionPool.eligibleQuestionsForLearner(request).isEmpty()) {
+                    diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), pointId);
+                    continue;
+                }
+                question = questionPool.selectQuestionForLearner(request);
+                break;
+            }
+        } else {
+            int index = run.path("knowledgePointIndex").asInt();
+            pointId = run.path("knowledgePointIds").path(index).asText();
+            mode = run.path("training").asBoolean()
+                    ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL;
+            if (world == null) {
             question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
                     pointId, allowed, seen, null, mode));
-        } else {
-            var profile = studyProfiles.rawCurrent();
-            AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
-                    world.learnerId(), allowed, pointId, profile.difficulty());
-            question = questionPool.selectQuestionForLearner(
-                    new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                            context.readyKnowledgePointIds(), seen, context.preferredDifficulty(), mode));
+            } else {
+                var profile = studyProfiles.rawCurrent();
+                AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
+                        world.learnerId(), allowed, pointId, profile.difficulty());
+                question = questionPool.selectQuestionForLearner(
+                        new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
+                                context.readyKnowledgePointIds(), seen, context.preferredDifficulty(), mode));
+            }
         }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
@@ -430,19 +472,27 @@ public class GameActionService {
         visible.set("knowledgePoints", knowledge);
         ObjectNode attempt = mapper.createObjectNode();
         attempt.put("id", attemptId);
-        KnowledgePointDto target = details.stream().filter(point -> pointId.equals(point.id())).findFirst()
+        String selectedPointId = pointId;
+        KnowledgePointDto target = details.stream().filter(point -> selectedPointId.equals(point.id())).findFirst()
                 .orElseThrow(() -> bad("当前修习知识点已经停用或不存在。"));
         attempt.put("targetKnowledgePointId", target.id());
         attempt.put("targetKnowledgePointName", target.name());
+        if (directive == null) attempt.putNull("learningPurpose");
+        else attempt.put("learningPurpose", learningPurpose(directive.role()));
         attempt.set("question", visible);
         attempt.set("scene", scene(question, run.path("definition")));
         attempt.putNull("result");
         attempt.putNull("reveal");
-        attempt.put("review", run.path("training").asBoolean());
+        boolean remediation = directive == null ? run.path("training").asBoolean()
+                : "training".equals(directive.evidenceMode());
+        run.put("training", remediation);
+        attempt.put("review", remediation);
         game.set("attempt", attempt);
         attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer(),
                 full.path("gradingMode").asText("auto"), target.id(),
-                run.path("training").asBoolean() ? "training" : "normal", question.difficulty());
+                remediation ? "training" : "normal", question.difficulty(),
+                directive == null ? null : directive.diagnosisSessionId(),
+                directive == null ? null : directive.role());
     }
 
     private ArrayNode knowledgeDetails(JsonNode question) {
@@ -485,10 +535,35 @@ public class GameActionService {
         return allowed;
     }
 
-    private void settleRunAnswer(ObjectNode game, boolean correct, String questionId) {
+    private static Set<String> frozenAllowedKnowledgePointIds(ObjectNode run) {
+        Set<String> allowed = new LinkedHashSet<>();
+        run.path("allowedKnowledgePointIds").forEach(id -> allowed.add(id.asText()));
+        return allowed;
+    }
+
+    private void settleRunAnswer(ObjectNode game, boolean correct, String questionId,
+                                 DiagnosticLearningService.GradingResult diagnosis) {
         ObjectNode run = activeRun(game);
         run.put("answered", run.path("answered").asInt() + 1);
         addUnique(run.withArray("seenQuestionIds"), questionId);
+        if (diagnosis.diagnosisStarted()) {
+            run.put("diagnosisSessionId", diagnosis.diagnosisSessionId());
+            run.put("training", false);
+            return;
+        }
+        if (diagnosis.diagnosisRole() != null) {
+            if (Set.of(DiagnosticLearningService.DEPENDENCY_PROBE,
+                    DiagnosticLearningService.TARGET_RECHECK).contains(diagnosis.diagnosisRole()))
+                run.put("diagnosticAnswered", run.path("diagnosticAnswered").asInt() + 1);
+            else run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
+            if (diagnosis.targetCompleted()) {
+                run.putNull("diagnosisSessionId");
+                run.put("training", false);
+                run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
+                settleRunIfComplete(game, run);
+            }
+            return;
+        }
         if (run.path("training").asBoolean()) {
             run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
             if (correct) {
@@ -500,8 +575,11 @@ public class GameActionService {
             run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
         } else {
             run.put("training", true);
-            run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
         }
+        settleRunIfComplete(game, run);
+    }
+
+    private void settleRunIfComplete(ObjectNode game, ObjectNode run) {
         if (run.path("knowledgePointIndex").asInt() < run.path("knowledgePointIds").size()) return;
         int score = Math.round(run.path("correct").asInt() * 100f / run.path("knowledgePointIds").size());
         run.put("score", score);
@@ -515,21 +593,44 @@ public class GameActionService {
         ArrayNode rewards = mapper.createArrayNode();
         grantRewards(game, selected.path("rewards"), rewards);
         String activityId = run.path("definition").path("id").asText();
+        ObjectNode bestScores = adventure(game).with("best");
+        bestScores.put(activityId, Math.max(bestScores.path(activityId).asInt(), score));
         ObjectNode clears = adventure(game).with("clears");
         if (score >= run.path("definition").path("passScore").asInt()) {
             boolean first = clears.path(activityId).asInt() == 0;
-            clears.put(activityId, clears.path(activityId).asInt() + 1);
+            if (WorldActionContext.active()) clears.put(activityId, 1);
+            else clears.put(activityId, clears.path(activityId).asInt() + 1);
             if (first) grantRewards(game, selected.path("firstRewards"), rewards);
         }
         run.set("rewards", rewards);
         content.examForActivity(activityId).ifPresent(exam -> {
             if (!activityId.equals(exam.path("activityId").asText())) return;
             ObjectNode record = (ObjectNode) adventure(game).with("exams").path(exam.path("id").asText());
-            record.put("attempts", record.path("attempts").asInt() + 1);
-            record.put("lastScore", score);
             record.put("best", Math.max(record.path("best").asInt(), score));
-            record.put("status", score == 100 ? "passed" : "registered");
+            boolean passed = score >= run.path("definition").path("passScore").asInt();
+            if (WorldActionContext.active()) {
+                if (passed) record.put("status", "passed");
+            } else {
+                record.put("attempts", record.path("attempts").asInt() + 1);
+                record.put("lastScore", score);
+                record.put("status", passed ? "passed" : "registered");
+            }
         });
+    }
+
+    private static String story(boolean correct, DiagnosticLearningService.GradingResult diagnosis) {
+        if (diagnosis.diagnosisStarted()) return "此题牵涉前置知识，先查根问底，再决定错处归因。";
+        return correct ? "此题已解，卷上添了一笔笃定。" : "错处已经记下，接下来会从同一知识点查漏补缺。";
+    }
+
+    private static String learningPurpose(String role) {
+        return switch (role) {
+            case DiagnosticLearningService.DEPENDENCY_PROBE -> "查根问底";
+            case DiagnosticLearningService.DEPENDENCY_REMEDIATION -> "补基础";
+            case DiagnosticLearningService.TARGET_RECHECK -> "回卷再试";
+            case DiagnosticLearningService.TARGET_REMEDIATION -> "温故补缺";
+            default -> "";
+        };
     }
 
     private void updateLearning(ObjectNode game, String questionId, JsonNode answer, boolean correct) {

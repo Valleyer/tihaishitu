@@ -348,9 +348,8 @@ export function ExamPanel({
   }[record.status];
   const action = () => {
     if (record.status === "passed") {
-      if (exam.id === "county-exam" && game.adventure!.locationId === "prefecture-road")
-        inspect("prefecture-departure");
-      else travel(exam.id === "county-exam" ? "prefecture-road" : exam.locationId);
+      if (atExam) inspect(exam.activityId);
+      else travel(exam.locationId);
     } else if (record.status === "preparing") inspect(exam.activityId);
     else if (record.status === "registered") inspect(exam.activityId);
     else if (missing.length) {
@@ -361,11 +360,9 @@ export function ExamPanel({
   };
   const actionText =
     record.status === "passed"
-      ? exam.id === "county-exam" && game.adventure!.locationId === "prefecture-road"
-        ? "展开府城新篇"
-        : exam.id === "county-exam"
-          ? "沿驿路赴府"
-          : "返回贡院前街"
+      ? atExam
+        ? "再次入号，刷新最高分"
+        : "返回试院，再次挑战"
       : record.status === "preparing"
         ? "再次入号，应试十题"
         : record.status === "registered"
@@ -413,7 +410,7 @@ export function ExamPanel({
         </article>
         <article className={record.status === "passed" ? "done" : ""}>
           <b>叁 · 十题定榜</b>
-          <p>十题全对取中 · 已应试 {record.attempts} 次 · 最高 {record.best || "—"} 分</p>
+          <p>十题全对取中 · 最高 {record.best || "—"} 分 · 可随时再次应试</p>
         </article>
       </div>
       <button className="gold-button full" disabled={busy || !!game.adventure!.run} onClick={action}>
@@ -736,15 +733,15 @@ export function Outcome({
         {run.definition.kind === "exam"
           ? run.score >= run.definition.passScore
             ? "红榜有名，功名初成"
-            : "榜上无名，收卷再读"
+            : "本次尚未取中，补强后再来"
           : run.score >= run.definition.passScore
           ? "有所获，亦有所长"
-          : "今日未竟，来日再试"}
+          : "错处已明，随时可以再试"}
       </h2>
       <blockquote>{run.response}</blockquote>
       <p>
-        首次答对 {run.correct} / {run.definition.rounds} 个知识点 · 诊断训练{" "}
-        {run.trainingAnswered} 题 · 最高成绩{" "}
+        首次答对 {run.correct} / {run.definition.rounds} 个知识点 · 前置核验与复核{" "}
+        {run.diagnosticAnswered || 0} 题 · 补强 {run.trainingAnswered} 题 · 最高成绩{" "}
         {game.adventure!.best[run.definition.id]} 分
       </p>
       <div className="loot-list">

@@ -211,6 +211,8 @@ export function beginRun(game: Game, id: string) {
     knowledgePointIndex: 0,
     training: false,
     trainingAnswered: 0,
+    diagnosticAnswered: 0,
+    diagnosisSessionId: null,
     seenQuestionIds: [],
     status: "active",
     score: 0,

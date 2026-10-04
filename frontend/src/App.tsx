@@ -452,7 +452,11 @@ function App() {
                             activityRun.definition.rounds,
                           )}
                           /{activityRun.definition.rounds}
-                          {activityRun.training ? " · 诊断训练中" : " · 首次考核"}
+                          {attempt.learningPurpose
+                            ? " · " + attempt.learningPurpose
+                            : activityRun.training
+                              ? " · 诊断训练中"
+                              : " · 首次考核"}
                           <b className="current-study">
                             当前修习：
                             {attempt.targetKnowledgePointName ||

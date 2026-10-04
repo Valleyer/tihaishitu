@@ -106,6 +106,10 @@ export interface ActivityRun {
   /** 首题答错后留在当前知识点，持续抽取低难度同类题。 */
   training: boolean;
   trainingAnswered: number;
+  /** 前置核验与目标复核题数；不计入本轮得分。 */
+  diagnosticAnswered: number;
+  /** 正式联机 World 只保存诊断会话指针，诊断事实保存在服务端数据表。 */
+  diagnosisSessionId?: string | null;
   seenQuestionIds: string[];
   status: "active" | "settled";
   score: number;
