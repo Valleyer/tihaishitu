@@ -91,6 +91,7 @@ export interface KnowledgeDirectoryItem extends KnowledgePoint {
   bookId: string; bookName: string; chapterId: string; catalogChapter: string;
   publishedQuestionCount: number;
 }
+export interface KnowledgeDirectoryFacets { subjects: string[] }
 export interface PageResult<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface LearnerStatistics {
   days: 7 | 30 | 90; generatedAt: string;
@@ -124,6 +125,7 @@ export const platformApi = {
     });
     return request<PageResult<KnowledgeDirectoryItem>>("/learning/knowledge-points?" + params.toString());
   },
+  knowledgeDirectoryFacets: () => request<KnowledgeDirectoryFacets>("/learning/knowledge-points/facets"),
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),
   question: (id: string) => request<BrowseQuestion>("/learning/questions/" + encodeURIComponent(id)),

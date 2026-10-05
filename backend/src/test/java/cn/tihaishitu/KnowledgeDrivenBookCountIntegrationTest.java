@@ -33,6 +33,10 @@ class KnowledgeDrivenBookCountIntegrationTest {
         String pointId = UUID.randomUUID().toString();
         String unavailablePointId = UUID.randomUUID().toString();
         String questionId = UUID.randomUUID().toString();
+        String unselectedBookId = UUID.randomUUID().toString();
+        String unselectedChapterId = UUID.randomUUID().toString();
+        String unselectedPointId = UUID.randomUUID().toString();
+        String unselectedQuestionId = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'知识驱动卷','',TRUE,1,1)", bookId);
         jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C1','第一章','',0,1)", chapterId, bookId);
         jdbc.update("""
@@ -53,8 +57,26 @@ class KnowledgeDrivenBookCountIntegrationTest {
                 VALUES (?,'测试','custom','true_false','true_false','auto','题目','true','解析',1,'published',1)
                 """, questionId);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", questionId, pointId);
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'未选文集','',TRUE,1,1)", unselectedBookId);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'H1','隐藏章','',0,1)", unselectedChapterId, unselectedBookId);
+        jdbc.update("""
+                INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,
+                                                   default_role,status,description,explanation,sort_order,revision)
+                VALUES (?,'HIDDEN-K1','未选知识点','隐藏科目','分部','隐藏章','core','active','','',0,1)
+                """, unselectedPointId);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", unselectedBookId, unselectedPointId, unselectedChapterId);
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,
+                                              content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'隐藏科目','custom','true_false','true_false','auto','隐藏题目','true','解析',1,'published',1)
+                """, unselectedQuestionId);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", unselectedQuestionId, unselectedPointId);
 
         Cookie learner = register();
+        String learnerId = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='book_count_user'", String.class);
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learnerId);
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)", learnerId, bookId);
         mvc.perform(get("/api/v1/bootstrap").cookie(learner))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bankManifest[?(@.id == '%s')].questionCount".formatted(bookId)).value(1))
@@ -70,7 +92,22 @@ class KnowledgeDrivenBookCountIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(pointId))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1));
+        mvc.perform(get("/api/v1/learning/knowledge-points").cookie(learner)
+                        .param("query", "未选知识点"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(get("/api/v1/learning/knowledge-points/facets").cookie(learner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects.length()").value(1))
+                .andExpect(jsonPath("$.subjects[0]").value("测试"));
         mvc.perform(get("/api/v1/learning/knowledge-points/{id}", unavailablePointId).cookie(learner))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/learning/books/{id}", unselectedBookId).cookie(learner))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/learning/knowledge-points/{id}", unselectedPointId).cookie(learner))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/learning/knowledge-points/{id}/questions", unselectedPointId).cookie(learner))
                 .andExpect(status().isNotFound());
         Integer oldLinks = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM question_bank_item WHERE bank_id = ? AND question_id = ?",
