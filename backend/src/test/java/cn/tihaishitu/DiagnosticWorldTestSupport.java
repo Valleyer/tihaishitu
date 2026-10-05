@@ -1,6 +1,7 @@
 package cn.tihaishitu;
 
 import cn.tihaishitu.learner.LearnerAuthService;
+import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -8,10 +9,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +29,7 @@ abstract class DiagnosticWorldTestSupport {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @MockitoSpyBean AdaptiveStudyPlanner planner;
 
     record Scenario(String book, String target, List<String> dependencies, List<String> fillers,
                     String rootQuestion) {}
@@ -85,6 +94,21 @@ abstract class DiagnosticWorldTestSupport {
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,0)", learner, scenario.target());
         for (String dependency : scenario.dependencies()) ready(learner, dependency);
         return learner;
+    }
+
+    void forceScenarioPlan(Scenario scenario) {
+        LinkedHashSet<String> allowed = new LinkedHashSet<>();
+        allowed.add(scenario.target());
+        allowed.addAll(scenario.dependencies());
+        allowed.addAll(scenario.fillers());
+        doAnswer(invocation -> {
+            int count = invocation.getArgument(2);
+            List<String> targets = new ArrayList<>();
+            targets.add(scenario.target());
+            targets.addAll(scenario.fillers());
+            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed,
+                    new LinkedHashSet<>(scenario.dependencies()), List.copyOf(targets.subList(0, count)));
+        }).when(planner).randomPlan(anyString(), anySet(), anyInt());
     }
 
     void initialize(Cookie cookie) throws Exception {

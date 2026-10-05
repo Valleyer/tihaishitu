@@ -130,6 +130,14 @@ public class LearnerKnowledgeStateStore {
                 SELECT learner_id FROM study_attempt
                  WHERE learner_id IS NOT NULL AND target_knowledge_point_id IN (?, ?)
                 UNION
+                SELECT learner_id FROM learner_practice_session
+                 WHERE target_knowledge_point_id IN (?, ?)
+                UNION
+                SELECT s.learner_id
+                  FROM learner_practice_scope p
+                  JOIN learner_practice_session s ON s.id=p.session_id
+                 WHERE p.knowledge_point_id IN (?, ?)
+                UNION
                 SELECT learner_id FROM learner_diagnosis_session
                  WHERE target_knowledge_point_id IN (?, ?)
                 UNION
@@ -139,7 +147,8 @@ public class LearnerKnowledgeStateStore {
                  WHERE d.knowledge_point_id IN (?, ?)
                 ORDER BY learner_id
                 """, (rs, row) -> rs.getString(1), sourceId, targetId, sourceId, targetId,
-                sourceId, targetId, sourceId, targetId, sourceId, targetId, sourceId, targetId);
+                sourceId, targetId, sourceId, targetId, sourceId, targetId, sourceId, targetId,
+                sourceId, targetId, sourceId, targetId);
     }
 
     public void canonicalizeForMerge(String sourceId, String targetId) {
@@ -169,6 +178,12 @@ public class LearnerKnowledgeStateStore {
         }
         jdbc.update("UPDATE learner_knowledge_evidence SET knowledge_point_id = ? WHERE knowledge_point_id = ?", targetId, sourceId);
         jdbc.update("UPDATE study_attempt SET target_knowledge_point_id = ? WHERE target_knowledge_point_id = ?", targetId, sourceId);
+        canonicalizePracticeScopes(sourceId, targetId);
+        jdbc.update("""
+                UPDATE learner_practice_session
+                   SET target_knowledge_point_id=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP
+                 WHERE target_knowledge_point_id=?
+                """, targetId, sourceId);
         canonicalizeDiagnosisDependencies(sourceId, targetId);
         jdbc.update("UPDATE learner_diagnosis_session SET target_knowledge_point_id=? WHERE target_knowledge_point_id=?",
                 targetId, sourceId);
@@ -180,6 +195,29 @@ public class LearnerKnowledgeStateStore {
                         AND s.target_knowledge_point_id=learner_diagnosis_dependency.knowledge_point_id)
                 """);
         jdbc.update("DELETE FROM learner_knowledge_state WHERE knowledge_point_id = ?", sourceId);
+    }
+
+    private void canonicalizePracticeScopes(String sourceId, String targetId) {
+        List<String> sessions = jdbc.query("""
+                SELECT session_id FROM learner_practice_scope
+                 WHERE knowledge_point_id=? ORDER BY session_id
+                """, (rs, row) -> rs.getString(1), sourceId);
+        for (String sessionId : sessions) {
+            Integer targetExists = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM learner_practice_scope
+                     WHERE session_id=? AND knowledge_point_id=?
+                    """, Integer.class, sessionId, targetId);
+            if (targetExists == null || targetExists == 0) {
+                jdbc.update("""
+                        UPDATE learner_practice_scope SET knowledge_point_id=?
+                         WHERE session_id=? AND knowledge_point_id=?
+                        """, targetId, sessionId, sourceId);
+            } else {
+                jdbc.update("""
+                        DELETE FROM learner_practice_scope WHERE session_id=? AND knowledge_point_id=?
+                        """, sessionId, sourceId);
+            }
+        }
     }
 
     private void canonicalizeDiagnosisDependencies(String sourceId, String targetId) {

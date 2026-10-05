@@ -17,36 +17,30 @@ public class ManageUserStore {
 
     private final JdbcTemplate jdbc;
 
-    public ManageUserStore(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
+    public ManageUserStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
     public Optional<LoginUser> findForLogin(String username) {
-        List<LoginUser> rows = jdbc.query("""
+        return jdbc.query("""
                 SELECT id, username, display_name, password_hash, status
-                  FROM app_user
-                 WHERE LOWER(username) = LOWER(?)
+                  FROM learner_account WHERE LOWER(username) = LOWER(?)
                 """, (result, row) -> {
             String id = result.getString("id");
             return new LoginUser(id, result.getString("username"), result.getString("display_name"),
                     result.getString("password_hash"), result.getString("status"), roles(id));
-        }, username);
-        return rows.stream().findFirst();
+        }, username).stream().findFirst();
     }
 
     public Optional<ManageUserView> findView(String username) {
-        List<ManageUserView> rows = jdbc.query("""
-                SELECT id, username, display_name, status, revision FROM app_user
+        return jdbc.query("""
+                SELECT id, username, display_name, status, revision FROM learner_account
                  WHERE LOWER(username) = LOWER(?)
-                """, (result, row) -> view(result.getString("id"), result), username);
-        return rows.stream().findFirst();
+                """, (result, row) -> view(result.getString("id"), result), username).stream().findFirst();
     }
 
     public int adminCount() {
         Integer count = jdbc.queryForObject("""
-                SELECT COUNT(*)
-                  FROM app_user_role r
-                  JOIN app_user u ON u.id = r.user_id
+                SELECT COUNT(*) FROM learner_account_role r
+                  JOIN learner_account u ON u.id = r.learner_id
                  WHERE r.role_name = 'ADMIN' AND u.status = 'active'
                 """, Integer.class);
         return count == null ? 0 : count;
@@ -54,35 +48,28 @@ public class ManageUserStore {
 
     @Transactional
     public ManageUserView createInitialAdmin(String username, String displayName, String passwordHash) {
-        String id = UUID.randomUUID().toString();
-        jdbc.update("""
-                INSERT INTO app_user(id, username, display_name, password_hash, status)
-                VALUES (?, ?, ?, ?, 'active')
-                """, id, username, displayName, passwordHash);
-        for (String role : List.of("CONTRIBUTOR", "REVIEWER", "ADMIN")) {
-            jdbc.update("INSERT INTO app_user_role(user_id, role_name) VALUES (?, ?)", id, role);
-        }
-        return new ManageUserView(id, username, displayName, "active", roles(id), 1);
+        String id = findView(username).map(ManageUserView::id)
+                .orElseGet(() -> createAccount(username, displayName, passwordHash));
+        replaceRoles(id, Set.of("CONTRIBUTOR", "REVIEWER", "ADMIN"));
+        return findById(id).orElseThrow();
     }
 
     public List<ManageUserView> findAll() {
         return jdbc.query("""
-                SELECT id, username, display_name, status, revision FROM app_user ORDER BY created_at, username
+                SELECT id, username, display_name, status, revision
+                  FROM learner_account ORDER BY created_at, username
                 """, (result, row) -> view(result.getString("id"), result));
     }
 
     public Optional<ManageUserView> findById(String id) {
-        List<ManageUserView> rows = jdbc.query("""
-                SELECT id, username, display_name, status, revision FROM app_user WHERE id = ?
-                """, (result, row) -> view(id, result), id);
-        return rows.stream().findFirst();
+        return jdbc.query("""
+                SELECT id, username, display_name, status, revision FROM learner_account WHERE id = ?
+                """, (result, row) -> view(id, result), id).stream().findFirst();
     }
 
     @Transactional
     public ManageUserView create(String username, String displayName, String passwordHash, Set<String> roleNames) {
-        String id = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO app_user(id, username, display_name, password_hash, status) VALUES (?, ?, ?, ?, 'active')",
-                id, username, displayName, passwordHash);
+        String id = createAccount(username, displayName, passwordHash);
         replaceRoles(id, roleNames);
         return findById(id).orElseThrow();
     }
@@ -93,14 +80,14 @@ public class ManageUserStore {
         int changed;
         if (passwordHash == null) {
             changed = jdbc.update("""
-                    UPDATE app_user SET display_name = ?, status = ?, revision = revision + 1,
-                                        updated_at = CURRENT_TIMESTAMP
+                    UPDATE learner_account SET display_name = ?, status = ?, revision = revision + 1,
+                                               updated_at = CURRENT_TIMESTAMP
                      WHERE id = ? AND revision = ?
                     """, displayName, status, id, expectedRevision);
         } else {
             changed = jdbc.update("""
-                    UPDATE app_user SET display_name = ?, status = ?, password_hash = ?, revision = revision + 1,
-                                        updated_at = CURRENT_TIMESTAMP
+                    UPDATE learner_account SET display_name = ?, status = ?, password_hash = ?,
+                                               revision = revision + 1, updated_at = CURRENT_TIMESTAMP
                      WHERE id = ? AND revision = ?
                     """, displayName, status, passwordHash, id, expectedRevision);
         }
@@ -109,10 +96,27 @@ public class ManageUserStore {
         return findById(id).orElseThrow();
     }
 
+    private String createAccount(String username, String displayName, String passwordHash) {
+        String id = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO learner_account(id, username, display_name, password_hash, status)
+                VALUES (?, ?, ?, ?, 'active')
+                """, id, username.trim().toLowerCase(java.util.Locale.ROOT), displayName, passwordHash);
+        jdbc.update("""
+                INSERT INTO learner_study_profile(learner_id, pace, difficulty, focus_mode)
+                VALUES (?, 'normal', 'standard', 'auto')
+                """, id);
+        jdbc.update("""
+                INSERT INTO learner_selected_book(learner_id, bank_id, weight_value)
+                SELECT ?, id, weight_value FROM question_bank WHERE enabled = TRUE
+                """, id);
+        return id;
+    }
+
     private void replaceRoles(String id, Set<String> roleNames) {
-        jdbc.update("DELETE FROM app_user_role WHERE user_id = ?", id);
+        jdbc.update("DELETE FROM learner_account_role WHERE learner_id = ?", id);
         for (String role : roleNames) {
-            jdbc.update("INSERT INTO app_user_role(user_id, role_name) VALUES (?, ?)", id, role);
+            jdbc.update("INSERT INTO learner_account_role(learner_id, role_name) VALUES (?, ?)", id, role);
         }
     }
 
@@ -121,9 +125,9 @@ public class ManageUserStore {
                 result.getString("status"), roles(id), result.getLong("revision"));
     }
 
-    public Set<String> roles(String userId) {
-        return new LinkedHashSet<>(jdbc.query(
-                "SELECT role_name FROM app_user_role WHERE user_id = ? ORDER BY role_name",
-                (result, row) -> result.getString("role_name"), userId));
+    public Set<String> roles(String learnerId) {
+        return new LinkedHashSet<>(jdbc.query("""
+                SELECT role_name FROM learner_account_role WHERE learner_id = ? ORDER BY role_name
+                """, (result, row) -> result.getString("role_name"), learnerId));
     }
 }

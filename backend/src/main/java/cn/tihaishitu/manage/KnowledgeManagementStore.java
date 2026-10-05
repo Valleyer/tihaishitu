@@ -214,7 +214,7 @@ public class KnowledgeManagementStore {
         String historyId = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO knowledge_merge_history(
-                    id, source_knowledge_id, target_knowledge_id, actor_user_id,
+                    id, source_knowledge_id, target_knowledge_id, actor_learner_id,
                     migrated_relation_count, collapsed_relation_count, reason)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, historyId, sourceId, targetId, actorId, migrated, collapsed, reason.trim());
@@ -233,13 +233,13 @@ public class KnowledgeManagementStore {
     }
 
     public String userId(String username) {
-        return jdbc.queryForObject("SELECT id FROM app_user WHERE username = ?", String.class, username);
+        return jdbc.queryForObject("SELECT id FROM learner_account WHERE username = ?", String.class, username);
     }
 
     public void audit(String actorId, String action, String type, String entityId, Object metadata) {
         try {
             jdbc.update("""
-                    INSERT INTO content_audit_log(id, actor_user_id, action_name, entity_type, entity_id, metadata_json)
+                    INSERT INTO content_audit_log(id, actor_learner_id, action_name, entity_type, entity_id, metadata_json)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """, UUID.randomUUID().toString(), actorId, action, type, entityId,
                     mapper.writeValueAsString(metadata));

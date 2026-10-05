@@ -30,25 +30,32 @@ public class AuditLogStore {
         add(clauses, values, "a.action_name", action);
         add(clauses, values, "a.entity_type", entityType);
         if (actor != null && !actor.isBlank()) {
-            clauses.add("(a.actor_user_id = ? OR LOWER(u.username) LIKE ? OR LOWER(u.display_name) LIKE ?)");
+            clauses.add("(COALESCE(a.actor_learner_id, a.actor_user_id) = ? "
+                    + "OR LOWER(COALESCE(l.username, u.username)) LIKE ? "
+                    + "OR LOWER(COALESCE(l.display_name, u.display_name)) LIKE ?)");
             values.add(actor.trim());
             values.add("%" + actor.trim().toLowerCase() + "%");
             values.add("%" + actor.trim().toLowerCase() + "%");
         }
         String where = clauses.isEmpty() ? "" : " WHERE " + String.join(" AND ", clauses);
         Long total = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM content_audit_log a LEFT JOIN app_user u ON u.id = a.actor_user_id
+                SELECT COUNT(*) FROM content_audit_log a
+                  LEFT JOIN learner_account l ON l.id = a.actor_learner_id
+                  LEFT JOIN app_user u ON u.id = a.actor_user_id
                 """ + where, Long.class, values.toArray());
         List<Object> queryValues = new ArrayList<>(values);
         queryValues.add(size);
         queryValues.add(page * size);
         List<AuditLogView> rows = jdbc.query("""
-                SELECT a.*, u.username actor_username, u.display_name actor_display_name
+                SELECT a.*, COALESCE(l.username, u.username) actor_username,
+                       COALESCE(l.display_name, u.display_name) actor_display_name
                   FROM content_audit_log a
+                  LEFT JOIN learner_account l ON l.id = a.actor_learner_id
                   LEFT JOIN app_user u ON u.id = a.actor_user_id
                 """ + where + " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?",
                 (result, index) -> new AuditLogView(
-                        result.getString("id"), result.getString("actor_user_id"),
+                        result.getString("id"), result.getString("actor_learner_id") != null
+                                ? result.getString("actor_learner_id") : result.getString("actor_user_id"),
                         result.getString("actor_username"), result.getString("actor_display_name"),
                         result.getString("action_name"), result.getString("entity_type"),
                         result.getString("entity_id"), json(result.getString("metadata_json")),

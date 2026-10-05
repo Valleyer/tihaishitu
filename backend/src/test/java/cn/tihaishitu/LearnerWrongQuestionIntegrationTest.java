@@ -1,0 +1,96 @@
+package cn.tihaishitu;
+
+import cn.tihaishitu.learner.LearnerAuthService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest @AutoConfigureMockMvc
+@TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:learner-wrong;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
+class LearnerWrongQuestionIntegrationTest {
+    @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper;
+
+    @Test void latestResultDrivesQueueAndWrongPracticeStartsWithOriginalQuestion() throws Exception {
+        Fixture f = fixture();
+        Cookie cookie = register();
+        String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='wrong-user'", String.class);
+        graded(learner, f.q1(), f.point(), "wrong", "normal");
+
+        JsonNode queue = json(mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(queue).hasSize(1);
+        JsonNode session = json(mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"intent\":\"wrong_review\",\"sourceQuestionId\":\"%s\"}".formatted(f.q1())))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        assertThat(session.path("currentAttempt").path("question").path("id").asText()).isEqualTo(f.q1());
+        String sessionId = session.path("id").asText(), attempt = session.path("currentAttempt").path("id").asText();
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/answers", sessionId).with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":true}".formatted(attempt, f.q1())))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andExpect(result ->
+                        assertThat(mapper.readTree(result.getResponse().getContentAsString())).isEmpty());
+
+        graded(learner, f.q1(), f.point(), "wrong", "normal");
+        graded(learner, f.q2(), f.point(), "correct", "training");
+        queue = json(mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(queue).hasSize(1);
+        assertThat(queue.get(0).path("questionId").asText()).isEqualTo(f.q1());
+    }
+
+    private void graded(String learner, String question, String point, String assessment, String mode) throws Exception {
+        String snapshot = mapper.writeValueAsString(java.util.Map.ofEntries(
+                java.util.Map.entry("id", question), java.util.Map.entry("subject", "测试"),
+                java.util.Map.entry("chapter", "章"), java.util.Map.entry("presentationType", "true_false"),
+                java.util.Map.entry("gradingMode", "auto"), java.util.Map.entry("question", "判断"),
+                java.util.Map.entry("options", java.util.Map.of("true", "正确", "false", "错误")),
+                java.util.Map.entry("answer", true), java.util.Map.entry("explanation", "解析"),
+                java.util.Map.entry("difficulty", 2),
+                java.util.Map.entry("knowledgePointIds", java.util.List.of(point))));
+        jdbc.update("""
+                INSERT INTO study_attempt(id,game_id,learner_id,world_id,practice_session_id,question_id,
+                    question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,
+                    target_knowledge_point_id,evidence_mode,question_difficulty,answered_at)
+                VALUES (?,NULL,?,NULL,NULL,?,?,'true','graded','auto','automatic',?,?,?,2,CURRENT_TIMESTAMP)
+                """, UUID.randomUUID().toString(), learner, question, snapshot, assessment, point, mode);
+    }
+
+    private Fixture fixture() {
+        String book=UUID.randomUUID().toString(), chapter=UUID.randomUUID().toString(), point=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'错题文集','',TRUE,1,1)", book);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C','章','',0,1)",chapter,book);
+        jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,'WRONG-K','错题知识','测试','节','章','core','active','','',0,1)",point);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)",book,point,chapter);
+        String q1=question(point,"原错题"), q2=question(point,"补救题");
+        return new Fixture(point,q1,q2);
+    }
+    private String question(String point,String text) {
+        String id=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision) VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)",id,text);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",id,point);
+        return id;
+    }
+    private Cookie register() throws Exception { return mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
+            .contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"wrong-user\",\"displayName\":\"错题\",\"password\":\"password-123\"}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE); }
+    private JsonNode json(String value) throws Exception { return mapper.readTree(value); }
+    private record Fixture(String point,String q1,String q2) {}
+}

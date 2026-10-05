@@ -29,6 +29,7 @@ class DiagnosticLearningIntegrationTest extends DiagnosticWorldTestSupport {
         Scenario scenario = scenario(1, true);
         Cookie cookie = register("diagnostic-dependency-route");
         configureLearner("diagnostic-dependency-route", scenario);
+        forceScenarioPlan(scenario);
         initialize(cookie);
 
         JsonNode game = begin(cookie, "read");

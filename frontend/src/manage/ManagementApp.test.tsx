@@ -6,6 +6,7 @@ import { QuestionPage } from "./ManagementApp";
 import { manageApi, type ManageUser, type PageResult, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
+  ManageHttpError: class ManageHttpError extends Error {},
   manageApi: {
     questions: vi.fn(),
     question: vi.fn(),
@@ -147,7 +148,7 @@ describe("QuestionPage pagination", () => {
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));
     const rowLabel = await screen.findByText("2026 · 21");
     fireEvent.click(rowLabel.closest("button")!);
-    fireEvent.click(await screen.findByRole("button", { name: "审核通过" }));
+    fireEvent.click(await screen.findByRole("button", { name: "审核通过并发布" }));
 
     expect(await screen.findByText("第 1 / 1 页")).toBeTruthy();
     expect(screen.getByText("待审核共 20 道")).toBeTruthy();

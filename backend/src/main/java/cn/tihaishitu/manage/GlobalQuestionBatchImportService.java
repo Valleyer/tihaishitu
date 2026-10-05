@@ -416,7 +416,7 @@ public class GlobalQuestionBatchImportService {
         metadata.put("relationCount", relationCount);
         jdbc.update("""
                 INSERT INTO content_audit_log(
-                    id, actor_user_id, action_name, entity_type, entity_id, metadata_json)
+                    id, actor_learner_id, action_name, entity_type, entity_id, metadata_json)
                 VALUES (?, ?, 'QUESTION_BATCH_IMPORTED', 'question_batch', ?, ?)
                 """, UUID.randomUUID().toString(), actorId, importId, json(metadata));
     }

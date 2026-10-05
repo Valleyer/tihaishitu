@@ -6,7 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -40,7 +41,7 @@ class GlobalQuestionBatchImportIntegrationTest {
 
     @Test
     void v2ImportsGlobalQuestionsWithoutChangingAnyBookTable() throws Exception {
-        MockHttpSession admin = login();
+        Cookie admin = login();
         String firstId = UUID.randomUUID().toString();
         String secondId = UUID.randomUUID().toString();
         BookSnapshot before = bookSnapshot();
@@ -53,7 +54,7 @@ class GlobalQuestionBatchImportIntegrationTest {
                 .andExpect(status().isUnauthorized());
 
         String response = mvc.perform(post("/api/v1/manage/imports/questions")
-                        .session(admin).with(csrf()).contentType("application/json").content(payload))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(payload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.schemaVersion").value("global-question-batch/v2"))
                 .andExpect(jsonPath("$.published").value(false))
@@ -66,7 +67,7 @@ class GlobalQuestionBatchImportIntegrationTest {
 
         String importId = mapper.readTree(response).path("importId").asText();
         String actorId = jdbc.queryForObject(
-                "SELECT id FROM app_user WHERE username = 'batch-admin'", String.class);
+                "SELECT id FROM learner_account WHERE username = 'batch-admin'", String.class);
         assertThat(bookSnapshot()).isEqualTo(before);
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id IN (?, ?) AND status = 'pending_review'",
                 firstId, secondId)).isEqualTo(2);
@@ -84,15 +85,15 @@ class GlobalQuestionBatchImportIntegrationTest {
 
     @Test
     void sameUuidUpdatesInPlaceAndInvalidatesPreviousReview() throws Exception {
-        MockHttpSession admin = login();
+        Cookie admin = login();
         String id = UUID.randomUUID().toString();
         String first = batch(2042, true,
                 List.of(singleChoice(id, "3", "旧题干", KNOWLEDGE_CODE)));
         mvc.perform(post("/api/v1/manage/imports/questions")
-                        .session(admin).with(csrf()).contentType("application/json").content(first))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(first))
                 .andExpect(status().isOk());
         String actorId = jdbc.queryForObject(
-                "SELECT id FROM app_user WHERE username = 'batch-admin'", String.class);
+                "SELECT id FROM learner_account WHERE username = 'batch-admin'", String.class);
         jdbc.update("""
                 UPDATE question_resource
                    SET reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, review_comment = '旧审核结论'
@@ -102,7 +103,7 @@ class GlobalQuestionBatchImportIntegrationTest {
         String second = batch(2042, false,
                 List.of(singleChoice(id, "3", "修订后的题干", KNOWLEDGE_CODE)));
         mvc.perform(post("/api/v1/manage/imports/questions")
-                        .session(admin).with(csrf()).contentType("application/json").content(second))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(second))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.createdQuestions").value(0))
                 .andExpect(jsonPath("$.updatedQuestions").value(1));
@@ -232,12 +233,12 @@ class GlobalQuestionBatchImportIntegrationTest {
                 .andExpect(jsonPath("$.createdQuestions").value(2));
     }
 
-    private MockHttpSession login() throws Exception {
+    private Cookie login() throws Exception {
         var response = mvc.perform(post("/api/v1/manage/auth/login").with(csrf())
                         .contentType("application/json")
                         .content("{\"username\":\"batch-admin\",\"password\":\"batch-admin-test-password\"}"))
                 .andExpect(status().isOk()).andReturn();
-        return (MockHttpSession) response.getRequest().getSession(false);
+        return response.getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 
     private String batch(int year, Boolean publish, List<Map<String, Object>> questions) throws Exception {

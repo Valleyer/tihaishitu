@@ -1,6 +1,7 @@
 package cn.tihaishitu.game;
 
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.learning.PracticeActionContext;
 import cn.tihaishitu.world.WorldActionContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,10 +17,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Optional;
 
 @Repository
 public class QuestionAttemptStore {
-    public record Snapshot(String id, String gameId, String learnerId, String worldId,
+    public record Snapshot(String id, String gameId, String learnerId, String worldId, String practiceSessionId,
                            String questionId, JsonNode question, JsonNode standard,
                            String status, String gradingMode, String gradingSource, String assessment,
                            String targetKnowledgePointId, String evidenceMode, Integer questionDifficulty,
@@ -54,29 +56,37 @@ public class QuestionAttemptStore {
                        String gradingMode, String targetKnowledgePointId, String evidenceMode,
                        Integer questionDifficulty, String diagnosisSessionId, String diagnosisRole) {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
+        PracticeActionContext.Scope practice = PracticeActionContext.currentOrNull();
         jdbc.update("""
-                INSERT INTO study_attempt(id, game_id, learner_id, world_id, question_id,
+                INSERT INTO study_attempt(id, game_id, learner_id, world_id, practice_session_id, question_id,
                                           question_snapshot_json, standard_answer_json, status, grading_mode,
                                           target_knowledge_point_id, evidence_mode, question_difficulty,
                                           diagnosis_session_id, diagnosis_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
-                """, id, world == null ? gameId : null, world == null ? null : world.learnerId(),
-                world == null ? null : world.worldId(), questionId, json(question), json(standard), gradingMode,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+                """, id, world == null && practice == null ? gameId : null,
+                world != null ? world.learnerId() : practice == null ? null : practice.learnerId(),
+                world == null ? null : world.worldId(), practice == null ? null : practice.practiceSessionId(),
+                questionId, json(question), json(standard), gradingMode,
                 targetKnowledgePointId, evidenceMode, questionDifficulty, diagnosisSessionId, diagnosisRole);
     }
 
     public Snapshot find(String id, String gameId) {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
-        String predicate = world == null ? "id = ? AND game_id = ?" : "id = ? AND learner_id = ? AND world_id = ?";
-        Object[] args = world == null ? new Object[]{id, gameId} : new Object[]{id, world.learnerId(), world.worldId()};
+        PracticeActionContext.Scope practice = PracticeActionContext.currentOrNull();
+        String predicate = world != null ? "id = ? AND learner_id = ? AND world_id = ? AND practice_session_id IS NULL"
+                : practice != null ? "id = ? AND learner_id = ? AND practice_session_id = ? AND world_id IS NULL"
+                : "id = ? AND game_id = ?";
+        Object[] args = world != null ? new Object[]{id, world.learnerId(), world.worldId()}
+                : practice != null ? new Object[]{id, practice.learnerId(), practice.practiceSessionId()}
+                : new Object[]{id, gameId};
         List<Snapshot> values = jdbc.query("""
-                SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
+                SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
                        target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
                        diagnosis_session_id, diagnosis_role
                   FROM study_attempt WHERE %s
                 """.formatted(predicate), (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
-                result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
+                result.getString("learner_id"), result.getString("world_id"), result.getString("practice_session_id"), result.getString("question_id"),
                 read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
                 result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
                 result.getString("assessment"), result.getString("target_knowledge_point_id"),
@@ -210,20 +220,53 @@ public class QuestionAttemptStore {
     }
 
     public Snapshot findForDiagnosis(String id, String learnerId, String worldId) {
-        List<Snapshot> values = jdbc.query("""
-                SELECT id, game_id, learner_id, world_id, question_id, question_snapshot_json,
+        return findForDiagnosis(id, learnerId, worldId, null);
+    }
+
+    public Snapshot findForPractice(String id, String learnerId, String practiceSessionId) {
+        return findForDiagnosis(id, learnerId, null, practiceSessionId);
+    }
+
+    public Optional<Snapshot> latestWrongForQuestion(String learnerId, String questionId) {
+        return jdbc.query("""
+                SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
                        target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
                        diagnosis_session_id, diagnosis_role
-                  FROM study_attempt WHERE id=? AND learner_id=? AND world_id=?
+                  FROM study_attempt
+                 WHERE learner_id=? AND question_id=? AND status='graded'
+                 ORDER BY answered_at DESC, created_at DESC, id DESC LIMIT 1
                 """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
-                result.getString("learner_id"), result.getString("world_id"), result.getString("question_id"),
+                result.getString("learner_id"), result.getString("world_id"), result.getString("practice_session_id"),
+                result.getString("question_id"), read(result.getString("question_snapshot_json")),
+                read(result.getString("standard_answer_json")), result.getString("status"),
+                result.getString("grading_mode"), result.getString("grading_source"), result.getString("assessment"),
+                result.getString("target_knowledge_point_id"), result.getString("evidence_mode"),
+                result.getObject("question_difficulty", Integer.class), instant(result.getTimestamp("answered_at")),
+                result.getString("diagnosis_session_id"), result.getString("diagnosis_role")),
+                learnerId, questionId).stream()
+                .filter(value -> java.util.Set.of("wrong", "partial").contains(value.assessment()))
+                .findFirst();
+    }
+
+    public Snapshot findForDiagnosis(String id, String learnerId, String worldId, String practiceSessionId) {
+        List<Snapshot> values = jdbc.query("""
+                SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
+                       standard_answer_json, status, grading_mode, grading_source, assessment,
+                       target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
+                       diagnosis_session_id, diagnosis_role
+                  FROM study_attempt WHERE id=? AND learner_id=?
+                   AND ((? IS NULL AND world_id IS NULL) OR world_id=?)
+                   AND ((? IS NULL AND practice_session_id IS NULL) OR practice_session_id=?)
+                """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
+                result.getString("learner_id"), result.getString("world_id"), result.getString("practice_session_id"), result.getString("question_id"),
                 read(result.getString("question_snapshot_json")), read(result.getString("standard_answer_json")),
                 result.getString("status"), result.getString("grading_mode"), result.getString("grading_source"),
                 result.getString("assessment"), result.getString("target_knowledge_point_id"),
                 result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class),
                 instant(result.getTimestamp("answered_at")), result.getString("diagnosis_session_id"),
-                result.getString("diagnosis_role")), id, learnerId, worldId);
+                result.getString("diagnosis_role")), id, learnerId, worldId, worldId,
+                practiceSessionId, practiceSessionId);
         if (values.isEmpty()) throw new IllegalStateException("诊断根答题记录不存在。 ");
         return values.get(0);
     }

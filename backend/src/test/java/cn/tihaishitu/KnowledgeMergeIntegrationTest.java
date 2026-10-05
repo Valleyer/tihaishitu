@@ -7,7 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -74,17 +75,17 @@ class KnowledgeMergeIntegrationTest {
 
     @Test
     void mergeMigratesAndCollapsesRelationsWithoutDeletingSource() throws Exception {
-        MockHttpSession admin = login("merge-admin", "merge-admin-test-password");
-        MockHttpSession reviewer = login("merge-reviewer", "merge-reviewer-test-password");
+        Cookie admin = login("merge-admin", "merge-admin-test-password");
+        Cookie reviewer = login("merge-reviewer", "merge-reviewer-test-password");
         String request = mapper.writeValueAsString(Map.of(
                 "targetId", targetId, "reason", "细分口径重复，统一到正式知识点", "expectedRevision", 1));
 
         mvc.perform(post("/api/v1/manage/knowledge-points/{id}/merge", sourceId)
-                        .session(reviewer).with(csrf()).contentType("application/json").content(request))
+                        .cookie(reviewer).with(csrf()).contentType("application/json").content(request))
                 .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/manage/knowledge-points/{id}/merge", sourceId)
-                        .session(admin).with(csrf()).contentType("application/json").content(request))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(request))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.migratedRelations").value(1))
                 .andExpect(jsonPath("$.collapsedRelations").value(1))
@@ -112,13 +113,13 @@ class KnowledgeMergeIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM knowledge_merge_history WHERE source_knowledge_id = ? AND target_knowledge_id = ?", Integer.class, sourceId, targetId))
                 .isEqualTo(1);
 
-        mvc.perform(get("/api/v1/manage/knowledge-points").session(admin)
+        mvc.perform(get("/api/v1/manage/knowledge-points").cookie(admin)
                         .param("query", "TEST-MERGE-SOURCE").param("status", "active"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(targetId));
-        mvc.perform(get("/api/v1/manage/audit-logs").session(reviewer))
+        mvc.perform(get("/api/v1/manage/audit-logs").cookie(reviewer))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/manage/audit-logs").session(admin).param("action", "KNOWLEDGE_MERGED"))
+        mvc.perform(get("/api/v1/manage/audit-logs").cookie(admin).param("action", "KNOWLEDGE_MERGED"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].entityId").value(sourceId))
@@ -127,7 +128,7 @@ class KnowledgeMergeIntegrationTest {
                 .andExpect(jsonPath("$.content[0].metadata.collapsedBookMemberships").value(1));
 
         mvc.perform(post("/api/v1/manage/knowledge-points/{id}/merge", sourceId)
-                        .session(admin).with(csrf()).contentType("application/json").content(request))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(request))
                 .andExpect(status().isBadRequest());
     }
 
@@ -172,19 +173,19 @@ class KnowledgeMergeIntegrationTest {
     }
 
     private void ensureReviewer() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM app_user WHERE username = 'merge-reviewer'", Integer.class);
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM learner_account WHERE username = 'merge-reviewer'", Integer.class);
         if (count != null && count > 0) return;
         String id = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO app_user(id, username, display_name, password_hash, status) VALUES (?, 'merge-reviewer', '合并审核员', ?, 'active')",
+        jdbc.update("INSERT INTO learner_account(id, username, display_name, password_hash, status) VALUES (?, 'merge-reviewer', '合并审核员', ?, 'active')",
                 id, encoder.encode("merge-reviewer-test-password"));
-        jdbc.update("INSERT INTO app_user_role(user_id, role_name) VALUES (?, 'REVIEWER')", id);
+        jdbc.update("INSERT INTO learner_account_role(learner_id, role_name) VALUES (?, 'REVIEWER')", id);
     }
 
-    private MockHttpSession login(String username, String password) throws Exception {
+    private Cookie login(String username, String password) throws Exception {
         var result = mvc.perform(post("/api/v1/manage/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(mapper.writeValueAsString(Map.of("username", username, "password", password))))
                 .andExpect(status().isOk()).andReturn();
-        return (MockHttpSession) result.getRequest().getSession(false);
+        return result.getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 }

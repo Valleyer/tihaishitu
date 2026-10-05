@@ -202,8 +202,9 @@ public class QuestionManagementStore {
     private static String blank(String value) { return value == null || value.isBlank() ? null : value.trim(); }
     private static String baseSelect() {
         return """
-                SELECT q.*, u.display_name creator_name
+                SELECT q.*, COALESCE(l.display_name, u.display_name) creator_name
                   FROM question_resource q
+                  LEFT JOIN learner_account l ON l.id = q.created_by
                   LEFT JOIN app_user u ON u.id = q.created_by
                 """;
     }

@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,11 +44,11 @@ class ManageContentIntegrationTest {
 
     @Test
     void knowledgeSearchEditAndQuestionReviewWorkflowAreRoleProtected() throws Exception {
-        MockHttpSession contributor = login("contributor");
-        MockHttpSession reviewer = login("reviewer");
+        Cookie contributor = login("contributor");
+        Cookie reviewer = login("reviewer");
 
         String search = mvc.perform(get("/api/v1/manage/knowledge-points")
-                        .session(contributor).param("query", "挖洞高斯"))
+                        .cookie(contributor).param("query", "挖洞高斯"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].code").value("M1-H06-035"))
@@ -57,22 +58,22 @@ class ManageContentIntegrationTest {
         long pointRevision = point.path("revision").asLong();
 
         mvc.perform(put("/api/v1/manage/knowledge-points/{id}", pointId)
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content(knowledgeUpdate(pointRevision)))
                 .andExpect(status().isForbidden());
 
         mvc.perform(put("/api/v1/manage/knowledge-points/{id}", pointId)
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content(knowledgeUpdate(pointRevision)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revision").value(pointRevision + 1));
         mvc.perform(put("/api/v1/manage/knowledge-points/{id}", pointId)
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content(knowledgeUpdate(pointRevision)))
                 .andExpect(status().isConflict());
 
         String created = mvc.perform(post("/api/v1/manage/questions")
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content(solutionQuestion(pointId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("draft"))
@@ -85,7 +86,7 @@ class ManageContentIntegrationTest {
         long revision = question.path("revision").asLong();
 
         String submitted = mvc.perform(post("/api/v1/manage/questions/{id}/submit", questionId)
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + revision + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("pending_review"))
@@ -93,11 +94,11 @@ class ManageContentIntegrationTest {
         long reviewRevision = mapper.readTree(submitted).path("revision").asLong();
 
         mvc.perform(post("/api/v1/manage/questions/{id}/review", questionId)
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + reviewRevision + ",\"approve\":true}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/manage/questions/{id}/review", questionId)
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + reviewRevision
                                 + ",\"approve\":true,\"comment\":\"内容与知识点标注通过\"}"))
                 .andExpect(status().isOk())
@@ -128,21 +129,21 @@ class ManageContentIntegrationTest {
                         "knowledgePointId", pointId, "role", "core", "sortOrder", 0)))));
     }
 
-    private MockHttpSession login(String username) throws Exception {
+    private Cookie login(String username) throws Exception {
         var result = mvc.perform(post("/api/v1/manage/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(mapper.writeValueAsString(java.util.Map.of(
                                 "username", username, "password", username + "-test-password"))))
                 .andExpect(status().isOk()).andReturn();
-        return (MockHttpSession) result.getRequest().getSession(false);
+        return result.getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 
     private void ensureUser(String username, String displayName, String role) {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM app_user WHERE username = ?", Integer.class, username);
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM learner_account WHERE username = ?", Integer.class, username);
         if (count != null && count > 0) return;
         String id = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO app_user(id, username, display_name, password_hash, status) VALUES (?, ?, ?, ?, 'active')",
+        jdbc.update("INSERT INTO learner_account(id, username, display_name, password_hash, status) VALUES (?, ?, ?, ?, 'active')",
                 id, username, displayName, encoder.encode(username + "-test-password"));
-        jdbc.update("INSERT INTO app_user_role(user_id, role_name) VALUES (?, ?)", id, role);
+        jdbc.update("INSERT INTO learner_account_role(learner_id, role_name) VALUES (?, ?)", id, role);
     }
 }

@@ -10,7 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
+import jakarta.servlet.http.Cookie;
+import cn.tihaishitu.learner.LearnerAuthService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -56,9 +57,9 @@ class ManagementPolicyIntegrationTest {
                         .contentType("application/json").content(payload.toString()))
                 .andExpect(status().isUnauthorized());
 
-        MockHttpSession contributor = login("policy-contributor");
-        MockHttpSession reviewer = login("policy-reviewer");
-        String created = mvc.perform(post("/api/v1/manage/questions").session(contributor).with(csrf())
+        Cookie contributor = login("policy-contributor");
+        Cookie reviewer = login("policy-reviewer");
+        String created = mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
                         .contentType("application/json").content(payload.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("draft"))
@@ -67,7 +68,7 @@ class ManagementPolicyIntegrationTest {
         String questionId = draft.path("id").asText();
 
         String submitted = mvc.perform(post("/api/v1/manage/questions/{id}/submit", questionId)
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + draft.path("revision").asLong() + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("pending_review"))
@@ -75,11 +76,11 @@ class ManagementPolicyIntegrationTest {
         long revision = mapper.readTree(submitted).path("revision").asLong();
 
         mvc.perform(post("/api/v1/manage/questions/{id}/review", questionId)
-                        .session(contributor).with(csrf()).contentType("application/json")
+                        .cookie(contributor).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + revision + ",\"approve\":true}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/manage/questions/{id}/review", questionId)
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + revision + ",\"approve\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("published"));
@@ -87,35 +88,35 @@ class ManagementPolicyIntegrationTest {
 
     @Test
     void reviewersCannotReviewTheirOwnQuestions() throws Exception {
-        MockHttpSession reviewer = login("policy-reviewer");
-        String created = mvc.perform(post("/api/v1/manage/questions").session(reviewer).with(csrf())
+        Cookie reviewer = login("policy-reviewer");
+        String created = mvc.perform(post("/api/v1/manage/questions").cookie(reviewer).with(csrf())
                         .contentType("application/json").content(choiceQuestion(activeKnowledgeId(), "single_choice").toString()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode draft = mapper.readTree(created);
         String submitted = mvc.perform(post("/api/v1/manage/questions/{id}/submit", draft.path("id").asText())
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + draft.path("revision").asLong() + "}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode pending = mapper.readTree(submitted);
 
         mvc.perform(post("/api/v1/manage/questions/{id}/review", pending.path("id").asText())
-                        .session(reviewer).with(csrf()).contentType("application/json")
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
                         .content("{\"expectedRevision\":" + pending.path("revision").asLong() + ",\"approve\":true}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void duplicateKnowledgeIsRejectedAndBlankQuestionsCanUseChoicePresentation() throws Exception {
-        MockHttpSession contributor = login("policy-contributor");
+        Cookie contributor = login("policy-contributor");
         String pointId = activeKnowledgeId();
         ObjectNode duplicate = choiceQuestion(pointId, "single_choice");
         ArrayNode relations = duplicate.withArray("knowledgePoints");
         relations.add(relations.get(0).deepCopy());
-        mvc.perform(post("/api/v1/manage/questions").session(contributor).with(csrf())
+        mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
                         .contentType("application/json").content(duplicate.toString()))
                 .andExpect(status().isBadRequest());
 
-        mvc.perform(post("/api/v1/manage/questions").session(contributor).with(csrf())
+        mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
                         .contentType("application/json").content(choiceQuestion(pointId, "blank").toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questionType").value("blank"))
@@ -126,12 +127,12 @@ class ManagementPolicyIntegrationTest {
 
     @Test
     void onlyAdminsManageRolesAndDisablingAnAccountRevokesExistingSessions() throws Exception {
-        MockHttpSession contributor = login("policy-contributor");
-        mvc.perform(get("/api/v1/manage/users").session(contributor))
+        Cookie contributor = login("policy-contributor");
+        mvc.perform(get("/api/v1/manage/users").cookie(contributor))
                 .andExpect(status().isForbidden());
 
-        MockHttpSession admin = login("policy-admin");
-        String users = mvc.perform(get("/api/v1/manage/users").session(admin))
+        Cookie admin = login("policy-admin");
+        String users = mvc.perform(get("/api/v1/manage/users").cookie(admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode target = null;
         for (JsonNode user : mapper.readTree(users)) {
@@ -143,14 +144,14 @@ class ManagementPolicyIntegrationTest {
                 "roles", Set.of("CONTRIBUTOR", "REVIEWER"),
                 "expectedRevision", target.path("revision").asLong()));
         mvc.perform(put("/api/v1/manage/users/{id}", target.path("id").asText())
-                        .session(admin).with(csrf()).contentType("application/json").content(body))
+                        .cookie(admin).with(csrf()).contentType("application/json").content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[?(@ == 'REVIEWER')]").exists());
 
-        jdbc.update("UPDATE app_user SET status = 'disabled' WHERE username = 'policy-contributor'");
-        mvc.perform(get("/api/v1/manage/questions").session(contributor))
+        jdbc.update("UPDATE learner_account SET status = 'disabled' WHERE username = 'policy-contributor'");
+        mvc.perform(get("/api/v1/manage/questions").cookie(contributor))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("账号已停用，请联系管理员。"));
+                .andExpect(jsonPath("$.message").value("请先登录管理后台。"));
         mvc.perform(post("/api/v1/manage/auth/login").with(csrf()).contentType("application/json")
                         .content("{\"username\":\"policy-contributor\",\"password\":\"policy-contributor-test-password\"}"))
                 .andExpect(status().isUnauthorized());
@@ -186,26 +187,26 @@ class ManagementPolicyIntegrationTest {
                 String.class);
     }
 
-    private MockHttpSession login(String username) throws Exception {
+    private Cookie login(String username) throws Exception {
         var result = mvc.perform(post("/api/v1/manage/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(mapper.writeValueAsString(java.util.Map.of(
                                 "username", username, "password", username + "-test-password"))))
                 .andExpect(status().isOk()).andReturn();
-        return (MockHttpSession) result.getRequest().getSession(false);
+        return result.getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 
     private void ensureUser(String username, String displayName, Set<String> roles) {
-        String id = jdbc.query("SELECT id FROM app_user WHERE username = ?",
+        String id = jdbc.query("SELECT id FROM learner_account WHERE username = ?",
                 result -> result.next() ? result.getString(1) : null, username);
         if (id == null) {
             id = UUID.randomUUID().toString();
-            jdbc.update("INSERT INTO app_user(id, username, display_name, password_hash, status) VALUES (?, ?, ?, ?, 'active')",
+            jdbc.update("INSERT INTO learner_account(id, username, display_name, password_hash, status) VALUES (?, ?, ?, ?, 'active')",
                     id, username, displayName, encoder.encode(username + "-test-password"));
         } else {
-            jdbc.update("UPDATE app_user SET display_name = ?, status = 'active' WHERE id = ?", displayName, id);
+            jdbc.update("UPDATE learner_account SET display_name = ?, status = 'active' WHERE id = ?", displayName, id);
         }
-        jdbc.update("DELETE FROM app_user_role WHERE user_id = ?", id);
-        for (String role : roles) jdbc.update("INSERT INTO app_user_role(user_id, role_name) VALUES (?, ?)", id, role);
+        jdbc.update("DELETE FROM learner_account_role WHERE learner_id = ?", id);
+        for (String role : roles) jdbc.update("INSERT INTO learner_account_role(learner_id, role_name) VALUES (?, ?)", id, role);
     }
 }

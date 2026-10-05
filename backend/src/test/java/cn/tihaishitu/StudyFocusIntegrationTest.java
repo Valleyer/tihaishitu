@@ -59,7 +59,7 @@ class StudyFocusIntegrationTest {
         jdbc.update("UPDATE learner_study_profile SET focus_mode='manual' WHERE learner_id=?", learnerId);
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,0)", learnerId, source);
         String actor = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,?,'重点管理员','x','active',1)",
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,'重点管理员','x','active',1)",
                 actor, "focus-actor-" + actor);
 
         management.merge(source, target, 1, "迁移仅有重点的学习者", actor);

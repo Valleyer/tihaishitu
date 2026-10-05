@@ -34,7 +34,7 @@ class LearnerKnowledgeMergeIntegrationTest {
         String actor = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,'merge-learner','合并学习者','x','active',1)", learner);
         jdbc.update("INSERT INTO learner_study_profile(learner_id,pace,difficulty,focus_mode,revision) VALUES (?,'normal','standard','manual',1)", learner);
-        jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,'merge-actor','管理员','x','active',1)", actor);
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,'merge-actor','管理员','x','active',1)", actor);
         insertKnowledge(source, "MERGE-STATE-SOURCE"); insertKnowledge(target, "MERGE-STATE-TARGET");
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,2)", learner, source);
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,5)", learner, target);
@@ -69,7 +69,7 @@ class LearnerKnowledgeMergeIntegrationTest {
         String questionId = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,'并发学习者','x','active',1)",
                 learner, "active-merge-" + learner);
-        jdbc.update("INSERT INTO app_user(id,username,display_name,password_hash,status,revision) VALUES (?,?,'并发管理员','x','active',1)",
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,'并发管理员','x','active',1)",
                 actor, "active-actor-" + actor);
         insertKnowledge(source, "ACTIVE-MERGE-SOURCE");
         insertKnowledge(target, "ACTIVE-MERGE-TARGET");

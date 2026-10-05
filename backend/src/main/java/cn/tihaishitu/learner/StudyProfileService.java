@@ -71,9 +71,8 @@ public class StudyProfileService {
 
     public KnowledgeQuestionPoolService.StudyPlan plan(int count) {
         StudyProfileStore.Profile profile = rawCurrent();
-        AdaptiveStudyPlanner.AdaptiveStudyPlan plan = adaptivePlanner.plan(LearnerContext.learnerId(),
-                new LinkedHashSet<>(profile.selectedBookIds()), profile.focusedKnowledgePointIds(),
-                "manual".equals(profile.focusMode()), count);
+        AdaptiveStudyPlanner.AdaptiveStudyPlan plan = adaptivePlanner.randomPlan(LearnerContext.learnerId(),
+                new LinkedHashSet<>(profile.selectedBookIds()), count);
         return new KnowledgeQuestionPoolService.StudyPlan(
                 plan.allowedKnowledgePointIds(), plan.targetKnowledgePointIds());
     }

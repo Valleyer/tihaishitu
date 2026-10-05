@@ -149,7 +149,7 @@ public class DiagnosticLearningService {
         boolean pending = sorted.stream().anyMatch(allowed::contains);
         String status = pending ? "diagnosing_dependencies" : "rechecking_target";
         try {
-            store.createSession(id, root.learnerId(), root.worldId(), root.id(), canonicalTarget,
+            store.createSession(id, root.learnerId(), root.worldId(), root.practiceSessionId(), root.id(), canonicalTarget,
                     status, unavailable);
             for (int index = 0; index < sorted.size(); index++) {
                 String point = sorted.get(index);
@@ -226,7 +226,7 @@ public class DiagnosticLearningService {
             return;
         }
         QuestionAttemptStore.Snapshot root = attempts.findForDiagnosis(session.rootAttemptId(),
-                session.learnerId(), session.worldId());
+                session.learnerId(), session.worldId(), session.practiceSessionId());
         if (!"graded".equals(root.status()) || root.answeredAt() == null)
             throw new IllegalStateException("诊断根答题尚未完成评分。 ");
         knowledgeStates.apply(root, root.assessment(), root.gradingSource(), root.answeredAt());
@@ -240,8 +240,15 @@ public class DiagnosticLearningService {
         learners.lockForUpdate(session.learnerId());
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         if (world != null && (!world.learnerId().equals(session.learnerId())
-                || !world.worldId().equals(session.worldId())))
+                || !world.worldId().equals(session.worldId()) || session.practiceSessionId() != null))
             throw new IllegalStateException("诊断会话不属于当前学习者或世界。 ");
+        PracticeActionContext.Scope practice = PracticeActionContext.currentOrNull();
+        if (practice != null && (!practice.learnerId().equals(session.learnerId())
+                || !practice.practiceSessionId().equals(session.practiceSessionId())
+                || session.worldId() != null))
+            throw new IllegalStateException("诊断会话不属于当前学习者或专项练习。 ");
+        if (world == null && practice == null)
+            throw new IllegalStateException("诊断会话缺少受验证的执行上下文。 ");
         return store.lock(id);
     }
 
