@@ -9,12 +9,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -29,11 +31,14 @@ public class UserManagementController {
     private final ManageUserStore users;
     private final PasswordEncoder encoder;
     private final KnowledgeManagementStore audit;
+    private final ManageUserDeletionService deletion;
 
-    public UserManagementController(ManageUserStore users, PasswordEncoder encoder, KnowledgeManagementStore audit) {
+    public UserManagementController(ManageUserStore users, PasswordEncoder encoder, KnowledgeManagementStore audit,
+                                    ManageUserDeletionService deletion) {
         this.users = users;
         this.encoder = encoder;
         this.audit = audit;
+        this.deletion = deletion;
     }
 
     @GetMapping
@@ -69,6 +74,12 @@ public class UserManagementController {
         audit.audit(audit.userId(authentication.getName()), "USER_ROLE_UPDATED", "learner_account", id,
                 java.util.Map.of("roles", body.roles(), "status", body.status()));
         return changed;
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(@PathVariable String id, Authentication authentication) {
+        deletion.delete(id, audit.userId(authentication.getName()));
     }
 
     private static void validateRoles(Set<String> roles) {

@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -84,6 +85,16 @@ public class QuestionManagementController {
         return service.review(id, request.expectedRevision(), request.approve(), request.comment(), authentication);
     }
 
+    @PostMapping("/bulk-review")
+    @PreAuthorize("hasAnyRole('REVIEWER','ADMIN')")
+    QuestionManagementService.BulkReviewResult bulkReview(
+            @Valid @RequestBody BulkReviewRequest request, Authentication authentication) {
+        return service.bulkReview(request.items().stream()
+                        .map(item -> new QuestionManagementService.BulkReviewItem(item.id(), item.expectedRevision()))
+                        .toList(),
+                request.approve(), request.comment(), authentication);
+    }
+
     @PostMapping("/{id}/archive")
     @PreAuthorize("hasAnyRole('REVIEWER','ADMIN')")
     QuestionManagementStore.QuestionView archive(@PathVariable String id,
@@ -117,6 +128,10 @@ public class QuestionManagementController {
             List<OptionRequest> options, List<RelationRequest> knowledgePoints, Long expectedRevision) {}
     public record RevisionRequest(@NotNull Long expectedRevision) {}
     public record ReviewRequest(@NotNull Long expectedRevision, boolean approve, String comment) {}
+    public record BulkReviewItemRequest(@NotBlank String id, @NotNull Long expectedRevision) {}
+    public record BulkReviewRequest(
+            @NotNull @Size(min = 1, max = 100) List<@Valid BulkReviewItemRequest> items,
+            boolean approve, String comment) {}
     public record BulkDeleteRequest(@NotNull List<@NotBlank String> ids) {}
     public record BulkDeleteResult(int deleted) {}
 }
