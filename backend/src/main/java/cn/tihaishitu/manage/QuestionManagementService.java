@@ -63,7 +63,9 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView review(
             String id, long revision, boolean approve, String comment, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
-        if (actor.equals(current.createdBy())) denied("不能审核自己创建的题目。");
+        boolean admin = auth.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (!admin && actor.equals(current.createdBy())) denied("审核员不能审核自己创建的题目。");
         if (!"pending_review".equals(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "只有待审核题目可以审核。");
         }
