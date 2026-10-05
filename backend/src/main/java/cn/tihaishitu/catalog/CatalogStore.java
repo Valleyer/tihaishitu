@@ -56,7 +56,8 @@ public class CatalogStore {
                                     FROM question_bank_knowledge bk
                                     JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
                                     JOIN question_resource qr ON qr.id = qk.question_id
-                                   WHERE bk.bank_id = b.id AND qr.status = 'published')
+                                   WHERE bk.bank_id = b.id AND qr.status = 'published'
+                                     AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
                             ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) END question_count,
                        CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
                             THEN (SELECT COUNT(*) FROM question_bank_knowledge bk
@@ -67,7 +68,8 @@ public class CatalogStore {
                            FROM question_bank_item bi
                            JOIN question_resource qr ON qr.id = bi.question_id
                            JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
-                          WHERE bi.bank_id = b.id AND qr.status = 'published')
+                          WHERE bi.bank_id = b.id AND qr.status = 'published'
+                            AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
                             ELSE (SELECT COUNT(*) FROM knowledge_point k WHERE k.bank_id = b.id) END point_count
                   FROM question_bank b
                  ORDER BY b.created_at, b.id
@@ -133,7 +135,9 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                    JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
-                  WHERE bi.bank_id = ? AND q.status = 'published' AND k.status = 'active'
+                  WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                    AND k.status = 'active'
                  ORDER BY k.sort_order, k.id
                 """,
                 (result, row) -> knowledgePoint(result),
@@ -160,6 +164,7 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_option o ON o.question_id = bi.question_id
                   WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY o.question_id, o.sort_order
                 """,
                 (RowCallbackHandler) result -> options
@@ -175,6 +180,7 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                   WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY qk.question_id, qk.sort_order
                 """,
                 (RowCallbackHandler) result -> pointIds
@@ -190,6 +196,7 @@ public class CatalogStore {
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
                  WHERE bi.bank_id = ? AND q.status = 'published'
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY bi.sort_order, q.id
                 """,
                 (result, row) -> {

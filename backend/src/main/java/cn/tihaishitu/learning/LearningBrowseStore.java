@@ -21,7 +21,9 @@ public class LearningBrowseStore {
         return jdbc.query("""
                 SELECT b.id, b.name, b.description, b.revision,
                        COUNT(DISTINCT bk.knowledge_point_id) knowledge_count,
-                       COUNT(DISTINCT CASE WHEN q.status = 'published' THEN q.id END) question_count
+                       COUNT(DISTINCT CASE WHEN q.status = 'published'
+                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                           THEN q.id END) question_count
                   FROM question_bank b
                   LEFT JOIN question_bank_knowledge bk ON bk.bank_id = b.id
                   LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
@@ -105,7 +107,9 @@ public class LearningBrowseStore {
         return jdbc.query("""
                 SELECT k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,
                        MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
-                       COUNT(DISTINCT CASE WHEN q.status='published' THEN q.id END) published_count
+                       COUNT(DISTINCT CASE WHEN q.status='published'
+                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                           THEN q.id END) published_count
                   FROM global_knowledge_point k
                   JOIN question_bank_knowledge bk ON bk.knowledge_point_id=k.id
                   JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
@@ -134,6 +138,7 @@ public class LearningBrowseStore {
                   FROM question_resource q
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
                  WHERE qk.knowledge_point_id = ? AND q.status = 'published'
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY q.id
                 """, (result, row) -> question(result), id);
         questions.forEach(question -> question.put("knowledgePoints", questionKnowledge((String) question.get("id"))));
@@ -146,6 +151,7 @@ public class LearningBrowseStore {
                        question_type, presentation_type,
                        grading_mode, content_markdown, analysis_markdown, standard_answer_json, difficulty, revision
                   FROM question_resource WHERE id = ? AND status = 'published'
+                   AND question_type IN ('single_choice','multiple_choice','true_false','solution')
                 """, (result, row) -> question(result), id).stream().findFirst()
                 .orElseThrow(() -> missing("题目不存在或尚未发布。"));
         value.put("options", jdbc.query("""

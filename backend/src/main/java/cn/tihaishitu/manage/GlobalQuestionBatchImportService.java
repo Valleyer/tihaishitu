@@ -37,7 +37,7 @@ public class GlobalQuestionBatchImportService {
             "code", "role", "sortOrder");
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
-            "single_choice", "multiple_choice", "true_false", "blank", "solution");
+            "single_choice", "multiple_choice", "true_false", "solution");
     private static final Set<String> RELATION_ROLES = Set.of("core", "auxiliary");
 
     public record BatchInput(String subject, String sourceType, String sourceName, Integer examYear) {}
@@ -264,6 +264,9 @@ public class GlobalQuestionBatchImportService {
     }
 
     private void validateQuestionType(QuestionInput question, String at) {
+        if ("blank".equals(question.questionType())) {
+            bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+        }
         if (!QUESTION_TYPES.contains(question.questionType())) {
             bad(at + "的 questionType 不合法。");
         }
@@ -273,7 +276,7 @@ public class GlobalQuestionBatchImportService {
             case "single_choice" -> { expectedPresentation = "single_choice"; expectedGrading = "auto"; }
             case "multiple_choice" -> { expectedPresentation = "multiple_choice"; expectedGrading = "auto"; }
             case "true_false" -> { expectedPresentation = "true_false"; expectedGrading = "auto"; }
-            case "blank", "solution" -> { expectedPresentation = "self_assessment"; expectedGrading = "self_assessment"; }
+            case "solution" -> { expectedPresentation = "self_assessment"; expectedGrading = "self_assessment"; }
             default -> throw new IllegalStateException("未覆盖的题型：" + question.questionType());
         }
         if (!expectedPresentation.equals(question.presentationType())

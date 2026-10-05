@@ -15,7 +15,8 @@ import java.util.UUID;
 
 @Component
 public class CatalogNormalizer {
-    private static final Set<String> TYPES = Set.of("single_choice", "multiple_choice", "true_false");
+    private static final Set<String> TYPES = Set.of(
+            "single_choice", "multiple_choice", "true_false", "solution");
 
     public QuestionBankDto normalize(QuestionBankDto source) {
         require(source != null, "文集不能为空。");
@@ -100,7 +101,17 @@ public class CatalogNormalizer {
         require(pointIds.size() >= 1 && pointIds.size() <= 3, "题目“" + question.id() + "”须关联 1–3 个知识点。");
         require(question.difficulty() >= 1 && question.difficulty() <= 5, "题目“" + question.id() + "”难度必须为 1–5。");
         require(question.frequency() >= 1 && question.frequency() <= 5, "题目“" + question.id() + "”频率必须为 1–5。");
-        require(question.options().size() >= 2 && question.options().size() <= 6, "题目“" + question.id() + "”需要 2–6 个选项。");
+        if ("solution".equals(question.type())) {
+            require("self_assessment".equals(question.presentationType())
+                            && "self_assessment".equals(question.gradingMode()),
+                    "题目“" + question.id() + "”综合题必须使用自评展示与自评判题。");
+            require(question.options().isEmpty(), "题目“" + question.id() + "”综合题不能提供客观题选项。");
+        } else {
+            require(question.type().equals(question.presentationType()) && "auto".equals(question.gradingMode()),
+                    "题目“" + question.id() + "”客观题的展示与判题模式不匹配。");
+            require(question.options().size() >= 2 && question.options().size() <= 6,
+                    "题目“" + question.id() + "”需要 2–6 个选项。");
+        }
         return new QuestionDto(id, defaultText(question.subject(), "自修"),
                 defaultText(question.category(), "通识"), defaultText(question.chapter(), "未分章"),
                 question.type(), question.originalType(), question.presentationType(), question.gradingMode(),

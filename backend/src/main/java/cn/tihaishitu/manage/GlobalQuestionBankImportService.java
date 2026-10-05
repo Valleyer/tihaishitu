@@ -23,7 +23,7 @@ public class GlobalQuestionBankImportService {
     private static final String SCHEMA_VERSION = "global-question-bank/v1";
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
-            "single_choice", "multiple_choice", "true_false", "blank", "solution");
+            "single_choice", "multiple_choice", "true_false", "solution");
     private static final Set<String> PRESENTATIONS = Set.of(
             "single_choice", "multiple_choice", "true_false", "self_assessment");
     private static final Set<String> GRADING_MODES = Set.of("auto", "self_assessment");
@@ -123,6 +123,9 @@ public class GlobalQuestionBankImportService {
             if (blank(q.subject()) || blank(q.content()) || q.standardAnswer() == null || q.standardAnswer().isNull()) {
                 bad(at + "缺少科目、题干或标准答案。");
             }
+            if ("blank".equals(q.questionType())) {
+                bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+            }
             if (!SOURCE_TYPES.contains(q.sourceType()) || !QUESTION_TYPES.contains(q.questionType())
                     || !PRESENTATIONS.contains(q.presentationType()) || !GRADING_MODES.contains(q.gradingMode())) {
                 bad(at + "的来源、原始题型、展示类型或判题模式不合法。");
@@ -135,11 +138,8 @@ public class GlobalQuestionBankImportService {
                 bad(at + "是真题，必须填写 examYear 和 questionNumber。");
             }
             boolean selfAssessment = "self_assessment".equals(q.gradingMode());
-            if (selfAssessment != "self_assessment".equals(q.presentationType())) {
-                bad(at + "的 presentationType 与 gradingMode 不匹配。");
-            }
-            if (("blank".equals(q.questionType()) || "solution".equals(q.questionType())) && !selfAssessment) {
-                bad(at + "的填空或解答原题必须使用 self_assessment 展示和判题。");
+            if (!validCombination(q.questionType(), q.presentationType(), q.gradingMode())) {
+                bad(at + "的 questionType、presentationType 与 gradingMode 不匹配。");
             }
             if (selfAssessment && !q.standardAnswer().isTextual()) {
                 bad(at + "的自评参考答案必须是 Markdown 字符串。");
@@ -191,6 +191,16 @@ public class GlobalQuestionBankImportService {
         }
         Set<String> answerKeys = answerKeys(q.standardAnswer());
         if (!answerKeys.equals(correct)) bad(at + "的 standardAnswer 与 options.correct 不一致。");
+    }
+
+    private static boolean validCombination(String type, String presentation, String grading) {
+        return switch (type) {
+            case "single_choice" -> "single_choice".equals(presentation) && "auto".equals(grading);
+            case "multiple_choice" -> "multiple_choice".equals(presentation) && "auto".equals(grading);
+            case "true_false" -> "true_false".equals(presentation) && "auto".equals(grading);
+            case "solution" -> "self_assessment".equals(presentation) && "self_assessment".equals(grading);
+            default -> false;
+        };
     }
 
     private List<OptionInput> normalizedOptions(List<OptionInput> options) {

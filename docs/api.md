@@ -237,7 +237,7 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 题库修订只影响以后发卷，不影响已有快照和历史记录。
 - 导入先完整校验，再原子保存；备份创建新人生并重映射题库引用。
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
-- 填空题与解答题保留原始题型，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
+- 正式题型仅允许 `single_choice`、`multiple_choice`、`true_false`、`solution`；其中 `solution` 展示为“综合题”，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。`blank` 不能新建、保存、导入或发布，历史 `blank` 也不会进入正式题池。原填空题须由题目生成 AI 保留 Question UUID 并改编为单选题或多选题。综合题参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
 
 本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
 

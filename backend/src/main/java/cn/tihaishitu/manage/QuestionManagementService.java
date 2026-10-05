@@ -14,7 +14,7 @@ import java.util.Set;
 public class QuestionManagementService {
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
-            "single_choice", "multiple_choice", "true_false", "blank", "solution");
+            "single_choice", "multiple_choice", "true_false", "solution");
     private static final Set<String> PRESENTATIONS = Set.of(
             "single_choice", "multiple_choice", "true_false", "self_assessment");
     private static final Set<String> GRADING_MODES = Set.of("auto", "self_assessment");
@@ -51,6 +51,7 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView submit(String id, long revision, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
         if (!actor.equals(current.createdBy())) denied("只能提交自己创建的题目。");
+        validateStoredType(current);
         if (!Set.of("draft", "rejected").contains(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "当前题目状态不能提交审核。");
         }
@@ -65,6 +66,7 @@ public class QuestionManagementService {
         if (!"pending_review".equals(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "只有待审核题目可以审核。");
         }
+        if (approve) validateStoredType(current);
         String to = approve ? "published" : "rejected";
         return store.transition(id, revision, "pending_review", to, actor,
                 approve ? "QUESTION_REVIEW_APPROVED" : "QUESTION_REVIEW_REJECTED", value(comment));
@@ -86,9 +88,13 @@ public class QuestionManagementService {
         if (input.subject() == null || input.subject().isBlank() || input.content() == null || input.content().isBlank()) {
             bad("科目和题干不能为空。");
         }
+        rejectBlank(input.questionType());
         if (!SOURCE_TYPES.contains(input.sourceType()) || !QUESTION_TYPES.contains(input.questionType())
                 || !PRESENTATIONS.contains(input.presentationType()) || !GRADING_MODES.contains(input.gradingMode())) {
             bad("来源、原始题型、展示类型或判题模式不合法。");
+        }
+        if (!validCombination(input.questionType(), input.presentationType(), input.gradingMode())) {
+            bad("题型、展示类型与判题模式必须使用知境规定的固定组合。");
         }
         if (input.difficulty() < 1 || input.difficulty() > 5) bad("难度必须在 1–5 之间。");
         if ("real_exam".equals(input.sourceType()) && (input.examYear() == null || input.questionNumber() == null
@@ -122,6 +128,29 @@ public class QuestionManagementService {
             if (!"active".equals(knowledge.status())) bad("题目不能绑定已停用或已合并的知识点。");
         }
         if (!hasCore) bad("题目至少需要一个核心知识点。");
+    }
+
+    private void validateStoredType(QuestionManagementStore.QuestionView question) {
+        rejectBlank(question.questionType());
+        if (!validCombination(question.questionType(), question.presentationType(), question.gradingMode())) {
+            bad("题型、展示类型与判题模式必须使用知境规定的固定组合。");
+        }
+    }
+
+    private static boolean validCombination(String type, String presentation, String grading) {
+        return switch (type) {
+            case "single_choice" -> "single_choice".equals(presentation) && "auto".equals(grading);
+            case "multiple_choice" -> "multiple_choice".equals(presentation) && "auto".equals(grading);
+            case "true_false" -> "true_false".equals(presentation) && "auto".equals(grading);
+            case "solution" -> "self_assessment".equals(presentation) && "self_assessment".equals(grading);
+            default -> false;
+        };
+    }
+
+    private static void rejectBlank(String type) {
+        if ("blank".equals(type)) {
+            bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+        }
     }
 
     private String actorId(Authentication auth) { return knowledgeStore.userId(auth.getName()); }

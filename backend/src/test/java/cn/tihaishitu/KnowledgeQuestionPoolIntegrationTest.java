@@ -57,6 +57,19 @@ class KnowledgeQuestionPoolIntegrationTest {
     }
 
     @Test
+    void legacyBlankIsNeverPlayable() {
+        String point = knowledge("legacy blank guard");
+        String book = book("Legacy Blank Book", point);
+        question("legacy blank", 2, "blank", relation(point, "core"));
+        String solution = question("supported solution", 3, relation(point, "core"));
+
+        var plan = pool.planKnowledgePoints(Set.of(book), 1);
+        assertThat(pool.eligibleQuestions(request(point, plan.allowedKnowledgePointIds(), Set.of(), false)))
+                .extracting(question -> question.id())
+                .containsExactly(solution);
+    }
+
+    @Test
     void multipleBooksDeduplicateScopeAndSeenQuestionsNeverRepeat() {
         String point = knowledge("shared");
         String firstBook = book("Book A", point);
@@ -118,15 +131,22 @@ class KnowledgeQuestionPoolIntegrationTest {
     }
 
     private String question(String content, int difficulty, Relation... relations) {
+        return question(content, difficulty, "solution", relations);
+    }
+
+    private String question(String content, int difficulty, String type, Relation... relations) {
         String id = UUID.randomUUID().toString();
+        String presentation = "solution".equals(type) || "blank".equals(type)
+                ? "self_assessment" : type;
+        String grading = "self_assessment".equals(presentation) ? "self_assessment" : "auto";
         jdbc.update("""
                 INSERT INTO question_resource(
                     id, subject_name, source_type, source_name, question_type, presentation_type,
                     grading_mode, content_markdown, standard_answer_json, analysis_markdown,
                     difficulty, status, revision)
-                VALUES (?, '测试科目', 'custom', 'Phase C 测试', 'solution', 'self_assessment',
-                        'self_assessment', ?, '"答案"', '测试解析', ?, 'published', 1)
-                """, id, content, difficulty);
+                VALUES (?, '测试科目', 'custom', 'Phase C 测试', ?, ?,
+                        ?, ?, '"答案"', '测试解析', ?, 'published', 1)
+                """, id, type, presentation, grading, content, difficulty);
         for (int index = 0; index < relations.length; index++) {
             Relation relation = relations[index];
             jdbc.update("""

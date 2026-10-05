@@ -12,7 +12,8 @@ import java.util.UUID;
 
 @Component
 public class CatalogValidator {
-    private static final Set<String> TYPES = Set.of("single_choice", "multiple_choice", "true_false");
+    private static final Set<String> TYPES = Set.of(
+            "single_choice", "multiple_choice", "true_false", "solution");
 
     public void validate(QuestionBankDto bank) {
         if (bank == null) throw bad("题库文件不能为空。");
@@ -64,6 +65,20 @@ public class CatalogValidator {
 
     private void validateAnswer(QuestionDto question) {
         JsonNode answer = question.answer();
+        if ("solution".equals(question.type())) {
+            if (!"self_assessment".equals(question.presentationType())
+                    || !"self_assessment".equals(question.gradingMode())) {
+                throw bad("综合题必须使用自评展示与自评判题：" + question.id());
+            }
+            if (!question.options().isEmpty()) throw bad("综合题不能提供客观题选项：" + question.id());
+            if (answer == null || !answer.isTextual() || answer.asText().isBlank()) {
+                throw bad("综合题参考答案必须是 Markdown 字符串：" + question.id());
+            }
+            return;
+        }
+        if (!question.type().equals(question.presentationType()) || !"auto".equals(question.gradingMode())) {
+            throw bad("客观题的展示与判题模式不匹配：" + question.id());
+        }
         if ("true_false".equals(question.type())) {
             if (answer == null || !answer.isBoolean()) throw bad("判断题答案必须是 true 或 false：" + question.id());
             if (!question.options().keySet().equals(Set.of("true", "false")))
