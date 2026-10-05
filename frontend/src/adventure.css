@@ -1560,7 +1560,7 @@
 
 /*
  * 弹窗统一对比度契约：浅色纸面只使用下面四组深色文字；深色卡片使用 ivory。
- * 新增弹窗组件应优先复用这些变量，避免把主世界的浅绿文字直接放到纸面上。
+ * 新增弹窗组件应优先复用这些变量，避免把寒门仕途主界面的浅绿文字直接放到纸面上。
  */
 .modal .modal-body {
   --paper-text: #29382d;
@@ -1587,7 +1587,7 @@
   color: var(--paper-text);
 }
 
-/* 读书书架：使用纸面卡片和深色正文，不沿用主世界的暗色卡片文字。 */
+/* 读书书架：使用纸面卡片和深色正文，不沿用寒门仕途主界面的暗色卡片文字。 */
 .modal .activity-shelf > button {
   background: #e2dbc5 !important;
   border-color: var(--paper-border) !important;

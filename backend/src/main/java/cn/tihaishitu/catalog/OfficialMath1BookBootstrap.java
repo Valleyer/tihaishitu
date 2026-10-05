@@ -77,7 +77,7 @@ public class OfficialMath1BookBootstrap {
             jdbc.update("""
                     INSERT INTO question_bank(id, name, description, enabled, weight_value, revision)
                     VALUES (?, ?, ?, TRUE, 1, 1)
-                    """, BOOK_ID, BOOK_NAME, "题海仕途官方维护的一站式数学一学习书籍。");
+                    """, BOOK_ID, BOOK_NAME, "知境官方维护的一站式数学一学习书籍。");
             return;
         }
         if (LEGACY_BOOK_NAME.equals(names.get(0))) {
@@ -87,6 +87,12 @@ public class OfficialMath1BookBootstrap {
                      WHERE id = ? AND name = ?
                     """, BOOK_NAME, BOOK_ID, LEGACY_BOOK_NAME);
         }
+        jdbc.update("""
+                UPDATE question_bank
+                   SET description = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND description = ?
+                """, "知境官方维护的一站式数学一学习书籍。", BOOK_ID,
+                "题海仕途官方维护的一站式数学一学习书籍。");
     }
 
     private Map<String, String> ensureChapters() {

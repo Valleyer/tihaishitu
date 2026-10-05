@@ -230,7 +230,7 @@ export const httpApi: GameApi = {
       }
     >("/bootstrap");
     // Learning Hub 只需要清单；题目正文按知识点/题目详情或正式发卷按需取得，
-    // 不在进入主世界时下载整本文集。
+    // 不在进入知境中枢时下载整本文集。
     const banks: Bank[] = data.bankManifest.map((bank) => ({
       id: bank.id, name: bank.name, description: bank.description,
       enabled: bank.enabled, weight: bank.weight, knowledgePoints: [], questions: [],
@@ -261,7 +261,7 @@ export const httpApi: GameApi = {
     gameRequest(gamePath(id) + "/choices", "POST", { eventId, choiceId }),
   saveNote: (id, questionId, note) =>
     gameRequest(gamePath(id) + "/notes", "PUT", { questionId, note }),
-  configure: async () => { throw new Error("请在主世界的学习方向中调整文集。"); },
+  configure: async () => { throw new Error("请在知境中枢的学习方向中调整文集。"); },
   acknowledgeChapter: (id, chapterId) =>
     gameRequest(gamePath(id) + "/chapter", "POST", { chapterId }),
   putBank: (bank) =>

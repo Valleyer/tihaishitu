@@ -31,8 +31,8 @@ function AuthPage({ register }: { register: boolean }) {
   };
   return <main className="auth-page">
     <form className="auth-card" onSubmit={submit}>
-      <span className="hub-seal">题</span><p className="eyebrow">联机学习者</p>
-      <h1>{register ? "建立学习身份" : "回到学习主世界"}</h1>
+      <span className="hub-seal">知</span><p className="eyebrow">知境学习者</p>
+      <h1>{register ? "建立学习身份" : "回到知境中枢"}</h1>
       <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       {register && <label>显示名称<input value={displayName} onChange={e => setDisplayName(e.target.value)} /></label>}
       <label>密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={register ? "new-password" : "current-password"} minLength={8} required /></label>
@@ -45,7 +45,7 @@ function AuthPage({ register }: { register: boolean }) {
 
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
   return <div className="learning-hub">
-    <header className="hub-header"><a className="hub-brand" href="/"><span>题</span>题海仕途</a>
+    <header className="hub-header"><a className="hub-brand" href="/"><span>知</span>知境</a>
       <nav><a href="/study">学习方向</a><a href="/progress">学习进度</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a>{data.canManage && <a href="/manage">管理后台</a>}<a href="/account">{data.learner.displayName}</a></nav>
     </header>
     {children}
@@ -57,7 +57,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
   const [progress, setProgress] = useState<LearnerProgress | null>();
   useEffect(() => { platformApi.progress().then(setProgress).catch(() => setProgress(null)); }, []);
   return <Shell data={data}><main className="hub-main">
-    <section className="hub-hero"><p className="eyebrow">Learning Hub · 学习主世界</p><h1>{data.learner.displayName}，今日从哪里继续？</h1>
+    <section className="hub-hero"><p className="eyebrow">Learning Hub · 知境中枢</p><h1>{data.learner.displayName}，今日从哪里继续？</h1>
       <p>文集决定完整学习范围，重点知识点记录当前关注方向。游戏世界从可玩知识点中随机确定目标，并共享同一份学习资源与学习身份。</p>
     </section>
     <div className="hub-grid">
@@ -104,11 +104,11 @@ function ProgressPage({ data }: { data: HubBootstrap }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
   const start = async (knowledgePointId: string) => { try { const session = await platformApi.startKnowledgePractice(knowledgePointId); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
-  if (!progress) return <Shell data={data}><main className="hub-main"><a href="/">← 返回主世界</a><h1>学习进度</h1><p className={error ? "hub-error" : ""}>{error || "正在从当前学习范围整理进度…"}</p></main></Shell>;
+  if (!progress) return <Shell data={data}><main className="hub-main"><a href="/">← 返回知境中枢</a><h1>学习进度</h1><p className={error ? "hub-error" : ""}>{error || "正在从当前学习范围整理进度…"}</p></main></Shell>;
   const total = progress.summary.totalKnowledgePoints;
   const maxDaily = Math.max(1, ...progress.recent.daily.map(day => day.gradedAttempts));
   const bandOrder = ["unstarted", "unmastered", "learning", "ready", "proficient"] as const;
-  return <Shell data={data}><main className="hub-main progress-page"><a href="/">← 返回主世界</a><p className="eyebrow">LEARNING PROGRESS</p><h1>学习进度</h1>
+  return <Shell data={data}><main className="hub-main progress-page"><a href="/">← 返回知境中枢</a><p className="eyebrow">LEARNING PROGRESS</p><h1>学习进度</h1>
     <p>进度按当前所选文集、有效掌握度、复习窗口和正式学习记录动态整理，会随学习与记忆变化。</p>{error && <p className="hub-error">{error}</p>}
     <section className="progress-hero-grid">
       <article><b>{total}</b><span>当前学习范围</span></article><article><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></article>
@@ -154,7 +154,7 @@ function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise
     try { const updated = await platformApi.updateProfile(profile, selected, profile.focusMode === "manual" ? focus.filter(id => points.some(p => p.id === id)) : []); setProfile(updated); setMessage("学习方向已保存"); await reload(); }
     catch (reason) { setMessage((reason as Error).message); }
   };
-  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><h1>学习方向</h1>
+  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回知境中枢</a><h1>学习方向</h1>
     <section className="hub-panel"><h2>学习范围</h2><p>所选文集共同构成题目依赖和活动抽题的完整允许范围。</p>
       <div className="choice-list">{data.bankManifest.map(book => <label key={book.id}><input type="checkbox" checked={selected.includes(book.id)} onChange={() => setSelected(v => v.includes(book.id) ? v.filter(x => x !== book.id) : [...v, book.id])} /><span><b>{book.name}</b><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道题</small></span></label>)}</div>
     </section>
@@ -166,7 +166,7 @@ function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise
   </main></Shell>;
 }
 
-function BooksPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><h1>文集与知识图谱</h1><div className="book-list">{data.bankManifest.map(book => <a className="hub-panel" href={`/books/${book.id}`} key={book.id}><h2>{book.name}</h2><p>{book.description}</p><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</small></a>)}</div></main></Shell>; }
+function BooksPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回知境中枢</a><h1>文集与知识图谱</h1><div className="book-list">{data.bankManifest.map(book => <a className="hub-panel" href={`/books/${book.id}`} key={book.id}><h2>{book.name}</h2><p>{book.description}</p><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</small></a>)}</div></main></Shell>; }
 
 const reviewGroups: { status: ReviewQueueItem["status"]; title: string; description: string }[] = [
   { status: "due", title: "现在适合巩固", description: "这些知识点已经进入合适的巩固窗口。" },
@@ -189,7 +189,7 @@ function ReviewCard({ item }: { item: ReviewQueueItem }) {
 function ReviewsPage({ data }: { data: HubBootstrap }) {
   const [queue, setQueue] = useState<ReviewQueue>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.reviewQueue().then(setQueue).catch(reason => setError((reason as Error).message)); }, []);
-  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><p className="eyebrow">REVIEW PLAN</p><h1>复习安排</h1>
+  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回知境中枢</a><p className="eyebrow">REVIEW PLAN</p><h1>复习安排</h1>
     <p>复习时间由当前掌握度与记忆稳定度动态推导。需要巩固时，可以直接进入对应知识点专项练习。</p>
     {error && <p className="hub-error">{error}</p>}
     {!queue && !error && <p>正在整理复习安排…</p>}
@@ -221,7 +221,7 @@ function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   const [items, setItems] = useState<WrongQuestion[]>([]); const [error, setError] = useState("");
   useEffect(() => { platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message)); }, []);
   const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
-  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><p className="eyebrow">WRONG PRACTICE</p><h1>错题练习</h1>
+  return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回知境中枢</a><p className="eyebrow">WRONG PRACTICE</p><h1>错题练习</h1>
     <p>这里只保留每道题最近一次正式作答仍需重做的项目，不展示错误次数或错误率。</p>{error && <p className="hub-error">{error}</p>}
     {items.length === 0 && <section className="hub-panel"><h2>当前没有待重做题目</h2><p>之后若同一道题出现错误或部分正确，会自动出现在这里。</p></section>}
     <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><p className="eyebrow">{item.subject} · {item.chapter}</p><h2>{item.knowledgePointName}</h2><p>{item.summary}</p><small>最近一次：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small><button className="hub-primary" onClick={() => start(item.questionId)}>重做这道题</button></article>)}</div>
@@ -262,15 +262,15 @@ function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   return <Shell data={data}><main className="hub-main narrow"><a href="/books">← 返回知识图谱</a>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{question.subject}</h1><section className="hub-panel rich"><RichText>{question.contentMarkdown}</RichText>{question.options?.map(option => <p key={option.key}><b>{option.key}.</b> <RichText>{option.text}</RichText></p>)}</section><div className="tag-row">{question.knowledgePoints?.map(point => <a href={`/knowledge/${point.id}`} key={point.id}>{point.name}</a>)}</div><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(question.standardAnswer, null, 2)}</pre><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></section>}</>}</main></Shell>;
 }
 
-function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><p>学习身份 UUID：<code>{data.learner.id}</code></p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
+function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回知境中枢</a><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><p>学习身份 UUID：<code>{data.learner.id}</code></p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
 
 function AuthenticatedPlatform() {
   const path = window.location.pathname;
   const [data, setData] = useState<HubBootstrap>(); const [error, setError] = useState("");
   const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
   useEffect(() => { void load(); }, []);
-  if (!data) return <main className="hub-loading">{error || "正在载入学习主世界…"}</main>;
-  if (path === "/worlds/ancient-official") return <div className="world-shell"><a className="world-shell-home" href="/">← 主世界</a><App /></div>;
+  if (!data) return <main className="hub-loading">{error || "正在载入知境中枢…"}</main>;
+  if (path === "/worlds/ancient-official") return <div className="world-shell"><a className="world-shell-home" href="/">← 知境中枢</a><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
   if (path === "/progress") return <ProgressPage data={data} />;
   if (path === "/reviews") return <ReviewsPage data={data} />;

@@ -34,12 +34,12 @@ export default function ManagementApp() {
     }).finally(() => setLoading(false));
   }, []);
   if (loading) return <div className="manage-loading">正在核验管理会话…</div>;
-  if (!user) return <div className="manage-loading"><div className="manage-access-denied"><h1>无法进入管理后台</h1><p>{accessError || "当前账号没有管理后台权限。"}</p><a href="/">返回学习主世界</a></div></div>;
+  if (!user) return <div className="manage-loading"><div className="manage-access-denied"><h1>无法进入管理后台</h1><p>{accessError || "当前账号没有管理后台权限。"}</p><a href="/">返回知境中枢</a></div></div>;
   const admin = user.roles.includes("ADMIN");
   return (
     <div className="manage-shell">
       <aside className="manage-sidebar">
-        <header><b>题海仕途</b><span>全服内容中台</span></header>
+        <header><b>知境</b><span>全服内容中台</span></header>
         <nav>
           <Nav active={page === "dashboard"} onClick={() => setPage("dashboard")}>仪表盘</Nav>
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>
@@ -52,7 +52,7 @@ export default function ManagementApp() {
         <footer>
           <span>{user.displayName}</span><small>{user.roles.map(role => manageLabel("role", role)).join(" · ") || "普通学习者"}</small>
           <button onClick={() => manageApi.logout().then(() => window.location.assign("/login"))}>退出登录</button>
-          <a href="/">返回学习主世界</a>
+          <a href="/">返回知境中枢</a>
         </footer>
       </aside>
       <main className="manage-main">

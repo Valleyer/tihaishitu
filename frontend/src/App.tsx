@@ -340,7 +340,7 @@ function App() {
         <>
           <header className="world-header">
             <button className="wordmark" onClick={() => window.location.assign("/")}>
-              <span className="small-seal">题</span>
+              <span className="small-seal">仕</span>
               {gameDesign.title}
             </button>
             <div className="world-date">
@@ -355,7 +355,7 @@ function App() {
                   window.location.assign("/");
                 }}
               >
-                主世界
+                知境中枢
               </button>
             </div>
           </header>
