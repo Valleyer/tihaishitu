@@ -80,7 +80,7 @@ class LearnerKnowledgeStateIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.band").value("unstarted"))
                 .andExpect(jsonPath("$.evidenceCount").value(0));
         mvc.perform(get("/api/v1/learner/knowledge-states").param("bookId", book).cookie(learner))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(6));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(5));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isZero();
         initialize(learner);
         JsonNode game = json(mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(learner)

@@ -34,7 +34,9 @@ class QuestionReviewWorkflowIntegrationTest {
         String body = """
                 {"subject":"测试","sourceType":"custom","sourceName":"审核题","questionType":"true_false",
                  "presentationType":"true_false","gradingMode":"auto","content":"待审核题","standardAnswer":true,
-                 "analysis":"解析","difficulty":2,"options":[],
+                 "analysis":"解析","difficulty":2,"options":[
+                   {"key":"true","text":"正确","correct":true,"sortOrder":0},
+                   {"key":"false","text":"错误","correct":false,"sortOrder":1}],
                  "knowledgePoints":[{"knowledgePointId":"%s","role":"core","sortOrder":0}]}
                 """.formatted(point);
         JsonNode created = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(creator)
