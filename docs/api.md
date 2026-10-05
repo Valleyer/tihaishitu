@@ -188,7 +188,7 @@ normal composite Question 的 wrong/partial 会从 root `question_snapshot_json.
 
 pace 为 normal / slow；difficulty 为 gentle / standard。此段仅描述 Legacy Game。
 新建人生界面不再要求玩家选择文集或题量；客户端自动接入当前可用文集。`bankIds` 允许为空，因此没有可用文集时仍可进入世界，待题库接入后再参与答题活动。
-正式 Bootstrap 为 `{learner, studyProfile, worlds, bankManifest, questionCatalog}`，不再以 saves 或 activeId 为中心。
+正式 Bootstrap 为 `{learner, canManage, studyProfile, worlds, bankManifest, questionCatalog}`，不再以 saves 或 activeId 为中心。
 
 `questionCatalog` 用于切换本地编辑题库与上线后的服务器统一题库：
 

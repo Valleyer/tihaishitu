@@ -80,7 +80,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
       {progress ? <div className="progress-summary-grid">
         <p><b>{progress.summary.totalKnowledgePoints}</b><span>当前学习范围</span></p>
         <p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p>
-        <p><b>{progress.summary.readyKnowledgePoints}</b><span>当前基本掌握</span></p>
+        <p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p>
         <p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p>
         <p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p>
       </div> : <p>{progress === null ? "学习进度暂时未能载入，可以稍后再看。" : "正在整理当前学习进度…"}</p>}
@@ -95,7 +95,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
 }
 
 function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bookId: string }) {
-  return <li><a href={`/books/${bookId}`}><span><code>{chapter.code}</code>{chapter.name}</span><small>{chapter.started} / {chapter.total} 已开始 · {chapter.ready} 基本掌握 · {chapter.proficient} 熟练掌握</small></a>
+  return <li><a href={`/books/${bookId}`}><span><code>{chapter.code}</code>{chapter.name}</span><small>{chapter.started} / {chapter.total} 已开始 · {chapter.ready} 基本掌握及以上 · {chapter.proficient} 熟练掌握</small></a>
     {chapter.children.length > 0 && <ul>{chapter.children.map(child => <ProgressChapterTree chapter={child} bookId={bookId} key={child.chapterId} />)}</ul>}
   </li>;
 }
@@ -112,10 +112,10 @@ function ProgressPage({ data }: { data: HubBootstrap }) {
     <p>进度按当前所选文集、有效掌握度、复习窗口和正式学习记录动态整理，会随学习与记忆变化。</p>{error && <p className="hub-error">{error}</p>}
     <section className="progress-hero-grid">
       <article><b>{total}</b><span>当前学习范围</span></article><article><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></article>
-      <article><b>{progress.summary.readyKnowledgePoints}</b><span>当前基本掌握</span></article><article><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></article>
+      <article><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></article><article><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></article>
       <article><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></article>
     </section>
-    <section className="hub-panel progress-section"><div className="panel-heading"><div><small>MASTERY</small><h2>当前掌握分布</h2></div><span>当前基本掌握 {progress.summary.readyKnowledgePoints} / {total}</span></div>
+    <section className="hub-panel progress-section"><div className="panel-heading"><div><small>MASTERY</small><h2>当前掌握分布</h2></div><span>基本掌握及以上 {progress.summary.readyKnowledgePoints} / {total}</span></div>
       <div className="band-distribution">{bandOrder.map(band => <div key={band}><span className={`mastery-band ${band}`}>{progressBandLabels[band]}</span><div><i style={{width: `${progressPercent(progress.bands[band], total)}%`}} /></div><b>{progress.bands[band]}</b><small>{progressPercent(progress.bands[band], total)}%</small></div>)}</div>
       <div className="progress-review-windows">
         <p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p>
@@ -125,7 +125,7 @@ function ProgressPage({ data }: { data: HubBootstrap }) {
     </section>
     <section className="progress-section"><div className="panel-heading"><div><small>SELECTED BOOKS</small><h2>按文集查看</h2></div><a href="/study">调整学习范围</a></div>
       {progress.books.length === 0 ? <div className="hub-panel"><h2>尚未选择学习文集</h2><p>先在学习方向中选择文集，再回来查看动态进度。</p></div> : <div className="progress-books">{progress.books.map(book => <article className="hub-panel" key={book.bookId}><div className="panel-heading"><div><h2>{book.name}</h2><p>{book.description}</p></div><a href={`/books/${book.bookId}`}>查看知识图谱</a></div>
-        <div className="book-progress-metrics"><span>{book.totalKnowledgePoints}<small>知识点</small></span><span>{book.started}<small>已开始</small></span><span>{book.ready}<small>基本掌握</small></span><span>{book.proficient}<small>熟练掌握</small></span><span>{book.reviewDueOrSoon}<small>建议巩固</small></span></div>
+        <div className="book-progress-metrics"><span>{book.totalKnowledgePoints}<small>知识点</small></span><span>{book.started}<small>已开始</small></span><span>{book.ready}<small>基本掌握及以上</small></span><span>{book.proficient}<small>熟练掌握</small></span><span>{book.reviewDueOrSoon}<small>建议巩固</small></span></div>
         <ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={book.bookId} key={chapter.chapterId} />)}</ul>
       </article>)}</div>}
     </section>
