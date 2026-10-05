@@ -31,7 +31,8 @@ API_PROXY_TARGET=http://localhost:12345
 | GET | /learner/knowledge-states/{knowledgePointId} | 无 | 当前 Learner 的 Knowledge State；无证据时返回未开始虚拟状态且不写库 |
 | GET | /learner/knowledge-states?bookId={bookId} | 无 | enabled Book 全部 active KnowledgePoint 的批量状态 |
 | GET | /learner/review-queue | 无 | 当前 Selected Books 范围内动态派生的 7 天复习安排；只读且不写库 |
-| GET | /bootstrap | 无 | learner、studyProfile、worlds、bankManifest、questionCatalog |
+| GET | /learner/progress | 无 | 当前 Selected Books 范围内动态派生的掌握分布、文集/章节聚合和近 7 日正式学习足迹 |
+| GET | /bootstrap | 无 | learner、canManage、studyProfile、worlds、bankManifest、questionCatalog |
 | GET | /learning/books | 无 | 可见文集 |
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
 | GET | /learning/knowledge-points/{id} | 无 | active KnowledgePoint |
@@ -77,12 +78,12 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 
 ## 全服管理后台 API
 
-`/api/v1/manage/*` 是浏览器用户后台，与机器级 `/admin/*` 严格分开。后台使用服务端 Session；前端先请求 `GET /manage/auth/csrf`，修改请求携带返回的 CSRF header，且始终使用 `credentials: include`。后端会在每次管理请求时复核账号状态；账号被停用后，已有 Session 的下一次请求返回 401 并被注销。
+`/api/v1/manage/*` 是浏览器用户后台，与机器级 `/admin/*` 严格分开。管理后台与 Learning Hub 共用同一个 Learner Session，不存在独立 Manage 登录身份；附加权限来自 `learner_account_role`。前端先请求 `GET /manage/auth/csrf`，修改请求携带返回的 CSRF header，且始终使用 `credentials: include`。后端会在每次管理请求时复核账号状态与角色；角色移除或账号停用后，管理请求立即失去权限，但学习者身份仍按统一 Learner Session 处理。
 
 | 方法 | 路径 | 权限 | 用途 |
 | --- | --- | --- | --- |
-| POST | /manage/auth/login | 公开 + CSRF | 建立管理 Session |
-| POST | /manage/auth/logout | 已登录 | 注销 Session |
+| GET | /manage/auth/csrf | 公开 | 取得管理写请求使用的 CSRF header |
+| POST | /manage/auth/logout | 已登录 | 注销统一 Learner Session |
 | GET | /manage/auth/me | 已登录 | 当前账号与服务端角色 |
 | GET | /manage/knowledge-points | CONTRIBUTOR+ | 分页并按 code/name/alias/分科/章节/状态搜索 |
 | GET | /manage/knowledge-points/{id} | CONTRIBUTOR+ | 知识点详情 |
@@ -120,7 +121,7 @@ V1 quality 为 automatic correct 1.00、automatic wrong 0、self correct 0.90、
 
 正式 World 开始活动时先从 Selected Books 得到冻结的 allowed KnowledgePoint scope。某个目标知识点只有在至少存在一道满足以下条件的 published Question 时才可进入本轮计划：目标是该题的 core；题目的全部 KnowledgePoint 都处于 allowed scope 且为 active；除目标本身之外的其他 core/auxiliary KnowledgePoint 均满足 `effectiveMastery >= 70`。目标自身不要求 ready，因此全新知识点仍可由单知识点题目启动。无 state 的依赖视为不 ready；空 ready set 只允许没有其他依赖的题目。
 
-Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用虚拟初始状态且不写库。自动目标优先级依次为：已有证据且有效掌握度低于 70、未开始、70–85、85 以上；同层优先有效掌握度更低、证据更早的知识点。Manual Focus 整体优先于非 Focus，但仍受相同 dependency、scope、published 与 seen 约束。可训练的不同目标不足活动轮数时返回明确的 400，不会放宽依赖规则。
+Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用虚拟初始状态且不写库。正式 World 从 Selected Books 与 adaptive playable 集合的交集中随机抽取不同 target；Mastery、Review 与 Manual Focus 不参与 target 排序。target 确定后仍受相同 dependency、scope、published、difficulty 与 seen 约束；可训练的不同目标不足活动轮数时返回明确的 400，不会放宽依赖规则。
 
 每次正式 draw 都在当前 run 冻结的 allowed scope 内重新计算 ready，并读取当前目标 state。难度上限为：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–85 为 4，85 以上为 5；`standard` 使用 `min(targetDifficulty, masteryCap)`，`gentle` 再下调一级但不低于 1。NORMAL 优先精确难度，否则选择距离最近的难度，距离相同取较低值；TRAINING 使用 `min(2, normalPreferred)`，优先不高于 2 的最近难度，没有低难题时使用全部合法候选中的最低难度。seen Question 永不因难度匹配而复用。
 
@@ -146,9 +147,17 @@ reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)
 
 `reviewDueAt <= now` 返回 `due`，未来 24 小时内返回 `soon`，24 小时以后至 7 天内返回 `upcoming`，更远的状态不进入默认列表。API 只读取当前 Learner 的 Selected Books，按 KnowledgePoint ID 去重，批量读取状态，并复用 Phase F 的 effective mastery readiness 与 adaptive playable 查询；`playable=false` 表示当前题库或前置状态暂时无法安全安排该目标。
 
-自动 Planner 的目标顺序为：已有证据且 effective mastery 低于 70、due/soon Review、未开始、70–85、85 以上。Manual Focus 仍先把 focused 与 non-focused 分区，再在各分区内应用同一顺序。Review target 继续使用原有 adaptive difficulty，答错仍按 Phase G diagnosis 处理，证据模式仍只有 `normal` 与 `training`。
+Review Queue 只负责 Learning Hub 的复习安排，不改变正式 World target 的随机选择。学习者从 Review Queue 进入知识点专项后，仍使用原有 adaptive difficulty；答错仍按 Phase G diagnosis 处理，证据模式仍只有 `normal` 与 `training`。
 
 Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时间窗口并链接到知识点说明页。复习队列的读取与浏览本身不创建 attempt 或 evidence；进入 Phase J 的知识点专项后，正式作答仍通过共享 Question Engine 更新既有 Mastery，自然推迟下一次 due 或回到薄弱学习队列。
+
+## Learning Progress Dashboard V1
+
+`GET /learner/progress` 是只读动态派生视图，不保存 progress、completion 或 daily summary。总体范围取当前 Learner 的 Selected Books，并沿正式 `question_bank → question_bank_chapter → question_bank_knowledge` 模型读取 active KnowledgePoints；总体按 KnowledgePoint ID 去重，单本文集仍按自己的 membership 统计。状态通过一次批量查询读取，`started` 定义为 `evidenceCount > 0`，`ready` 使用惰性遗忘后的 `effectiveMastery >= 70`，`proficient` 复用 Mastery V1 的现有 band。
+
+文集响应包含按正式章节树组织的聚合；父章节统计自身直接成员和整棵子树，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量复用 Wrong Queue 的 latest graded result 语义。
+
+近 7 日足迹仅查询当前 Learner 在 UTC 最近 7 个自然日内 `status=graded` 的 `study_attempt`。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
 
 ## Diagnostic State Machine V1
 
