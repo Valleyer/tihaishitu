@@ -191,7 +191,7 @@ function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
         <label className="inline-check"><input type="checkbox" checked={selected.book.enabled} onChange={event => setSelected({ ...selected, book: { ...selected.book, enabled: event.target.checked } })} />启用文集</label>
         <button className="primary" onClick={saveBook}>保存文集</button>
         <fieldset className="editor-group"><legend>章节</legend>{selected.chapters.map(chapter => <ChapterEditor key={chapter.id} chapter={chapter} changed={next => setSelected({ ...selected, chapters: selected.chapters.map(item => item.id === next.id ? next : item) })} save={() => saveChapter(chapter)} />)}</fieldset>
-        <button className="danger" onClick={remove}>删除文集</button>
+        <section className="danger-zone"><div><b>危险操作</b><p>删除后将移除该文集及章节结构和文集绑定关系，不会删除全局题目、知识点和学习历史。</p></div><button className="danger" onClick={remove}>删除文集</button></section>
       </div> : <Empty>选择一部文集查看详情</Empty>}</aside></div>
   </section>;
 }

@@ -130,16 +130,32 @@ export class ManageHttpError extends Error {
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-let csrf: { headerName: string; token: string } | null = null;
+const csrfCookieName = "XSRF-TOKEN";
+const csrfHeaderName = "X-XSRF-TOKEN";
+let csrfRequest: Promise<void> | null = null;
 
-async function ensureCsrf() {
-  if (csrf) return csrf;
-  const response = await fetch("/api/v1/manage/auth/csrf", {
+function csrfToken(): string | null {
+  const prefix = csrfCookieName + "=";
+  const value = document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+}
+
+async function ensureCsrfToken(): Promise<string> {
+  const current = csrfToken();
+  if (current) return current;
+  csrfRequest ||= fetch("/api/v1/manage/auth/csrf", {
     credentials: "include",
-  });
-  if (!response.ok) throw new Error("无法取得管理会话凭证。");
-  csrf = await response.json();
-  return csrf!;
+    headers: { Accept: "application/json" },
+  }).then(async (response) => {
+    if (!response.ok) throw new ManageHttpError(response.status, "无法取得管理会话凭证。");
+  }).finally(() => { csrfRequest = null; });
+  await csrfRequest;
+  const issued = csrfToken();
+  if (!issued) throw new ManageHttpError(0, "浏览器未保存管理会话凭证。");
+  return issued;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -147,8 +163,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const token = await ensureCsrf();
-    headers.set(token.headerName, token.token);
+    headers.set(csrfHeaderName, await ensureCsrfToken());
   }
   const response = await fetch(`/api/v1/manage${path}`, {
     ...init,
@@ -173,7 +188,6 @@ export const manageApi = {
   me: () => request<ManageUser>("/auth/me"),
   async logout() {
     await request<void>("/auth/logout", { method: "POST" });
-    csrf = null;
   },
   knowledge: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<KnowledgeView>>(`/knowledge-points?${params(filters)}`),
