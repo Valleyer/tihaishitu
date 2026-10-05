@@ -3,7 +3,8 @@ import type { FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
 import { HttpError } from "../api/http";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type PracticeSession, type ReviewQueue, type ReviewQueueItem, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type ReviewQueue, type ReviewQueueItem, type StudyProfile, type WrongQuestion } from "./api";
+import { progressBandLabels, progressPercent } from "./progressView";
 import "./platform.css";
 
 const go = (path: string) => window.location.assign(path);
@@ -45,7 +46,7 @@ function AuthPage({ register }: { register: boolean }) {
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
   return <div className="learning-hub">
     <header className="hub-header"><a className="hub-brand" href="/"><span>题</span>题海仕途</a>
-      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a>{data.canManage && <a href="/manage">管理后台</a>}<a href="/account">{data.learner.displayName}</a></nav>
+      <nav><a href="/study">学习方向</a><a href="/progress">学习进度</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a>{data.canManage && <a href="/manage">管理后台</a>}<a href="/account">{data.learner.displayName}</a></nav>
     </header>
     {children}
   </div>;
@@ -53,11 +54,11 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
 
 function HubHome({ data }: { data: HubBootstrap }) {
   const selected = data.bankManifest.filter(book => data.studyProfile.selectedBookIds.includes(book.id));
-  const [reviews, setReviews] = useState<ReviewQueue | null>();
-  useEffect(() => { platformApi.reviewQueue().then(setReviews).catch(() => setReviews(null)); }, []);
+  const [progress, setProgress] = useState<LearnerProgress | null>();
+  useEffect(() => { platformApi.progress().then(setProgress).catch(() => setProgress(null)); }, []);
   return <Shell data={data}><main className="hub-main">
     <section className="hub-hero"><p className="eyebrow">Learning Hub · 学习主世界</p><h1>{data.learner.displayName}，今日从哪里继续？</h1>
-      <p>文集决定完整学习范围，重点知识点只负责安排优先顺序。所有游戏世界共享同一份学习资源与学习身份。</p>
+      <p>文集决定完整学习范围，重点知识点记录当前关注方向。游戏世界从可玩知识点中随机确定目标，并共享同一份学习资源与学习身份。</p>
     </section>
     <div className="hub-grid">
       <section className="hub-panel"><div className="panel-heading"><div><small>FORMAL PRACTICE</small><h2>专项练习</h2></div><a href="/books">选择知识点</a></div>
@@ -75,18 +76,65 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <p>{data.bankManifest.length} 本可用文集，题目和知识点由服务器统一维护。浏览行为不会产生答题记录。</p>
       </section>
     </div>
-    <section className="hub-panel review-summary"><div className="panel-heading"><div><small>REVIEW PLAN</small><h2>今日巩固</h2></div><a href="/reviews">查看复习安排</a></div>
-      {reviews ? <div className="review-summary-grid">
-        <p><b>{reviews.summary.due}</b><span>今日适合巩固</span></p>
-        <p><b>{reviews.summary.soon}</b><span>24 小时内进入窗口</span></p>
-        <p><b>{reviews.summary.upcoming}</b><span>未来 7 天可提前查看</span></p>
-      </div> : <p>{reviews === null ? "复习安排暂时未能载入，可以稍后再看。" : "正在根据当前掌握度与记忆稳定度整理复习安排…"}</p>}
+    <section className="hub-panel progress-summary"><div className="panel-heading"><div><small>LEARNING PROGRESS</small><h2>当前学习进度</h2></div><a href="/progress">查看学习进度</a></div>
+      {progress ? <div className="progress-summary-grid">
+        <p><b>{progress.summary.totalKnowledgePoints}</b><span>当前学习范围</span></p>
+        <p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p>
+        <p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p>
+        <p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p>
+        <p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p>
+      </div> : <p>{progress === null ? "学习进度暂时未能载入，可以稍后再看。" : "正在整理当前学习进度…"}</p>}
     </section>
     <section className="world-gallery" id="worlds"><div className="panel-heading"><div><small>WORLD GALLERY</small><h2>游戏世界</h2></div></div>
       <div className="world-cards">{data.worlds.map(world => <article key={world.id} className={world.enabled ? "world-card enabled" : "world-card"}>
         <p>{world.enabled ? "现已开放" : "筹备中"}</p><h3>{world.name}</h3><span>{world.description}</span>
         {world.enabled ? <a className="hub-primary" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"}</a> : <button disabled>尚未开放</button>}
       </article>)}</div>
+    </section>
+  </main></Shell>;
+}
+
+function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bookId: string }) {
+  return <li><a href={`/books/${bookId}`}><span><code>{chapter.code}</code>{chapter.name}</span><small>{chapter.started} / {chapter.total} 已开始 · {chapter.ready} 基本掌握及以上 · {chapter.proficient} 熟练掌握</small></a>
+    {chapter.children.length > 0 && <ul>{chapter.children.map(child => <ProgressChapterTree chapter={child} bookId={bookId} key={child.chapterId} />)}</ul>}
+  </li>;
+}
+
+function ProgressPage({ data }: { data: HubBootstrap }) {
+  const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
+  useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
+  const start = async (knowledgePointId: string) => { try { const session = await platformApi.startKnowledgePractice(knowledgePointId); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
+  if (!progress) return <Shell data={data}><main className="hub-main"><a href="/">← 返回主世界</a><h1>学习进度</h1><p className={error ? "hub-error" : ""}>{error || "正在从当前学习范围整理进度…"}</p></main></Shell>;
+  const total = progress.summary.totalKnowledgePoints;
+  const maxDaily = Math.max(1, ...progress.recent.daily.map(day => day.gradedAttempts));
+  const bandOrder = ["unstarted", "unmastered", "learning", "ready", "proficient"] as const;
+  return <Shell data={data}><main className="hub-main progress-page"><a href="/">← 返回主世界</a><p className="eyebrow">LEARNING PROGRESS</p><h1>学习进度</h1>
+    <p>进度按当前所选文集、有效掌握度、复习窗口和正式学习记录动态整理，会随学习与记忆变化。</p>{error && <p className="hub-error">{error}</p>}
+    <section className="progress-hero-grid">
+      <article><b>{total}</b><span>当前学习范围</span></article><article><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></article>
+      <article><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></article><article><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></article>
+      <article><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></article>
+    </section>
+    <section className="hub-panel progress-section"><div className="panel-heading"><div><small>MASTERY</small><h2>当前掌握分布</h2></div><span>基本掌握及以上 {progress.summary.readyKnowledgePoints} / {total}</span></div>
+      <div className="band-distribution">{bandOrder.map(band => <div key={band}><span className={`mastery-band ${band}`}>{progressBandLabels[band]}</span><div><i style={{width: `${progressPercent(progress.bands[band], total)}%`}} /></div><b>{progress.bands[band]}</b><small>{progressPercent(progress.bands[band], total)}%</small></div>)}</div>
+      <div className="progress-review-windows">
+        <p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p>
+        <p><b>{progress.summary.reviewSoon}</b><span>24 小时内建议巩固</span></p>
+        <p><b>{progress.summary.reviewUpcoming}</b><span>未来 7 天建议巩固</span></p>
+      </div>
+    </section>
+    <section className="progress-section"><div className="panel-heading"><div><small>SELECTED BOOKS</small><h2>按文集查看</h2></div><a href="/study">调整学习范围</a></div>
+      {progress.books.length === 0 ? <div className="hub-panel"><h2>尚未选择学习文集</h2><p>先在学习方向中选择文集，再回来查看动态进度。</p></div> : <div className="progress-books">{progress.books.map(book => <article className="hub-panel" key={book.bookId}><div className="panel-heading"><div><h2>{book.name}</h2><p>{book.description}</p></div><a href={`/books/${book.bookId}`}>查看知识图谱</a></div>
+        <div className="book-progress-metrics"><span>{book.totalKnowledgePoints}<small>知识点</small></span><span>{book.started}<small>已开始</small></span><span>{book.ready}<small>基本掌握及以上</small></span><span>{book.proficient}<small>熟练掌握</small></span><span>{book.reviewDueOrSoon}<small>建议巩固</small></span></div>
+        <ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={book.bookId} key={chapter.chapterId} />)}</ul>
+      </article>)}</div>}
+    </section>
+    <section className="hub-panel progress-section"><div className="panel-heading"><div><small>RECENT 7 DAYS</small><h2>近期学习足迹</h2></div></div>
+      <div className="recent-metrics"><p><b>{progress.recent.gradedAttempts7d}</b><span>正式作答</span></p><p><b>{progress.recent.distinctKnowledgePoints7d}</b><span>接触知识点</span></p><p><b>{progress.recent.activeStudyDays7d}</b><span>有正式学习的日期</span></p></div>
+      <div className="activity-chart" aria-label="近七日正式作答数量">{progress.recent.daily.map(day => <div key={day.date} title={`${day.date}：${day.gradedAttempts} 次正式作答`}><span><i style={{height: `${Math.max(day.gradedAttempts ? 8 : 0, day.gradedAttempts / maxDaily * 100)}%`}} /></span><b>{day.gradedAttempts}</b><small>{new Date(`${day.date}T00:00:00Z`).toLocaleDateString("zh-CN", {month:"numeric",day:"numeric"})}</small></div>)}</div>
+    </section>
+    <section className="progress-section"><div className="panel-heading"><div><small>RECENT KNOWLEDGE</small><h2>最近学习</h2></div></div>
+      {progress.recent.knowledgePoints.length === 0 ? <div className="hub-panel"><h2>还没有正式学习足迹</h2><p>从文集选择一个知识点开始专项练习，之后会在这里看到最近学习内容。</p></div> : <div className="recent-knowledge-grid">{progress.recent.knowledgePoints.map(point => <article className="hub-panel" key={point.knowledgePointId}><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h2><a href={`/knowledge/${point.knowledgePointId}`}>{point.name}</a></h2><p><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span> · 有效掌握度 {Math.round(point.effectiveMastery)}%</p><p>记忆稳定度 {point.stabilityDays.toFixed(1)} 天 · 最近学习 {new Date(point.lastEvidenceAt).toLocaleString("zh-CN", {hour12:false})}</p><button className="hub-primary" onClick={() => start(point.knowledgePointId)}>继续专项练习</button></article>)}</div>}
     </section>
   </main></Shell>;
 }
@@ -111,7 +159,7 @@ function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise
       <div className="choice-list">{data.bankManifest.map(book => <label key={book.id}><input type="checkbox" checked={selected.includes(book.id)} onChange={() => setSelected(v => v.includes(book.id) ? v.filter(x => x !== book.id) : [...v, book.id])} /><span><b>{book.name}</b><small>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道题</small></span></label>)}</div>
     </section>
     <section className="hub-panel"><h2>Study Focus</h2><div className="segmented"><button className={profile.focusMode === "auto" ? "active" : ""} onClick={() => setProfile({...profile, focusMode: "auto"})}>自动规划</button><button className={profile.focusMode === "manual" ? "active" : ""} onClick={() => setProfile({...profile, focusMode: "manual"})}>手动重点</button></div>
-      <p>重点知识点只会优先进入训练计划，不会缩小依赖检查和学习范围。</p>
+      <p>重点知识点用于记录当前关注方向，不会缩小依赖检查和学习范围，也不改变游戏世界的随机目标选择。</p>
       {profile.focusMode === "manual" && <div className="knowledge-picker">{points.map(point => <label key={point.id}><input type="checkbox" checked={focus.includes(point.id)} onChange={() => setFocus(v => v.includes(point.id) ? v.filter(x => x !== point.id) : [...v, point.id])} /><span>{point.name}<small>{point.section} · {point.chapter}</small></span></label>)}</div>}
     </section>
     {message && <p className="hub-message">{message}</p>}<button className="hub-primary" onClick={save}>保存学习方向</button>
@@ -224,6 +272,7 @@ function AuthenticatedPlatform() {
   if (!data) return <main className="hub-loading">{error || "正在载入学习主世界…"}</main>;
   if (path === "/worlds/ancient-official") return <div className="world-shell"><a className="world-shell-home" href="/">← 主世界</a><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
+  if (path === "/progress") return <ProgressPage data={data} />;
   if (path === "/reviews") return <ReviewsPage data={data} />;
   if (path === "/wrong-questions") return <WrongQuestionsPage data={data} />;
   if (path.startsWith("/practice/")) return <PracticePage data={data} id={idAfter("/practice/")} />;

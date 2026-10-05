@@ -11,13 +11,13 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **读书**：三页一卷，提升学识、悟性、辞采、筹算并赚银两。
 - **访友**：与六位人物交谈、共读；按整轮成绩增加好感，解锁话题与关系信物。
 - **游历**：青溪县、临川府两张大地图共十二个地点，统一显示“大地图名 · 小地点名”。
-- **挑战**：普通活动按五个不同知识点考核，60 分基础过关、100 分完美过关；首题答错会进入同知识点训练。
-- **任务**：主线按十个知识点考核且必须全对，支线五题答对三题完成；未完成无惩罚并可无限重试，完成后领取完整奖励并永久结案。
+- **一次性任务**：Main 必须 10/10；Side 与 Dungeon 均为五题答对至少三题完成。任务只有完成档，完成时一次性领取完整奖励并永久关闭；未完成无惩罚且可无限重试，完成后不可再刷。
+- **可重复活动**：普通 Study、Companion 等 Activity 与一次性 Task 分开管理，完成一轮后仍可再次进行。
 - **养成**：26 件装备、消耗品和信物可收入行囊，装备加成实际参与解锁条件。
-- **Learning Hub**：统一选择文集与重点知识点，浏览章节、知识点和已发布题目。
+- **Learning Hub**：统一管理学习范围与重点知识点，查看学习进度和复习安排，并进行知识点专项练习与错题练习。
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
-- **自适应学习 V1**：正式 World 优先巩固尚未基本掌握的知识点，并按当前掌握状态与学习设置选择合适难度；Selected Books 始终是学习范围的硬边界。
-- **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，正式 World 会在知识点接近基本掌握边界前优先安排。
+- **自适应学习 V1**：正式 World 从 Selected Books 范围内可玩的知识点随机确定目标；目标确定后，再按当前掌握状态与学习设置选择合适难度并校验前置知识。
+- **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
 - **跨轮次题目轮换 V1**：正式 World 在维持自适应难度的前提下优先选择 Learner 尚未见过或更久未见的同难度题；题量不足时允许自然重用，不阻断任务重试。
 - **综合题诊断 V1**：综合题答错时先保留原始作答，再核验最可疑的前置知识、补强薄弱点并复核目标知识点；只有诊断确认后才把根错误归因到目标。
 - **正向挑战记录**：同一轮补救不追回首题失分，新一轮仍可重新拿满分；正式 World 只保留最高分、已通关和首次奖励等正向成就，不累计失败或应试次数。
@@ -26,9 +26,9 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 掌握度 V1 保留每次正式判定的 Knowledge Evidence，并以 `stabilityDays` 为半衰期在读取时惰性计算遗忘；数据库中的 `masteryScore` 表示最近一条证据发生时的基础值。该模型可解释、可版本化、可调参，不声称是心理测量学上的最终模型。题目浏览、查看答案和 reveal 不产生证据。
 
-Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。当前目标知识点可以尚未掌握，但题目关联的其他 core/auxiliary 知识点必须达到基本掌握；手动 Study Focus 只提高目标优先级，不绕过依赖、文集范围、发布状态或本轮去重。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
+Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。World target 从当前 Selected Books 的 playable KnowledgePoints 中随机抽取，Mastery、Review 与 Manual Focus 不决定 target 优先级；target 确定后，题目关联的其他 core/auxiliary 知识点必须达到基本掌握，并继续使用自适应难度、发布状态、本轮去重与题目轮换规则。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
-Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 只展示与解释计划，不创建正式 attempt 或 evidence；自动 Planner 按“当前薄弱 → 到期/即将到期 → 未开始 → 基本掌握 → 熟练掌握”排序，Manual Focus 仍保持整体优先。
+Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 展示与解释计划，并可进入共享 Question Engine 的正式专项练习；Review 与 Focus 不改变 World target 的随机选择。
 
 Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；服务端先沿用 Phase F 规则确定难度，再在同难度候选中按“未曝光 → 最久未见 → 曝光更少 → 随机”选择。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
 

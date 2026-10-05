@@ -40,6 +40,34 @@ export interface ReviewQueue {
   summary: { due: number; soon: number; upcoming: number; playableDueOrSoon: number };
   items: ReviewQueueItem[];
 }
+export type MasteryBand = "unstarted" | "unmastered" | "learning" | "ready" | "proficient";
+export interface ProgressChapter {
+  chapterId: string; code: string; name: string; total: number; started: number;
+  ready: number; proficient: number; children: ProgressChapter[];
+}
+export interface ProgressBook {
+  bookId: string; name: string; description: string; totalKnowledgePoints: number;
+  started: number; ready: number; proficient: number; reviewDueOrSoon: number;
+  chapters: ProgressChapter[];
+}
+export interface LearnerProgress {
+  generatedAt: string;
+  summary: {
+    selectedBooks: number; totalKnowledgePoints: number; startedKnowledgePoints: number;
+    readyKnowledgePoints: number; proficientKnowledgePoints: number; reviewDue: number;
+    reviewSoon: number; reviewUpcoming: number; wrongQuestions: number;
+  };
+  bands: Record<MasteryBand, number>;
+  books: ProgressBook[];
+  recent: {
+    gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
+    daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
+    knowledgePoints: {
+      knowledgePointId: string; name: string; subject: string; section: string; chapter: string;
+      band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
+    }[];
+  };
+}
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
   subject: string; chapter: string; summary: string; lastGradedAt: string;
@@ -80,6 +108,7 @@ export const platformApi = {
   knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
     "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
   reviewQueue: () => request<ReviewQueue>("/learner/review-queue"),
+  progress: () => request<LearnerProgress>("/learner/progress"),
   wrongQuestions: () => request<WrongQuestion[]>("/learner/wrong-questions"),
   startKnowledgePractice: (targetKnowledgePointId: string) =>
     request<PracticeSession>("/learner/practice-sessions", "POST", {
