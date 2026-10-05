@@ -10,6 +10,7 @@ import java.util.List;
 
 public record BootstrapResponse(
         LearnerContext.LearnerPrincipal learner,
+        boolean canManage,
         StudyProfileService.StudyProfileResponse studyProfile,
         List<WorldRegistry.WorldDefinition> worlds,
         List<QuestionBankManifest> bankManifest,

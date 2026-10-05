@@ -21,7 +21,7 @@ export interface BrowseQuestion {
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
 }
 export interface HubBootstrap {
-  learner: Learner; studyProfile: StudyProfile; worlds: WorldDefinition[];
+  learner: Learner; canManage: boolean; studyProfile: StudyProfile; worlds: WorldDefinition[];
   bankManifest: BookSummary[]; questionCatalog: { source: string; canEdit: boolean; revision?: string };
 }
 export interface KnowledgeState {

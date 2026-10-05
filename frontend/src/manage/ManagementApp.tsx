@@ -107,17 +107,17 @@ function ImportPage({ fail }: { fail: (value: string) => void }) {
     file.text().then((text) => { setSource(text); setResult(null); })
       .catch(() => fail("无法读取所选文件。"));
   };
-  return <section><PageTitle title="批量导入" detail="批量导入全服题目；题目通过 KnowledgePoint 自动成为学习资源" />
+  return <section><PageTitle title="批量导入" detail="批量导入全服题目；题目通过知识点自动成为学习资源" />
     <div className="import-workspace">
       <div className="manage-card import-source">
-        <div className="import-heading"><div><h2>题目批次 JSON</h2><p>格式版本固定为 <code>global-question-batch/v2</code>，导入不会创建或修改 Book。</p></div>
+        <div className="import-heading"><div><h2>题目批次 JSON</h2><p>格式版本固定为 <code>global-question-batch/v2</code>，导入不会创建或修改文集。</p></div>
           <label className="file-button">选择文件<input type="file" accept="application/json,.json" onChange={(event) => loadFile(event.target.files?.[0])} /></label></div>
         <textarea rows={24} spellCheck={false} value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} placeholder="粘贴题目批次 JSON，或选择文件…" />
       </div>
       <aside className="manage-card import-preview"><h2>导入预检</h2>
         {!source && <Empty>选择文件或粘贴 JSON 后，这里会显示题目批次摘要。</Empty>}
         {parseError && <p className="form-error">{parseError}</p>}
-        {legacyFormat && <p className="form-error">这是旧版文集导入格式。新版系统的题目已经与 Book 解耦，请使用 global-question-batch/v2。</p>}
+        {legacyFormat && <p className="form-error">这是旧版文集导入格式。新版系统的题目已经与文集解耦，请使用 global-question-batch/v2。</p>}
         {preview && !legacyFormat && !supportedFormat && <p className="form-error">格式必须为 global-question-batch/v2。</p>}
         {preview && <dl><dt>格式</dt><dd>{preview.schemaVersion || "未提供"}</dd><dt>科目</dt><dd>{preview.batch?.subject || "未提供"}</dd><dt>来源类型</dt><dd>{manageLabel("source", preview.batch?.sourceType)}</dd><dt>来源名称</dt><dd>{preview.batch?.sourceName || "未提供"}</dd><dt>年份</dt><dd>{preview.batch?.examYear ?? "—"}</dd><dt>题目数</dt><dd>{Array.isArray(preview.questions) ? preview.questions.length : 0}</dd><dt>导入状态</dt><dd>{preview.publish ? "直接发布" : "进入待审核"}</dd></dl>}
         <button className="primary" disabled={!supportedFormat || busy} onClick={submit}>{busy ? "导入中…" : "校验并导入"}</button>
@@ -141,8 +141,8 @@ function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string)
     .then((page) => { setItems(page.content); setTotal(page.totalElements); })
     .catch((e) => fail(e.message)), [query, subject, section, chapter, status, fail]);
   useEffect(() => { void load(); }, [load]);
-  return <section><PageTitle title="知识点管理" detail={`共 ${total} 条；code 是永久稳定身份`} />
-    <div className="manage-toolbar knowledge-filters"><input placeholder="搜索 code / 名称 / alias" value={query} onChange={(e) => setQuery(e.target.value)} />
+  return <section><PageTitle title="知识点管理" detail={`共 ${total} 条；知识点编码是永久稳定身份`} />
+    <div className="manage-toolbar knowledge-filters"><input placeholder="搜索知识点编码 / 名称 / 别名" value={query} onChange={(e) => setQuery(e.target.value)} />
       <select value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">全部科目</option><option>数学一</option></select>
       <select value={section} onChange={(e) => setSection(e.target.value)}><option value="">全部分科</option><option>高等数学</option><option>线性代数</option><option>概率论与数理统计</option></select>
       <input placeholder="章节精确筛选" value={chapter} onChange={(e) => setChapter(e.target.value)} />
@@ -177,8 +177,8 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
     <label>知识点解析（Markdown + LaTeX）<textarea disabled={!editable} rows={8} value={point.explanation} onChange={(e) => setPoint({ ...point, explanation: e.target.value })} /></label>
     {editable && <button disabled={busy} onClick={() => { setBusy(true); manageApi.saveKnowledge(point).then(saved).catch((e) => fail(e.message)).finally(() => setBusy(false)); }}>保存知识点</button>}
     {admin && point.status === "active" && <fieldset className="editor-group merge-panel"><legend>合并知识点</legend>
-      <p>旧知识点会保留为 deprecated；题目关系、旧 code、名称和别名将迁移到目标知识点。</p>
-      <div className="inline-search"><input placeholder="搜索目标 code / 名称 / alias" value={targetQuery} onChange={(e) => setTargetQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: targetQuery, status: "active", size: 10 }).then((page) => setTargets(page.content.filter((item) => item.id !== point.id))).catch((error) => fail(error.message))}>搜索</button></div>
+      <p>旧知识点会保留为已停用或已合并状态；题目关系、原知识点编码、名称和别名将迁移到目标知识点。</p>
+      <div className="inline-search"><input placeholder="搜索目标知识点编码 / 名称 / 别名" value={targetQuery} onChange={(e) => setTargetQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: targetQuery, status: "active", size: 10 }).then((page) => setTargets(page.content.filter((item) => item.id !== point.id))).catch((error) => fail(error.message))}>搜索</button></div>
       {targets.length > 0 && <div className="merge-targets">{targets.map((item) => <button className={target?.id === item.id ? "selected" : ""} key={item.id} onClick={() => setTarget(item)}><code>{item.code}</code><span>{item.name}</span><small>{item.chapter}</small></button>)}</div>}
       {target && <p className="selected-target">目标：<code>{target.code}</code> {target.name}</p>}
       <label>合并原因<textarea rows={3} value={mergeReason} onChange={(event) => setMergeReason(event.target.value)} placeholder="记录口径重复、命名修订或知识体系调整原因" /></label>
@@ -236,7 +236,7 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
     <label>题干（Markdown + LaTeX）<textarea rows={8} value={question.content || ""} onChange={(e) => setQuestion({ ...question, content: e.target.value })} /></label><details><summary>预览题干</summary><div className="markdown-preview"><RichText>{question.content || "暂无题干"}</RichText></div></details>
     <label>标准答案（JSON）<textarea rows={3} value={answerText} onChange={(e) => setAnswerText(e.target.value)} /></label><label>完整解析<textarea rows={7} value={question.analysis || ""} onChange={(e) => setQuestion({ ...question, analysis: e.target.value })} /></label>
     <fieldset className="editor-group"><legend>游戏化选项</legend>{(question.options || []).map((option, index) => <OptionRow key={index} option={option} changed={(next) => setQuestion({ ...question, options: question.options!.map((old, i) => i === index ? next : old) })} remove={() => setQuestion({ ...question, options: question.options!.filter((_, i) => i !== index) })} />)}<button onClick={addOption}>添加选项</button></fieldset>
-    <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索 code / 名称 / alias" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, status: "active", size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>
+    <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索知识点编码 / 名称 / 别名" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, status: "active", size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>
       {matches.length > 0 && <div className="search-results">{matches.map((point) => <button key={point.id} onClick={() => { if (!(question.knowledgePoints || []).some((r) => (r.id || r.knowledgePointId) === point.id)) setQuestion({ ...question, knowledgePoints: [...(question.knowledgePoints || []), { id: point.id, knowledgePointId: point.id, code: point.code, name: point.name, role: "core", sortOrder: question.knowledgePoints?.length || 0 }] }); }}>{point.code} {point.name}</button>)}</div>}
       <div className="relations">{(question.knowledgePoints || []).map((relation, index) => <div key={relation.id || relation.knowledgePointId}><span><code>{relation.code}</code> {relation.name}</span><select value={relation.role} onChange={(e) => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.map((r, i) => i === index ? { ...r, role: e.target.value as QuestionRelation["role"] } : r) })}><option value="core">核心</option><option value="auxiliary">辅助</option></select><span className="relation-order"><button aria-label="上移知识点" disabled={index === 0} onClick={() => moveKnowledge(index, -1)}>↑</button><button aria-label="下移知识点" disabled={index === (question.knowledgePoints?.length || 0) - 1} onClick={() => moveKnowledge(index, 1)}>↓</button></span><button onClick={() => setQuestion({ ...question, knowledgePoints: question.knowledgePoints!.filter((_, i) => i !== index) })}>解绑</button></div>)}</div>
     </fieldset>

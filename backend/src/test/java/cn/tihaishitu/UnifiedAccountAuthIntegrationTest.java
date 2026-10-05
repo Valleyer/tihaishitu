@@ -39,7 +39,8 @@ class UnifiedAccountAuthIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_account_role WHERE learner_id=?", Integer.class, id)).isEqualTo(3);
         Cookie cookie = login("unified-admin", "initial-admin-password");
         mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.learner.id").value(id));
+                .andExpect(jsonPath("$.learner.id").value(id))
+                .andExpect(jsonPath("$.canManage").value(true));
         mvc.perform(get("/api/v1/manage/auth/me").cookie(cookie)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id)).andExpect(jsonPath("$.roles").isArray());
     }
@@ -47,11 +48,16 @@ class UnifiedAccountAuthIntegrationTest {
     @Test void ordinaryLearnerKeepsHubWhenManagementRolesAreRemovedAndUnifiedLogoutRevokesBoth() throws Exception {
         Cookie cookie = register("unified-learner");
         String id = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='unified-learner'", String.class);
+        mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.canManage").value(false));
         mvc.perform(get("/api/v1/manage/auth/me").cookie(cookie)).andExpect(status().isForbidden());
         jdbc.update("INSERT INTO learner_account_role(learner_id,role_name) VALUES (?,'ADMIN')", id);
         mvc.perform(get("/api/v1/manage/auth/me").cookie(cookie)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.canManage").value(true));
         jdbc.update("DELETE FROM learner_account_role WHERE learner_id=?", id);
-        mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.canManage").value(false));
         mvc.perform(get("/api/v1/manage/auth/me").cookie(cookie)).andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/learner/auth/logout").with(csrf()).cookie(cookie))

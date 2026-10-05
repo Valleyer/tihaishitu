@@ -45,7 +45,7 @@ function AuthPage({ register }: { register: boolean }) {
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
   return <div className="learning-hub">
     <header className="hub-header"><a className="hub-brand" href="/"><span>题</span>题海仕途</a>
-      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a><a href="/account">{data.learner.displayName}</a></nav>
+      <nav><a href="/study">学习方向</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a>{data.canManage && <a href="/manage">管理后台</a>}<a href="/account">{data.learner.displayName}</a></nav>
     </header>
     {children}
   </div>;
@@ -142,7 +142,7 @@ function ReviewsPage({ data }: { data: HubBootstrap }) {
   const [queue, setQueue] = useState<ReviewQueue>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.reviewQueue().then(setQueue).catch(reason => setError((reason as Error).message)); }, []);
   return <Shell data={data}><main className="hub-main narrow"><a href="/">← 返回主世界</a><p className="eyebrow">REVIEW PLAN</p><h1>复习安排</h1>
-    <p>复习时间由现有掌握度、记忆稳定度和最近正式练习动态推导。这里用于规划，正式作答仍在游戏世界中进行。</p>
+    <p>复习时间由当前掌握度与记忆稳定度动态推导。需要巩固时，可以直接进入对应知识点专项练习。</p>
     {error && <p className="hub-error">{error}</p>}
     {!queue && !error && <p>正在整理复习安排…</p>}
     {queue && queue.items.length === 0 && <section className="hub-panel"><h2>当前安排从容</h2><p>未来 7 天暂时没有需要特别安排的知识点，继续按现有学习方向前进即可。</p></section>}
