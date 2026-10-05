@@ -136,7 +136,9 @@ public class LearnerProgressService {
             if (parent == null) roots.add(node); else parent.children.add(node);
         });
         List<ChapterProgress> chapterViews = roots.stream()
-                .map(root -> chapterProgress(root, points, new LinkedHashSet<>()).view()).toList();
+                .map(root -> chapterProgress(root, points, new LinkedHashSet<>()))
+                .filter(root -> !root.knowledgePointIds().isEmpty())
+                .map(ChapterAggregate::view).toList();
         return new BookProgress(book.id(), book.name(), book.description(), counts.total(), counts.started(),
                 counts.ready(), counts.proficient(), counts.masteryProgress(), reviewDueOrSoon, chapterViews);
     }
@@ -144,7 +146,8 @@ public class LearnerProgressService {
     private ChapterAggregate chapterProgress(ChapterNode node, Map<String, PointProgress> points, Set<String> path) {
         if (!path.add(node.row.id())) throw new IllegalStateException("文集章节树存在循环。");
         List<ChapterAggregate> children = node.children.stream()
-                .map(child -> chapterProgress(child, points, new LinkedHashSet<>(path))).toList();
+                .map(child -> chapterProgress(child, points, new LinkedHashSet<>(path)))
+                .filter(child -> !child.knowledgePointIds().isEmpty()).toList();
         Set<String> subtree = new LinkedHashSet<>(node.directPointIds);
         children.forEach(child -> subtree.addAll(child.knowledgePointIds()));
         Counts counts = counts(subtree, points);

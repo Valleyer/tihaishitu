@@ -1,6 +1,7 @@
 package cn.tihaishitu.learning;
 
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.manage.PageResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,18 +21,23 @@ public class LearningBrowseStore {
     public List<Map<String, Object>> books() {
         return jdbc.query("""
                 SELECT b.id, b.name, b.description, b.revision,
-                       COUNT(DISTINCT bk.knowledge_point_id) knowledge_count,
-                       COUNT(DISTINCT CASE WHEN q.status = 'published'
-                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                           THEN q.id END) question_count
+                       (SELECT COUNT(DISTINCT bk.knowledge_point_id)
+                          FROM question_bank_knowledge bk
+                          JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id
+                         WHERE bk.bank_id=b.id AND k.status='active' AND %s) knowledge_count,
+                       (SELECT COUNT(DISTINCT q.id)
+                          FROM question_bank_knowledge bk
+                          JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
+                          JOIN question_resource q ON q.id=qk.question_id
+                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
                   FROM question_bank b
-                  LEFT JOIN question_bank_knowledge bk ON bk.bank_id = b.id
-                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
-                  LEFT JOIN question_resource q ON q.id = qk.question_id
                  WHERE b.enabled = TRUE
-                 GROUP BY b.id, b.name, b.description, b.revision, b.created_at
+                   AND EXISTS (SELECT 1 FROM question_bank_knowledge visible_bk
+                               JOIN global_knowledge_point k ON k.id=visible_bk.knowledge_point_id
+                               WHERE visible_bk.bank_id=b.id AND k.status='active' AND %s)
                  ORDER BY b.created_at, b.id
-                """, (result, row) -> ordered(
+                """.formatted(TrainableKnowledge.exists("k"), TrainableKnowledge.exists("k")), (result, row) -> ordered(
                 "id", result.getString("id"), "name", result.getString("name"),
                 "description", result.getString("description"), "revision", result.getLong("revision"),
                 "knowledgePointCount", result.getInt("knowledge_count"),
@@ -39,9 +45,23 @@ public class LearningBrowseStore {
     }
 
     public Map<String, Object> book(String id) {
-        Map<String, Object> book = jdbc.query("SELECT id, name, description, revision FROM question_bank WHERE id = ? AND enabled = TRUE",
+        Map<String, Object> book = jdbc.query("""
+                SELECT b.id,b.name,b.description,b.revision,
+                       (SELECT COUNT(DISTINCT bk.knowledge_point_id)
+                          FROM question_bank_knowledge bk JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id
+                         WHERE bk.bank_id=b.id AND k.status='active' AND %s) knowledge_count,
+                       (SELECT COUNT(DISTINCT q.id)
+                          FROM question_bank_knowledge bk
+                          JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
+                          JOIN question_resource q ON q.id=qk.question_id
+                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
+                  FROM question_bank b WHERE b.id=? AND b.enabled=TRUE
+                """.formatted(TrainableKnowledge.exists("k")),
                 (result, row) -> ordered("id", result.getString("id"), "name", result.getString("name"),
-                        "description", result.getString("description"), "revision", result.getLong("revision")), id)
+                        "description", result.getString("description"), "revision", result.getLong("revision"),
+                        "knowledgePointCount", result.getInt("knowledge_count"),
+                        "questionCount", result.getInt("question_count")), id)
                 .stream().findFirst().orElseThrow(() -> missing("文集不存在或已停用。"));
         List<Map<String, Object>> chapters = jdbc.query("""
                 SELECT id, parent_id, chapter_code, name, description, sort_order
@@ -53,9 +73,9 @@ public class LearningBrowseStore {
         jdbc.query("""
                 SELECT bk.chapter_id, k.id, k.code, k.name, k.subject_name, k.section_name,
                        k.chapter_name, k.description, k.explanation, bk.sort_order
-                  FROM question_bank_knowledge bk JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
-                 WHERE bk.bank_id = ? AND k.status = 'active' ORDER BY bk.sort_order, k.id
-                """, (RowCallbackHandler) result -> points.computeIfAbsent(result.getString("chapter_id"), ignored -> new ArrayList<>())
+                 FROM question_bank_knowledge bk JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
+                 WHERE bk.bank_id = ? AND k.status = 'active' AND %s ORDER BY bk.sort_order, k.id
+                """.formatted(TrainableKnowledge.exists("k")), (RowCallbackHandler) result -> points.computeIfAbsent(result.getString("chapter_id"), ignored -> new ArrayList<>())
                 .add(knowledge(result)), id);
         Map<String, Map<String, Object>> nodes = new LinkedHashMap<>();
         chapters.forEach(chapter -> {
@@ -71,15 +91,18 @@ public class LearningBrowseStore {
             else ((List<Map<String, Object>>) nodes.get(parentId).get("children")).add(node);
         });
         Map<String, Object> result = new LinkedHashMap<>(book);
-        result.put("chapters", tree);
+        result.put("chapters", prune(tree));
         return result;
     }
 
     public Map<String, Object> knowledge(String id) {
         return jdbc.query("""
                 SELECT id, code, name, subject_name, section_name, chapter_name, description, explanation, revision
-                  FROM global_knowledge_point WHERE id = ? AND status = 'active'
-                """, (result, row) -> {
+                  FROM global_knowledge_point k WHERE id = ? AND status = 'active'
+                   AND %s
+                   AND EXISTS (SELECT 1 FROM question_bank_knowledge bk JOIN question_bank b ON b.id=bk.bank_id
+                               WHERE bk.knowledge_point_id=k.id AND b.enabled=TRUE)
+                """.formatted(TrainableKnowledge.exists("k")), (result, row) -> {
             Map<String, Object> value = knowledge(result);
             value.put("revision", result.getLong("revision"));
             value.put("books", jdbc.query("""
@@ -91,45 +114,54 @@ public class LearningBrowseStore {
         }, id).stream().findFirst().orElseThrow(() -> missing("知识点不存在或已停用。"));
     }
 
-    public List<Map<String, Object>> knowledgePoints(String query, String bookId, String chapterId, String subject) {
+    public PageResult<Map<String, Object>> knowledgePoints(String query, String bookId, String chapterId,
+                                                            String subject, int page, int size) {
         List<String> clauses = new ArrayList<>();
         List<Object> params = new ArrayList<>();
         clauses.add("k.status = 'active'");
         if (query != null && !query.isBlank()) {
-            clauses.add("(LOWER(k.name) LIKE ? OR LOWER(k.code) LIKE ? OR EXISTS "
-                    + "(SELECT 1 FROM knowledge_alias a WHERE a.knowledge_point_id=k.id AND LOWER(a.alias) LIKE ?))");
+            clauses.add("LOWER(k.name) LIKE ?");
             String value = "%" + query.trim().toLowerCase() + "%";
-            params.add(value); params.add(value); params.add(value);
+            params.add(value);
         }
         if (bookId != null && !bookId.isBlank()) { clauses.add("bk.bank_id = ?"); params.add(bookId); }
         if (chapterId != null && !chapterId.isBlank()) { clauses.add("bk.chapter_id = ?"); params.add(chapterId); }
         if (subject != null && !subject.isBlank()) { clauses.add("k.subject_name = ?"); params.add(subject); }
-        return jdbc.query("""
-                SELECT k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,
-                       MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
-                       COUNT(DISTINCT CASE WHEN q.status='published'
-                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                           THEN q.id END) published_count
+        clauses.add(TrainableKnowledge.exists("k"));
+        String from = """
                   FROM global_knowledge_point k
                   JOIN question_bank_knowledge bk ON bk.knowledge_point_id=k.id
                   JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
                   JOIN question_bank_chapter c ON c.id=bk.chapter_id
-                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id
-                  LEFT JOIN question_resource q ON q.id=qk.question_id
                  WHERE %s
+                """.formatted(String.join(" AND ", clauses));
+        Long total = jdbc.queryForObject("SELECT COUNT(DISTINCT k.id) " + from, Long.class, params.toArray());
+        List<Object> contentParams = new ArrayList<>(params);
+        contentParams.add(size); contentParams.add(page * size);
+        List<Map<String, Object>> content = jdbc.query("""
+                SELECT k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,
+                       MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
+                       (SELECT COUNT(DISTINCT q.id) FROM question_resource_knowledge qk
+                         JOIN question_resource q ON q.id=qk.question_id
+                        WHERE qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                          AND q.status='published'
+                          AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) published_count
+                  %s
                  GROUP BY k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,k.sort_order
                  ORDER BY k.sort_order,k.code
-                 LIMIT 2000
-                """.formatted(String.join(" AND ", clauses)), (row, index) -> ordered(
+                 LIMIT ? OFFSET ?
+                """.formatted(from), (row, index) -> ordered(
                 "id", row.getString("id"), "code", row.getString("code"), "name", row.getString("name"),
                 "subject", row.getString("subject_name"), "section", row.getString("section_name"),
                 "chapter", row.getString("chapter_name"), "bookId", row.getString("book_id"),
                 "bookName", row.getString("book_name"), "chapterId", row.getString("chapter_id"),
                 "catalogChapter", row.getString("catalog_chapter"),
-                "publishedQuestionCount", row.getInt("published_count")), params.toArray());
+                "publishedQuestionCount", row.getInt("published_count")), contentParams.toArray());
+        return PageResult.of(content, page, size, total == null ? 0 : total);
     }
 
     public List<Map<String, Object>> questionsForKnowledge(String id) {
+        ensureTrainable(id);
         List<Map<String, Object>> questions = jdbc.query("""
                 SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year,
                        q.question_number, q.question_type,
@@ -173,6 +205,28 @@ public class LearningBrowseStore {
             point.put("role", result.getString("relation_role"));
             return point;
         }, id);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> prune(List<Map<String, Object>> chapters) {
+        List<Map<String, Object>> visible = new ArrayList<>();
+        for (Map<String, Object> chapter : chapters) {
+            List<Map<String, Object>> children = prune((List<Map<String, Object>>) chapter.get("children"));
+            chapter.put("children", children);
+            if (!((List<?>) chapter.get("knowledgePoints")).isEmpty() || !children.isEmpty()) visible.add(chapter);
+        }
+        return visible;
+    }
+
+    private void ensureTrainable(String id) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM global_knowledge_point k
+                 WHERE k.id=? AND k.status='active' AND %s
+                   AND EXISTS (SELECT 1 FROM question_bank_knowledge bk
+                               JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
+                              WHERE bk.knowledge_point_id=k.id)
+                """.formatted(TrainableKnowledge.exists("k")), Integer.class, id);
+        if (count == null || count == 0) throw missing("知识点不存在或当前不可学习。");
     }
 
     private Map<String, Object> question(java.sql.ResultSet result) throws java.sql.SQLException {

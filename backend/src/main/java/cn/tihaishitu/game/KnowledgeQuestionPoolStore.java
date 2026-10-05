@@ -2,6 +2,7 @@ package cn.tihaishitu.game;
 
 import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
+import cn.tihaishitu.learning.TrainableKnowledge;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,20 +45,22 @@ public class KnowledgeQuestionPoolStore {
                     SELECT DISTINCT k.id, k.name, k.subject_name, k.section_name, k.chapter_name,
                            k.description, k.explanation, k.sort_order
                       FROM question_bank_knowledge bk
-                      JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
+                     JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
                      WHERE bk.bank_id IN (%s) AND k.status = 'active'
+                       AND %s
                      ORDER BY k.sort_order, k.id
-                    """.formatted(placeholders(modernBooks.size())), modernBooks, points);
+                    """.formatted(placeholders(modernBooks.size()), TrainableKnowledge.exists("k")), modernBooks, points);
         }
         if (!legacyBooks.isEmpty()) {
             loadPoints("""
                     SELECT DISTINCT k.id, k.name, k.subject_name, k.section_name, k.chapter_name,
                            k.description, k.explanation, k.sort_order
                       FROM legacy_knowledge_map legacy
-                      JOIN global_knowledge_point k ON k.id = legacy.global_id
+                     JOIN global_knowledge_point k ON k.id = legacy.global_id
                      WHERE legacy.bank_id IN (%s) AND k.status = 'active'
+                       AND %s
                      ORDER BY k.sort_order, k.id
-                    """.formatted(placeholders(legacyBooks.size())), legacyBooks, points);
+                    """.formatted(placeholders(legacyBooks.size()), TrainableKnowledge.exists("k")), legacyBooks, points);
         }
         return List.copyOf(points.values());
     }

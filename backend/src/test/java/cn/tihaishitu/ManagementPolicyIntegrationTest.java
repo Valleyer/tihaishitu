@@ -208,6 +208,10 @@ class ManagementPolicyIntegrationTest {
             question.putArray("standardAnswer").add("A").add("B");
         } else if ("true_false".equals(questionType)) {
             question.put("presentationType", "true_false");
+            question.put("standardAnswer", true);
+            ArrayNode options = question.putArray("options");
+            options.add(option("true", "正确", true, 0));
+            options.add(option("false", "错误", false, 1));
         } else if ("solution".equals(questionType)) {
             question.put("presentationType", "self_assessment");
             question.put("gradingMode", "self_assessment");

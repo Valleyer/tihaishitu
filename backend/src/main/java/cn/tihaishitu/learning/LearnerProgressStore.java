@@ -25,8 +25,14 @@ public class LearnerProgressStore {
         return jdbc.query("""
                 SELECT b.id,b.name,b.description
                   FROM learner_selected_book selected
-                  JOIN question_bank b ON b.id=selected.bank_id AND b.enabled=TRUE
+                 JOIN question_bank b ON b.id=selected.bank_id AND b.enabled=TRUE
                  WHERE selected.learner_id=?
+                   AND EXISTS (
+                       SELECT 1 FROM question_bank_knowledge visible_membership
+                       JOIN global_knowledge_point k ON k.id=visible_membership.knowledge_point_id
+                       WHERE visible_membership.bank_id=b.id AND k.status='active'
+                         AND """ + " " + TrainableKnowledge.exists("k") + """
+                   )
                  ORDER BY selected.created_at,b.id
                 """, (rs, row) -> new BookRow(rs.getString("id"), rs.getString("name"),
                 rs.getString("description")), learnerId);
@@ -53,6 +59,7 @@ public class LearnerProgressStore {
                   JOIN question_bank_knowledge membership ON membership.bank_id=b.id
                   JOIN global_knowledge_point k ON k.id=membership.knowledge_point_id AND k.status='active'
                  WHERE selected.learner_id=?
+                   AND """ + " " + TrainableKnowledge.exists("k") + """
                  ORDER BY selected.created_at,membership.sort_order,k.id
                 """, (rs, row) -> new MembershipRow(rs.getString("bank_id"), rs.getString("chapter_id"),
                 rs.getString("id"), rs.getString("name"), rs.getString("subject_name"),

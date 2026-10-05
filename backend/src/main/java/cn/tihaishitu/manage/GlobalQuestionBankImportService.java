@@ -1,5 +1,7 @@
 package cn.tihaishitu.manage;
 
+import cn.tihaishitu.catalog.QuestionContractValidator;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -124,7 +126,7 @@ public class GlobalQuestionBankImportService {
                 bad(at + "缺少科目、题干或标准答案。");
             }
             if ("blank".equals(q.questionType())) {
-                bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+                bad(QuestionContractValidator.BLANK_ERROR);
             }
             if (!SOURCE_TYPES.contains(q.sourceType()) || !QUESTION_TYPES.contains(q.questionType())
                     || !PRESENTATIONS.contains(q.presentationType()) || !GRADING_MODES.contains(q.gradingMode())) {
@@ -146,6 +148,10 @@ public class GlobalQuestionBankImportService {
             }
             List<OptionInput> options = q.options() == null ? List.of() : q.options();
             validateOptions(q, options, at);
+            QuestionContractValidator.validate(q.questionType(), q.presentationType(), q.gradingMode(),
+                    q.standardAnswer(), options.stream().map(option -> new QuestionContractValidator.Option(
+                            option.key(), option.text(), Boolean.TRUE.equals(option.correct()))).toList())
+                    .ifPresent(message -> bad(at + "：" + message));
             List<KnowledgeInput> relations = q.knowledgePoints() == null ? List.of() : q.knowledgePoints();
             if (relations.isEmpty() || relations.size() > 3) bad(at + "必须关联 1–3 个知识点。");
             Set<String> codes = new HashSet<>();

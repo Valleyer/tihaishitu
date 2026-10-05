@@ -91,6 +91,7 @@ export interface KnowledgeDirectoryItem extends KnowledgePoint {
   bookId: string; bookName: string; chapterId: string; catalogChapter: string;
   publishedQuestionCount: number;
 }
+export interface PageResult<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface LearnerStatistics {
   days: 7 | 30 | 90; generatedAt: string;
   summary: {
@@ -114,10 +115,14 @@ export const platformApi = {
   book: (id: string) => request<BookDetail>("/learning/books/" + encodeURIComponent(id)),
   knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string }[] }>(
     "/learning/knowledge-points/" + encodeURIComponent(id)),
-  knowledgeDirectory: (filters: { query?: string; bookId?: string; chapterId?: string; subject?: string }) => {
+  knowledgeDirectory: (filters: { query?: string; bookId?: string; chapterId?: string; subject?: string; page?: number; size?: number }) => {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
-    return request<KnowledgeDirectoryItem[]>("/learning/knowledge-points?" + params.toString());
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") {
+        params.set(key, String(value));
+      }
+    });
+    return request<PageResult<KnowledgeDirectoryItem>>("/learning/knowledge-points?" + params.toString());
   },
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),

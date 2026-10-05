@@ -1,5 +1,7 @@
 package cn.tihaishitu.manage;
 
+import cn.tihaishitu.catalog.QuestionContractValidator;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -178,6 +180,11 @@ public class GlobalQuestionBatchImportService {
             }
             if (question.options() == null) bad(at + "必须提供 options 字段。");
             List<OptionInput> options = normalizeAndValidateOptions(question, at);
+            QuestionContractValidator.validate(question.questionType(), question.presentationType(),
+                    question.gradingMode(), question.standardAnswer(), options.stream().map(option ->
+                            new QuestionContractValidator.Option(option.key(), option.text(),
+                                    Boolean.TRUE.equals(option.correct()))).toList())
+                    .ifPresent(message -> bad(at + "：" + message));
             if (question.knowledgePoints() == null) bad(at + "必须提供 knowledgePoints 字段。");
             List<ResolvedKnowledge> points = resolveKnowledgePoints(
                     question.knowledgePoints(), batch.subject(), at);
@@ -265,7 +272,7 @@ public class GlobalQuestionBatchImportService {
 
     private void validateQuestionType(QuestionInput question, String at) {
         if ("blank".equals(question.questionType())) {
-            bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+            bad(QuestionContractValidator.BLANK_ERROR);
         }
         if (!QUESTION_TYPES.contains(question.questionType())) {
             bad(at + "的 questionType 不合法。");

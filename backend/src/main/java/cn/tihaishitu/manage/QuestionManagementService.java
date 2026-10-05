@@ -1,6 +1,7 @@
 package cn.tihaishitu.manage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import cn.tihaishitu.catalog.QuestionContractValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,7 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView submit(String id, long revision, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
         if (!actor.equals(current.createdBy())) denied("只能提交自己创建的题目。");
-        validateStoredType(current);
+        validateStored(current);
         if (!Set.of("draft", "rejected").contains(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "当前题目状态不能提交审核。");
         }
@@ -66,7 +67,7 @@ public class QuestionManagementService {
         if (!"pending_review".equals(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "只有待审核题目可以审核。");
         }
-        if (approve) validateStoredType(current);
+        if (approve) validateStored(current);
         String to = approve ? "published" : "rejected";
         return store.transition(id, revision, "pending_review", to, actor,
                 approve ? "QUESTION_REVIEW_APPROVED" : "QUESTION_REVIEW_REJECTED", value(comment));
@@ -93,9 +94,6 @@ public class QuestionManagementService {
                 || !PRESENTATIONS.contains(input.presentationType()) || !GRADING_MODES.contains(input.gradingMode())) {
             bad("来源、原始题型、展示类型或判题模式不合法。");
         }
-        if (!validCombination(input.questionType(), input.presentationType(), input.gradingMode())) {
-            bad("题型、展示类型与判题模式必须使用知境规定的固定组合。");
-        }
         if (input.difficulty() < 1 || input.difficulty() > 5) bad("难度必须在 1–5 之间。");
         if ("real_exam".equals(input.sourceType()) && (input.examYear() == null || input.questionNumber() == null
                 || input.questionNumber().isBlank())) bad("真题必须填写年份和题号。");
@@ -116,6 +114,9 @@ public class QuestionManagementService {
             if (option.key() == null || option.key().isBlank() || option.text() == null || option.text().isBlank()
                     || !keys.add(option.key())) bad("选项键和值不能为空，且选项键不能重复。");
         }
+        QuestionContractValidator.validate(input.questionType(), input.presentationType(), input.gradingMode(),
+                input.standardAnswer(), options.stream().map(option -> new QuestionContractValidator.Option(
+                        option.key(), option.text(), option.correct())).toList()).ifPresent(QuestionManagementService::bad);
         Set<String> points = new HashSet<>();
         boolean hasCore = false;
         for (var relation : relations) {
@@ -130,26 +131,16 @@ public class QuestionManagementService {
         if (!hasCore) bad("题目至少需要一个核心知识点。");
     }
 
-    private void validateStoredType(QuestionManagementStore.QuestionView question) {
-        rejectBlank(question.questionType());
-        if (!validCombination(question.questionType(), question.presentationType(), question.gradingMode())) {
-            bad("题型、展示类型与判题模式必须使用知境规定的固定组合。");
-        }
-    }
-
-    private static boolean validCombination(String type, String presentation, String grading) {
-        return switch (type) {
-            case "single_choice" -> "single_choice".equals(presentation) && "auto".equals(grading);
-            case "multiple_choice" -> "multiple_choice".equals(presentation) && "auto".equals(grading);
-            case "true_false" -> "true_false".equals(presentation) && "auto".equals(grading);
-            case "solution" -> "self_assessment".equals(presentation) && "self_assessment".equals(grading);
-            default -> false;
-        };
+    private void validateStored(QuestionManagementStore.QuestionView question) {
+        QuestionContractValidator.validate(question.questionType(), question.presentationType(), question.gradingMode(),
+                question.standardAnswer(), question.options().stream().map(option ->
+                        new QuestionContractValidator.Option(option.key(), option.text(), option.correct())).toList())
+                .ifPresent(QuestionManagementService::bad);
     }
 
     private static void rejectBlank(String type) {
         if ("blank".equals(type)) {
-            bad("知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。");
+            bad(QuestionContractValidator.BLANK_ERROR);
         }
     }
 

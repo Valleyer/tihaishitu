@@ -114,6 +114,17 @@ export type AuditLogView = {
   createdAt: string;
 };
 
+export type ManagedBook = {
+  id: string; name: string; description: string; enabled: boolean; revision: number;
+  membershipCount: number; trainableKnowledgePointCount: number; publishedQuestionCount: number;
+  chapterCount: number; selectedLearnerCount: number;
+};
+export type ManagedChapter = {
+  id: string; parentId?: string; code: string; name: string; description: string;
+  sortOrder: number; revision: number;
+};
+export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
+
 export class ManageHttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
@@ -187,6 +198,18 @@ export const manageApi = {
     }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
+  books: () => request<ManagedBook[]>("/books"),
+  book: (id: string) => request<ManagedBookDetail>(`/books/${id}`),
+  saveBook: (book: ManagedBook) => request<ManagedBookDetail>(`/books/${book.id}`, {
+    method: "PUT", body: JSON.stringify({ name: book.name, description: book.description,
+      enabled: book.enabled, expectedRevision: book.revision }),
+  }),
+  saveChapter: (bookId: string, chapter: ManagedChapter) =>
+    request<ManagedChapter>(`/books/${bookId}/chapters/${chapter.id}`, {
+      method: "PUT", body: JSON.stringify({ name: chapter.name, description: chapter.description,
+        expectedRevision: chapter.revision }),
+    }),
+  deleteBook: (id: string) => request<void>(`/books/${id}`, { method: "DELETE" }),
   questions: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<QuestionView>>(`/questions?${params(filters)}`),
   question: (id: string) => request<QuestionView>(`/questions/${id}`),

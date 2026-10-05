@@ -7,6 +7,9 @@ import {
   type KnowledgeView,
   type KnowledgeBatchImportResult,
   type ManageUser,
+  type ManagedBook,
+  type ManagedBookDetail,
+  type ManagedChapter,
   type QuestionBatchImportResult,
   type QuestionOption,
   type QuestionRelation,
@@ -15,7 +18,7 @@ import {
 import { manageLabel, manageOptions, questionTypeContract } from "./manageLabels";
 import "./manage.css";
 
-type Page = "dashboard" | "questions" | "knowledge" | "reviews" | "imports" | "users" | "audit";
+type Page = "dashboard" | "questions" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
 
 export default function ManagementApp() {
   const [user, setUser] = useState<ManageUser | null>(null);
@@ -45,6 +48,7 @@ export default function ManagementApp() {
           <Nav active={page === "dashboard"} onClick={() => setPage("dashboard")}>仪表盘</Nav>
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>
           <Nav active={page === "knowledge"} onClick={() => setPage("knowledge")}>知识点管理</Nav>
+          {admin && <Nav active={page === "books"} onClick={() => setPage("books")}>文集管理</Nav>}
           <Nav active={page === "reviews"} onClick={() => setPage("reviews")}>审核中心</Nav>
           {admin && <Nav active={page === "imports"} onClick={() => setPage("imports")}>批量导入</Nav>}
           {admin && <Nav active={page === "users"} onClick={() => setPage("users")}>用户与权限</Nav>}
@@ -60,6 +64,7 @@ export default function ManagementApp() {
         {error && <div className="manage-error" onClick={() => setError("")}>{error}</div>}
         {page === "dashboard" && <Dashboard user={user} />}
         {page === "knowledge" && <KnowledgePage user={user} fail={setError} />}
+        {page === "books" && admin && <BooksManagementPage fail={setError} />}
         {page === "questions" && <QuestionPage user={user} fail={setError} />}
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
         {page === "imports" && admin && <ImportPage fail={setError} />}
@@ -160,6 +165,41 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
   </div>;
 }
 
+function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
+  const [items, setItems] = useState<ManagedBook[]>([]);
+  const [selected, setSelected] = useState<ManagedBookDetail>();
+  const load = useCallback(() => manageApi.books().then(setItems).catch(error => fail(error.message)), [fail]);
+  useEffect(() => { void load(); }, [load]);
+  const open = (id: string) => manageApi.book(id).then(setSelected).catch(error => fail(error.message));
+  const saveBook = () => selected && manageApi.saveBook(selected.book).then(value => { setSelected(value); void load(); }).catch(error => fail(error.message));
+  const saveChapter = (chapter: ManagedChapter) => selected && manageApi.saveChapter(selected.book.id, chapter)
+    .then(saved => setSelected({ ...selected, chapters: selected.chapters.map(item => item.id === saved.id ? saved : item) }))
+    .catch(error => fail(error.message));
+  const remove = async () => {
+    if (!selected) return;
+    const message = `确认删除文集“${selected.book.name}”？\n\n将删除该文集本身、章节结构和文集-知识点关系。\n不会删除全局知识点、全局题目和学习历史。`;
+    if (!window.confirm(message)) return;
+    try { await manageApi.deleteBook(selected.book.id); setSelected(undefined); await load(); }
+    catch (error) { fail((error as Error).message); }
+  };
+  return <section><PageTitle title="文集管理" detail="维护文集、章节名称与学习范围；稳定 ID 和章节编码保持不变" />
+    <div className="split-workspace book-management"><div className="data-table"><div className="table-head book-cols"><span>文集</span><span>成员</span><span>可学习</span><span>题目</span><span>状态</span></div>
+      {items.map(item => <button className="table-row book-cols" key={item.id} onClick={() => open(item.id)}><b>{item.name}</b><span>{item.membershipCount}</span><span>{item.trainableKnowledgePointCount}</span><span>{item.publishedQuestionCount}</span><i>{item.enabled ? "正常" : "已停用"}</i></button>)}</div>
+      <aside className="detail-panel wide">{selected ? <div className="editor book-editor"><header><b>{selected.book.name}</b><span>{selected.book.membershipCount} 个成员 · {selected.book.trainableKnowledgePointCount} 个可学习知识点 · {selected.book.publishedQuestionCount} 道已发布题目</span></header>
+        <label>文集名称<input value={selected.book.name} onChange={event => setSelected({ ...selected, book: { ...selected.book, name: event.target.value } })} /></label>
+        <label>文集描述<textarea rows={4} value={selected.book.description} onChange={event => setSelected({ ...selected, book: { ...selected.book, description: event.target.value } })} /></label>
+        <label className="inline-check"><input type="checkbox" checked={selected.book.enabled} onChange={event => setSelected({ ...selected, book: { ...selected.book, enabled: event.target.checked } })} />启用文集</label>
+        <button className="primary" onClick={saveBook}>保存文集</button>
+        <fieldset className="editor-group"><legend>章节</legend>{selected.chapters.map(chapter => <ChapterEditor key={chapter.id} chapter={chapter} changed={next => setSelected({ ...selected, chapters: selected.chapters.map(item => item.id === next.id ? next : item) })} save={() => saveChapter(chapter)} />)}</fieldset>
+        <button className="danger" onClick={remove}>删除文集</button>
+      </div> : <Empty>选择一部文集查看详情</Empty>}</aside></div>
+  </section>;
+}
+
+function ChapterEditor({ chapter, changed, save }: { chapter: ManagedChapter; changed: (chapter: ManagedChapter) => void; save: () => void }) {
+  return <div className="chapter-editor"><div><b>{chapter.name}</b><code>{chapter.code}</code></div><label>章节名称<input value={chapter.name} onChange={event => changed({ ...chapter, name: event.target.value })} /></label><label>章节描述<input value={chapter.description} onChange={event => changed({ ...chapter, description: event.target.value })} /></label><button onClick={save}>保存章节</button></div>;
+}
+
 export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
   const [query,setQuery]=useState(""); const [status,setStatus]=useState(reviewOnly?"pending_review":""); const [items,setItems]=useState<QuestionView[]>([]); const [selected,setSelected]=useState<QuestionView|null>(null); const [creating,setCreating]=useState(false); const [checked,setChecked]=useState<string[]>([]); const [page,setPage]=useState(0); const [size,setSize]=useState(30); const [totalPages,setTotalPages]=useState(0); const [totalElements,setTotalElements]=useState(0);
   const load=useCallback(()=>manageApi.questions({query,status:reviewOnly?"pending_review":status,page,size}).then(result=>{setItems(result.content);setTotalPages(result.totalPages);setTotalElements(result.totalElements);setChecked([]);if(page>0&&!result.content.length)setPage(page-1)}).catch(e=>fail(e.message)),[query,status,reviewOnly,page,size,fail]);
@@ -222,7 +262,7 @@ function AuditPage({ fail }: { fail: (value: string) => void }) {
   useEffect(() => { void load(); }, [load]);
   return <section><PageTitle title="审计记录" detail={`共 ${total} 条；只读展示全服内容与权限变更`} />
     <div className="manage-toolbar audit-filters"><input placeholder="操作者账号 / 名称 / UUID" value={actor} onChange={(event) => setActor(event.target.value)} />
-      <select value={action} onChange={(event) => setAction(event.target.value)}><option value="">全部动作</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option></select>
+      <select value={action} onChange={(event) => setAction(event.target.value)}><option value="">全部动作</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="BOOK_UPDATED">文集修改</option><option value="BOOK_CHAPTER_UPDATED">章节修改</option><option value="BOOK_DELETED">文集删除</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option></select>
       <select value={entityType} onChange={(event) => setEntityType(event.target.value)}><option value="">全部实体</option><option value="knowledge_point">知识点</option><option value="question">题目</option><option value="learner_account">用户</option><option value="question_bank">文集</option></select>
       <button onClick={load}>查询</button></div>
     <div className="audit-list">{items.map((item) => <article key={item.id} className="audit-row"><header><b>{auditAction(item.action)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time></header>
@@ -234,6 +274,7 @@ function AuditPage({ fail }: { fail: (value: string) => void }) {
 function auditAction(action: string) {
   const labels: Record<string, string> = {
     KNOWLEDGE_UPDATED: "知识点修改", KNOWLEDGE_ALIASES_UPDATED: "知识点别名修改", KNOWLEDGE_MERGED: "知识点合并",
+    BOOK_UPDATED: "文集修改", BOOK_CHAPTER_UPDATED: "章节修改", BOOK_DELETED: "文集删除",
     QUESTION_CREATED: "题目创建", QUESTION_UPDATED: "题目修改", QUESTION_SUBMITTED: "题目提交审核",
     QUESTION_REVIEW_APPROVED: "题目审核通过", QUESTION_REVIEW_REJECTED: "题目审核退回", QUESTION_ARCHIVED: "题目归档",
     USER_CREATED: "用户创建", USER_ROLE_UPDATED: "用户权限修改", QUESTION_BANK_IMPORTED: "题库导入",
