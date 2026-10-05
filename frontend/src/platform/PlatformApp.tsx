@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
 import { HttpError } from "../api/http";
 import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type ReviewQueue, type ReviewQueueItem, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels, progressPercent } from "./progressView";
+import { worldPresentation } from "./worldPresentation";
 import "./platform.css";
 
 const go = (path: string) => window.location.assign(path);
 const idAfter = (prefix: string) => decodeURIComponent(window.location.pathname.slice(prefix.length));
 const flattenChapters = (chapters: BookDetail["chapters"]): BookDetail["chapters"] =>
   chapters.flatMap(chapter => [chapter, ...flattenChapters(chapter.children || [])]);
+const greeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 6) return "夜深了";
+  if (hour < 12) return "上午好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+};
+const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
 function AuthPage({ register }: { register: boolean }) {
   const [username, setUsername] = useState("");
@@ -31,8 +40,8 @@ function AuthPage({ register }: { register: boolean }) {
   };
   return <main className="auth-page">
     <form className="auth-card" onSubmit={submit}>
-      <span className="hub-seal">知</span><p className="eyebrow">知境学习者</p>
-      <h1>{register ? "建立学习身份" : "回到知境中枢"}</h1>
+      <a className="auth-brand" href="/">知境</a>
+      <div><h1>{register ? "创建学习账号" : "欢迎回来"}</h1><p className="auth-subtitle">{register ? "建立属于你的统一学习身份" : "继续你的学习旅程"}</p></div>
       <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       {register && <label>显示名称<input value={displayName} onChange={e => setDisplayName(e.target.value)} /></label>}
       <label>密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={register ? "new-password" : "current-password"} minLength={8} required /></label>
@@ -44,53 +53,48 @@ function AuthPage({ register }: { register: boolean }) {
 }
 
 function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNode }) {
+  const path = window.location.pathname;
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const syncHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+  const nav = [
+    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"], ["复习", "/reviews"], ["题库", "/books"], ["世界", "/#worlds"],
+  ];
+  const active = (href: string) => href === "/" ? path === "/" && hash !== "#worlds" : href === "/#worlds" ? path === "/" && hash === "#worlds" : path === href || path.startsWith(`${href}/`);
   return <div className="learning-hub">
-    <header className="hub-header"><a className="hub-brand" href="/"><span>知</span>知境</a>
-      <nav><a href="/study">学习方向</a><a href="/progress">学习进度</a><a href="/reviews">复习安排</a><a href="/wrong-questions">错题练习</a><a href="/books">文集与知识图谱</a><a href="/#worlds">游戏世界</a>{data.canManage && <a href="/manage">管理后台</a>}<a href="/account">{data.learner.displayName}</a></nav>
+    <header className="hub-header"><div className="hub-header-inner"><a className="hub-brand" href="/"><span aria-hidden="true" />知境</a>
+      <nav aria-label="主要导航">{nav.map(([label, href]) => <a className={active(href) ? "active" : ""} href={href} key={href}>{label}</a>)}</nav>
+      <div className="hub-user">{data.canManage && <a className="hub-manage-link" href="/manage">管理后台</a>}<a className={active("/account") ? "hub-account active" : "hub-account"} href="/account">{data.learner.displayName}</a></div></div>
     </header>
     {children}
   </div>;
 }
 
 function HubHome({ data }: { data: HubBootstrap }) {
-  const selected = data.bankManifest.filter(book => data.studyProfile.selectedBookIds.includes(book.id));
   const [progress, setProgress] = useState<LearnerProgress | null>();
-  useEffect(() => { platformApi.progress().then(setProgress).catch(() => setProgress(null)); }, []);
-  return <Shell data={data}><main className="hub-main">
-    <section className="hub-hero"><p className="eyebrow">Learning Hub · 知境中枢</p><h1>{data.learner.displayName}，今日从哪里继续？</h1>
-      <p>文集决定完整学习范围，重点知识点记录当前关注方向。游戏世界从可玩知识点中随机确定目标，并共享同一份学习资源与学习身份。</p>
+  const [homeError, setHomeError] = useState("");
+  useEffect(() => { platformApi.progress().then(setProgress).catch(() => { setProgress(null); setHomeError("学习数据暂时未能载入，可以稍后再试。"); }); }, []);
+  const latest = progress?.recent.knowledgePoints[0];
+  const start = async () => { if (!latest) return; try { const session = await platformApi.startKnowledgePractice(latest.knowledgePointId); go(`/practice/${session.id}`); } catch (reason) { setHomeError((reason as Error).message); } };
+  return <Shell data={data}><main className="hub-main hub-home">
+    <section className="hub-greeting"><h1>{greeting()}，{data.learner.displayName}</h1><p>今天继续你的学习进度。</p></section>
+    {homeError && <p className="hub-error" role="alert">{homeError}</p>}
+    <section className="home-focus-grid">
+      <article className="continue-card"><p className="section-kicker">继续学习</p>{latest ? <><h2>{latest.name}</h2><p>{latest.subject} · {latest.chapter}</p><div className="continue-mastery"><span className={`mastery-band ${latest.band}`}>{progressBandLabels[latest.band]}</span><span>有效掌握度 {Math.round(latest.effectiveMastery)}%</span></div><button className="hub-primary" onClick={start}>继续专项练习 →</button></> : <><h2>开始学习</h2><p>{progress === undefined ? "正在读取最近的学习记录…" : "从当前学习范围选择一个知识点开始。"}</p><a className="hub-primary" href="/books">选择知识点 →</a></>}</article>
+      <article className="today-card"><div className="section-heading"><div><p className="section-kicker">今日学习</p><h2>学习状态</h2></div></div>{progress ? <div className="today-metrics"><p><b>{progress.summary.reviewDue}</b><span>今日待巩固</span></p><p><b>{progress.summary.wrongQuestions}</b><span>待重做错题</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p><p><b>{progress.recent.activeStudyDays7d}</b><span>近 7 日学习天数</span></p></div> : <p className="muted">{progress === null ? "暂时无法读取学习状态" : "正在整理学习状态…"}</p>}</article>
     </section>
-    <div className="hub-grid">
-      <section className="hub-panel"><div className="panel-heading"><div><small>FORMAL PRACTICE</small><h2>专项练习</h2></div><a href="/books">选择知识点</a></div>
-        <p>选定一个知识点，完成每道正式题及其诊断或补救流程。没有固定题数和通关分数，进度直接体现在掌握度与记忆稳定度中。</p>
-      </section>
-      <section className="hub-panel"><div className="panel-heading"><div><small>WRONG PRACTICE</small><h2>错题练习</h2></div><a href="/wrong-questions">查看待重做</a></div>
-        <p>同一道题最近一次正式结果为错误或部分正确时出现在这里；重新做对后自动移除。</p>
-      </section>
-      <section className="hub-panel"><div className="panel-heading"><div><small>MY STUDY</small><h2>我的学习</h2></div><a href="/study">调整学习方向</a></div>
-        <p>当前模式：{data.studyProfile.focusMode === "manual" ? "手动重点" : "自动规划"} · {data.studyProfile.pace === "slow" ? "从容节奏" : "正常节奏"}</p>
-        <div className="tag-row">{selected.map(book => <span key={book.id}>{book.name}</span>)}</div>
-        <p>重点知识点：{data.studyProfile.focusedKnowledgePoints.map(point => point.name).join("、") || "由系统按可用知识范围自动安排"}</p>
-      </section>
-      <section className="hub-panel"><div className="panel-heading"><div><small>LIBRARY</small><h2>文集与知识图谱</h2></div><a href="/books">展开</a></div>
-        <p>{data.bankManifest.length} 本可用文集，题目和知识点由服务器统一维护。浏览行为不会产生答题记录。</p>
-      </section>
-    </div>
-    <section className="hub-panel progress-summary"><div className="panel-heading"><div><small>LEARNING PROGRESS</small><h2>当前学习进度</h2></div><a href="/progress">查看学习进度</a></div>
-      {progress ? <div className="progress-summary-grid">
-        <p><b>{progress.summary.totalKnowledgePoints}</b><span>当前学习范围</span></p>
-        <p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p>
-        <p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p>
-        <p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p>
-        <p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p>
-      </div> : <p>{progress === null ? "学习进度暂时未能载入，可以稍后再看。" : "正在整理当前学习进度…"}</p>}
+    <section className="overview-card"><div className="section-heading"><div><p className="section-kicker">学习概览</p><h2>当前学习范围</h2></div><a href="/progress">查看详细进度 →</a></div>{progress ? <div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p><p><b>{progress.summary.reviewDue}</b><span>待巩固</span></p></div> : <p className="muted">正在整理当前学习进度…</p>}</section>
+    <section className="world-gallery" id="worlds"><div className="section-heading"><div><p className="section-kicker">学习世界</p><h2>在不同世界中继续成长</h2></div></div>
+      <div className="world-cards">{data.worlds.map(world => { const presentation = worldPresentation(world.id); return <article key={world.id} className={world.enabled ? "world-card enabled" : "world-card"} style={{ "--world-accent": presentation.accent } as CSSProperties}>
+        <div className={presentation.cover ? "world-cover" : "world-cover fallback"}><span className="world-cover-media" style={presentation.cover ? { backgroundImage: `url(${presentation.cover})` } : undefined} /><span className={world.enabled ? "world-status open" : "world-status"}>{world.enabled ? "已开放" : "即将开放"}</span></div>
+        <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <a className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</a> : <span className="world-unavailable">尚未开放</span>}</div>
+      </article> })}</div>
     </section>
-    <section className="world-gallery" id="worlds"><div className="panel-heading"><div><small>WORLD GALLERY</small><h2>游戏世界</h2></div></div>
-      <div className="world-cards">{data.worlds.map(world => <article key={world.id} className={world.enabled ? "world-card enabled" : "world-card"}>
-        <p>{world.enabled ? "现已开放" : "筹备中"}</p><h3>{world.name}</h3><span>{world.description}</span>
-        {world.enabled ? <a className="hub-primary" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"}</a> : <button disabled>尚未开放</button>}
-      </article>)}</div>
-    </section>
+    <div className="home-lower-grid"><section className="recent-home"><div className="section-heading"><div><p className="section-kicker">最近学习</p><h2>最近接触的知识点</h2></div><a href="/progress">全部记录 →</a></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <a href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.subject} · {point.chapter}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></a>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
+      <section className="quick-links"><div className="section-heading"><div><p className="section-kicker">快捷入口</p><h2>常用学习功能</h2></div></div><div><a href="/wrong-questions"><b>错题练习</b><span>重做最近仍需巩固的题目</span></a><a href="/reviews"><b>今日复习</b><span>查看动态复习安排</span></a><a href="/books"><b>浏览题库</b><span>从文集和知识点开始</span></a><a href="/study"><b>调整学习方向</b><span>管理学习范围与重点</span></a></div></section></div>
   </main></Shell>;
 }
 
