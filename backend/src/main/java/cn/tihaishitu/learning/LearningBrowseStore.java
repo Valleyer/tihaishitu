@@ -89,9 +89,46 @@ public class LearningBrowseStore {
         }, id).stream().findFirst().orElseThrow(() -> missing("知识点不存在或已停用。"));
     }
 
-    public List<Map<String, Object>> questionsForKnowledge(String id) {
+    public List<Map<String, Object>> knowledgePoints(String query, String bookId, String chapterId, String subject) {
+        List<String> clauses = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        clauses.add("k.status = 'active'");
+        if (query != null && !query.isBlank()) {
+            clauses.add("(LOWER(k.name) LIKE ? OR LOWER(k.code) LIKE ? OR EXISTS "
+                    + "(SELECT 1 FROM knowledge_alias a WHERE a.knowledge_point_id=k.id AND LOWER(a.alias) LIKE ?))");
+            String value = "%" + query.trim().toLowerCase() + "%";
+            params.add(value); params.add(value); params.add(value);
+        }
+        if (bookId != null && !bookId.isBlank()) { clauses.add("bk.bank_id = ?"); params.add(bookId); }
+        if (chapterId != null && !chapterId.isBlank()) { clauses.add("bk.chapter_id = ?"); params.add(chapterId); }
+        if (subject != null && !subject.isBlank()) { clauses.add("k.subject_name = ?"); params.add(subject); }
         return jdbc.query("""
-                SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
+                SELECT k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,
+                       MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
+                       COUNT(DISTINCT CASE WHEN q.status='published' THEN q.id END) published_count
+                  FROM global_knowledge_point k
+                  JOIN question_bank_knowledge bk ON bk.knowledge_point_id=k.id
+                  JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
+                  JOIN question_bank_chapter c ON c.id=bk.chapter_id
+                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id
+                  LEFT JOIN question_resource q ON q.id=qk.question_id
+                 WHERE %s
+                 GROUP BY k.id,k.code,k.name,k.subject_name,k.section_name,k.chapter_name,k.sort_order
+                 ORDER BY k.sort_order,k.code
+                 LIMIT 2000
+                """.formatted(String.join(" AND ", clauses)), (row, index) -> ordered(
+                "id", row.getString("id"), "code", row.getString("code"), "name", row.getString("name"),
+                "subject", row.getString("subject_name"), "section", row.getString("section_name"),
+                "chapter", row.getString("chapter_name"), "bookId", row.getString("book_id"),
+                "bookName", row.getString("book_name"), "chapterId", row.getString("chapter_id"),
+                "catalogChapter", row.getString("catalog_chapter"),
+                "publishedQuestionCount", row.getInt("published_count")), params.toArray());
+    }
+
+    public List<Map<String, Object>> questionsForKnowledge(String id) {
+        List<Map<String, Object>> questions = jdbc.query("""
+                SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year,
+                       q.question_number, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
                        q.standard_answer_json, q.difficulty, q.revision
                   FROM question_resource q
@@ -99,11 +136,14 @@ public class LearningBrowseStore {
                  WHERE qk.knowledge_point_id = ? AND q.status = 'published'
                  ORDER BY q.id
                 """, (result, row) -> question(result), id);
+        questions.forEach(question -> question.put("knowledgePoints", questionKnowledge((String) question.get("id"))));
+        return questions;
     }
 
     public Map<String, Object> question(String id) {
         Map<String, Object> value = jdbc.query("""
-                SELECT id, subject_name, source_type, source_name, question_type, presentation_type,
+                SELECT id, subject_name, source_type, source_name, exam_year, question_number,
+                       question_type, presentation_type,
                        grading_mode, content_markdown, analysis_markdown, standard_answer_json, difficulty, revision
                   FROM question_resource WHERE id = ? AND status = 'published'
                 """, (result, row) -> question(result), id).stream().findFirst()
@@ -112,7 +152,12 @@ public class LearningBrowseStore {
                 SELECT option_key, option_text FROM question_resource_option
                  WHERE question_id = ? ORDER BY sort_order, option_key
                 """, (result, row) -> ordered("key", result.getString("option_key"), "text", result.getString("option_text")), id));
-        value.put("knowledgePoints", jdbc.query("""
+        value.put("knowledgePoints", questionKnowledge(id));
+        return value;
+    }
+
+    private List<Map<String, Object>> questionKnowledge(String id) {
+        return jdbc.query("""
                 SELECT k.id, k.code, k.name, k.subject_name, k.section_name, k.chapter_name,
                        k.description, k.explanation, qk.relation_role, qk.sort_order
                   FROM question_resource_knowledge qk JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
@@ -121,13 +166,14 @@ public class LearningBrowseStore {
             Map<String, Object> point = knowledge(result);
             point.put("role", result.getString("relation_role"));
             return point;
-        }, id));
-        return value;
+        }, id);
     }
 
     private Map<String, Object> question(java.sql.ResultSet result) throws java.sql.SQLException {
         return ordered("id", result.getString("id"), "subject", result.getString("subject_name"),
                 "sourceType", result.getString("source_type"), "sourceName", result.getString("source_name"),
+                "examYear", result.getObject("exam_year", Integer.class),
+                "questionNumber", result.getString("question_number"),
                 "questionType", result.getString("question_type"), "presentationType", result.getString("presentation_type"),
                 "gradingMode", result.getString("grading_mode"), "contentMarkdown", result.getString("content_markdown"),
                 "analysisMarkdown", result.getString("analysis_markdown"),

@@ -13,6 +13,14 @@ public class LearningBrowseController {
 
     @GetMapping("/books") public List<Map<String, Object>> books() { return store.books(); }
     @GetMapping("/books/{id}") public Map<String, Object> book(@PathVariable String id) { return store.book(id); }
+    @GetMapping("/knowledge-points")
+    public List<Map<String, Object>> knowledgePoints(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String bookId,
+            @RequestParam(required = false) String chapterId,
+            @RequestParam(required = false) String subject) {
+        return store.knowledgePoints(query, bookId, chapterId, subject);
+    }
     @GetMapping("/knowledge-points/{id}") public Map<String, Object> knowledge(@PathVariable String id) { return store.knowledge(id); }
     @GetMapping("/knowledge-points/{id}/questions") public List<Map<String, Object>> knowledgeQuestions(@PathVariable String id) { return store.questionsForKnowledge(id); }
     @GetMapping("/questions/{id}") public Map<String, Object> question(@PathVariable String id) { return store.question(id); }

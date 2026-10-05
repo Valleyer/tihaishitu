@@ -15,7 +15,7 @@ export interface BookSummary { id: string; name: string; description: string; re
 export interface Chapter { id: string; parentId?: string; code: string; name: string; description: string; knowledgePoints: KnowledgePoint[]; children: Chapter[] }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
-  id: string; subject: string; sourceType: string; sourceName?: string; questionType: string;
+  id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string; questionType: string;
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
   standardAnswer: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
@@ -43,11 +43,11 @@ export interface ReviewQueue {
 export type MasteryBand = "unstarted" | "unmastered" | "learning" | "ready" | "proficient";
 export interface ProgressChapter {
   chapterId: string; code: string; name: string; total: number; started: number;
-  ready: number; proficient: number; children: ProgressChapter[];
+  ready: number; proficient: number; masteryProgress: number; children: ProgressChapter[];
 }
 export interface ProgressBook {
   bookId: string; name: string; description: string; totalKnowledgePoints: number;
-  started: number; ready: number; proficient: number; reviewDueOrSoon: number;
+  started: number; ready: number; proficient: number; masteryProgress: number; reviewDueOrSoon: number;
   chapters: ProgressChapter[];
 }
 export interface LearnerProgress {
@@ -87,6 +87,20 @@ export interface PracticeSession {
   sourceQuestionId?: string; status: "active" | "ended"; revision: number;
   currentAttempt: PracticeAttempt; flowComplete: boolean; canRepeat: boolean;
 }
+export interface KnowledgeDirectoryItem extends KnowledgePoint {
+  bookId: string; bookName: string; chapterId: string; catalogChapter: string;
+  publishedQuestionCount: number;
+}
+export interface LearnerStatistics {
+  days: 7 | 30 | 90; generatedAt: string;
+  summary: {
+    gradedAttempts: number; activeStudyDays: number; distinctKnowledgePoints: number;
+    knowledgeDrillAttempts: number; wrongReviewAttempts: number; worldAttempts: number;
+    correct: number; partial: number; wrong: number;
+  };
+  daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
+  books: { bookId: string; name: string; masteryProgress: number; knowledgePointCount: number }[];
+}
 
 export const platformApi = {
   register: (username: string, displayName: string, password: string) =>
@@ -100,6 +114,11 @@ export const platformApi = {
   book: (id: string) => request<BookDetail>("/learning/books/" + encodeURIComponent(id)),
   knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string }[] }>(
     "/learning/knowledge-points/" + encodeURIComponent(id)),
+  knowledgeDirectory: (filters: { query?: string; bookId?: string; chapterId?: string; subject?: string }) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
+    return request<KnowledgeDirectoryItem[]>("/learning/knowledge-points?" + params.toString());
+  },
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),
   question: (id: string) => request<BrowseQuestion>("/learning/questions/" + encodeURIComponent(id)),
@@ -109,6 +128,7 @@ export const platformApi = {
     "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
   reviewQueue: () => request<ReviewQueue>("/learner/review-queue"),
   progress: () => request<LearnerProgress>("/learner/progress"),
+  statistics: (days: 7 | 30 | 90) => request<LearnerStatistics>(`/learner/statistics?days=${days}`),
   wrongQuestions: () => request<WrongQuestion[]>("/learner/wrong-questions"),
   startKnowledgePractice: (targetKnowledgePointId: string) =>
     request<PracticeSession>("/learner/practice-sessions", "POST", {

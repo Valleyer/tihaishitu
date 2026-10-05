@@ -59,7 +59,7 @@ function question(index: number, status = "pending_review"): QuestionView {
 }
 
 function result(content: QuestionView[], page: number, totalElements: number, totalPages: number): PageResult<QuestionView> {
-  return { content, page, size: 20, totalElements, totalPages };
+  return { content, page, size: 30, totalElements, totalPages };
 }
 
 beforeEach(() => {
@@ -80,7 +80,7 @@ describe("QuestionPage pagination", () => {
     const { container } = render(<QuestionPage user={reviewer} fail={vi.fn()} />);
     expect(await screen.findByText("共 22 道")).toBeTruthy();
     expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
-    expect(container.querySelector(".data-table.manage-question-list")).toBeTruthy();
+    expect(container.querySelector(".question-management-table.data-table")).toBeTruthy();
 
     const previous = screen.getByRole("button", { name: "上一页" }) as HTMLButtonElement;
     const next = screen.getByRole("button", { name: "下一页" }) as HTMLButtonElement;
@@ -89,7 +89,7 @@ describe("QuestionPage pagination", () => {
     fireEvent.click(next);
 
     expect(await screen.findByText("第 2 / 2 页")).toBeTruthy();
-    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 20 })));
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 30 })));
     expect((screen.getByRole("button", { name: "上一页" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "下一页" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -104,7 +104,7 @@ describe("QuestionPage pagination", () => {
     fireEvent.change(screen.getByPlaceholderText("搜索题干 / 来源 / 题号"), { target: { value: "极限" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ query: "极限", page: 0 })));
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "published" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "题目状态" }), { target: { value: "published" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ status: "published", page: 0 })));
   });
 
@@ -121,7 +121,7 @@ describe("QuestionPage pagination", () => {
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
       status: "pending_review",
       page: 0,
-      size: 20,
+      size: 30,
     })));
     expect(questionsMock.mock.calls.slice(callsBeforeReviewMode)
       .every(([filters]) => filters.status === "pending_review")).toBe(true);

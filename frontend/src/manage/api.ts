@@ -68,6 +68,7 @@ export type QuestionView = {
   creatorName?: string;
   reviewComment?: string;
   revision: number;
+  updatedAt?: string;
   options: QuestionOption[];
   knowledgePoints: QuestionRelation[];
 };
@@ -85,6 +86,11 @@ export type QuestionBatchImportResult = {
   relationCount: number;
   createdQuestions: number;
   updatedQuestions: number;
+};
+export type KnowledgeBatchImportResult = {
+  schemaVersion: string; importId: string; bookId: string; bookName: string; subject: string;
+  chapterCount: number; knowledgePointCount: number; createdKnowledgePoints: number;
+  updatedKnowledgePoints: number; membershipCount: number; aliasCount: number;
 };
 
 export type KnowledgeMergeResult = {
@@ -204,10 +210,18 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ expectedRevision: question.revision, approve, comment }),
     }),
+  bulkDeleteQuestions: (ids: string[]) =>
+    request<{ deleted: number }>("/questions/bulk-delete", {
+      method: "POST", body: JSON.stringify({ ids }),
+    }),
   importQuestionBatch: (payload: unknown) =>
     request<QuestionBatchImportResult>("/imports/questions", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  importKnowledgeBatch: (payload: unknown) =>
+    request<KnowledgeBatchImportResult>("/imports/knowledge", {
+      method: "POST", body: JSON.stringify(payload),
     }),
   users: () => request<ManageUser[]>("/users"),
   createUser: (input: { username: string; displayName: string; password: string; roles: string[] }) =>

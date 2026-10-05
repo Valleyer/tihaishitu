@@ -58,6 +58,8 @@ class LearnerProgressIntegrationTest {
                 .filter(item -> item.bookId().equals(first.id())).findFirst().orElseThrow();
         LearnerProgressService.ChapterProgress parent = firstView.chapters().get(0);
         assertThat(parent.total()).isEqualTo(3);
+        assertThat(firstView.masteryProgress()).isGreaterThan(0).isLessThan(100);
+        assertThat(parent.masteryProgress()).isGreaterThan(0).isLessThan(100);
         assertThat(parent.children()).extracting(LearnerProgressService.ChapterProgress::total)
                 .containsExactly(1, 2);
     }

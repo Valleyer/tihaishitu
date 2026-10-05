@@ -138,7 +138,7 @@ public class LearnerProgressService {
         List<ChapterProgress> chapterViews = roots.stream()
                 .map(root -> chapterProgress(root, points, new LinkedHashSet<>()).view()).toList();
         return new BookProgress(book.id(), book.name(), book.description(), counts.total(), counts.started(),
-                counts.ready(), counts.proficient(), reviewDueOrSoon, chapterViews);
+                counts.ready(), counts.proficient(), counts.masteryProgress(), reviewDueOrSoon, chapterViews);
     }
 
     private ChapterAggregate chapterProgress(ChapterNode node, Map<String, PointProgress> points, Set<String> path) {
@@ -149,26 +149,29 @@ public class LearnerProgressService {
         children.forEach(child -> subtree.addAll(child.knowledgePointIds()));
         Counts counts = counts(subtree, points);
         return new ChapterAggregate(new ChapterProgress(node.row.id(), node.row.code(), node.row.name(),
-                counts.total(), counts.started(), counts.ready(), counts.proficient(),
+                counts.total(), counts.started(), counts.ready(), counts.proficient(), counts.masteryProgress(),
                 children.stream().map(ChapterAggregate::view).toList()), Set.copyOf(subtree));
     }
 
     private static Counts counts(Set<String> ids, Map<String, PointProgress> points) {
         int started = 0, ready = 0, proficient = 0;
+        double masteryTotal = 0;
         for (String id : ids) {
             PointProgress point = points.get(id);
             if (point == null) continue;
             if (point.evidenceCount() > 0) started++;
             if (point.effectiveMastery() >= READY_THRESHOLD) ready++;
             if ("proficient".equals(point.band())) proficient++;
+            masteryTotal += point.effectiveMastery();
         }
-        return new Counts(ids.size(), started, ready, proficient);
+        return new Counts(ids.size(), started, ready, proficient,
+                ids.isEmpty() ? 0 : masteryTotal / ids.size());
     }
 
     private record PointProgress(String knowledgePointId, String name, String subject, String section,
                                  String chapter, String band, double effectiveMastery, double stabilityDays,
                                  int evidenceCount, Instant lastEvidenceAt) {}
-    private record Counts(int total, int started, int ready, int proficient) {}
+    private record Counts(int total, int started, int ready, int proficient, double masteryProgress) {}
     private record ChapterAggregate(ChapterProgress view, Set<String> knowledgePointIds) {}
     private static final class ChapterNode {
         private final LearnerProgressStore.ChapterRow row;
@@ -185,10 +188,11 @@ public class LearnerProgressService {
                           int readyKnowledgePoints, int proficientKnowledgePoints, int reviewDue,
                           int reviewSoon, int reviewUpcoming, int wrongQuestions) {}
     public record BookProgress(String bookId, String name, String description, int totalKnowledgePoints,
-                               int started, int ready, int proficient, int reviewDueOrSoon,
+                               int started, int ready, int proficient, double masteryProgress, int reviewDueOrSoon,
                                List<ChapterProgress> chapters) {}
     public record ChapterProgress(String chapterId, String code, String name, int total, int started,
-                                  int ready, int proficient, List<ChapterProgress> children) {}
+                                  int ready, int proficient, double masteryProgress,
+                                  List<ChapterProgress> children) {}
     public record RecentProgress(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
                                  List<DailyProgress> daily, List<RecentKnowledgePoint> knowledgePoints) {}
     public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}

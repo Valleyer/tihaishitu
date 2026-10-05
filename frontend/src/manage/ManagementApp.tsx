@@ -5,6 +5,7 @@ import {
   ManageHttpError,
   type AuditLogView,
   type KnowledgeView,
+  type KnowledgeBatchImportResult,
   type ManageUser,
   type QuestionBatchImportResult,
   type QuestionOption,
@@ -85,46 +86,18 @@ function Dashboard({ user }: { user: ManageUser }) {
 }
 
 function ImportPage({ fail }: { fail: (value: string) => void }) {
-  const [source, setSource] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<QuestionBatchImportResult | null>(null);
-  let preview: { schemaVersion?: string; publish?: boolean; batch?: { subject?: string; sourceType?: string; sourceName?: string; examYear?: number }; questions?: unknown[] } | null = null;
-  let parseError = "";
-  if (source.trim()) {
-    try { preview = JSON.parse(source); }
-    catch { parseError = "JSON 格式尚不完整。"; }
-  }
-  const legacyFormat = preview?.schemaVersion === "global-question-bank/v1";
-  const supportedFormat = preview?.schemaVersion === "global-question-batch/v2";
-  const submit = () => {
-    if (!preview || !supportedFormat) return;
-    setBusy(true); setResult(null);
-    manageApi.importQuestionBatch(preview)
-      .then(setResult).catch((error) => fail(error.message)).finally(() => setBusy(false));
-  };
-  const loadFile = (file?: File) => {
-    if (!file) return;
-    file.text().then((text) => { setSource(text); setResult(null); })
-      .catch(() => fail("无法读取所选文件。"));
-  };
-  return <section><PageTitle title="批量导入" detail="批量导入全服题目；题目通过知识点自动成为学习资源" />
-    <div className="import-workspace">
-      <div className="manage-card import-source">
-        <div className="import-heading"><div><h2>题目批次 JSON</h2><p>格式版本固定为 <code>global-question-batch/v2</code>，导入不会创建或修改文集。</p></div>
-          <label className="file-button">选择文件<input type="file" accept="application/json,.json" onChange={(event) => loadFile(event.target.files?.[0])} /></label></div>
-        <textarea rows={24} spellCheck={false} value={source} onChange={(event) => { setSource(event.target.value); setResult(null); }} placeholder="粘贴题目批次 JSON，或选择文件…" />
-      </div>
-      <aside className="manage-card import-preview"><h2>导入预检</h2>
-        {!source && <Empty>选择文件或粘贴 JSON 后，这里会显示题目批次摘要。</Empty>}
-        {parseError && <p className="form-error">{parseError}</p>}
-        {legacyFormat && <p className="form-error">这是旧版文集导入格式。新版系统的题目已经与文集解耦，请使用 global-question-batch/v2。</p>}
-        {preview && !legacyFormat && !supportedFormat && <p className="form-error">格式必须为 global-question-batch/v2。</p>}
-        {preview && <dl><dt>格式</dt><dd>{preview.schemaVersion || "未提供"}</dd><dt>科目</dt><dd>{preview.batch?.subject || "未提供"}</dd><dt>来源类型</dt><dd>{manageLabel("source", preview.batch?.sourceType)}</dd><dt>来源名称</dt><dd>{preview.batch?.sourceName || "未提供"}</dd><dt>年份</dt><dd>{preview.batch?.examYear ?? "—"}</dd><dt>题目数</dt><dd>{Array.isArray(preview.questions) ? preview.questions.length : 0}</dd><dt>导入状态</dt><dd>{preview.publish ? "直接发布" : "进入待审核"}</dd></dl>}
-        <button className="primary" disabled={!supportedFormat || busy} onClick={submit}>{busy ? "导入中…" : "校验并导入"}</button>
-        {result && <div className="import-result"><b>导入完成</b><p>{result.subject} · {result.sourceName}{result.examYear ? ` · ${result.examYear}` : ""}</p><p>题目 {result.questionCount} 道；新建 {result.createdQuestions}，更新 {result.updatedQuestions}</p><p>选项 {result.optionCount} 条；知识点关系 {result.relationCount} 条</p><small>导入编号：{result.importId}</small></div>}
-      </aside>
-    </div>
-  </section>;
+  const [kind,setKind]=useState<"questions"|"knowledge">("questions"); const [source,setSource]=useState(""); const [busy,setBusy]=useState(false); const [questionResult,setQuestionResult]=useState<QuestionBatchImportResult|null>(null); const [knowledgeResult,setKnowledgeResult]=useState<KnowledgeBatchImportResult|null>(null);
+  let preview: Record<string,unknown>|null=null; let parseError=""; if(source.trim()){try{preview=JSON.parse(source)}catch{parseError="JSON 格式尚不完整。"}}
+  const expected=kind==="questions"?"global-question-batch/v2":"global-knowledge-batch/v1"; const supported=preview?.schemaVersion===expected;
+  const loadFile=(file?:File)=>{if(file)file.text().then(text=>{setSource(text);setQuestionResult(null);setKnowledgeResult(null)}).catch(()=>fail("无法读取所选文件。"))};
+  const submit=()=>{if(!preview||!supported)return;setBusy(true);const action=kind==="questions"?manageApi.importQuestionBatch(preview).then(setQuestionResult):manageApi.importKnowledgeBatch(preview).then(setKnowledgeResult);action.catch(error=>fail(error.message)).finally(()=>setBusy(false))};
+  const select=(next:"questions"|"knowledge")=>{setKind(next);setSource("");setQuestionResult(null);setKnowledgeResult(null)};
+  const batch=preview?.batch as Record<string,unknown>|undefined; const book=preview?.book as Record<string,unknown>|undefined; const questions=preview?.questions as unknown[]|undefined; const chapters=preview?.chapters as unknown[]|undefined; const points=preview?.knowledgePoints as unknown[]|undefined;
+  return <section><PageTitle title="批量导入" detail="题目资源与知识体系分别使用稳定版本的 JSON Schema"/><div className="import-tabs"><button className={kind==="questions"?"active":""} onClick={()=>select("questions")}>题目导入</button><button className={kind==="knowledge"?"active":""} onClick={()=>select("knowledge")}>知识点导入</button></div>
+    <div className="import-workspace"><div className="manage-card import-source"><div className="import-heading"><div><h2>{kind==="questions"?"题目批次 JSON":"知识点批次 JSON"}</h2><p>格式版本固定为 <code>{expected}</code>。</p></div><div><a className="file-button" href={kind==="questions"?"/examples/题库示例.json":"/examples/知识点批量导入示例.json"} download>下载示例</a><label className="file-button">选择文件<input type="file" accept="application/json,.json" onChange={event=>loadFile(event.target.files?.[0])}/></label></div></div><textarea rows={24} spellCheck={false} value={source} onChange={event=>{setSource(event.target.value);setQuestionResult(null);setKnowledgeResult(null)}} placeholder="粘贴 JSON，或选择文件…"/></div>
+      <aside className="manage-card import-preview"><h2>导入预检</h2>{!source&&<Empty>选择文件或粘贴 JSON 后显示摘要。</Empty>}{parseError&&<p className="form-error">{parseError}</p>}{preview&&!supported&&<p className="form-error">格式必须为 {expected}。</p>}{preview&&<dl><dt>格式</dt><dd>{String(preview.schemaVersion||"未提供")}</dd>{kind==="questions"?<><dt>科目</dt><dd>{String(batch?.subject||"未提供")}</dd><dt>来源</dt><dd>{String(batch?.sourceName||"未提供")}</dd><dt>题目数</dt><dd>{questions?.length||0}</dd></>:<><dt>文集</dt><dd>{String(book?.name||"未提供")}</dd><dt>科目</dt><dd>{String(preview.subject||"未提供")}</dd><dt>章节数</dt><dd>{chapters?.length||0}</dd><dt>知识点数</dt><dd>{points?.length||0}</dd></>}</dl>}<button className="primary" disabled={!supported||busy} onClick={submit}>{busy?"导入中…":"确认导入"}</button>
+      {questionResult&&<div className="import-result"><b>题目导入完成</b><p>{questionResult.subject} · {questionResult.sourceName}</p><p>题目 {questionResult.questionCount} 道；新建 {questionResult.createdQuestions}，更新 {questionResult.updatedQuestions}</p></div>}{knowledgeResult&&<div className="import-result"><b>知识点导入完成</b><p>{knowledgeResult.bookName} · {knowledgeResult.subject}</p><p>章节 {knowledgeResult.chapterCount}；知识点 {knowledgeResult.knowledgePointCount}；新建 {knowledgeResult.createdKnowledgePoints}，更新 {knowledgeResult.updatedKnowledgePoints}</p><p>Membership {knowledgeResult.membershipCount}；别名 {knowledgeResult.aliasCount}</p></div>}</aside>
+    </div></section>;
 }
 
 function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string) => void }) {
@@ -188,33 +161,22 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
 }
 
 export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
-  const [query, setQuery] = useState(""); const [status, setStatus] = useState(reviewOnly ? "pending_review" : "");
-  const [items, setItems] = useState<QuestionView[]>([]); const [selected, setSelected] = useState<QuestionView | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [pagination, setPagination] = useState({ page: 0, reviewOnly });
-  const page = pagination.reviewOnly === reviewOnly ? pagination.page : 0;
-  const [totalPages, setTotalPages] = useState(0); const [totalElements, setTotalElements] = useState(0);
-  const load = useCallback(() => manageApi.questions({ query, status: reviewOnly ? "pending_review" : status, page, size: 20 })
-    .then((result) => {
-      setTotalPages(result.totalPages); setTotalElements(result.totalElements);
-      if (page > 0 && result.content.length === 0 && page >= result.totalPages) {
-        setItems([]); setPagination({ page: page - 1, reviewOnly }); return;
-      }
-      setItems(result.content);
-    }).catch((e) => fail(e.message)), [query, status, reviewOnly, page, fail]);
-  useEffect(() => { void load(); }, [load]);
-  return <section><PageTitle title={reviewOnly ? "审核中心" : "题目管理"} detail="原始题型、游戏展示与判题方式分开维护" />
-    <div className="manage-toolbar"><input placeholder="搜索题干 / 来源 / 题号" value={query} onChange={(e) => { setQuery(e.target.value); setPagination({ page: 0, reviewOnly }); }} />
-      {!reviewOnly && <select value={status} onChange={(e) => { setStatus(e.target.value); setPagination({ page: 0, reviewOnly }); }}><option value="">全部状态</option>{manageOptions("questionStatus").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>}
-      <button onClick={load}>查询</button>{!reviewOnly && <button className="primary" onClick={() => { setCreating(true); setSelected(null); }}>新建题目</button>}</div>
-    <div className="split-workspace"><div className="question-list-panel"><div className="data-table manage-question-list"><div className="table-head question-cols"><span>来源</span><span>原题型</span><span>判题</span><span>状态</span></div>
-      {items.map((item) => <button className="table-row question-cols" key={item.id} onClick={() => { manageApi.question(item.id).then(setSelected).catch((e) => fail(e.message)); setCreating(false); }}><b>{item.examYear ? `${item.examYear} · ${item.questionNumber}` : item.sourceName || "自建题"}</b><span>{manageLabel("questionType", item.questionType)}</span><span>{manageLabel("grading", item.gradingMode)}</span><i>{manageLabel("questionStatus", item.status)}</i></button>)}</div>
-      <div className="manage-pagination"><span>{reviewOnly ? `待审核共 ${totalElements} 道` : `共 ${totalElements} 道`}</span><span>第 {totalPages === 0 ? 0 : page + 1} / {totalPages} 页</span><div><button disabled={page === 0} onClick={() => setPagination({ page: page - 1, reviewOnly })}>上一页</button><button disabled={totalPages === 0 || page >= totalPages - 1} onClick={() => setPagination({ page: page + 1, reviewOnly })}>下一页</button></div></div></div>
-      <aside className="detail-panel wide">{(selected || creating) ? <QuestionEditor key={selected?.id || "new"} initial={selected} user={user} fail={fail} saved={(q) => { setSelected(q); setCreating(false); load(); }} /> : <Empty>选择题目查看，或新建草稿</Empty>}</aside></div>
+  const [query,setQuery]=useState(""); const [status,setStatus]=useState(reviewOnly?"pending_review":""); const [items,setItems]=useState<QuestionView[]>([]); const [selected,setSelected]=useState<QuestionView|null>(null); const [creating,setCreating]=useState(false); const [checked,setChecked]=useState<string[]>([]); const [page,setPage]=useState(0); const [size,setSize]=useState(30); const [totalPages,setTotalPages]=useState(0); const [totalElements,setTotalElements]=useState(0);
+  const load=useCallback(()=>manageApi.questions({query,status:reviewOnly?"pending_review":status,page,size}).then(result=>{setItems(result.content);setTotalPages(result.totalPages);setTotalElements(result.totalElements);setChecked([]);if(page>0&&!result.content.length)setPage(page-1)}).catch(e=>fail(e.message)),[query,status,reviewOnly,page,size,fail]);
+  useEffect(()=>{setPage(0)},[reviewOnly]);
+  useEffect(()=>{void load()},[load]);
+  const open=(item:QuestionView)=>manageApi.question(item.id).then(setSelected).catch(e=>fail(e.message));
+  const toggle=(id:string)=>setChecked(values=>values.includes(id)?values.filter(value=>value!==id):[...values,id]);
+  const remove=async()=>{if(!checked.length||!window.confirm(`确认永久删除所选 ${checked.length} 道题？历史学习事实仍会保留。`))return;try{const result=await manageApi.bulkDeleteQuestions(checked);setSelected(null);setChecked([]);await load();window.alert(`已删除 ${result.deleted} 道题。`)}catch(error){fail((error as Error).message)}};
+  const pager=<div className="manage-pagination"><span>{reviewOnly?`待审核共 ${totalElements} 道`:`共 ${totalElements} 道`}</span><span>第 {totalPages? page+1:0} / {totalPages} 页</span><div><button disabled={page===0} onClick={()=>setPage(page-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(page+1)}>下一页</button></div></div>;
+  if(reviewOnly)return <section className="review-page"><PageTitle title="审核中心" detail="只处理待审核题目的发布或退回"/><div className="manage-toolbar"><input placeholder="搜索题干 / 来源 / 题号" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/><button onClick={load}>查询</button></div><div className="review-workspace"><div className="question-list-panel"><div className="data-table manage-question-list"><div className="table-head question-cols"><span>来源</span><span>题型</span><span>创建者</span><span>状态</span></div>{items.map(item=><button className="table-row question-cols" key={item.id} onClick={()=>open(item)}><b>{item.examYear?`${item.examYear} · ${item.questionNumber}`:item.sourceName||"自建题"}</b><span>{manageLabel("questionType",item.questionType)}</span><span>{item.creatorName||"—"}</span><i>{manageLabel("questionStatus",item.status)}</i></button>)}</div>{pager}</div><aside className="detail-panel wide">{selected?<QuestionEditor key={selected.id+selected.revision} initial={selected} user={user} reviewMode fail={fail} saved={q=>{setSelected(q);load()}}/>:<Empty>选择待审核题目查看详情</Empty>}</aside></div></section>;
+  return <section><PageTitle title="题目管理" detail="全状态题目的创建、编辑、筛选、分页与批量删除"/><div className="manage-toolbar question-management-toolbar"><input placeholder="搜索题干 / 来源 / 题号" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/><select aria-label="题目状态" value={status} onChange={e=>{setStatus(e.target.value);setPage(0)}}><option value="">全部状态</option>{manageOptions("questionStatus").map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select><select aria-label="每页数量" value={size} onChange={e=>{setSize(Number(e.target.value));setPage(0)}}>{[30,50,100].map(value=><option value={value} key={value}>每页 {value}</option>)}</select><button onClick={load}>查询</button><button className="primary" onClick={()=>{setCreating(true);setSelected(null)}}>新建题目</button><button className="danger" disabled={!checked.length} onClick={remove}>批量删除（{checked.length}）</button></div>
+    <div className="question-management-table data-table"><div className="table-head question-management-cols"><input aria-label="全选当前页" type="checkbox" checked={items.length>0&&items.every(item=>checked.includes(item.id))} onChange={e=>setChecked(e.target.checked?items.map(item=>item.id):[])}/><span>来源</span><span>题号</span><span>科目</span><span>题型</span><span>难度</span><span>状态</span><span>KnowledgePoint</span><span>更新时间</span><span>操作</span></div>{items.map(item=><div className="table-row question-management-cols" key={item.id}><input aria-label={`选择 ${item.id}`} type="checkbox" checked={checked.includes(item.id)} onChange={()=>toggle(item.id)}/><span>{item.sourceName||manageLabel("source",item.sourceType)}</span><span>{item.examYear?`${item.examYear}-${item.questionNumber}`:item.questionNumber||"—"}</span><span>{item.subject}</span><span>{manageLabel("questionType",item.questionType)}</span><span>{item.difficulty}</span><i>{manageLabel("questionStatus",item.status)}</i><span>{item.knowledgePoints.map(point=>point.name).join("、")}</span><time>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("zh-CN") : "—"}</time><button onClick={()=>open(item)}>编辑</button></div>)}</div>{pager}
+    {(selected||creating)&&<div className="question-editor-drawer" role="dialog" aria-modal="true"><div className="drawer-backdrop" onClick={()=>{setSelected(null);setCreating(false)}}/><aside><button className="drawer-close" onClick={()=>{setSelected(null);setCreating(false)}}>关闭</button><QuestionEditor key={selected?.id||"new"} initial={selected} user={user} fail={fail} saved={q=>{setSelected(q);setCreating(false);load()}}/></aside></div>}
   </section>;
 }
 
-function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView | null; user: ManageUser; fail: (v: string) => void; saved: (v: QuestionView) => void }) {
+function QuestionEditor({ initial, user, fail, saved, reviewMode = false }: { initial: QuestionView | null; user: ManageUser; fail: (v: string) => void; saved: (v: QuestionView) => void; reviewMode?: boolean }) {
   const [question, setQuestion] = useState<Partial<QuestionView>>(initial || { subject: "数学一", sourceType: "custom", questionType: "single_choice", presentationType: "single_choice", gradingMode: "auto", difficulty: 2, standardAnswer: "A", options: [], knowledgePoints: [] });
   const [answerText, setAnswerText] = useState(JSON.stringify(question.standardAnswer ?? "", null, 2));
   const [knowledgeQuery, setKnowledgeQuery] = useState(""); const [matches, setMatches] = useState<KnowledgeView[]>([]); const [busy, setBusy] = useState(false);
@@ -242,7 +204,7 @@ function QuestionEditor({ initial, user, fail, saved }: { initial: QuestionView 
     </fieldset>
     {question.reviewComment && <p className="review-comment">审核意见：{question.reviewComment}</p>}
     {rejecting && <div className="review-decision"><label>退回修改原因<textarea autoFocus rows={4} value={rejectComment} onChange={event => setRejectComment(event.target.value)} placeholder="请明确写出需要修改的内容" /></label><div><button onClick={() => setRejecting(false)}>取消</button><button className="reject" disabled={!rejectComment.trim()} onClick={() => initial && manageApi.reviewQuestion(initial, false, rejectComment.trim()).then(saved).catch((e) => fail(e.message))}>确认退回修改</button></div></div>}
-    <div className="editor-actions"><button className="primary" disabled={busy} onClick={save}>保存草稿</button>{initial && ["draft","rejected"].includes(initial.status) && <button onClick={() => manageApi.submitQuestion(initial).then(saved).catch((e) => fail(e.message))}>提交审核</button>}{initial?.status === "pending_review" && canReview && <><button className="approve" onClick={() => manageApi.reviewQuestion(initial, true, "审核通过并发布").then(saved).catch((e) => fail(e.message))}>审核通过并发布</button><button className="reject" onClick={() => setRejecting(true)}>退回修改</button></>}</div>
+    <div className="editor-actions">{!reviewMode && <button className="primary" disabled={busy} onClick={save}>{initial ? "保存修改" : "保存草稿"}</button>}{!reviewMode && initial && ["draft","rejected"].includes(initial.status) && <button onClick={() => manageApi.submitQuestion(initial).then(saved).catch((e) => fail(e.message))}>提交审核</button>}{reviewMode && initial?.status === "pending_review" && canReview && <><button className="approve" onClick={() => manageApi.reviewQuestion(initial, true, "审核通过并发布").then(saved).catch((e) => fail(e.message))}>审核通过并发布</button><button className="reject" onClick={() => setRejecting(true)}>退回修改</button></>}</div>
   </div>;
 }
 

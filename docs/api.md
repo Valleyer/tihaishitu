@@ -23,6 +23,15 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 
 下表路径均相对于 /api/v1。字段的完整 TypeScript 定义以 domain/types.ts 为准。
 
+### MVP 学习与管理扩展
+
+- `GET /learner/statistics?days=7|30|90`：从正式 graded attempts 和当前 Selected Books 动态派生学习统计。
+- `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量。
+- `POST /manage/questions/bulk-delete`：事务性批量删除题目资源；活动中的错题练习和未同时选择的派生题会阻止整批删除。
+- `POST /manage/imports/knowledge`：管理员导入 `global-knowledge-batch/v1`，事务性 upsert Book、Chapter、Global KnowledgePoint、alias 与 membership。
+
+`GET /learner/progress` 的 Book 与 Chapter 聚合同时返回 `masteryProgress`，值为对应去重 KnowledgePoint 在同一时刻的 `effectiveMastery` 算术平均值，未开始按 0 计算。
+
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
 | POST | /learner/auth/register | username, displayName, password | Learner + HttpOnly Cookie |

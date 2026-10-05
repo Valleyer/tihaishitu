@@ -39,12 +39,13 @@ public class QuestionManagementService {
         validate(input);
         var current = require(id);
         String actor = actorId(auth);
-        boolean elevated = has(auth, "REVIEWER") || has(auth, "ADMIN");
-        boolean ownEditable = actor.equals(current.createdBy())
-                && Set.of("draft", "rejected").contains(current.status());
-        if (!elevated && !ownEditable) denied("只能编辑自己的草稿或退回稿。");
-        if ("published".equals(current.status()) && !has(auth, "ADMIN")) denied("正式题目只能由管理员维护。");
         return store.update(id, input, expectedRevision, actor);
+    }
+
+    public int bulkDelete(List<String> ids, Authentication auth) {
+        if (ids == null || ids.isEmpty()) bad("请至少选择一道题。");
+        if (ids.size() > 100) bad("一次最多删除 100 道题。");
+        return store.bulkDelete(new java.util.LinkedHashSet<>(ids), actorId(auth));
     }
 
     public QuestionManagementStore.QuestionView submit(String id, long revision, Authentication auth) {
@@ -124,9 +125,6 @@ public class QuestionManagementService {
     }
 
     private String actorId(Authentication auth) { return knowledgeStore.userId(auth.getName()); }
-    private static boolean has(Authentication auth, String role) {
-        return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role));
-    }
     private static String value(String value) { return value == null ? "" : value; }
     private static void denied(String message) { throw new ResponseStatusException(HttpStatus.FORBIDDEN, message); }
     private static void bad(String message) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
