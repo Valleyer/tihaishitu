@@ -34,6 +34,7 @@ function AuthPage({ register }: { register: boolean }) {
     try {
       if (register) await platformApi.register(username, displayName, password);
       else await platformApi.login(username, password);
+      await platformApi.bootstrap();
       go(next);
     } catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
@@ -44,7 +45,7 @@ function AuthPage({ register }: { register: boolean }) {
       <div><h1>{register ? "创建学习账号" : "欢迎回来"}</h1><p className="auth-subtitle">{register ? "建立属于你的统一学习身份" : "继续你的学习旅程"}</p></div>
       <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       {register && <label>显示名称<input value={displayName} onChange={e => setDisplayName(e.target.value)} /></label>}
-      <label>密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={register ? "new-password" : "current-password"} minLength={8} required /></label>
+      <label>密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={register ? "new-password" : "current-password"} {...(register ? { minLength: 8 } : {})} required /></label>
       {error && <p className="hub-error" role="alert">{error}</p>}
       <button className="hub-primary" disabled={busy}>{busy ? "请稍候…" : register ? "注册并进入" : "登录"}</button>
       <a href={register ? "/login" : "/register"}>{register ? "已有账号，直接登录" : "第一次来？注册学习账号"}</a>
@@ -84,12 +85,12 @@ function HubHome({ data }: { data: HubBootstrap }) {
     {homeError && <p className="hub-error" role="alert">{homeError}</p>}
     <section className="home-focus-grid">
       <article className="continue-card"><p className="section-kicker">继续学习</p>{latest ? <><h2>{latest.name}</h2><p>{latest.subject} · {latest.chapter}</p><div className="continue-mastery"><span className={`mastery-band ${latest.band}`}>{progressBandLabels[latest.band]}</span><span>有效掌握度 {Math.round(latest.effectiveMastery)}%</span></div><button className="hub-primary" onClick={start}>继续专项练习 →</button></> : <><h2>开始学习</h2><p>{progress === undefined ? "正在读取最近的学习记录…" : "从当前学习范围选择一个知识点开始。"}</p><a className="hub-primary" href="/books">选择知识点 →</a></>}</article>
-      <article className="today-card"><div className="section-heading"><div><p className="section-kicker">今日学习</p><h2>学习状态</h2></div></div>{progress ? <div className="today-metrics"><p><b>{progress.summary.reviewDue}</b><span>今日待巩固</span></p><p><b>{progress.summary.wrongQuestions}</b><span>待重做错题</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p><p><b>{progress.recent.activeStudyDays7d}</b><span>近 7 日学习天数</span></p></div> : <p className="muted">{progress === null ? "暂时无法读取学习状态" : "正在整理学习状态…"}</p>}</article>
+      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress ? <div className="today-metrics"><p><b>{progress.summary.reviewDue}</b><span>当前待巩固</span></p><p><b>{progress.summary.wrongQuestions}</b><span>待重做错题</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p><p><b>{progress.recent.activeStudyDays7d}</b><span>近 7 日学习天数</span></p></div> : <p className="muted">{progress === null ? "暂时无法读取学习状态" : "正在整理学习状态…"}</p>}</article>
     </section>
     <section className="overview-card"><div className="section-heading"><div><p className="section-kicker">学习概览</p><h2>当前学习范围</h2></div><a href="/progress">查看详细进度 →</a></div>{progress ? <div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p><p><b>{progress.summary.reviewDue}</b><span>待巩固</span></p></div> : <p className="muted">正在整理当前学习进度…</p>}</section>
     <section className="world-gallery" id="worlds"><div className="section-heading"><div><p className="section-kicker">学习世界</p><h2>在不同世界中继续成长</h2></div></div>
       <div className="world-cards">{data.worlds.map(world => { const presentation = worldPresentation(world.id); return <article key={world.id} className={world.enabled ? "world-card enabled" : "world-card"} style={{ "--world-accent": presentation.accent } as CSSProperties}>
-        <div className={presentation.cover ? "world-cover" : "world-cover fallback"}><span className="world-cover-media" style={presentation.cover ? { backgroundImage: `url(${presentation.cover})` } : undefined} /><span className={world.enabled ? "world-status open" : "world-status"}>{world.enabled ? "已开放" : "即将开放"}</span></div>
+        <div className={presentation.cover ? "world-cover" : "world-cover fallback"}><span className="world-cover-media" style={presentation.cover ? { backgroundImage: `url(${presentation.cover})` } : undefined} /><span className={world.enabled ? "world-card-status open" : "world-card-status"}>{world.enabled ? "已开放" : "即将开放"}</span></div>
         <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <a className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</a> : <span className="world-unavailable">尚未开放</span>}</div>
       </article> })}</div>
     </section>

@@ -17,6 +17,8 @@ API_PROXY_TARGET=http://localhost:12345
 重启开发服务器。Vite 开发代理把 /api 请求交给 Java；部署时自行配置同源代理或 CORS。
 默认使用 HTTP 联机模式；如需运行旧本地兼容实现，可显式设置 `VITE_API_MODE=local`。
 
+Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终通过当前站点的同源 `/api/v1` 访问 Java API。`API_PROXY_TARGET` 是 Vite 服务器内部的转发目标，不是浏览器 API 地址。不得将 `VITE_API_BASE_URL` 设为与页面 Origin 不同的绝对 URL；前端会直接拒绝这类配置并给出同源配置提示。
+
 ## 路由
 
 下表路径均相对于 /api/v1。字段的完整 TypeScript 定义以 domain/types.ts 为准。

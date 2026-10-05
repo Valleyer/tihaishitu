@@ -50,6 +50,8 @@ npm run dev
 
 打开终端显示的本地地址，一般为 http://127.0.0.1:5173。
 
+Learner Session 使用 HttpOnly SameSite Cookie。浏览器端必须使用同源 `VITE_API_BASE_URL=/api/v1`，本地由 Vite 将 `/api` 转发到 Java，部署时由反向代理转发。不要把 `VITE_API_BASE_URL` 设为 `http://localhost:12345/api/v1` 等绝对地址，否则页面 Origin 和 Session Cookie 站点会分离。
+
 本机系统 Node 版本过旧时：
 
 ~~~powershell

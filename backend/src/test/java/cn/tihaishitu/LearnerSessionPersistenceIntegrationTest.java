@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,9 +26,13 @@ class LearnerSessionPersistenceIntegrationTest {
         mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"session-user\",\"displayName\":\"会话学习者\",\"password\":\"password-123\"}"))
                 .andExpect(status().isCreated());
-        Cookie cookie = mvc.perform(post("/api/v1/learner/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+        var login = mvc.perform(post("/api/v1/learner/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"session-user\",\"password\":\"password-123\"}"))
-                .andExpect(status().isOk()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+                .andExpect(status().isOk()).andReturn();
+        String setCookie = login.getResponse().getHeader(HttpHeaders.SET_COOKIE);
+        assertThat(setCookie).contains("THS_LEARNER_SESSION=", "Path=/", "Max-Age=2592000", "HttpOnly", "SameSite=Lax")
+                .doesNotContain("Secure");
+        Cookie cookie = login.getResponse().getCookie(LearnerAuthService.COOKIE);
         assertThat(cookie).isNotNull();
         String id = mvc.perform(get("/api/v1/bootstrap").cookie(cookie)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.learner.username").value("session-user"))

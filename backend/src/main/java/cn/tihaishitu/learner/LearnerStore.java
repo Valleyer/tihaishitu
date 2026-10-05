@@ -64,7 +64,10 @@ public class LearnerStore {
                    AND a.status = 'active'
                 """, (result, row) -> account(result), tokenHash);
         if (!values.isEmpty()) {
-            jdbc.update("UPDATE learner_session SET last_seen_at = CURRENT_TIMESTAMP WHERE token_hash = ?", tokenHash);
+            // MySQL 5.7 with explicit_defaults_for_timestamp disabled may add an implicit
+            // ON UPDATE clause to the first TIMESTAMP column (expires_at). Assigning the
+            // column to itself keeps a last-seen update from expiring the session.
+            jdbc.update("UPDATE learner_session SET last_seen_at = CURRENT_TIMESTAMP, expires_at = expires_at WHERE token_hash = ?", tokenHash);
         }
         return values.stream().findFirst();
     }
