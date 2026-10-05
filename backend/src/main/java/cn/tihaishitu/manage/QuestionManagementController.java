@@ -91,6 +91,12 @@ public class QuestionManagementController {
         return service.archive(id, request.expectedRevision(), authentication);
     }
 
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("hasAnyRole('CONTRIBUTOR','REVIEWER','ADMIN')")
+    BulkDeleteResult bulkDelete(@Valid @RequestBody BulkDeleteRequest request, Authentication authentication) {
+        return new BulkDeleteResult(service.bulkDelete(request.ids(), authentication));
+    }
+
     private static QuestionManagementStore.QuestionInput input(QuestionRequest r) {
         return new QuestionManagementStore.QuestionInput(r.subject(), r.sourceType(), r.sourceName(), r.examYear(),
                 r.questionNumber(), r.questionType(), r.presentationType(), r.gradingMode(), r.content(),
@@ -111,4 +117,6 @@ public class QuestionManagementController {
             List<OptionRequest> options, List<RelationRequest> knowledgePoints, Long expectedRevision) {}
     public record RevisionRequest(@NotNull Long expectedRevision) {}
     public record ReviewRequest(@NotNull Long expectedRevision, boolean approve, String comment) {}
+    public record BulkDeleteRequest(@NotNull List<@NotBlank String> ids) {}
+    public record BulkDeleteResult(int deleted) {}
 }

@@ -40,6 +40,26 @@ class GlobalQuestionBatchImportIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
+    void v2RejectsBlankWithMigrationGuidance() throws Exception {
+        Cookie admin = login();
+        String id = UUID.randomUUID().toString();
+        Map<String, Object> blank = new LinkedHashMap<>(singleChoice(id, "6", "历史填空题", KNOWLEDGE_CODE));
+        blank.put("questionType", "blank");
+        blank.put("presentationType", "self_assessment");
+        blank.put("gradingMode", "self_assessment");
+        blank.put("standardAnswer", "原答案");
+        blank.put("options", List.of());
+
+        mvc.perform(post("/api/v1/manage/imports/questions")
+                        .cookie(admin).with(csrf()).contentType("application/json")
+                        .content(batch(2040, false, List.of(blank))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?", id)).isZero();
+    }
+
+    @Test
     void v2ImportsGlobalQuestionsWithoutChangingAnyBookTable() throws Exception {
         Cookie admin = login();
         String firstId = UUID.randomUUID().toString();

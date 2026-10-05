@@ -68,6 +68,7 @@ export type QuestionView = {
   creatorName?: string;
   reviewComment?: string;
   revision: number;
+  updatedAt?: string;
   options: QuestionOption[];
   knowledgePoints: QuestionRelation[];
 };
@@ -85,6 +86,11 @@ export type QuestionBatchImportResult = {
   relationCount: number;
   createdQuestions: number;
   updatedQuestions: number;
+};
+export type KnowledgeBatchImportResult = {
+  schemaVersion: string; importId: string; bookId: string; bookName: string; subject: string;
+  chapterCount: number; knowledgePointCount: number; createdKnowledgePoints: number;
+  updatedKnowledgePoints: number; membershipCount: number; aliasCount: number;
 };
 
 export type KnowledgeMergeResult = {
@@ -108,21 +114,48 @@ export type AuditLogView = {
   createdAt: string;
 };
 
+export type ManagedBook = {
+  id: string; name: string; description: string; enabled: boolean; revision: number;
+  membershipCount: number; trainableKnowledgePointCount: number; publishedQuestionCount: number;
+  chapterCount: number; selectedLearnerCount: number;
+};
+export type ManagedChapter = {
+  id: string; parentId?: string; code: string; name: string; description: string;
+  sortOrder: number; revision: number;
+};
+export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
+
 export class ManageHttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-let csrf: { headerName: string; token: string } | null = null;
+const csrfCookieName = "XSRF-TOKEN";
+const csrfHeaderName = "X-XSRF-TOKEN";
+let csrfRequest: Promise<void> | null = null;
 
-async function ensureCsrf() {
-  if (csrf) return csrf;
-  const response = await fetch("/api/v1/manage/auth/csrf", {
+function csrfToken(): string | null {
+  const prefix = csrfCookieName + "=";
+  const value = document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+}
+
+async function ensureCsrfToken(): Promise<string> {
+  const current = csrfToken();
+  if (current) return current;
+  csrfRequest ||= fetch("/api/v1/manage/auth/csrf", {
     credentials: "include",
-  });
-  if (!response.ok) throw new Error("无法取得管理会话凭证。");
-  csrf = await response.json();
-  return csrf!;
+    headers: { Accept: "application/json" },
+  }).then(async (response) => {
+    if (!response.ok) throw new ManageHttpError(response.status, "无法取得管理会话凭证。");
+  }).finally(() => { csrfRequest = null; });
+  await csrfRequest;
+  const issued = csrfToken();
+  if (!issued) throw new ManageHttpError(0, "浏览器未保存管理会话凭证。");
+  return issued;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -130,8 +163,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const token = await ensureCsrf();
-    headers.set(token.headerName, token.token);
+    headers.set(csrfHeaderName, await ensureCsrfToken());
   }
   const response = await fetch(`/api/v1/manage${path}`, {
     ...init,
@@ -156,7 +188,6 @@ export const manageApi = {
   me: () => request<ManageUser>("/auth/me"),
   async logout() {
     await request<void>("/auth/logout", { method: "POST" });
-    csrf = null;
   },
   knowledge: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<KnowledgeView>>(`/knowledge-points?${params(filters)}`),
@@ -181,6 +212,18 @@ export const manageApi = {
     }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
+  books: () => request<ManagedBook[]>("/books"),
+  book: (id: string) => request<ManagedBookDetail>(`/books/${id}`),
+  saveBook: (book: ManagedBook) => request<ManagedBookDetail>(`/books/${book.id}`, {
+    method: "PUT", body: JSON.stringify({ name: book.name, description: book.description,
+      enabled: book.enabled, expectedRevision: book.revision }),
+  }),
+  saveChapter: (bookId: string, chapter: ManagedChapter) =>
+    request<ManagedChapter>(`/books/${bookId}/chapters/${chapter.id}`, {
+      method: "PUT", body: JSON.stringify({ name: chapter.name, description: chapter.description,
+        expectedRevision: chapter.revision }),
+    }),
+  deleteBook: (id: string) => request<void>(`/books/${id}`, { method: "DELETE" }),
   questions: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<QuestionView>>(`/questions?${params(filters)}`),
   question: (id: string) => request<QuestionView>(`/questions/${id}`),
@@ -204,10 +247,18 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ expectedRevision: question.revision, approve, comment }),
     }),
+  bulkDeleteQuestions: (ids: string[]) =>
+    request<{ deleted: number }>("/questions/bulk-delete", {
+      method: "POST", body: JSON.stringify({ ids }),
+    }),
   importQuestionBatch: (payload: unknown) =>
     request<QuestionBatchImportResult>("/imports/questions", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  importKnowledgeBatch: (payload: unknown) =>
+    request<KnowledgeBatchImportResult>("/imports/knowledge", {
+      method: "POST", body: JSON.stringify(payload),
     }),
   users: () => request<ManageUser[]>("/users"),
   createUser: (input: { username: string; displayName: string; password: string; roles: string[] }) =>

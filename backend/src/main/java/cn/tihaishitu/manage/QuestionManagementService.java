@@ -1,6 +1,7 @@
 package cn.tihaishitu.manage;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import cn.tihaishitu.catalog.QuestionContractValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,7 @@ import java.util.Set;
 public class QuestionManagementService {
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
-            "single_choice", "multiple_choice", "true_false", "blank", "solution");
+            "single_choice", "multiple_choice", "true_false", "solution");
     private static final Set<String> PRESENTATIONS = Set.of(
             "single_choice", "multiple_choice", "true_false", "self_assessment");
     private static final Set<String> GRADING_MODES = Set.of("auto", "self_assessment");
@@ -39,17 +40,19 @@ public class QuestionManagementService {
         validate(input);
         var current = require(id);
         String actor = actorId(auth);
-        boolean elevated = has(auth, "REVIEWER") || has(auth, "ADMIN");
-        boolean ownEditable = actor.equals(current.createdBy())
-                && Set.of("draft", "rejected").contains(current.status());
-        if (!elevated && !ownEditable) denied("只能编辑自己的草稿或退回稿。");
-        if ("published".equals(current.status()) && !has(auth, "ADMIN")) denied("正式题目只能由管理员维护。");
         return store.update(id, input, expectedRevision, actor);
+    }
+
+    public int bulkDelete(List<String> ids, Authentication auth) {
+        if (ids == null || ids.isEmpty()) bad("请至少选择一道题。");
+        if (ids.size() > 100) bad("一次最多删除 100 道题。");
+        return store.bulkDelete(new java.util.LinkedHashSet<>(ids), actorId(auth));
     }
 
     public QuestionManagementStore.QuestionView submit(String id, long revision, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
         if (!actor.equals(current.createdBy())) denied("只能提交自己创建的题目。");
+        validateStored(current);
         if (!Set.of("draft", "rejected").contains(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "当前题目状态不能提交审核。");
         }
@@ -60,10 +63,13 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView review(
             String id, long revision, boolean approve, String comment, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
-        if (actor.equals(current.createdBy())) denied("不能审核自己创建的题目。");
+        boolean admin = auth.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (!admin && actor.equals(current.createdBy())) denied("审核员不能审核自己创建的题目。");
         if (!"pending_review".equals(current.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "只有待审核题目可以审核。");
         }
+        if (approve) validateStored(current);
         String to = approve ? "published" : "rejected";
         return store.transition(id, revision, "pending_review", to, actor,
                 approve ? "QUESTION_REVIEW_APPROVED" : "QUESTION_REVIEW_REJECTED", value(comment));
@@ -85,6 +91,7 @@ public class QuestionManagementService {
         if (input.subject() == null || input.subject().isBlank() || input.content() == null || input.content().isBlank()) {
             bad("科目和题干不能为空。");
         }
+        rejectBlank(input.questionType());
         if (!SOURCE_TYPES.contains(input.sourceType()) || !QUESTION_TYPES.contains(input.questionType())
                 || !PRESENTATIONS.contains(input.presentationType()) || !GRADING_MODES.contains(input.gradingMode())) {
             bad("来源、原始题型、展示类型或判题模式不合法。");
@@ -109,6 +116,9 @@ public class QuestionManagementService {
             if (option.key() == null || option.key().isBlank() || option.text() == null || option.text().isBlank()
                     || !keys.add(option.key())) bad("选项键和值不能为空，且选项键不能重复。");
         }
+        QuestionContractValidator.validate(input.questionType(), input.presentationType(), input.gradingMode(),
+                input.standardAnswer(), options.stream().map(option -> new QuestionContractValidator.Option(
+                        option.key(), option.text(), option.correct())).toList()).ifPresent(QuestionManagementService::bad);
         Set<String> points = new HashSet<>();
         boolean hasCore = false;
         for (var relation : relations) {
@@ -123,10 +133,20 @@ public class QuestionManagementService {
         if (!hasCore) bad("题目至少需要一个核心知识点。");
     }
 
-    private String actorId(Authentication auth) { return knowledgeStore.userId(auth.getName()); }
-    private static boolean has(Authentication auth, String role) {
-        return auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role));
+    private void validateStored(QuestionManagementStore.QuestionView question) {
+        QuestionContractValidator.validate(question.questionType(), question.presentationType(), question.gradingMode(),
+                question.standardAnswer(), question.options().stream().map(option ->
+                        new QuestionContractValidator.Option(option.key(), option.text(), option.correct())).toList())
+                .ifPresent(QuestionManagementService::bad);
     }
+
+    private static void rejectBlank(String type) {
+        if ("blank".equals(type)) {
+            bad(QuestionContractValidator.BLANK_ERROR);
+        }
+    }
+
+    private String actorId(Authentication auth) { return knowledgeStore.userId(auth.getName()); }
     private static String value(String value) { return value == null ? "" : value; }
     private static void denied(String message) { throw new ResponseStatusException(HttpStatus.FORBIDDEN, message); }
     private static void bad(String message) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }

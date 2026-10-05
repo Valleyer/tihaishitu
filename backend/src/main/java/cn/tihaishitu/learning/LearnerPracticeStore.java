@@ -85,6 +85,10 @@ public class LearnerPracticeStore {
                   JOIN question_resource q ON q.id=a.question_id
                   JOIN global_knowledge_point k ON k.id=a.target_knowledge_point_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.assessment IN ('wrong','partial')
+                   AND q.status='published'
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                   AND k.status='active'
+                   AND """ + " " + TrainableKnowledge.exists("k") + """
                    AND NOT EXISTS (
                        SELECT 1 FROM study_attempt newer
                         WHERE newer.learner_id=a.learner_id AND newer.question_id=a.question_id

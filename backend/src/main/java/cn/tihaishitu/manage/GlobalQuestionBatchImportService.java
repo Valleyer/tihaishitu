@@ -1,5 +1,7 @@
 package cn.tihaishitu.manage;
 
+import cn.tihaishitu.catalog.QuestionContractValidator;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +39,7 @@ public class GlobalQuestionBatchImportService {
             "code", "role", "sortOrder");
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
-            "single_choice", "multiple_choice", "true_false", "blank", "solution");
+            "single_choice", "multiple_choice", "true_false", "solution");
     private static final Set<String> RELATION_ROLES = Set.of("core", "auxiliary");
 
     public record BatchInput(String subject, String sourceType, String sourceName, Integer examYear) {}
@@ -178,6 +180,11 @@ public class GlobalQuestionBatchImportService {
             }
             if (question.options() == null) bad(at + "必须提供 options 字段。");
             List<OptionInput> options = normalizeAndValidateOptions(question, at);
+            QuestionContractValidator.validate(question.questionType(), question.presentationType(),
+                    question.gradingMode(), question.standardAnswer(), options.stream().map(option ->
+                            new QuestionContractValidator.Option(option.key(), option.text(),
+                                    Boolean.TRUE.equals(option.correct()))).toList())
+                    .ifPresent(message -> bad(at + "：" + message));
             if (question.knowledgePoints() == null) bad(at + "必须提供 knowledgePoints 字段。");
             List<ResolvedKnowledge> points = resolveKnowledgePoints(
                     question.knowledgePoints(), batch.subject(), at);
@@ -264,6 +271,9 @@ public class GlobalQuestionBatchImportService {
     }
 
     private void validateQuestionType(QuestionInput question, String at) {
+        if ("blank".equals(question.questionType())) {
+            bad(QuestionContractValidator.BLANK_ERROR);
+        }
         if (!QUESTION_TYPES.contains(question.questionType())) {
             bad(at + "的 questionType 不合法。");
         }
@@ -273,7 +283,7 @@ public class GlobalQuestionBatchImportService {
             case "single_choice" -> { expectedPresentation = "single_choice"; expectedGrading = "auto"; }
             case "multiple_choice" -> { expectedPresentation = "multiple_choice"; expectedGrading = "auto"; }
             case "true_false" -> { expectedPresentation = "true_false"; expectedGrading = "auto"; }
-            case "blank", "solution" -> { expectedPresentation = "self_assessment"; expectedGrading = "self_assessment"; }
+            case "solution" -> { expectedPresentation = "self_assessment"; expectedGrading = "self_assessment"; }
             default -> throw new IllegalStateException("未覆盖的题型：" + question.questionType());
         }
         if (!expectedPresentation.equals(question.presentationType())

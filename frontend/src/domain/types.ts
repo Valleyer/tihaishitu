@@ -13,7 +13,6 @@ export type OriginalQuestionType =
   | "single_choice"
   | "multiple_choice"
   | "true_false"
-  | "blank"
   | "solution";
 export type Assessment = "correct" | "partial" | "wrong";
 export type Answer = string | string[] | boolean;

@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import cn.tihaishitu.learning.TrainableKnowledge;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -54,24 +55,30 @@ public class CatalogStore {
                        CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
                             THEN (SELECT COUNT(DISTINCT qr.id)
                                     FROM question_bank_knowledge bk
-                                    JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
+                                   JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
                                     JOIN question_resource qr ON qr.id = qk.question_id
-                                   WHERE bk.bank_id = b.id AND qr.status = 'published')
-                            ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id) END question_count,
+                                   WHERE bk.bank_id = b.id AND qr.status = 'published'
+                                     AND qk.relation_role = 'core'
+                                     AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
+                            ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id
+                                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) END question_count,
                        CASE WHEN EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.bank_id = b.id)
                             THEN (SELECT COUNT(*) FROM question_bank_knowledge bk
                                    JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
-                                  WHERE bk.bank_id = b.id AND k.status = 'active')
+                                  WHERE bk.bank_id = b.id AND k.status = 'active' AND %s)
                             WHEN EXISTS (SELECT 1 FROM question_bank_item x WHERE x.bank_id = b.id)
                             THEN (SELECT COUNT(DISTINCT qk.knowledge_point_id)
                            FROM question_bank_item bi
                            JOIN question_resource qr ON qr.id = bi.question_id
                            JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
-                          WHERE bi.bank_id = b.id AND qr.status = 'published')
-                            ELSE (SELECT COUNT(*) FROM knowledge_point k WHERE k.bank_id = b.id) END point_count
+                           JOIN global_knowledge_point k ON k.id=qk.knowledge_point_id
+                          WHERE bi.bank_id = b.id AND qr.status = 'published'
+                            AND qk.relation_role='core' AND k.status='active'
+                            AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
+                            ELSE 0 END point_count
                   FROM question_bank b
                  ORDER BY b.created_at, b.id
-                """,
+                """.formatted(TrainableKnowledge.exists("k")),
                 (result, row) -> new QuestionBankManifest(
                         result.getString("id"), result.getString("name"), result.getString("description"),
                         result.getBoolean("enabled"), result.getInt("weight_value"), result.getLong("revision"),
@@ -133,7 +140,9 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                    JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
-                  WHERE bi.bank_id = ? AND q.status = 'published' AND k.status = 'active'
+                  WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                    AND k.status = 'active'
                  ORDER BY k.sort_order, k.id
                 """,
                 (result, row) -> knowledgePoint(result),
@@ -160,6 +169,7 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_option o ON o.question_id = bi.question_id
                   WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY o.question_id, o.sort_order
                 """,
                 (RowCallbackHandler) result -> options
@@ -175,6 +185,7 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                   WHERE bi.bank_id = ? AND q.status = 'published'
+                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY qk.question_id, qk.sort_order
                 """,
                 (RowCallbackHandler) result -> pointIds
@@ -190,6 +201,7 @@ public class CatalogStore {
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
                  WHERE bi.bank_id = ? AND q.status = 'published'
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY bi.sort_order, q.id
                 """,
                 (result, row) -> {
@@ -247,7 +259,9 @@ public class CatalogStore {
                 SELECT id, subject_name, category_name, chapter_name, question_type,
                        question_text, answer_json, explanation, aliases_json, keywords_json,
                        difficulty, frequency_value, tags_json, enabled
-                  FROM question_item WHERE bank_id = ? ORDER BY sort_order, id
+                  FROM question_item WHERE bank_id = ? AND enabled=TRUE
+                   AND question_type IN ('single_choice','multiple_choice','true_false','solution')
+                 ORDER BY sort_order, id
                 """, (result, row) -> {
             String id = result.getString("id");
             String type = result.getString("question_type");

@@ -10,9 +10,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 
 @Repository
 public class QuestionManagementStore {
@@ -23,7 +28,7 @@ public class QuestionManagementStore {
             String questionNumber, String questionType, String presentationType, String gradingMode,
             String content, JsonNode standardAnswer, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
-            String reviewedBy, String reviewComment, long revision,
+            String reviewedBy, String reviewComment, long revision, Instant updatedAt,
             List<OptionView> options, List<KnowledgeRelationView> knowledgePoints) {}
     public record OptionInput(String key, String text, boolean correct, int sortOrder) {}
     public record RelationInput(String knowledgePointId, String role, int sortOrder) {}
@@ -124,6 +129,56 @@ public class QuestionManagementStore {
         return find(id).orElseThrow();
     }
 
+    @Transactional
+    public int bulkDelete(Set<String> requestedIds, String actorId) {
+        Set<String> ids = new LinkedHashSet<>(requestedIds);
+        if (ids.stream().anyMatch(id -> id == null || id.isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "题目 ID 不能为空。");
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        List<QuestionParent> rows = jdbc.query("SELECT id,parent_question_id FROM question_resource WHERE id IN ("
+                        + placeholders + ")", (row, index) -> new QuestionParent(
+                        row.getString("id"), row.getString("parent_question_id")), ids.toArray());
+        if (rows.size() != ids.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "所选题目中有题目不存在，请刷新列表后重试。");
+        }
+        List<String> externalChildren = jdbc.query("SELECT id FROM question_resource WHERE parent_question_id IN ("
+                        + placeholders + ") AND id NOT IN (" + placeholders + ")",
+                (row, index) -> row.getString("id"), concat(ids, ids));
+        if (!externalChildren.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "所选题目仍有未同时选择的派生题，必须将父题与全部子题一起删除。");
+        }
+        Integer activePractice = jdbc.queryForObject("SELECT COUNT(*) FROM learner_practice_session "
+                        + "WHERE intent='wrong_review' AND status='active' AND source_question_id IN (" + placeholders + ")",
+                Integer.class, ids.toArray());
+        if (activePractice != null && activePractice > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "所选题目正在被错题练习使用，请先结束对应练习后再删除。");
+        }
+        List<String> bankIds = jdbc.query("SELECT DISTINCT bank_id FROM question_bank_item WHERE question_id IN ("
+                        + placeholders + ")", (row, index) -> row.getString("bank_id"), ids.toArray());
+        jdbc.update("UPDATE learner_practice_session SET source_question_id=NULL WHERE status='ended' "
+                + "AND source_question_id IN (" + placeholders + ")", ids.toArray());
+
+        Map<String, String> parents = new LinkedHashMap<>();
+        rows.forEach(row -> parents.put(row.id(), row.parentId()));
+        Set<String> remaining = new LinkedHashSet<>(ids);
+        int deleted = 0;
+        while (!remaining.isEmpty()) {
+            String leaf = remaining.stream().filter(candidate -> remaining.stream()
+                    .noneMatch(child -> candidate.equals(parents.get(child)))).findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "题目父子关系存在循环，无法删除。"));
+            deleted += jdbc.update("DELETE FROM question_resource WHERE id=?", leaf);
+            remaining.remove(leaf);
+        }
+        bankIds.forEach(bankId -> jdbc.update("UPDATE question_bank SET revision=revision+1, "
+                + "updated_at=CURRENT_TIMESTAMP WHERE id=?", bankId));
+        knowledgeStore.audit(actorId, "QUESTION_BULK_DELETED", "question_batch", UUID.randomUUID().toString(),
+                Map.of("questionIds", ids, "count", deleted));
+        return deleted;
+    }
+
     private void replaceChildren(String id, QuestionInput input, String actorId) {
         jdbc.update("DELETE FROM question_resource_option WHERE question_id = ?", id);
         for (OptionInput option : input.options()) {
@@ -162,6 +217,7 @@ public class QuestionManagementStore {
                 result.getString("parent_question_id"), result.getString("derivation_type"),
                 result.getString("created_by"), result.getString("creator_name"),
                 result.getString("reviewed_by"), result.getString("review_comment"), result.getLong("revision"),
+                result.getTimestamp("updated_at").toInstant(),
                 options(id), relations(id));
     }
 
@@ -200,6 +256,11 @@ public class QuestionManagementStore {
 
     private static boolean isReview(String action) { return action.startsWith("QUESTION_REVIEW_"); }
     private static String blank(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private static Object[] concat(Set<String> first, Set<String> second) {
+        List<Object> values = new ArrayList<>(first);
+        values.addAll(second);
+        return values.toArray();
+    }
     private static String baseSelect() {
         return """
                 SELECT q.*, COALESCE(l.display_name, u.display_name) creator_name
@@ -232,4 +293,5 @@ public class QuestionManagementStore {
         if (value != null && !value.isBlank()) { clauses.add(col + " = ?"); params.add(value.trim()); }
     }
     private record SqlFilter(String where, List<Object> params) {}
+    private record QuestionParent(String id, String parentId) {}
 }

@@ -12,7 +12,8 @@ import java.util.UUID;
 
 @Component
 public class CatalogValidator {
-    private static final Set<String> TYPES = Set.of("single_choice", "multiple_choice", "true_false");
+    private static final Set<String> TYPES = Set.of(
+            "single_choice", "multiple_choice", "true_false", "solution");
 
     public void validate(QuestionBankDto bank) {
         if (bank == null) throw bad("题库文件不能为空。");
@@ -64,25 +65,17 @@ public class CatalogValidator {
 
     private void validateAnswer(QuestionDto question) {
         JsonNode answer = question.answer();
-        if ("true_false".equals(question.type())) {
-            if (answer == null || !answer.isBoolean()) throw bad("判断题答案必须是 true 或 false：" + question.id());
-            if (!question.options().keySet().equals(Set.of("true", "false")))
-                throw bad("判断题选项必须固定为 true/false：" + question.id());
-            return;
-        }
-        if (question.options().size() < 2) throw bad("选择题至少需要两个选项：" + question.id());
-        if ("single_choice".equals(question.type())) {
-            if (answer == null || !answer.isTextual() || !question.options().containsKey(answer.asText()))
-                throw bad("单选题答案必须引用有效选项键：" + question.id());
-            return;
-        }
-        if (answer == null || !answer.isArray() || answer.size() < 2)
-            throw bad("多选题答案至少包含两个选项键：" + question.id());
-        Set<String> selected = new HashSet<>();
-        for (JsonNode value : answer) {
-            if (!value.isTextual() || !question.options().containsKey(value.asText()) || !selected.add(value.asText()))
-                throw bad("多选题答案包含无效或重复选项键：" + question.id());
-        }
+        Set<String> correct = new HashSet<>();
+        if (answer != null && answer.isTextual()) correct.add(answer.asText());
+        else if (answer != null && answer.isBoolean()) correct.add(answer.asBoolean() ? "true" : "false");
+        else if (answer != null && answer.isArray()) answer.forEach(value -> {
+            if (value.isTextual()) correct.add(value.asText());
+        });
+        QuestionContractValidator.validate(question.type(), question.presentationType(), question.gradingMode(),
+                answer, question.options().entrySet().stream().map(option ->
+                        new QuestionContractValidator.Option(option.getKey(), option.getValue(),
+                                correct.contains(option.getKey()))).toList())
+                .ifPresent(message -> { throw bad(message + "：" + question.id()); });
     }
 
     ApiException bad(String message) {

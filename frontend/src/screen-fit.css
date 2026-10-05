@@ -1,16 +1,15 @@
-/* 主游戏按视口分配空间；只有辅助编辑器和完整正文允许内部滚动。 */
-html,
-body,
-#root {
-  height: 100%;
-  overflow: hidden;
-}
-.game-app {
+/* 寒门仕途按视口分配空间；知境中枢继续使用正常的 document 滚动。 */
+.world-shell {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
 }
-.game-app.in-world {
+.world-shell .game-app {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.world-shell .game-app.in-world {
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr) 66px;
 }
@@ -993,7 +992,7 @@ body,
     padding: 12px 18px;
     gap: 18px;
   }
-  .game-app.in-world {
+  .world-shell .game-app.in-world {
     grid-template-rows: 56px minmax(0, 1fr) 57px;
   }
   .world-header {
@@ -1151,7 +1150,7 @@ body,
   }
 }
 @media (max-width: 720px) {
-  .game-app.in-world {
+  .world-shell .game-app.in-world {
     grid-template-rows: 54px minmax(0, 1fr) 58px;
   }
   .world-header {

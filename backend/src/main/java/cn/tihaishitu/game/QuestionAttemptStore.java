@@ -235,6 +235,9 @@ public class QuestionAttemptStore {
                        diagnosis_session_id, diagnosis_role
                   FROM study_attempt
                  WHERE learner_id=? AND question_id=? AND status='graded'
+                   AND EXISTS (SELECT 1 FROM question_resource q WHERE q.id=study_attempt.question_id
+                               AND q.status='published'
+                               AND q.question_type IN ('single_choice','multiple_choice','true_false','solution'))
                  ORDER BY answered_at DESC, created_at DESC, id DESC LIMIT 1
                 """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
                 result.getString("learner_id"), result.getString("world_id"), result.getString("practice_session_id"),

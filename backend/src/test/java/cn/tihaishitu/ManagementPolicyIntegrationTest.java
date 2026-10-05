@@ -106,8 +106,9 @@ class ManagementPolicyIntegrationTest {
     }
 
     @Test
-    void duplicateKnowledgeIsRejectedAndBlankQuestionsCanUseChoicePresentation() throws Exception {
+    void questionTypesUseFixedContractsAndBlankIsRejectedEverywhere() throws Exception {
         Cookie contributor = login("policy-contributor");
+        Cookie reviewer = login("policy-reviewer");
         String pointId = activeKnowledgeId();
         ObjectNode duplicate = choiceQuestion(pointId, "single_choice");
         ArrayNode relations = duplicate.withArray("knowledgePoints");
@@ -118,11 +119,33 @@ class ManagementPolicyIntegrationTest {
 
         mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
                         .contentType("application/json").content(choiceQuestion(pointId, "blank").toString()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.questionType").value("blank"))
-                .andExpect(jsonPath("$.presentationType").value("single_choice"))
-                .andExpect(jsonPath("$.gradingMode").value("auto"))
-                .andExpect(jsonPath("$.options.length()").value(2));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
+
+        for (String type : java.util.List.of("single_choice", "multiple_choice", "true_false", "solution")) {
+            mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
+                            .contentType("application/json").content(questionForType(pointId, type).toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.questionType").value(type));
+        }
+
+        String legacyId = UUID.randomUUID().toString();
+        String contributorId = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='policy-contributor'", String.class);
+        jdbc.update("""
+                INSERT INTO question_resource(
+                    id,subject_name,source_type,question_type,presentation_type,grading_mode,
+                    content_markdown,standard_answer_json,analysis_markdown,difficulty,status,created_by,revision)
+                VALUES (?,'数学一','custom','blank','self_assessment','self_assessment',
+                    '历史填空题','\"答案\"','历史解析',2,'pending_review',?,1)
+                """, legacyId, contributorId);
+        mvc.perform(post("/api/v1/manage/questions/{id}/review", legacyId)
+                        .cookie(reviewer).with(csrf()).contentType("application/json")
+                        .content("{\"expectedRevision\":1,\"approve\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "知境不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
     }
 
     @Test
@@ -174,6 +197,27 @@ class ManagementPolicyIntegrationTest {
         options.add(option("B", "1", false, 1));
         question.putArray("knowledgePoints").addObject()
                 .put("knowledgePointId", pointId).put("role", "core").put("sortOrder", 0);
+        return question;
+    }
+
+    private ObjectNode questionForType(String pointId, String questionType) {
+        ObjectNode question = choiceQuestion(pointId, questionType);
+        if ("multiple_choice".equals(questionType)) {
+            question.put("presentationType", "multiple_choice");
+            ((ObjectNode) question.withArray("options").get(1)).put("correct", true);
+            question.putArray("standardAnswer").add("A").add("B");
+        } else if ("true_false".equals(questionType)) {
+            question.put("presentationType", "true_false");
+            question.put("standardAnswer", true);
+            ArrayNode options = question.putArray("options");
+            options.add(option("true", "正确", true, 0));
+            options.add(option("false", "错误", false, 1));
+        } else if ("solution".equals(questionType)) {
+            question.put("presentationType", "self_assessment");
+            question.put("gradingMode", "self_assessment");
+            question.put("standardAnswer", "完整参考步骤");
+            question.putArray("options");
+        }
         return question;
     }
 

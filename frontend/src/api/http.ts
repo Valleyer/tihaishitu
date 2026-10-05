@@ -15,10 +15,8 @@ import {
   cacheAnsweredQuestion,
   loadAnsweredQuestions,
 } from "./catalog-cache";
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(
-  /\/$/,
-  "",
-);
+import { resolveApiBaseUrl } from "./apiBase";
+const baseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, window.location.origin);
 export class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }

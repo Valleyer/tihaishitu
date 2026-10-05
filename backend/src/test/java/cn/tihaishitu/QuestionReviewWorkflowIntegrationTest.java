@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class QuestionReviewWorkflowIntegrationTest {
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper;
 
-    @Test void nonCreatorReviewerCanPublishAndCreatorCannotReviewOwnPendingQuestion() throws Exception {
+    @Test void adminCanSelfReviewWhileReviewerRulesRemain() throws Exception {
         String point = knowledge();
         Cookie creator = account("review-creator", "CONTRIBUTOR", "REVIEWER");
         Cookie reviewer = account("review-other", "REVIEWER");
@@ -34,7 +34,9 @@ class QuestionReviewWorkflowIntegrationTest {
         String body = """
                 {"subject":"测试","sourceType":"custom","sourceName":"审核题","questionType":"true_false",
                  "presentationType":"true_false","gradingMode":"auto","content":"待审核题","standardAnswer":true,
-                 "analysis":"解析","difficulty":2,"options":[],
+                 "analysis":"解析","difficulty":2,"options":[
+                   {"key":"true","text":"正确","correct":true,"sortOrder":0},
+                   {"key":"false","text":"错误","correct":false,"sortOrder":1}],
                  "knowledgePoints":[{"knowledgePointId":"%s","role":"core","sortOrder":0}]}
                 """.formatted(point);
         JsonNode created = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(creator)
@@ -59,6 +61,23 @@ class QuestionReviewWorkflowIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("archived"));
         assertThat(pending.path("createdBy").asText()).isEqualTo(
                 jdbc.queryForObject("SELECT id FROM learner_account WHERE username='review-creator'", String.class));
+
+        JsonNode adminCreated = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(body.replace("待审核题", "管理员自审题")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String adminQuestionId = adminCreated.path("id").asText();
+        mvc.perform(post("/api/v1/manage/questions/{id}/submit", adminQuestionId).with(csrf()).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"expectedRevision\":1}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("pending_review"));
+        mvc.perform(post("/api/v1/manage/questions/{id}/review", adminQuestionId).with(csrf()).cookie(admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":2,\"approve\":true,\"comment\":\"管理员审核通过\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("published"));
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM content_audit_log
+                WHERE actor_learner_id = (SELECT id FROM learner_account WHERE username='review-admin')
+                  AND entity_id = ? AND action_name = 'QUESTION_REVIEW_APPROVED'
+                """, Integer.class, adminQuestionId)).isEqualTo(1);
     }
 
     private Cookie account(String username,String...roles) throws Exception {

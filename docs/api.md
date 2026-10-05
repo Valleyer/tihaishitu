@@ -17,9 +17,20 @@ API_PROXY_TARGET=http://localhost:12345
 重启开发服务器。Vite 开发代理把 /api 请求交给 Java；部署时自行配置同源代理或 CORS。
 默认使用 HTTP 联机模式；如需运行旧本地兼容实现，可显式设置 `VITE_API_MODE=local`。
 
+Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终通过当前站点的同源 `/api/v1` 访问 Java API。`API_PROXY_TARGET` 是 Vite 服务器内部的转发目标，不是浏览器 API 地址。不得将 `VITE_API_BASE_URL` 设为与页面 Origin 不同的绝对 URL；前端会直接拒绝这类配置并给出同源配置提示。
+
 ## 路由
 
 下表路径均相对于 /api/v1。字段的完整 TypeScript 定义以 domain/types.ts 为准。
+
+### MVP 学习与管理扩展
+
+- `GET /learner/statistics?days=7|30|90`：从正式 graded attempts 和当前 Selected Books 动态派生学习统计。
+- `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量。
+- `POST /manage/questions/bulk-delete`：事务性批量删除题目资源；活动中的错题练习和未同时选择的派生题会阻止整批删除。
+- `POST /manage/imports/knowledge`：管理员导入 `global-knowledge-batch/v1`，事务性 upsert Book、Chapter、Global KnowledgePoint、alias 与 membership。
+
+`GET /learner/progress` 的 Book 与 Chapter 聚合同时返回 `masteryProgress`，值为对应去重 KnowledgePoint 在同一时刻的 `effectiveMastery` 算术平均值，未开始按 0 计算。
 
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
@@ -226,7 +237,7 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 题库修订只影响以后发卷，不影响已有快照和历史记录。
 - 导入先完整校验，再原子保存；备份创建新人生并重映射题库引用。
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
-- 填空题与解答题保留原始题型，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
+- 正式题型仅允许 `single_choice`、`multiple_choice`、`true_false`、`solution`；其中 `solution` 展示为“综合题”，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。`blank` 不能新建、保存、导入或发布，历史 `blank` 也不会进入正式题池。原填空题须由题目生成 AI 保留 Question UUID 并改编为单选题或多选题。综合题参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
 
 本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
 

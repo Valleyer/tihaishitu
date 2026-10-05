@@ -56,6 +56,7 @@ public class LearnerKnowledgeStateStore {
                   LEFT JOIN learner_knowledge_state s
                     ON s.knowledge_point_id = bk.knowledge_point_id AND s.learner_id = ?
                  WHERE bk.bank_id = ?
+                   AND """ + " " + TrainableKnowledge.exists("k") + """
                  ORDER BY bk.sort_order, bk.knowledge_point_id
                 """, (rs, row) -> new StateRow(rs.getString("knowledge_point_id"),
                 rs.getObject("mastery_score") == null ? null : state(rs)), learnerId, bookId);

@@ -58,6 +58,8 @@ class LearnerProgressIntegrationTest {
                 .filter(item -> item.bookId().equals(first.id())).findFirst().orElseThrow();
         LearnerProgressService.ChapterProgress parent = firstView.chapters().get(0);
         assertThat(parent.total()).isEqualTo(3);
+        assertThat(firstView.masteryProgress()).isGreaterThan(0).isLessThan(100);
+        assertThat(parent.masteryProgress()).isGreaterThan(0).isLessThan(100);
         assertThat(parent.children()).extracting(LearnerProgressService.ChapterProgress::total)
                 .containsExactly(1, 2);
     }
@@ -141,6 +143,17 @@ class LearnerProgressIntegrationTest {
     private void member(String book, String chapter, String point, int order) {
         jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,?)",
                 book, point, chapter, order);
+        Integer covered = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM question_resource_knowledge qk
+                  JOIN question_resource q ON q.id=qk.question_id
+                 WHERE qk.knowledge_point_id=? AND qk.relation_role='core'
+                   AND q.status='published' AND q.question_type='true_false'
+                """, Integer.class, point);
+        if (covered == null || covered == 0) {
+            String question = question();
+            jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
+                    question, point);
+        }
     }
 
     private void select(String learner, String book) {

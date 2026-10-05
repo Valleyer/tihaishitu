@@ -5,7 +5,7 @@ const maps = {
   },
   questionType: {
     single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题",
-    blank: "填空题", solution: "解答题",
+    blank: "历史填空题（需改造）", solution: "综合题",
   },
   presentation: {
     single_choice: "单选作答", multiple_choice: "多选作答", true_false: "判断作答",
@@ -19,7 +19,8 @@ const maps = {
   role: { CONTRIBUTOR: "内容贡献者", REVIEWER: "审核员", ADMIN: "管理员" },
   entity: {
     knowledge_point: "知识点", question: "题目", learner_account: "用户",
-    app_user: "历史管理用户", question_bank: "文集", question_batch: "题目批次",
+    app_user: "历史管理用户", question_bank: "文集", question_bank_chapter: "章节",
+    question_batch: "题目批次",
   },
 } as const;
 
@@ -30,4 +31,13 @@ export function manageLabel(kind: LabelKind, code?: string | null) {
 }
 
 export const manageOptions = (kind: LabelKind) =>
-  Object.entries(maps[kind]).map(([value, label]) => ({ value, label }));
+  Object.entries(maps[kind])
+    .filter(([value]) => kind !== "questionType" || value !== "blank")
+    .map(([value, label]) => ({ value, label }));
+
+export function questionTypeContract(questionType: string) {
+  if (questionType === "solution") {
+    return { presentationType: "self_assessment", gradingMode: "self_assessment" } as const;
+  }
+  return { presentationType: questionType, gradingMode: "auto" } as const;
+}

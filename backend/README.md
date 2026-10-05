@@ -77,7 +77,7 @@ API_PROXY_TARGET=http://localhost:12345
 - `DELETE /api/v1/games/{id}`：删除存档
 - `POST /api/v1/games/{id}/activities`：开始五知识点副本或十知识点主线
 - `POST /api/v1/games/{id}/answers`：只提交课卷 UUID、题目 UUID 与答案
-- `POST /api/v1/games/{id}/answers/reveal`、`/self-assess`：解答题显式揭示答案并自评掌握程度
+- `POST /api/v1/games/{id}/answers/reveal`、`/self-assess`：综合题显式揭示答案并自评掌握程度
 - `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
 - `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
