@@ -124,6 +124,7 @@ export type ManagedChapter = {
   sortOrder: number; revision: number;
 };
 export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
+export type BulkReviewResult = { reviewed: number; approved: number; rejected: number };
 
 export class ManageHttpError extends Error {
   status: number;
@@ -247,6 +248,15 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ expectedRevision: question.revision, approve, comment }),
     }),
+  bulkReviewQuestions: (questions: QuestionView[], approve: boolean, comment: string) =>
+    request<BulkReviewResult>("/questions/bulk-review", {
+      method: "POST",
+      body: JSON.stringify({
+        items: questions.map(question => ({ id: question.id, expectedRevision: question.revision })),
+        approve,
+        comment,
+      }),
+    }),
   bulkDeleteQuestions: (ids: string[]) =>
     request<{ deleted: number }>("/questions/bulk-delete", {
       method: "POST", body: JSON.stringify({ ids }),
@@ -274,6 +284,7 @@ export const manageApi = {
         expectedRevision: user.revision,
       }),
     }),
+  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
 };
 
 function questionPayload(question: Partial<QuestionView>) {

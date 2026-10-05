@@ -285,7 +285,7 @@
 .learning-hub .hub-greeting { padding: 4px 0 2px; }
 .learning-hub .hub-greeting h1 { margin: 0 0 6px; color: var(--zj-text); font-size: clamp(30px, 4vw, 38px); line-height: 1.2; letter-spacing: -.035em; }
 .learning-hub .hub-greeting p { margin: 0; color: var(--zj-text-secondary); font-size: 16px; }
-.learning-hub .home-focus-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
+.learning-hub .learning-focus-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
 .learning-hub .continue-card { min-height: 280px; display: flex; flex-direction: column; align-items: flex-start; }
 .learning-hub .continue-card h2 { margin-top: 24px; font-size: clamp(25px, 3vw, 30px); }
 .learning-hub .continue-card > p:not(.section-kicker) { margin: 8px 0; color: var(--zj-text-secondary); }
@@ -299,7 +299,7 @@
 .learning-hub .today-metrics b { color: var(--zj-text); font-size: 26px; line-height: 1.2; }
 .learning-hub .today-metrics span { color: var(--zj-text-tertiary); font-size: 12px; }
 .learning-hub .overview-card { box-shadow: none; }
-.learning-hub .overview-metrics { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 22px; }
+.learning-hub .overview-metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 22px; }
 .learning-hub .overview-metrics p { display: grid; gap: 5px; margin: 0; padding: 6px 18px; border-left: 1px solid var(--zj-border); }
 .learning-hub .overview-metrics p:first-child { padding-left: 0; border-left: 0; }
 .learning-hub .overview-metrics b { color: var(--zj-text); font-size: 28px; line-height: 1.2; letter-spacing: -.02em; }
@@ -501,7 +501,7 @@
   .learning-hub .hub-main.narrow,
   .learning-hub .hub-main.narrow.practice-page { width: calc(100vw - 32px); padding: 32px 0 64px; }
   .learning-hub .hub-home { gap: 28px; }
-  .learning-hub .home-focus-grid { grid-template-columns: 1fr; }
+  .learning-hub .learning-focus-grid { grid-template-columns: 1fr; }
   .learning-hub .continue-card,
   .learning-hub .today-card { min-height: auto; }
   .learning-hub .continue-card .hub-primary { margin-top: 18px; }

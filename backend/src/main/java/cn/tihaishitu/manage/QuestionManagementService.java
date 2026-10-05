@@ -5,14 +5,19 @@ import cn.tihaishitu.catalog.QuestionContractValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 @Service
 public class QuestionManagementService {
+    public record BulkReviewItem(String id, long expectedRevision) {}
+    public record BulkReviewResult(int reviewed, int approved, int rejected) {}
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
             "single_choice", "multiple_choice", "true_false", "solution");
@@ -63,16 +68,44 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView review(
             String id, long revision, boolean approve, String comment, Authentication auth) {
         var current = require(id); String actor = actorId(auth);
-        boolean admin = auth.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-        if (!admin && actor.equals(current.createdBy())) denied("审核员不能审核自己创建的题目。");
-        if (!"pending_review".equals(current.status())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "只有待审核题目可以审核。");
-        }
-        if (approve) validateStored(current);
+        validateReview(current, revision, approve, actor, isAdmin(auth), "");
         String to = approve ? "published" : "rejected";
         return store.transition(id, revision, "pending_review", to, actor,
                 approve ? "QUESTION_REVIEW_APPROVED" : "QUESTION_REVIEW_REJECTED", value(comment));
+    }
+
+    @Transactional
+    public BulkReviewResult bulkReview(
+            List<BulkReviewItem> requestedItems, boolean approve, String comment, Authentication auth) {
+        if (requestedItems == null || requestedItems.isEmpty()) bad("请至少选择一道待审核题目。");
+        if (requestedItems.size() > 100) bad("一次最多审核 100 道题。");
+        if (!approve && (comment == null || comment.isBlank())) bad("批量退回必须填写统一退回原因。");
+        Set<String> ids = new LinkedHashSet<>();
+        List<QuestionManagementStore.QuestionView> questions = new ArrayList<>();
+        String actor = actorId(auth);
+        boolean admin = isAdmin(auth);
+        for (BulkReviewItem item : requestedItems) {
+            if (item == null || item.id() == null || item.id().isBlank()) bad("题目 ID 不能为空。");
+            if (!ids.add(item.id())) bad("批量审核中不能重复选择同一道题。");
+            QuestionManagementStore.QuestionView current = require(item.id());
+            String prefix = questionLabel(current) + "：";
+            validateReview(current, item.expectedRevision(), approve, actor, admin, prefix);
+            questions.add(current);
+        }
+        String to = approve ? "published" : "rejected";
+        String action = approve ? "QUESTION_REVIEW_APPROVED" : "QUESTION_REVIEW_REJECTED";
+        for (int index = 0; index < questions.size(); index++) {
+            QuestionManagementStore.QuestionView question = questions.get(index);
+            try {
+                store.transition(question.id(), requestedItems.get(index).expectedRevision(),
+                        "pending_review", to, actor, action, value(comment));
+            } catch (ResponseStatusException error) {
+                throw new ResponseStatusException(error.getStatusCode(),
+                        questionLabel(question) + "：" + value(error.getReason()), error);
+            }
+        }
+        int reviewed = questions.size();
+        return new BulkReviewResult(reviewed, approve ? reviewed : 0, approve ? 0 : reviewed);
     }
 
     public QuestionManagementStore.QuestionView archive(
@@ -138,6 +171,35 @@ public class QuestionManagementService {
                 question.standardAnswer(), question.options().stream().map(option ->
                         new QuestionContractValidator.Option(option.key(), option.text(), option.correct())).toList())
                 .ifPresent(QuestionManagementService::bad);
+    }
+
+    private void validateReview(QuestionManagementStore.QuestionView current, long revision, boolean approve,
+                                String actor, boolean admin, String prefix) {
+        if (!admin && actor.equals(current.createdBy())) denied(prefix + "审核员不能审核自己创建的题目。");
+        if (!"pending_review".equals(current.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, prefix + "只有待审核题目可以审核。");
+        }
+        if (current.revision() != revision) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, prefix + "题目已被其他人修改，请刷新列表后重试。");
+        }
+        if (approve) {
+            try { validateStored(current); }
+            catch (ResponseStatusException error) {
+                throw new ResponseStatusException(error.getStatusCode(), prefix + value(error.getReason()), error);
+            }
+        }
+    }
+
+    private static boolean isAdmin(Authentication auth) {
+        return auth.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private static String questionLabel(QuestionManagementStore.QuestionView question) {
+        if (question.questionNumber() != null && !question.questionNumber().isBlank()) {
+            return "题目 " + question.questionNumber();
+        }
+        return "题目 " + question.id();
     }
 
     private static void rejectBlank(String type) {
