@@ -205,7 +205,8 @@ public class LearnerPracticeService {
                 ? Math.min(3, context.preferredDifficulty()) : context.preferredDifficulty();
         var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
                 context.readyKnowledgePointIds(), store.seenQuestions(sessionId), preferred,
-                training ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL);
+                training ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL,
+                KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
         if (directive != null && DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
                 && pool.eligibleQuestionsForLearner(request).isEmpty()) {
             diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), targetId);
@@ -279,9 +280,10 @@ public class LearnerPracticeService {
         AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(learnerId, allowed, targetId, difficulty);
         var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
                 context.readyKnowledgePointIds(), Set.of(), context.preferredDifficulty(),
-                KnowledgeQuestionPoolService.Mode.NORMAL);
+                KnowledgeQuestionPoolService.Mode.NORMAL,
+                KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
         if (pool.eligibleQuestionsForLearner(request).isEmpty())
-            throw bad("该知识点当前没有符合前置掌握条件的正式题。");
+            throw bad("当前知识点暂无可用于专项练习的正式题。");
     }
 
     private static boolean needsTraining(QuestionAttemptStore.Snapshot snapshot) {

@@ -274,9 +274,12 @@
   box-shadow: 0 1px 2px rgba(79, 70, 229, .18);
 }
 
-.learning-hub .hub-primary:hover,
-.auth-page .hub-primary:hover,
-.learning-hub a.hub-primary:hover { border-color: var(--zj-brand-hover); background: var(--zj-brand-hover); }
+.learning-hub button.hub-primary:hover:not(:disabled),
+.auth-page button.hub-primary:hover:not(:disabled),
+.learning-hub a.hub-primary:hover { border-color: var(--zj-brand-hover); background: var(--zj-brand-hover); color: #fff; }
+.learning-hub button.hub-primary:active:not(:disabled),
+.auth-page button.hub-primary:active:not(:disabled),
+.learning-hub a.hub-primary:active { border-color: #3730a3; background: #3730a3; }
 .learning-hub .hub-error, .auth-page .hub-error { border-radius: var(--zj-radius-sm); background: var(--zj-danger-soft); color: #b42318; padding: 11px 14px; }
 .learning-hub .hub-message { border-radius: var(--zj-radius-sm); background: var(--zj-success-soft); color: #067647; padding: 11px 14px; }
 
@@ -406,7 +409,9 @@
 /* Practice */
 .learning-hub .practice-page { padding-bottom: 64px; }
 .learning-hub .practice-options { display: grid; gap: 9px; margin-top: 18px; }
-.learning-hub .practice-options button { text-align: left; background: var(--zj-surface); }
+.learning-hub .practice-options button { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 7px; text-align: left; background: var(--zj-surface); }
+.learning-hub .practice-options .rich-inline,
+.learning-hub .practice-options .rich-inline > p { min-width: 0; margin: 0; }
 .learning-hub .practice-options button:hover:not(:disabled) { border-color: #a5b4fc; background: var(--zj-surface-hover); }
 .learning-hub .practice-options button.selected { border-color: var(--zj-brand); background: var(--zj-brand-soft); color: var(--zj-brand-hover); box-shadow: 0 0 0 1px var(--zj-brand); }
 .learning-hub .practice-assessment,
@@ -433,7 +438,7 @@
 .learning-hub .recent-metrics b { color: var(--zj-text); font-size: 24px; }
 .learning-hub .progress-review-windows span,
 .learning-hub .recent-metrics span { color: var(--zj-text-tertiary); font-size: 12px; }
-.learning-hub .progress-books { display: grid; gap: 16px; margin-top: 28px; }
+.learning-hub .progress-books { display: grid; gap: 16px; }
 .learning-hub .book-progress-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; overflow: hidden; margin: 18px 0; border: 1px solid var(--zj-border); border-radius: var(--zj-radius-sm); background: var(--zj-border); }
 .learning-hub .book-progress-metrics span { display: grid; gap: 3px; background: var(--zj-surface-soft); color: var(--zj-text); padding: 12px; font-size: 20px; }
 .learning-hub .book-progress-metrics small { color: var(--zj-text-tertiary); font-size: 11px; }
@@ -572,3 +577,5 @@
   .learning-hub .directory-pagination { flex-wrap: wrap; }
   .learning-hub .directory-pagination span:first-child { width: 100%; margin-right: 0; }
 }
+.learning-hub .study-drill { scroll-margin-top: 88px; }
+.learning-hub .study-drill .study-book-grid { margin-top: 18px; }

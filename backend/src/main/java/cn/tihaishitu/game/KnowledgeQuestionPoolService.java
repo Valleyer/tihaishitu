@@ -19,6 +19,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class KnowledgeQuestionPoolService {
     public enum Mode { NORMAL, TRAINING }
+    public enum DependencyPolicy { REQUIRE_READY, SCOPE_ONLY }
 
     public record QuestionPoolRequest(
             String currentKnowledgePointId,
@@ -40,7 +41,19 @@ public class KnowledgeQuestionPoolService {
             Set<String> readyKnowledgePointIds,
             Set<String> seenQuestionIds,
             int preferredDifficulty,
-            Mode mode) {
+            Mode mode,
+            DependencyPolicy dependencyPolicy) {
+        public AdaptiveQuestionPoolRequest(
+                String currentKnowledgePointId,
+                Set<String> allowedKnowledgePointIds,
+                Set<String> readyKnowledgePointIds,
+                Set<String> seenQuestionIds,
+                int preferredDifficulty,
+                Mode mode) {
+            this(currentKnowledgePointId, allowedKnowledgePointIds, readyKnowledgePointIds,
+                    seenQuestionIds, preferredDifficulty, mode, DependencyPolicy.REQUIRE_READY);
+        }
+
         public AdaptiveQuestionPoolRequest {
             allowedKnowledgePointIds = allowedKnowledgePointIds == null
                     ? Set.of() : Set.copyOf(allowedKnowledgePointIds);
@@ -48,6 +61,8 @@ public class KnowledgeQuestionPoolService {
                     ? Set.of() : Set.copyOf(readyKnowledgePointIds);
             seenQuestionIds = seenQuestionIds == null ? Set.of() : Set.copyOf(seenQuestionIds);
             mode = mode == null ? Mode.NORMAL : mode;
+            dependencyPolicy = dependencyPolicy == null
+                    ? DependencyPolicy.REQUIRE_READY : dependencyPolicy;
         }
     }
 
@@ -122,8 +137,13 @@ public class KnowledgeQuestionPoolService {
         if (request.currentKnowledgePointId() == null || request.currentKnowledgePointId().isBlank()) {
             throw bad("当前修习知识点不能为空。");
         }
-        return store.adaptiveCandidatesForCore(request.currentKnowledgePointId(),
-                        request.allowedKnowledgePointIds(), request.readyKnowledgePointIds()).stream()
+        List<QuestionDto> candidates = request.dependencyPolicy() == DependencyPolicy.SCOPE_ONLY
+                ? request.allowedKnowledgePointIds().contains(request.currentKnowledgePointId())
+                    ? store.candidatesForCore(request.currentKnowledgePointId(), request.allowedKnowledgePointIds())
+                    : List.of()
+                : store.adaptiveCandidatesForCore(request.currentKnowledgePointId(),
+                        request.allowedKnowledgePointIds(), request.readyKnowledgePointIds());
+        return candidates.stream()
                 .filter(question -> !request.seenQuestionIds().contains(question.id()))
                 .toList();
     }
@@ -142,6 +162,9 @@ public class KnowledgeQuestionPoolService {
     private List<QuestionDto> selectedDifficultyBucket(AdaptiveQuestionPoolRequest request) {
         List<QuestionDto> candidates = eligibleQuestionsForLearner(request);
         if (candidates.isEmpty()) {
+            if (request.dependencyPolicy() == DependencyPolicy.SCOPE_ONLY) {
+                throw bad("当前知识点暂无可用于专项练习的正式题。");
+            }
             throw bad("该知识点当前可用题目已用尽，或前置知识尚未达到基本掌握。请结束或退出本轮训练。");
         }
         if (request.mode() == Mode.NORMAL) {

@@ -1,6 +1,7 @@
 package cn.tihaishitu;
 
 import cn.tihaishitu.learner.LearnerAuthService;
+import cn.tihaishitu.game.KnowledgeQuestionPoolService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -13,6 +14,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +27,37 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:learner-practice;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 class LearnerPracticeIntegrationTest {
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper;
+    @Autowired KnowledgeQuestionPoolService pool;
+
+    @Test void explicitKnowledgeDrillUsesScopeWithoutRequiringDependencyMastery() throws Exception {
+        DependencyFixture fixture = dependencyFixture("practice-scope-only");
+        var worldPolicy = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
+                fixture.target(), Set.of(fixture.target(), fixture.dependency()), Set.of(), Set.of(), 2,
+                KnowledgeQuestionPoolService.Mode.NORMAL,
+                KnowledgeQuestionPoolService.DependencyPolicy.REQUIRE_READY);
+        assertThat(pool.eligibleQuestionsForLearner(worldPolicy)).isEmpty();
+        var hubPolicy = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
+                fixture.target(), Set.of(fixture.target(), fixture.dependency()), Set.of(), Set.of(), 2,
+                KnowledgeQuestionPoolService.Mode.NORMAL,
+                KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
+        assertThat(pool.eligibleQuestionsForLearner(hubPolicy)).extracting(question -> question.id())
+                .containsExactly(fixture.question());
+
+        Cookie learner = register("practice-scope-only");
+        String learnerId = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='practice-scope-only'", String.class);
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learnerId);
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
+                learnerId, fixture.book());
+        assertThat(pool.allowedKnowledgePointIds(Set.of(fixture.book())))
+                .containsExactlyInAnyOrder(fixture.target(), fixture.dependency());
+        JsonNode session = startKnowledge(learner, fixture.target());
+
+        assertThat(session.path("currentAttempt").path("question").path("id").asText())
+                .isEqualTo(fixture.question());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?",
+                Integer.class, fixture.dependency())).isZero();
+    }
 
     @Test void knowledgeDrillPersistsAttemptUpdatesMasteryAndDrawsAnotherSameTarget() throws Exception {
         Fixture fixture = fixture("practice-main");
@@ -88,6 +122,35 @@ class LearnerPracticeIntegrationTest {
         return new Fixture(book, point);
     }
 
+    private DependencyFixture dependencyFixture(String prefix) {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        String target = UUID.randomUUID().toString(), dependency = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,?, '',TRUE,1,1)",
+                book, prefix);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C','章','',0,1)", chapter, book);
+        for (String point : List.of(target, dependency)) {
+            jdbc.update("""
+                    INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,
+                        default_role,status,description,explanation,sort_order,revision)
+                    VALUES (?,?,?,'测试','节','章','core','active','','',0,1)
+                    """, point, prefix + "-" + point, point.equals(target) ? "目标" : "依赖");
+            jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)",
+                    book, point, chapter);
+        }
+        String question = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','true_false','true_false','auto','含未掌握依赖的题','true','解析',2,'published',1)
+                """, question);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
+                question, target);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)",
+                question, dependency);
+        question(dependency, prefix + "-dependency-q");
+        return new DependencyFixture(book, target, dependency, question);
+    }
+
     private void question(String point, String content) {
         String id = UUID.randomUUID().toString();
         jdbc.update("""
@@ -99,4 +162,5 @@ class LearnerPracticeIntegrationTest {
     }
     private JsonNode json(String value) throws Exception { return mapper.readTree(value); }
     private record Fixture(String book, String point) {}
+    private record DependencyFixture(String book, String target, String dependency, String question) {}
 }
