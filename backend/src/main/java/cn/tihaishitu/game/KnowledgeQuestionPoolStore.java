@@ -77,6 +77,7 @@ public class KnowledgeQuestionPoolStore {
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
                  WHERE q.status = 'published'
+                   AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND current_rel.relation_role = 'core'
                    AND current_rel.knowledge_point_id IN (%s)
@@ -112,6 +113,7 @@ public class KnowledgeQuestionPoolStore {
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
                  WHERE q.status = 'published'
+                   AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND current_rel.relation_role = 'core'
                    AND current_rel.knowledge_point_id IN (%s)
@@ -146,6 +148,7 @@ public class KnowledgeQuestionPoolStore {
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
                  WHERE q.status = 'published'
+                   AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND current_rel.knowledge_point_id = ?
                    AND current_rel.relation_role = 'core'
@@ -185,6 +188,7 @@ public class KnowledgeQuestionPoolStore {
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
                  WHERE q.status = 'published'
+                   AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND current_rel.knowledge_point_id = ?
                    AND current_rel.relation_role = 'core'

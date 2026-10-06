@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
@@ -156,6 +157,7 @@ public class QuestionAttemptStore {
                 """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
                 snapshot.id(), snapshot.questionId(),
                 json(submitted), correct, assessment);
+        recordWrongQuestion(snapshot, assessment, occurredAt);
         return true;
     }
 
@@ -192,7 +194,40 @@ public class QuestionAttemptStore {
                 """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
                 snapshot.id(), snapshot.questionId(),
                 json(assessment), correct, assessment);
+        recordWrongQuestion(snapshot, assessment, occurredAt);
         return true;
+    }
+
+    private void recordWrongQuestion(Snapshot snapshot, String assessment, Instant occurredAt) {
+        if (snapshot.learnerId() == null || snapshot.targetKnowledgePointId() == null
+                || !java.util.Set.of("wrong", "partial").contains(assessment)) return;
+        Integer formal = jdbc.queryForObject("SELECT COUNT(*) FROM question_resource q WHERE q.id=? AND "
+                + cn.tihaishitu.learning.FormalQuestionPolicy.published("q"), Integer.class, snapshot.questionId());
+        if (formal == null || formal == 0) return;
+        Timestamp at = Timestamp.from(occurredAt);
+        int changed = jdbc.update("""
+                UPDATE learner_wrong_question
+                   SET target_knowledge_point_id=?,last_wrong_at=?,last_wrong_attempt_id=?,status='active',
+                       removed_at=NULL,updated_at=CURRENT_TIMESTAMP
+                 WHERE learner_id=? AND question_id=?
+                """, snapshot.targetKnowledgePointId(), at, snapshot.id(), snapshot.learnerId(), snapshot.questionId());
+        if (changed > 0) return;
+        try {
+            jdbc.update("""
+                    INSERT INTO learner_wrong_question(
+                        learner_id,question_id,target_knowledge_point_id,first_wrong_at,last_wrong_at,
+                        last_wrong_attempt_id,status,removed_at)
+                    VALUES (?,?,?,?,?,?,'active',NULL)
+                    """, snapshot.learnerId(), snapshot.questionId(), snapshot.targetKnowledgePointId(),
+                    at, at, snapshot.id());
+        } catch (DuplicateKeyException concurrentInsert) {
+            jdbc.update("""
+                    UPDATE learner_wrong_question
+                       SET target_knowledge_point_id=?,last_wrong_at=?,last_wrong_attempt_id=?,status='active',
+                           removed_at=NULL,updated_at=CURRENT_TIMESTAMP
+                     WHERE learner_id=? AND question_id=?
+                    """, snapshot.targetKnowledgePointId(), at, snapshot.id(), snapshot.learnerId(), snapshot.questionId());
+        }
     }
 
     private String json(Object value) {
@@ -237,6 +272,7 @@ public class QuestionAttemptStore {
                  WHERE learner_id=? AND question_id=? AND status='graded'
                    AND EXISTS (SELECT 1 FROM question_resource q WHERE q.id=study_attempt.question_id
                                AND q.status='published'
+                               AND q.parent_question_id IS NULL
                                AND q.question_type IN ('single_choice','multiple_choice','true_false','solution'))
                  ORDER BY answered_at DESC, created_at DESC, id DESC LIMIT 1
                 """, (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),

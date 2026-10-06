@@ -8,5 +8,6 @@ public record QuestionBankManifest(
         int weight,
         long revision,
         int questionCount,
-        int knowledgePointCount
+        int knowledgePointCount,
+        int totalKnowledgePointCount
 ) {}

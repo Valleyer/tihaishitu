@@ -3,6 +3,10 @@ package cn.tihaishitu.game;
 import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.learning.LearnerKnowledgeStateStore;
+import cn.tihaishitu.learning.LearnerQuestionProgressStore;
+import cn.tihaishitu.learning.LearnerQuestionMasteryStore;
+import cn.tihaishitu.learning.ReviewSchedulingPolicy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -15,10 +19,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.time.Clock;
 
 @Service
 public class KnowledgeQuestionPoolService {
     public enum Mode { NORMAL, TRAINING }
+    public enum DependencyPolicy { REQUIRE_READY, SCOPE_ONLY }
 
     public record QuestionPoolRequest(
             String currentKnowledgePointId,
@@ -40,7 +46,19 @@ public class KnowledgeQuestionPoolService {
             Set<String> readyKnowledgePointIds,
             Set<String> seenQuestionIds,
             int preferredDifficulty,
-            Mode mode) {
+            Mode mode,
+            DependencyPolicy dependencyPolicy) {
+        public AdaptiveQuestionPoolRequest(
+                String currentKnowledgePointId,
+                Set<String> allowedKnowledgePointIds,
+                Set<String> readyKnowledgePointIds,
+                Set<String> seenQuestionIds,
+                int preferredDifficulty,
+                Mode mode) {
+            this(currentKnowledgePointId, allowedKnowledgePointIds, readyKnowledgePointIds,
+                    seenQuestionIds, preferredDifficulty, mode, DependencyPolicy.REQUIRE_READY);
+        }
+
         public AdaptiveQuestionPoolRequest {
             allowedKnowledgePointIds = allowedKnowledgePointIds == null
                     ? Set.of() : Set.copyOf(allowedKnowledgePointIds);
@@ -48,18 +66,24 @@ public class KnowledgeQuestionPoolService {
                     ? Set.of() : Set.copyOf(readyKnowledgePointIds);
             seenQuestionIds = seenQuestionIds == null ? Set.of() : Set.copyOf(seenQuestionIds);
             mode = mode == null ? Mode.NORMAL : mode;
+            dependencyPolicy = dependencyPolicy == null
+                    ? DependencyPolicy.REQUIRE_READY : dependencyPolicy;
         }
     }
 
     public record StudyPlan(Set<String> allowedKnowledgePointIds, List<String> knowledgePointIds) {}
 
     private final KnowledgeQuestionPoolStore store;
-    private final LearnerQuestionExposureStore exposures;
+    private final LearnerQuestionProgressStore progress;
+    private final LearnerKnowledgeStateStore states;
+    private final Clock clock = Clock.systemUTC();
 
     public KnowledgeQuestionPoolService(KnowledgeQuestionPoolStore store,
-                                        LearnerQuestionExposureStore exposures) {
+                                        LearnerQuestionProgressStore progress,
+                                        LearnerKnowledgeStateStore states) {
         this.store = store;
-        this.exposures = exposures;
+        this.progress = progress;
+        this.states = states;
     }
 
     public StudyPlan planKnowledgePoints(Set<String> selectedBookIds, int count) {
@@ -122,34 +146,65 @@ public class KnowledgeQuestionPoolService {
         if (request.currentKnowledgePointId() == null || request.currentKnowledgePointId().isBlank()) {
             throw bad("当前修习知识点不能为空。");
         }
-        return store.adaptiveCandidatesForCore(request.currentKnowledgePointId(),
-                        request.allowedKnowledgePointIds(), request.readyKnowledgePointIds()).stream()
+        List<QuestionDto> candidates = request.dependencyPolicy() == DependencyPolicy.SCOPE_ONLY
+                ? request.allowedKnowledgePointIds().contains(request.currentKnowledgePointId())
+                    ? store.candidatesForCore(request.currentKnowledgePointId(), request.allowedKnowledgePointIds())
+                    : List.of()
+                : store.adaptiveCandidatesForCore(request.currentKnowledgePointId(),
+                        request.allowedKnowledgePointIds(), request.readyKnowledgePointIds());
+        return candidates.stream()
                 .filter(question -> !request.seenQuestionIds().contains(question.id()))
                 .toList();
     }
 
     public QuestionDto selectQuestionForLearner(AdaptiveQuestionPoolRequest request) {
-        return random(selectedDifficultyBucket(request));
+        return random(softCandidates(request));
     }
 
     public QuestionDto selectQuestionForLearner(String learnerId, AdaptiveQuestionPoolRequest request) {
-        List<QuestionDto> selectedDifficulty = selectedDifficultyBucket(request);
-        Map<String, LearnerQuestionExposureStore.Exposure> history = exposures.findForQuestions(
-                learnerId, selectedDifficulty.stream().map(QuestionDto::id).toList());
-        return rotate(selectedDifficulty, history);
+        List<QuestionDto> candidates = softCandidates(request);
+        Map<String, LearnerQuestionProgressStore.QuestionProgress> history = progress.latestGradedForQuestions(
+                learnerId, request.currentKnowledgePointId(), candidates.stream().map(QuestionDto::id).toList());
+        return softSelect(candidates, history, request.preferredDifficulty());
     }
 
-    private List<QuestionDto> selectedDifficultyBucket(AdaptiveQuestionPoolRequest request) {
+    public List<QuestionDto> eligibleKnowledgeDrillQuestions(String learnerId, AdaptiveQuestionPoolRequest request) {
+        List<QuestionDto> candidates = eligibleQuestionsForLearner(request);
+        if (candidates.isEmpty()) return List.of();
+        Map<String, LearnerQuestionProgressStore.QuestionProgress> history = progress.latestGradedForQuestions(
+                learnerId, request.currentKnowledgePointId(), candidates.stream().map(QuestionDto::id).toList());
+        boolean due = states.find(learnerId, request.currentKnowledgePointId())
+                .map(state -> ReviewSchedulingPolicy.dueWithin24Hours(state, clock.instant())).orElse(false);
+        var today = clock.instant().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+        return candidates.stream().filter(question -> {
+            var item = history.get(question.id());
+            boolean newRewardDay = item != null && item.answeredAt() != null
+                    && item.answeredAt().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate().isBefore(today);
+            return item == null || !item.graded() || !"correct".equals(item.assessment()) || newRewardDay || due;
+        }).toList();
+    }
+
+    public QuestionDto selectKnowledgeDrillQuestion(String learnerId, AdaptiveQuestionPoolRequest request) {
+        List<QuestionDto> candidates = eligibleKnowledgeDrillQuestions(learnerId, request);
+        if (candidates.isEmpty()) throw bad("这个知识点当前没有待练的新题，已掌握题目会在复习到期后重新开放。");
+        Map<String, LearnerQuestionProgressStore.QuestionProgress> history = progress.latestGradedForQuestions(
+                learnerId, request.currentKnowledgePointId(), candidates.stream().map(QuestionDto::id).toList());
+        int bestTier = candidates.stream().mapToInt(question -> tier(history.get(question.id()))).min().orElseThrow();
+        return softSelect(candidates.stream().filter(question -> tier(history.get(question.id())) == bestTier).toList(),
+                history, request.preferredDifficulty());
+    }
+
+    private List<QuestionDto> softCandidates(AdaptiveQuestionPoolRequest request) {
         List<QuestionDto> candidates = eligibleQuestionsForLearner(request);
         if (candidates.isEmpty()) {
+            if (request.dependencyPolicy() == DependencyPolicy.SCOPE_ONLY) {
+                throw bad("当前知识点暂无可用于专项练习的正式题。");
+            }
             throw bad("该知识点当前可用题目已用尽，或前置知识尚未达到基本掌握。请结束或退出本轮训练。");
         }
-        if (request.mode() == Mode.NORMAL) {
-            return nearestDifficultyBucket(candidates, request.preferredDifficulty());
-        }
-        int remedialPreferred = Math.min(2, request.preferredDifficulty());
+        if (request.mode() == Mode.NORMAL) return candidates;
         List<QuestionDto> remedial = candidates.stream().filter(question -> question.difficulty() <= 2).toList();
-        if (!remedial.isEmpty()) return nearestDifficultyBucket(remedial, remedialPreferred);
+        if (!remedial.isEmpty()) return remedial;
         int minimum = candidates.stream().mapToInt(QuestionDto::difficulty).min().orElseThrow();
         return candidates.stream().filter(question -> question.difficulty() == minimum).toList();
     }
@@ -162,33 +217,33 @@ public class KnowledgeQuestionPoolService {
         return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
     }
 
-    private static List<QuestionDto> nearestDifficultyBucket(List<QuestionDto> candidates,
-                                                              int preferredDifficulty) {
-        int selectedDifficulty = candidates.stream().mapToInt(QuestionDto::difficulty).boxed()
-                .min(Comparator.comparingInt((Integer difficulty) ->
-                                Math.abs(difficulty - preferredDifficulty))
-                        .thenComparingInt(Integer::intValue))
-                .orElseThrow();
-        return candidates.stream().filter(question -> question.difficulty() == selectedDifficulty).toList();
-    }
-
-    private static QuestionDto rotate(List<QuestionDto> candidates,
-                                      Map<String, LearnerQuestionExposureStore.Exposure> history) {
-        List<QuestionDto> neverExposed = candidates.stream()
-                .filter(question -> !history.containsKey(question.id())).toList();
-        if (!neverExposed.isEmpty()) return random(neverExposed);
-
+    private static QuestionDto softSelect(List<QuestionDto> candidates,
+            Map<String, LearnerQuestionProgressStore.QuestionProgress> history, int preferredDifficulty) {
         Comparator<QuestionDto> rotationOrder = Comparator
-                .comparing((QuestionDto question) -> history.get(question.id()).lastExposedAt())
-                .thenComparingInt(question -> history.get(question.id()).exposureCount());
+                .comparingInt((QuestionDto question) -> exposureCount(history.get(question.id())))
+                .thenComparingInt(question -> Math.abs(question.difficulty() - preferredDifficulty))
+                .thenComparing(question -> lastExposedAt(history.get(question.id())),
+                        Comparator.nullsFirst(Comparator.naturalOrder()));
         QuestionDto first = candidates.stream().min(rotationOrder).orElseThrow();
-        var firstExposure = history.get(first.id());
         List<QuestionDto> tied = candidates.stream().filter(question -> {
-            var exposure = history.get(question.id());
-            return exposure.lastExposedAt().equals(firstExposure.lastExposedAt())
-                    && exposure.exposureCount() == firstExposure.exposureCount();
+            var left = history.get(question.id()); var right = history.get(first.id());
+            return exposureCount(left) == exposureCount(right)
+                    && Math.abs(question.difficulty() - preferredDifficulty)
+                    == Math.abs(first.difficulty() - preferredDifficulty)
+                    && java.util.Objects.equals(lastExposedAt(left), lastExposedAt(right));
         }).toList();
         return random(tied);
+    }
+
+    private static int tier(LearnerQuestionProgressStore.QuestionProgress progress) {
+        if (progress == null || !progress.graded()) return 0;
+        return "correct".equals(progress.assessment()) ? 2 : 1;
+    }
+    private static int exposureCount(LearnerQuestionProgressStore.QuestionProgress progress) {
+        return progress == null ? 0 : progress.exposureCount();
+    }
+    private static java.time.Instant lastExposedAt(LearnerQuestionProgressStore.QuestionProgress progress) {
+        return progress == null ? null : progress.lastExposedAt();
     }
 
     private static ApiException bad(String message) {

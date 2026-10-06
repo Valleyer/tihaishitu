@@ -8,7 +8,7 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.MIN_STABILITY;
 import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 import static cn.tihaishitu.learning.KnowledgeModelPolicy.SECONDS_PER_DAY;
 
-/** Pure Phase H policy derived from the existing Mastery V1 half-life model. */
+/** Pure Phase H policy derived from the current mastery half-life model. */
 public final class ReviewSchedulingPolicy {
     public enum ReviewStatus { DUE, SOON, UPCOMING }
 

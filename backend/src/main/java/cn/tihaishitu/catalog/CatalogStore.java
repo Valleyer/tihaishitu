@@ -57,7 +57,7 @@ public class CatalogStore {
                                     FROM question_bank_knowledge bk
                                    JOIN question_resource_knowledge qk ON qk.knowledge_point_id = bk.knowledge_point_id
                                     JOIN question_resource qr ON qr.id = qk.question_id
-                                   WHERE bk.bank_id = b.id AND qr.status = 'published'
+                                   WHERE bk.bank_id = b.id AND qr.status = 'published' AND qr.parent_question_id IS NULL
                                      AND qk.relation_role = 'core'
                                      AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
                             ELSE (SELECT COUNT(*) FROM question_item q WHERE q.bank_id = b.id
@@ -72,17 +72,20 @@ public class CatalogStore {
                            JOIN question_resource qr ON qr.id = bi.question_id
                            JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                            JOIN global_knowledge_point k ON k.id=qk.knowledge_point_id
-                          WHERE bi.bank_id = b.id AND qr.status = 'published'
+                          WHERE bi.bank_id = b.id AND qr.status = 'published' AND qr.parent_question_id IS NULL
                             AND qk.relation_role='core' AND k.status='active'
                             AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
-                            ELSE 0 END point_count
+                            ELSE 0 END point_count,
+                       (SELECT COUNT(*) FROM question_bank_knowledge total_bk
+                         WHERE total_bk.bank_id = b.id) total_point_count
                   FROM question_bank b
                  ORDER BY b.created_at, b.id
                 """.formatted(TrainableKnowledge.exists("k")),
                 (result, row) -> new QuestionBankManifest(
                         result.getString("id"), result.getString("name"), result.getString("description"),
                         result.getBoolean("enabled"), result.getInt("weight_value"), result.getLong("revision"),
-                        result.getInt("question_count"), result.getInt("point_count")
+                        result.getInt("question_count"), result.getInt("point_count"),
+                        result.getInt("total_point_count")
                 )
         );
     }
@@ -140,7 +143,7 @@ public class CatalogStore {
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
                    JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
-                  WHERE bi.bank_id = ? AND q.status = 'published'
+                  WHERE bi.bank_id = ? AND q.status = 'published' AND q.parent_question_id IS NULL
                     AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                     AND k.status = 'active'
                  ORDER BY k.sort_order, k.id
@@ -168,7 +171,7 @@ public class CatalogStore {
                    FROM question_bank_item bi
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_option o ON o.question_id = bi.question_id
-                  WHERE bi.bank_id = ? AND q.status = 'published'
+                  WHERE bi.bank_id = ? AND q.status = 'published' AND q.parent_question_id IS NULL
                     AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY o.question_id, o.sort_order
                 """,
@@ -184,7 +187,7 @@ public class CatalogStore {
                    FROM question_bank_item bi
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_knowledge qk ON qk.question_id = bi.question_id
-                  WHERE bi.bank_id = ? AND q.status = 'published'
+                  WHERE bi.bank_id = ? AND q.status = 'published' AND q.parent_question_id IS NULL
                     AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY qk.question_id, qk.sort_order
                 """,
@@ -200,7 +203,7 @@ public class CatalogStore {
                        q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
-                 WHERE bi.bank_id = ? AND q.status = 'published'
+                 WHERE bi.bank_id = ? AND q.status = 'published' AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY bi.sort_order, q.id
                 """,

@@ -66,7 +66,7 @@ class LearnerQuestionRotationIntegrationTest {
     }
 
     @Test
-    void difficultyWinsWhileHistoricalExposureNeverHardLocksRetry() {
+    void unseenWinsBeforeDifficultyWhileHistoricalExposureNeverHardLocksRetry() {
         String learner = learner();
         String point = knowledge();
         String seenDifficultyTwo = question(point, 2);
@@ -74,7 +74,7 @@ class LearnerQuestionRotationIntegrationTest {
         expose(learner, "ancient-official", seenDifficultyTwo, NOW.minus(1, ChronoUnit.HOURS));
 
         assertThat(select(learner, point, Set.of(), 2, KnowledgeQuestionPoolService.Mode.NORMAL).id())
-                .isEqualTo(seenDifficultyTwo);
+                .isEqualTo(freshDifficultyThree);
         assertThat(select(learner, point, Set.of(seenDifficultyTwo), 2,
                 KnowledgeQuestionPoolService.Mode.NORMAL).id()).isEqualTo(freshDifficultyThree);
 

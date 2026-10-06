@@ -2,17 +2,19 @@ import { useEffect, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
+import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
+import { PAGE_SIZE } from "../pagination";
 import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
+import { AnswerDisplay } from "./practiceView";
 import "./platform.css";
 
 const go = navigate;
 const idAfter = (prefix: string) => decodeURIComponent(window.location.pathname.slice(prefix.length));
-const flattenChapters = (chapters: BookDetail["chapters"]): BookDetail["chapters"] =>
-  chapters.flatMap(chapter => [chapter, ...flattenChapters(chapter.children || [])]);
+const flattenChapters = (chapters: BookDetail["chapters"]): BookDetail["chapters"] => chapters;
 const greeting = () => {
   const hour = new Date().getHours();
   if (hour < 6) return "夜深了";
@@ -23,6 +25,14 @@ const greeting = () => {
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
+export const safePracticeReturnTo = (intent: PracticeSession["intent"]) => {
+  const value = new URLSearchParams(window.location.search).get("returnTo");
+  const allowed = value === "/study" || value === "/wrong-questions" || value === "/progress"
+    || value?.startsWith("/progress/") || value?.startsWith("/knowledge/");
+  return value && value.startsWith("/") && !value.startsWith("//") && !value.includes("://") && allowed
+    ? value : intent === "wrong_review" ? "/wrong-questions" : "/study";
+};
+const practicePath = (id: string, returnTo: string) => `/practice/${id}?returnTo=${encodeURIComponent(returnTo)}`;
 
 function AuthPage({ register }: { register: boolean }) {
   const [username, setUsername] = useState("");
@@ -85,23 +95,22 @@ function HubHome({ data }: { data: HubBootstrap }) {
       </article> })}</div>
     </section>
     <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.subject} · {point.chapter}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
-      <section className="quick-links"><div><HubLink href="/study"><b>专项练习</b><span>按文集、章节和知识点开始</span></HubLink><HubLink href="/wrong-questions"><b>错题练习</b><span>重做最近仍需巩固的题目</span></HubLink><HubLink href="/books"><b>浏览题库</b><span>按知识点查看已发布题目</span></HubLink><HubLink href="/statistics"><b>学习统计</b><span>查看近期正式学习足迹</span></HubLink></div></section></div>
+      <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览题库</b><span>按知识点查看已发布题目</span></HubLink><HubLink href="/statistics"><b>学习统计</b><span>查看近期正式学习足迹</span></HubLink></div></section></div>
   </main></Shell>;
 }
 
 function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bookId: string }) {
-  return <li><HubLink href={`/progress/books/${bookId}/chapters/${chapter.chapterId}`}><span>{chapter.name}</span><small>掌握进度 {Math.round(chapter.masteryProgress)}% · {chapter.total} 个可学习知识点</small></HubLink>
-    {chapter.children.length > 0 && <ul>{chapter.children.map(child => <ProgressChapterTree chapter={child} bookId={bookId} key={child.chapterId} />)}</ul>}
+  return <li><HubLink href={`/progress/books/${bookId}/chapters/${chapter.chapterId}`}><span>{chapter.name}</span><small>掌握进度 {Math.round(chapter.masteryProgress)}% · {chapter.total} 个知识点</small></HubLink>
   </li>;
 }
 
 function ProgressPage({ data }: { data: HubBootstrap }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
-  return <Shell data={data}><main className="hub-main progress-page"><h1>学习进度</h1>
+  return <Shell data={data}><main className="hub-main progress-page">
     {error && <p className="hub-error">{error}</p>}{!progress && !error && <p>正在整理学习进度…</p>}
-    {progress&&<section className="overview-card"><div className="section-heading"><h2>当前学习范围</h2></div><div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>可学习知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>熟练掌握</span></p></div></section>}
-    <div className="progress-books">{progress?.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}><h2>{book.name}</h2><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><b>{Math.round(book.masteryProgress)}%</b><small>掌握进度 · {book.totalKnowledgePoints} 个可学习知识点 · 已开始 {book.started} · 基本掌握及以上 {book.ready} · 熟练掌握 {book.proficient}</small><HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink></article>)}</div>
+    {progress&&<section className="overview-card"><div className="section-heading"><h2>当前学习范围</h2></div><div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>彻底掌握</span></p></div></section>}
+    <div className="progress-books">{progress?.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}><h2>{book.name}</h2><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><b>{Math.round(book.masteryProgress)}%</b><small>掌握进度 · {book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small><HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink></article>)}</div>
     {progress?.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
   </main></Shell>;
 }
@@ -110,106 +119,130 @@ function ProgressBookPage({ data, bookId }: { data: HubBootstrap; bookId: string
   const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, [bookId]);
   const book = progress?.books.find(item => item.bookId === bookId);
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/progress">← 返回文集进度</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><p className="eyebrow">文集进度</p><h1>{book.name}</h1><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(book.masteryProgress)}% · {book.totalKnowledgePoints} 个可学习知识点</p><ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={bookId} key={chapter.chapterId} />)}</ul></>}</main></Shell>;
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/progress">← 返回文集进度</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><p className="eyebrow">文集进度</p><h1>{book.name}</h1><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(book.masteryProgress)}% · {book.totalKnowledgePoints} 个知识点</p><ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={bookId} key={chapter.chapterId} />)}</ul></>}</main></Shell>;
 }
 
-function findProgressChapter(chapters: ProgressChapter[], id: string): ProgressChapter | undefined { for (const chapter of chapters) { if (chapter.chapterId === id) return chapter; const nested = findProgressChapter(chapter.children, id); if (nested) return nested; } }
-function findBookChapter(chapters: BookDetail["chapters"], id: string): BookDetail["chapters"][number] | undefined { for (const chapter of chapters) { if (chapter.id === id) return chapter; const nested = findBookChapter(chapter.children, id); if (nested) return nested; } }
-function chapterPoints(chapter: BookDetail["chapters"][number]): KnowledgePoint[] { return [...new Map([ ...chapter.knowledgePoints, ...chapter.children.flatMap(chapterPoints) ].map(point => [point.id, point])).values()]; }
+function findProgressChapter(chapters: ProgressChapter[], id: string): ProgressChapter | undefined { return chapters.find(chapter => chapter.chapterId === id); }
+function findBookChapter(chapters: BookDetail["chapters"], id: string): BookDetail["chapters"][number] | undefined { return chapters.find(chapter => chapter.id === id); }
+function chapterPoints(chapter: BookDetail["chapters"][number]): KnowledgePoint[] { return chapter.knowledgePoints; }
 
 function ProgressChapterPage({ data, bookId, chapterId }: { data: HubBootstrap; bookId: string; chapterId: string }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
   useEffect(() => { Promise.all([platformApi.progress(), platformApi.book(bookId), platformApi.knowledgeStatesForBook(bookId)]).then(([p,b,s]) => { setProgress(p); setBook(b); setStates(new Map(s.map(item => [item.knowledgePointId,item]))); }).catch(reason => setError((reason as Error).message)); }, [bookId, chapterId]);
   const aggregate = progress?.books.find(item => item.bookId === bookId); const chapterProgress = aggregate && findProgressChapter(aggregate.chapters, chapterId); const chapter = book && findBookChapter(book.chapters, chapterId);
-  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); go(`/practice/${session.id}`); } catch(reason){ setError((reason as Error).message); } };
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href={`/progress/books/${bookId}`}>← 返回章节进度</HubLink>{error && <p className="hub-error">{error}</p>}{chapter && chapterProgress && <><p className="eyebrow">章节进度</p><h1>{chapter.name}</h1><div className="mastery-progress"><span style={{width:`${chapterProgress.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(chapterProgress.masteryProgress)}% · {chapterProgress.total} 个可学习知识点</p><div className="progress-point-list">{chapterPoints(chapter).map(point => { const state=states.get(point.id); return <article className="hub-panel" key={point.id}><div><h2><HubLink href={`/knowledge/${point.id}`}>{point.name}</HubLink></h2><p>{state?.lastEvidenceAt ? `最近学习 ${new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN")}` : "未开始"}</p></div><div><span className={`mastery-band ${state?.band || "unstarted"}`}>{progressBandLabels[state?.band || "unstarted"]}</span><b>{Math.round(state?.effectiveMastery || 0)}%</b><button onClick={() => start(point.id)}>开始专项</button></div></article> })}</div></>}</main></Shell>;
+  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); go(practicePath(session.id, `/progress/books/${bookId}/chapters/${chapterId}`)); } catch(reason){ setError((reason as Error).message); } };
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href={`/progress/books/${bookId}`}>← 返回章节进度</HubLink>{error && <p className="hub-error">{error}</p>}{chapter && chapterProgress && <><p className="eyebrow">章节进度</p><h1>{chapter.name}</h1><div className="mastery-progress"><span style={{width:`${chapterProgress.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(chapterProgress.masteryProgress)}% · {chapterProgress.total} 个知识点</p><div className="progress-point-list">{chapterPoints(chapter).map(point => { const state=states.get(point.id); return <article className="hub-panel" key={point.id}><div><h2><HubLink href={`/knowledge/${point.id}`}>{point.name}</HubLink></h2><p>{state?.lastEvidenceAt ? `最近学习 ${new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN")}` : "未开始"}</p></div><div><span className={`mastery-band ${state?.band || "unstarted"}`}>{progressBandLabels[state?.band || "unstarted"]}</span><b>{Math.round(state?.effectiveMastery || 0)}%</b><button onClick={() => start(point.id)}>开始专项</button></div></article> })}</div></>}</main></Shell>;
 }
 
-function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise<void> }) {
+export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise<void> }) {
   const [profile, setProfile] = useState<StudyProfile>(data.studyProfile); const [selected, setSelected] = useState(data.studyProfile.selectedBookIds);
-  const [details, setDetails] = useState<BookDetail[]>([]); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [wrongCount, setWrongCount] = useState(0);
+  const [details, setDetails] = useState<BookDetail[]>([]); const [wrongCount, setWrongCount] = useState(0);
   const [progress,setProgress]=useState<LearnerProgress|null>();
+  const [activeChapter,setActiveChapter]=useState<PracticeSession>();
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); }, [data.studyProfile.selectedBookIds]);
-  useEffect(() => { if (bookId) platformApi.knowledgeStatesForBook(bookId).then(items => setStates(new Map(items.map(item => [item.knowledgePointId,item])))); }, [bookId]);
+  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.activeChapterPractice().then(setActiveChapter).catch(()=>setActiveChapter(undefined)); }, [data.studyProfile.selectedBookIds]);
   const book=details.find(item=>item.id===bookId); const chapters=book ? flattenChapters(book.chapters) : []; const chapter=chapters.find(item=>item.id===chapterId);
-  const latest=progress?.recent.knowledgePoints[0];
-  const start=async(id:string)=>{try{const session=await platformApi.startKnowledgePractice(id);go(`/practice/${session.id}`)}catch(reason){setMessage((reason as Error).message)}};
-  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
-  return <Shell data={data}><main className="hub-main study-page"><h1>学习</h1>
-    <section className="learning-focus-grid"><article className="continue-card">{latest?<><h2>{latest.name}</h2><div className="continue-mastery"><span className={`mastery-band ${latest.band}`}>{progressBandLabels[latest.band]}</span><span>有效掌握度 {Math.round(latest.effectiveMastery)}%</span></div><button className="hub-primary" onClick={()=>start(latest.knowledgePointId)}>继续专项练习 →</button></>:<><h2>选择第一个知识点</h2><button className="hub-primary" onClick={()=>document.getElementById("knowledge-drill")?.scrollIntoView({behavior:"smooth"})}>选择知识点 →</button></>}</article><article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>基本掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>待重做错题</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
-    <section className="hub-panel study-drill" id="knowledge-drill"><div className="panel-heading"><h2>专项练习</h2></div>
-      <div className="study-book-grid">{details.map(item=><button className={bookId===item.id?"book-cover-card selected":"book-cover-card"} onClick={()=>{setBookId(item.id);setChapterId("")}} key={item.id}><span>{item.name.slice(0,2)}</span><b>{item.name}</b><small>{item.knowledgePointCount} 个可学习知识点</small></button>)}</div>
+  const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
+  const start=async()=>{if(!book||!chapter)return;try{const session=await platformApi.startChapterPractice(book.id,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
+  const activeBook=details.find(item=>item.id===activeChapter?.targetBookId); const activeChapterView=activeBook?.chapters.find(item=>item.id===activeChapter?.targetChapterId);
+  const activeIndex=activeChapterView?.knowledgePoints.findIndex(item=>item.id===activeChapter?.currentKnowledgePointId)??-1;
+  return <Shell data={data}><main className="hub-main study-page">
+    <section className="learning-focus-grid"><article className="continue-card">{activeChapter?<><h2>{activeBook?.name||"章节练习"}</h2><div className="continue-mastery"><span>{activeChapterView?.name}</span><span>当前进度：{activeIndex>=0?activeIndex+1:"—"} / {activeChapterView?.knowledgePoints.length||"—"}</span></div><button className="hub-primary" onClick={()=>go(practicePath(activeChapter.id,"/study"))}>继续章节练习 →</button></>:<><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}</article><article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
+    <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
+      <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
       {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
-      {chapter && <><h3>选择知识点</h3><div className="study-points">{chapterPoints(chapter).map(point=>{const state=states.get(point.id);const band=state?.band||"unstarted";return <article key={point.id}><div><b>{point.name}</b><small>{progressBandLabels[band]} · {Math.round(state?.effectiveMastery||0)}%</small></div><button className="hub-primary" onClick={()=>start(point.id)}>开始专项</button></article>})}</div></>}
-      {details.length===0 && <p className="empty-state">当前没有已选择文集，请先在下方设置学习范围。</p>}
+      {chapter && <div className="chapter-drill-action"><p>{chapter.knowledgePointCount} 个知识点{chapter.trainableKnowledgePointCount>0?"，将按章节顺序轮流练习。":"，暂无可练正式题。"}</p><button className="hub-primary" disabled={chapter.trainableKnowledgePointCount===0} onClick={start}>{chapter.trainableKnowledgePointCount>0?"开始章节练习":"暂无可练正式题"}</button></div>}
+      {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
-    <section className="hub-panel wrong-entry"><div><h2>错题练习</h2><p>当前待重做 {wrongCount} 题</p></div><HubLink className="hub-primary" href="/wrong-questions">进入错题练习</HubLink></section>
-    <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个可学习知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
+      <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><HubLink className="hub-primary" href="/wrong-questions">进入错题本</HubLink></section>
+    <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
     {message&&<p className="hub-message">{message}</p>}
   </main></Shell>;
 }
 
 function BooksPage({ data }: { data: HubBootstrap }) {
-  const [items,setItems]=useState<KnowledgeDirectoryItem[]>([]); const [query,setQuery]=useState(""); const [bookId,setBookId]=useState(""); const [chapterId,setChapterId]=useState(""); const [book,setBook]=useState<BookDetail>(); const [error,setError]=useState(""); const [page,setPage]=useState(0); const [size,setSize]=useState(20); const [totalElements,setTotalElements]=useState(0); const [totalPages,setTotalPages]=useState(0);
-  const load=()=>platformApi.knowledgeDirectory({query,bookId,chapterId,page,size}).then(result=>{setItems(result.content);setTotalElements(result.totalElements);setTotalPages(result.totalPages)}).catch(reason=>setError((reason as Error).message));
-  useEffect(()=>{void load()},[query,bookId,chapterId,page,size]); useEffect(()=>{if(bookId)platformApi.book(bookId).then(setBook).catch(reason=>setError((reason as Error).message));else setBook(undefined)},[bookId]);
+  const [items,setItems]=useState<KnowledgeDirectoryItem[]>([]); const [query,setQuery]=useState(""); const [bookId,setBookId]=useState(""); const [chapterId,setChapterId]=useState(""); const [book,setBook]=useState<BookDetail>(); const [error,setError]=useState(""); const [page,setPage]=useState(0); const [totalElements,setTotalElements]=useState(0); const [totalPages,setTotalPages]=useState(0);
+  const load=()=>platformApi.knowledgeDirectory({query,bookId,chapterId,page,size:PAGE_SIZE}).then(result=>{setItems(result.content);setTotalElements(result.totalElements);setTotalPages(result.totalPages)}).catch(reason=>setError((reason as Error).message));
+  useEffect(()=>{void load()},[query,bookId,chapterId,page]); useEffect(()=>{if(bookId)platformApi.book(bookId).then(setBook).catch(reason=>setError((reason as Error).message));else setBook(undefined)},[bookId]);
   const selectedBooks=data.bankManifest.filter(item=>data.studyProfile.selectedBookIds.includes(item.id)); const chapters=book?flattenChapters(book.chapters):[];
   const reset=()=>setPage(0);
-  return <Shell data={data}><main className="hub-main question-bank-page"><h1>题库</h1>{error&&<p className="hub-error">{error}</p>}
+  return <Shell data={data}><main className="hub-main question-bank-page">{error&&<p className="hub-error">{error}</p>}
     <div className="bank-filters"><input value={query} onChange={e=>{setQuery(e.target.value);reset()}} placeholder="搜索知识点名称"/><select value={bookId} onChange={e=>{setBookId(e.target.value);setChapterId("");reset()}}><option value="">全部文集</option>{selectedBooks.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select><select value={chapterId} onChange={e=>{setChapterId(e.target.value);reset()}} disabled={!bookId}><option value="">全部章节</option>{chapters.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
-    <div className="knowledge-directory">{items.map(item=><HubLink className="hub-panel" href={`/knowledge/${item.id}`} key={item.id}><div><h2>{item.name}</h2></div><p>{item.subject} · {item.catalogChapter||item.chapter}</p><b>{item.publishedQuestionCount}</b><small>道已发布题目</small></HubLink>)}</div>{items.length===0&&<p className="empty-state">没有符合条件的知识点。</p>}
-    <div className="directory-pagination"><span>共 {totalElements} 个知识点</span><span>第 {totalPages?page+1:0} / {totalPages} 页</span><label>每页 <select value={size} onChange={e=>{setSize(Number(e.target.value));reset()}}><option value={20}>20</option><option value={50}>50</option></select></label><button disabled={page===0} onClick={()=>setPage(value=>value-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(value=>value+1)}>下一页</button></div>
+    <div className="knowledge-directory">{items.map(item=><HubLink className="hub-panel" href={`/knowledge/${item.id}?bookId=${encodeURIComponent(item.bookId)}&chapterId=${encodeURIComponent(item.chapterId)}`} key={item.id}><div><h2>{item.name}</h2></div><p>{item.bookName} · {item.catalogChapter}</p><b>{item.publishedQuestionCount}</b><small>道已发布题目</small></HubLink>)}</div>{items.length===0&&<p className="empty-state">没有符合条件的知识点。</p>}
+    <div className="directory-pagination"><span>共 {totalElements} 个知识点</span><span>第 {totalPages?page+1:0} / {totalPages} 页</span><button disabled={page===0} onClick={()=>setPage(value=>value-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(value=>value+1)}>下一页</button></div>
   </main></Shell>;
 }
 
+function ActivityBarChart({ title, days, values, unit }: { title: string; days: number; values: { date: string; value: number }[]; unit: string }) {
+  const max = Math.max(1, ...values.map(item => item.value));
+  const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
+  const ticks = [ceiling, Math.round(ceiling / 2), 0];
+  const every = days === 7 ? 1 : days === 30 ? 5 : 14;
+  const empty = values.every(item => item.value === 0);
+  return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
+    <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
+    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=><div className="chart-column" title={`${item.date}：${item.value} ${unit}`} key={item.date}><i style={{height:`${item.value/ceiling*100}%`}}/><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>)}</div><div className="chart-x-title">日期</div></div>
+  </div></section>;
+}
+
 function StatisticsPage({ data }: { data: HubBootstrap }) {
-  const [days,setDays]=useState<7|30|90>(30); const [stats,setStats]=useState<LearnerStatistics>(); const [error,setError]=useState("");
+  const [days,setDays]=useState<7|30|90>(7); const [stats,setStats]=useState<LearnerStatistics>(); const [error,setError]=useState("");
   useEffect(()=>{setStats(undefined);platformApi.statistics(days).then(setStats).catch(reason=>setError((reason as Error).message))},[days]);
-  const maxAttempts=Math.max(1,...(stats?.daily.map(item=>item.gradedAttempts)||[1])); const maxPoints=Math.max(1,...(stats?.daily.map(item=>item.distinctKnowledgePoints)||[1])); const outcomeTotal=(stats?.summary.correct||0)+(stats?.summary.partial||0)+(stats?.summary.wrong||0)||1;
+  const outcomeTotal=(stats?.summary.correct||0)+(stats?.summary.partial||0)+(stats?.summary.wrong||0)||1;
   return <Shell data={data}><main className="hub-main statistics-page"><div className="panel-heading"><h1>学习统计</h1><div className="segmented">{([7,30,90] as const).map(value=><button className={days===value?"active":""} onClick={()=>setDays(value)} key={value}>近 {value} 天</button>)}</div></div>{error&&<p className="hub-error">{error}</p>}{!stats&&!error&&<p>正在整理统计…</p>}{stats&&<>
     <section className="statistics-summary"><article><b>{stats.summary.gradedAttempts}</b><span>正式作答</span></article><article><b>{stats.summary.activeStudyDays}</b><span>活跃学习日</span></article><article><b>{stats.summary.distinctKnowledgePoints}</b><span>接触知识点</span></article><article><b>{stats.summary.knowledgeDrillAttempts}</b><span>专项作答</span></article><article><b>{stats.summary.wrongReviewAttempts}</b><span>错题作答</span></article><article><b>{stats.summary.worldAttempts}</b><span>世界作答</span></article></section>
-    <section className="hub-panel"><h2>每日正式作答</h2><div className="stats-bars">{stats.daily.map(day=><i title={`${day.date}：${day.gradedAttempts}`} key={day.date} style={{height:`${Math.max(day.gradedAttempts?4:0,day.gradedAttempts/maxAttempts*100)}%`}}/>)}</div></section>
-    <section className="hub-panel"><h2>每日接触知识点</h2><div className="stats-bars secondary">{stats.daily.map(day=><i title={`${day.date}：${day.distinctKnowledgePoints}`} key={day.date} style={{height:`${Math.max(day.distinctKnowledgePoints?4:0,day.distinctKnowledgePoints/maxPoints*100)}%`}}/>)}</div></section>
+    <ActivityBarChart title="每日正式作答" days={days} unit="题" values={stats.daily.map(day=>({date:day.date,value:day.gradedAttempts}))}/>
+    <ActivityBarChart title="每日接触知识点" days={days} unit="个" values={stats.daily.map(day=>({date:day.date,value:day.distinctKnowledgePoints}))}/>
     <section className="statistics-grid"><article className="hub-panel"><h2>正式作答结果分布</h2>{[["正确",stats.summary.correct],["部分正确",stats.summary.partial],["需巩固",stats.summary.wrong]].map(([label,value])=><div className="horizontal-stat" key={String(label)}><span>{label}</span><i><b style={{width:`${Number(value)/outcomeTotal*100}%`}}/></i><strong>{value}</strong></div>)}</article><article className="hub-panel"><h2>文集掌握进度</h2>{stats.books.map(book=><div className="horizontal-stat" key={book.bookId}><span>{book.name}</span><i><b style={{width:`${book.masteryProgress}%`}}/></i><strong>{Math.round(book.masteryProgress)}%</strong></div>)}</article></section>
   </>}</main></Shell>;
 }
 
-const bandLabel: Record<KnowledgeState["band"], string> = { unstarted: "未开始", unmastered: "未掌握", learning: "学习中", ready: "基本掌握", proficient: "熟练掌握" };
+const bandLabel: Record<KnowledgeState["band"], string> = progressBandLabels;
 
-function ChapterSection({ chapter, states }: { chapter: BookDetail["chapters"][number]; states: Map<string, KnowledgeState> }) {
-  return <section className="hub-panel"><h2>{chapter.name}</h2><p>{chapter.description}</p><div className="knowledge-links">{chapter.knowledgePoints.map(point => { const state = states.get(point.id); return <HubLink href={`/knowledge/${point.id}`} key={point.id}>{point.name}<small>{point.description}</small><span className={`mastery-band ${state?.band || "unstarted"}`}>{bandLabel[state?.band || "unstarted"]}{state?.evidenceCount ? ` · ${Math.round(state.effectiveMastery)}%` : ""}</span></HubLink> })}</div>{chapter.children?.map(child => <ChapterSection chapter={child} states={states} key={child.id} />)}</section>;
+function ChapterSection({ chapter, bookId, states }: { chapter: BookDetail["chapters"][number]; bookId: string; states: Map<string, KnowledgeState> }) {
+  return <section className="hub-panel"><h2>{chapter.name}</h2><p>{chapter.description}</p><div className="knowledge-links">{chapter.knowledgePoints.map(point => { const state = states.get(point.id); return <HubLink href={`/knowledge/${point.id}?bookId=${encodeURIComponent(bookId)}&chapterId=${encodeURIComponent(chapter.id)}`} key={point.id}>{point.name}<small>{point.description}</small><span className={`mastery-band ${state?.band || "unstarted"}`}>{bandLabel[state?.band || "unstarted"]}{state?.evidenceCount ? ` · ${state.effectiveMastery.toFixed(1)}%` : ""}</span></HubLink> })}</div></section>;
 }
 
 function BookPage({ data, id }: { data: HubBootstrap; id: string }) {
   const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
   useEffect(() => { Promise.all([platformApi.book(id), platformApi.knowledgeStatesForBook(id)]).then(([value, stateList]) => { setBook(value); setStates(new Map(stateList.map(state => [state.knowledgePointId, state]))) }).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p><p>{book.knowledgePointCount} 个可学习知识点 · {book.questionCount} 道已发布题目</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} states={states} key={chapter.id} />)}</>}</main></Shell>;
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p><p>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} bookId={book.id} states={states} key={chapter.id} />)}</>}</main></Shell>;
 }
 
-function ReadonlyQuestion({ question }: { question: BrowseQuestion }) { return <><div className="question-meta"><span>{question.examYear||""}{question.questionNumber?` · 第 ${question.questionNumber} 题`:""}</span><span>{questionTypeLabel[question.questionType] || "题目"}</span><span>难度 {question.difficulty}</span></div><section className="hub-panel rich"><RichText>{question.contentMarkdown}</RichText>{question.options?.map(option=><p className="readonly-option" key={option.key}><b>{option.key}.</b> <RichText>{option.text}</RichText></p>)}</section><div className="tag-row">{question.knowledgePoints?.map(point=><HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>)}</div></>; }
+function ReadonlyQuestion({ question }: { question: BrowseQuestion }) { return <><div className="question-meta"><span>{question.examYear||""}{question.questionNumber?` · 第 ${question.questionNumber} 题`:""}</span><span>{questionTypeLabel[question.questionType] || "题目"}</span><span>难度 {question.difficulty}</span></div><section className="hub-panel rich"><RichText>{question.contentMarkdown}</RichText>{question.options?.map(option=><p className="readonly-option" key={option.key}><b>{option.key}.</b> <RichText inline>{option.text}</RichText></p>)}</section><div className="tag-row">{question.knowledgePoints?.map(point=><HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>)}</div></>; }
 
-function QuestionPreviewCard({ summary }: { summary: BrowseQuestion }) { const [open,setOpen]=useState(false); const [question,setQuestion]=useState<BrowseQuestion>(); const toggle=async()=>{if(!open&&!question)setQuestion(await platformApi.question(summary.id));setOpen(v=>!v)}; return <article className="hub-panel question-summary"><div><p>{summary.sourceName||sourceTypeLabel[summary.sourceType]||"题目"}{summary.examYear?` · ${summary.examYear}`:""}{summary.questionNumber?` · ${summary.questionNumber}题`:""}</p><h3><RichText>{summary.contentMarkdown}</RichText></h3><div className="tag-row">{summary.knowledgePoints?.map(point=><span className={`knowledge-tag ${point.role||"core"}`} key={point.id}>{point.name}</span>)}</div></div><div className="question-summary-actions"><button onClick={toggle}>{open?"收起预览":"预览"}</button><HubLink href={`/questions/${summary.id}`}>查看答案与解析</HubLink></div>{open&&question&&<div className="inline-question-preview"><ReadonlyQuestion question={question}/></div>}</article>; }
+export function QuestionPreviewCard({ summary }: { summary: BrowseQuestion }) { const [open,setOpen]=useState(false); const [question,setQuestion]=useState<BrowseQuestion>(); const toggle=async()=>{if(!open&&!question)setQuestion(await platformApi.question(summary.id));setOpen(v=>!v)}; return <article className="hub-panel question-summary"><div><p>{summary.sourceName||sourceTypeLabel[summary.sourceType]||"题目"}{summary.examYear?` · ${summary.examYear}`:""}{summary.questionNumber?` · ${summary.questionNumber}题`:""}{summary.learnerQuestionStatus==="mastered"&&<span className="question-mastered">✓ 已掌握</span>}</p><h3><RichText>{summary.contentMarkdown}</RichText></h3><div className="tag-row">{summary.knowledgePoints?.map(point=><span className={`knowledge-tag ${point.role||"core"}`} key={point.id}>{point.name}</span>)}</div></div><div className="question-summary-actions"><button onClick={toggle}>{open?"收起预览":"预览"}</button><HubLink href={`/questions/${summary.id}`}>查看答案与解析</HubLink></div>{open&&question&&<div className="inline-question-preview"><ReadonlyQuestion question={question}/></div>}</article>; }
 
 function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
-  const [point,setPoint]=useState<(KnowledgePoint&{books:{id:string;name:string}[]})>(); const [questions,setQuestions]=useState<BrowseQuestion[]>([]); const [state,setState]=useState<KnowledgeState>(); const [error,setError]=useState("");
+  const [point,setPoint]=useState<(KnowledgePoint&{books:{id:string;name:string;chapterId:string;chapterName:string}[]})>(); const [questions,setQuestions]=useState<BrowseQuestion[]>([]); const [state,setState]=useState<KnowledgeState>(); const [neighbors,setNeighbors]=useState<Awaited<ReturnType<typeof platformApi.knowledgeNeighbors>>>(); const [guide,setGuide]=useState<Awaited<ReturnType<typeof platformApi.knowledgeGuide>>>(); const [guideOpen,setGuideOpen]=useState(false); const [error,setError]=useState("");
   useEffect(()=>{Promise.all([platformApi.knowledge(id),platformApi.knowledgeQuestions(id),platformApi.knowledgeState(id)]).then(([p,q,s])=>{setPoint(p);setQuestions(q);setState(s)}).catch(e=>setError(e.message))},[id]);
-  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);go(`/practice/${session.id}`)}catch(reason){setError((reason as Error).message)}};
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{point.subject} · {point.section} · {point.chapter}</p><h1>{point.name}</h1><button className="hub-primary" onClick={start}>开始知识点专项练习</button>{state&&<section className="hub-panel mastery-summary"><h2>当前状态</h2><p className="mastery-score"><b>{bandLabel[state.band]}</b> · {Math.round(state.effectiveMastery)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<section className="hub-panel rich"><RichText>{point.explanation||point.description}</RichText></section><h2>相关已发布题目</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}</>}</main></Shell>;
+  const requestedBook=new URLSearchParams(window.location.search).get("bookId"); const requestedChapter=new URLSearchParams(window.location.search).get("chapterId");
+  const context=point?.books.find(item=>item.id===requestedBook&&item.chapterId===requestedChapter)||point?.books[0];
+  useEffect(()=>{if(context)platformApi.knowledgeNeighbors(id,context.id,context.chapterId).then(setNeighbors).catch(()=>setNeighbors(undefined))},[id,context?.id,context?.chapterId]);
+  const contextQuery=context?`?bookId=${encodeURIComponent(context.id)}&chapterId=${encodeURIComponent(context.chapterId)}`:"";
+  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
+  const openGuide=async()=>{setGuideOpen(true);try{setGuide(await platformApi.knowledgeGuide(id))}catch(reason){setError((reason as Error).message)}};
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{context?`${context.name} · ${context.chapterName}`:"知识点"}</p><h1>{point.name}</h1><div className="knowledge-actions"><button className="hub-primary" onClick={start}>开始知识点练习</button><button onClick={openGuide}>知识讲解</button>{neighbors?.next?<HubLink href={`/knowledge/${neighbors.next.id}?bookId=${encodeURIComponent(context!.id)}&chapterId=${encodeURIComponent(neighbors.next.chapterId)}`}>下一个知识点 →</HubLink>:<span className="muted">已到文集末尾</span>}</div>{state&&<section className={`hub-panel mastery-summary ${state.band==="proficient"?"mastery-perfect":""}`}><h2>当前状态</h2><p className="mastery-score"><b>{state.band==="proficient"?"✦ ":""}{bandLabel[state.band]}</b> · {state.effectiveMastery.toFixed(1)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<h2>相关正式真题</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}{guideOpen&&<Modal title={`${point.name} · 知识讲解`} wide close={()=>setGuideOpen(false)}>{guide===undefined?<p>正在载入知识讲解…</p>:guide.contentMarkdown?<div className="rich"><RichText>{guide.contentMarkdown}</RichText></div>:<div className="empty-state"><h3>知识讲解尚未录入</h3></div>}</Modal>}</>}</main></Shell>;
 }
 
-function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
+export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   const [items, setItems] = useState<WrongQuestion[]>([]); const [error, setError] = useState("");
-  useEffect(() => { platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message)); }, []);
-  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(`/practice/${session.id}`); } catch (reason) { setError((reason as Error).message); } };
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回知境中枢</HubLink><p className="eyebrow">错题练习</p><h1>错题练习</h1>
-    <p>这里只保留每道题最近一次正式作答仍需重做的项目，不展示错误次数或错误率。</p>{error && <p className="hub-error">{error}</p>}
-    {items.length === 0 && <section className="hub-panel"><h2>当前没有待重做题目</h2><p>之后若同一道题出现错误或部分正确，会自动出现在这里。</p></section>}
-    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><p className="eyebrow">{item.subject} · {item.chapter}</p><h2>{item.knowledgePointName}</h2><p>{item.summary}</p><small>最近一次：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small><button className="hub-primary" onClick={() => start(item.questionId)}>重做这道题</button></article>)}</div>
+  const load=()=>platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message));
+  useEffect(() => { void load(); }, []);
+  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(practicePath(session.id,"/wrong-questions")); } catch (reason) { setError((reason as Error).message); } };
+  const remove = async (questionId: string) => {
+    if (!window.confirm("确认已经掌握这道题并将它移出错题本吗？\n如果以后再次做错，它会自动重新加入。")) return;
+    try { await platformApi.removeWrongQuestion(questionId); await load(); } catch (reason) { setError((reason as Error).message); }
+  };
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
+    {error && <p className="hub-error">{error}</p>}
+    {items.length === 0 && <section className="hub-panel"><h2>错题本还是空的</h2></section>}
+    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><h2>{item.knowledgePointName}</h2><div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">该题当前不可练习</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
   </main></Shell>;
 }
 
-function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
+export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const [session, setSession] = useState<PracticeSession>(); const [selected, setSelected] = useState<string[]>([]); const [error, setError] = useState("");
   const load = () => platformApi.practice(id).then(value => { setSession(value); setSelected([]); }).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, [id]);
@@ -224,16 +257,18 @@ function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
     setSession(await platformApi.answerPractice(session, answer));
   } catch (reason) { setError((reason as Error).message); } };
   const update = (action: Promise<PracticeSession>) => action.then(value => { setSession(value); setSelected([]); setError(""); }).catch(reason => setError((reason as Error).message));
-  const finish = async () => { try { await platformApi.endPractice(id); go(session.intent === "wrong_review" ? "/wrong-questions" : `/knowledge/${session.targetKnowledgePointId}`); } catch (reason) { setError((reason as Error).message); } };
-  return <Shell data={data}><main className="hub-main narrow practice-page"><button className="practice-exit" onClick={finish}>← 结束并返回</button><p className="eyebrow">{session.intent === "wrong_review" ? "错题重做" : "知识点专项"} · {attempt.targetKnowledgePointName}</p>
-    <h1>{attempt.evidenceMode === "training" ? "补救训练" : "正式练习"}</h1>{error && <p className="hub-error">{error}</p>}
-    <section className="hub-panel rich"><RichText>{question.question}</RichText><div className="practice-options">{Object.entries(practiceOptions).map(([key, text]) => <button className={selected.includes(key) ? "selected" : ""} disabled={attempt.status !== "active"} key={key} onClick={() => toggle(key)}><b>{key}.</b> {text}</button>)}</div></section>
+  const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
+  const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer"><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</section>;
+  const assessment = attempt.assessment || "wrong";
+  const practiceLabel=session.intent === "wrong_review" ? "错题重做" : session.intent === "chapter_drill" ? "章节知识练习" : "知识点练习";
+  return <Shell data={data}><main className="hub-main narrow practice-page"><button className="practice-exit" onClick={finish}>← 结束并返回</button><p className="eyebrow">{practiceLabel} · {attempt.targetKnowledgePointName}</p>
+    <h1>{attempt.evidenceMode === "remedial" ? "分步讲练" : attempt.evidenceMode === "training" ? "补救训练" : "正式练习"}</h1>{error && <p className="hub-error">{error}</p>}
+    <section className="hub-panel rich"><RichText>{question.question}</RichText><div className="practice-options">{Object.entries(practiceOptions).map(([key, text]) => <button className={selected.includes(key) ? "selected" : ""} disabled={attempt.status !== "active"} key={key} onClick={() => toggle(key)}><b>{key}.</b><RichText inline>{text}</RichText></button>)}</div></section>
     {attempt.status === "active" && question.gradingMode === "auto" && <button className="hub-primary" disabled={!selected.length} onClick={submit}>提交答案</button>}
     {attempt.status === "active" && question.gradingMode === "self_assessment" && <button className="hub-primary" onClick={() => update(platformApi.revealPractice(session))}>查看参考答案并自评</button>}
-    {attempt.answerRevealed && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(attempt.standard, null, 2)}</pre>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</section>}
-    {attempt.status === "revealed" && <div className="practice-assessment"><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div>}
-    {attempt.status === "graded" && <section className="hub-panel"><h2>{attempt.assessment === "correct" ? "本题已掌握" : attempt.assessment === "partial" ? "已有部分思路" : "错处已记录"}</h2><p>{session.flowComplete ? "当前知识点流程已经完成。" : "继续进入同一套诊断或补救流程。"}</p></section>}
-    {attempt.status === "graded" && <div className="practice-actions">{session.flowComplete ? <>{session.canRepeat && <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>再来一道同知识点</button>}<button onClick={finish}>结束专项</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续学习流程</button>}</div>}
+    {attempt.status === "graded" && <section className={`practice-result ${assessment}`}><h2>{assessment === "correct" ? "✓ 回答正确" : assessment === "partial" ? "△ 部分正确" : "✕ 回答错误"}</h2><p>{session.flowComplete ? session.canRepeat ? "当前知识点流程已经完成。" : "本轮可练题目已完成" : "继续进入同一套诊断或补救流程。"}</p><div className="practice-actions">{session.flowComplete ? session.intent === "wrong_review" ? <button className="hub-primary" onClick={finish}>返回错题列表</button> : <>{session.canRepeat&&<button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>下一道题</button>}<button onClick={finish}>结束专项</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续下一题</button>}</div></section>}
+    {attempt.status === "revealed" && <>{answerDetails}<div className="practice-assessment"><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div></>}
+    {attempt.status === "graded" && answerDetails}
   </main></Shell>;
 }
 

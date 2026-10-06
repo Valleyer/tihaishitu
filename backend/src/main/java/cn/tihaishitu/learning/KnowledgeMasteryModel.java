@@ -30,6 +30,7 @@ public final class KnowledgeMasteryModel {
 
     public double effectiveMastery(State state, Instant now) {
         if (state.lastEvidenceAt() == null || state.evidenceCount() == 0) return 0;
+        if (MODEL_VERSION.equals(state.modelVersion())) return round(state.masteryScore());
         return round(clamp(MIN_MASTERY, MAX_MASTERY, state.masteryScore()
                 * Math.pow(2, -elapsedDays(state, now) / Math.max(MIN_STABILITY, state.stabilityDays()))));
     }

@@ -13,10 +13,11 @@ import java.util.Set;
 @Repository
 public class LearnerPracticeStore {
     public record Session(String id, String learnerId, String intent, String targetKnowledgePointId,
+                          String targetBookId, String targetChapterId, String currentKnowledgePointId,
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
-                                String subject, String chapter, String summary, Instant lastGradedAt) {}
+                                String contentMarkdown, Instant lastGradedAt, boolean available) {}
 
     private final JdbcTemplate jdbc;
 
@@ -34,6 +35,32 @@ public class LearnerPracticeStore {
                     INSERT INTO learner_practice_scope(session_id,knowledge_point_id) VALUES (?,?)
                     """, id, pointId);
         }
+    }
+
+    public void createChapter(String id,String learnerId,String bookId,String chapterId,String currentPointId,Set<String> scope){
+        jdbc.update("""
+                INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,
+                    target_book_id,target_chapter_id,current_knowledge_point_id,status,revision)
+                VALUES (?,?,'chapter_drill',NULL,?,?,?,'active',1)
+                """,id,learnerId,bookId,chapterId,currentPointId);
+        for(String pointId:scope)jdbc.update("INSERT INTO learner_practice_scope(session_id,knowledge_point_id) VALUES (?,?)",id,pointId);
+    }
+
+    public List<String> chapterKnowledgePoints(String learnerId,String bookId,String chapterId){
+        return jdbc.query("""
+                SELECT bk.knowledge_point_id FROM question_bank_knowledge bk
+                JOIN learner_selected_book selected ON selected.bank_id=bk.bank_id AND selected.learner_id=?
+                JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id AND k.status='active'
+                WHERE bk.bank_id=? AND bk.chapter_id=? AND %s ORDER BY bk.sort_order,bk.knowledge_point_id
+                """.formatted(TrainableKnowledge.exists("k")),(rs,row)->rs.getString(1),learnerId,bookId,chapterId);
+    }
+
+    public void setCurrentKnowledgePoint(String id,String learnerId,String pointId){
+        jdbc.update("UPDATE learner_practice_session SET current_knowledge_point_id=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND learner_id=? AND status='active'",pointId,id,learnerId);
+    }
+
+    public Optional<Session> latestActiveChapter(String learnerId){
+        return sessions("WHERE learner_id=? AND intent='chapter_drill' AND status='active' ORDER BY updated_at DESC LIMIT 1",learnerId).stream().findFirst();
     }
 
     public Optional<Session> find(String id, String learnerId) {
@@ -59,6 +86,11 @@ public class LearnerPracticeStore {
                 """, (rs, row) -> rs.getString(1), id));
     }
 
+    public int attemptCount(String sessionId,String questionId){
+        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM study_attempt WHERE practice_session_id=? AND question_id=?",Integer.class,sessionId,questionId);
+        return count==null?0:count;
+    }
+
     public void setCurrentAttempt(String id, String learnerId, String attemptId) {
         int changed = jdbc.update("""
                 UPDATE learner_practice_session
@@ -79,45 +111,46 @@ public class LearnerPracticeStore {
 
     public List<WrongQuestion> wrongQuestions(String learnerId) {
         return jdbc.query("""
-                SELECT a.question_id,a.target_knowledge_point_id,k.name knowledge_name,
-                       q.subject_name,k.chapter_name,q.content_markdown,a.answered_at
-                  FROM study_attempt a
-                  JOIN question_resource q ON q.id=a.question_id
-                  JOIN global_knowledge_point k ON k.id=a.target_knowledge_point_id
-                 WHERE a.learner_id=? AND a.status='graded' AND a.assessment IN ('wrong','partial')
-                   AND q.status='published'
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                   AND k.status='active'
-                   AND """ + " " + TrainableKnowledge.exists("k") + """
-                   AND NOT EXISTS (
-                       SELECT 1 FROM study_attempt newer
-                        WHERE newer.learner_id=a.learner_id AND newer.question_id=a.question_id
-                          AND newer.status='graded'
-                          AND (newer.answered_at>a.answered_at
-                               OR (newer.answered_at=a.answered_at AND newer.id>a.id))
-                   )
-                 ORDER BY a.answered_at DESC,a.id DESC
-                """, (rs, row) -> new WrongQuestion(rs.getString("question_id"),
+                SELECT wrong.question_id,wrong.target_knowledge_point_id,k.name knowledge_name,
+                       q.content_markdown,wrong.last_wrong_at,
+                       CASE WHEN q.status='published' AND q.parent_question_id IS NULL
+                                  AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                                  AND k.status='active' AND %s THEN TRUE ELSE FALSE END available
+                  FROM learner_wrong_question wrong
+                  JOIN question_resource q ON q.id=wrong.question_id
+                  JOIN global_knowledge_point k ON k.id=wrong.target_knowledge_point_id
+                 WHERE wrong.learner_id=? AND wrong.status='active'
+                 ORDER BY wrong.last_wrong_at DESC,wrong.question_id
+                """.formatted(TrainableKnowledge.exists("k")), (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
-                rs.getString("subject_name"), rs.getString("chapter_name"),
-                summary(rs.getString("content_markdown")), rs.getTimestamp("answered_at").toInstant()), learnerId);
+                rs.getString("content_markdown"), rs.getTimestamp("last_wrong_at").toInstant(),
+                rs.getBoolean("available")), learnerId);
+    }
+
+    public Optional<WrongQuestion> activeWrongQuestion(String learnerId, String questionId) {
+        return wrongQuestions(learnerId).stream().filter(item -> item.questionId().equals(questionId)).findFirst();
+    }
+
+    public boolean removeWrongQuestion(String learnerId, String questionId, Instant now) {
+        return jdbc.update("""
+                UPDATE learner_wrong_question SET status='removed',removed_at=?,updated_at=CURRENT_TIMESTAMP
+                 WHERE learner_id=? AND question_id=? AND status='active'
+                """, Timestamp.from(now), learnerId, questionId) == 1;
     }
 
     private List<Session> sessions(String predicate, Object... args) {
         return jdbc.query("""
-                SELECT id,learner_id,intent,target_knowledge_point_id,source_question_id,current_attempt_id,
+                SELECT id,learner_id,intent,target_knowledge_point_id,target_book_id,target_chapter_id,
+                       current_knowledge_point_id,source_question_id,current_attempt_id,
                        status,revision,created_at,updated_at,ended_at
                   FROM learner_practice_session %s
                 """.formatted(predicate), (rs, row) -> new Session(rs.getString("id"),
                 rs.getString("learner_id"), rs.getString("intent"), rs.getString("target_knowledge_point_id"),
+                rs.getString("target_book_id"),rs.getString("target_chapter_id"),rs.getString("current_knowledge_point_id"),
                 rs.getString("source_question_id"), rs.getString("current_attempt_id"), rs.getString("status"),
                 rs.getLong("revision"), rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(),
                 rs.getTimestamp("ended_at") == null ? null : rs.getTimestamp("ended_at").toInstant()), args);
     }
 
-    private static String summary(String value) {
-        String plain = value == null ? "" : value.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\s+", " ").trim();
-        return plain.length() <= 120 ? plain : plain.substring(0, 117) + "...";
-    }
 }

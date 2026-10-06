@@ -33,11 +33,11 @@ class ReviewQueueIntegrationTest {
         select(learner, firstBook);
         select(learner, secondBook);
 
-        states.save(learner, learning, state(60, 365, NOW));
-        states.save(learner, due, state(90, 10, NOW.minusSeconds(4 * 86_400L)));
-        states.save(learner, upcoming, state(90, 10, NOW.minusSeconds(12 * 3_600L)));
-        question(relation(due, "core"));
-        question(relation(upcoming, "core"), relation(learning, "auxiliary"));
+        states.save(learner, learning, state(0, 365, NOW));
+        String dueQuestion = question(relation(due, "core"));
+        String upcomingQuestion = question(relation(upcoming, "core"), relation(learning, "auxiliary"));
+        saveMastery(learner, due, dueQuestion, 90, 10, NOW.minusSeconds(4 * 86_400L));
+        saveMastery(learner, upcoming, upcomingQuestion, 90, 10, NOW.minusSeconds(12 * 3_600L));
         int stateCount = count("learner_knowledge_state");
         int evidenceCount = count("learner_knowledge_evidence");
 
@@ -86,7 +86,7 @@ class ReviewQueueIntegrationTest {
         jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)", learner, book);
     }
 
-    private void question(Relation... relations) {
+    private String question(Relation... relations) {
         String id = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
@@ -96,11 +96,24 @@ class ReviewQueueIntegrationTest {
         for (int index = 0; index < relations.length; index++)
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,?,?)",
                     id, relations[index].pointId(), relations[index].role(), index);
+        return id;
     }
 
     private static KnowledgeMasteryModel.State state(double mastery, double stability, Instant at) {
         return new KnowledgeMasteryModel.State(mastery, stability, 3, 1, 0, 0,
-                "correct", at, at, "v1", 1);
+                "correct", at, at, KnowledgeModelPolicy.MODEL_VERSION, 1);
+    }
+
+    private void saveMastery(String learner, String point, String question, double mastery,
+                             double stability, Instant at) {
+        java.time.LocalDate today = NOW.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+        jdbc.update("""
+                INSERT INTO learner_question_mastery(learner_id,knowledge_point_id,question_id,score,
+                    first_correct_at,last_correct_at,last_reward_date,last_decay_date,last_assessment,last_attempt_at,
+                    decay_frozen,revision) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE,1)
+                """, learner, point, question, mastery, java.sql.Timestamp.from(at), java.sql.Timestamp.from(at),
+                java.sql.Date.valueOf(today), java.sql.Date.valueOf(today), "correct", java.sql.Timestamp.from(at));
+        states.save(learner, point, state(mastery, stability, at));
     }
 
     private int count(String table) {

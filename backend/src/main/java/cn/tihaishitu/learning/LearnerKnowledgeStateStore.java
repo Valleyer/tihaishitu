@@ -29,6 +29,14 @@ public class LearnerKnowledgeStateStore {
                 """, (rs, row) -> state(rs), learnerId, pointId).stream().findFirst();
     }
 
+    public List<StateIdentity> legacyStates() {
+        return jdbc.query("""
+                SELECT learner_id,knowledge_point_id FROM learner_knowledge_state
+                 WHERE model_version<>? ORDER BY learner_id,knowledge_point_id
+                """, (rs, row) -> new StateIdentity(rs.getString(1), rs.getString(2)),
+                KnowledgeModelPolicy.MODEL_VERSION);
+    }
+
     public List<StateRow> findForKnowledgePoints(String learnerId, Collection<String> pointIds) {
         if (pointIds.isEmpty()) return List.of();
         List<Object> args = new ArrayList<>();
@@ -142,6 +150,9 @@ public class LearnerKnowledgeStateStore {
                 SELECT learner_id FROM learner_diagnosis_session
                  WHERE target_knowledge_point_id IN (?, ?)
                 UNION
+                SELECT learner_id FROM learner_wrong_question
+                 WHERE target_knowledge_point_id IN (?, ?)
+                UNION
                 SELECT s.learner_id
                   FROM learner_diagnosis_dependency d
                   JOIN learner_diagnosis_session s ON s.id=d.diagnosis_id
@@ -149,7 +160,7 @@ public class LearnerKnowledgeStateStore {
                 ORDER BY learner_id
                 """, (rs, row) -> rs.getString(1), sourceId, targetId, sourceId, targetId,
                 sourceId, targetId, sourceId, targetId, sourceId, targetId, sourceId, targetId,
-                sourceId, targetId, sourceId, targetId);
+                sourceId, targetId, sourceId, targetId, sourceId, targetId);
     }
 
     public void canonicalizeForMerge(String sourceId, String targetId) {
@@ -179,6 +190,9 @@ public class LearnerKnowledgeStateStore {
         }
         jdbc.update("UPDATE learner_knowledge_evidence SET knowledge_point_id = ? WHERE knowledge_point_id = ?", targetId, sourceId);
         jdbc.update("UPDATE study_attempt SET target_knowledge_point_id = ? WHERE target_knowledge_point_id = ?", targetId, sourceId);
+        jdbc.update("UPDATE learner_wrong_question SET target_knowledge_point_id=? WHERE target_knowledge_point_id=?",
+                targetId, sourceId);
+        jdbc.update("UPDATE learner_practice_session SET current_knowledge_point_id=? WHERE current_knowledge_point_id=?", targetId, sourceId);
         canonicalizePracticeScopes(sourceId, targetId);
         jdbc.update("""
                 UPDATE learner_practice_session
@@ -300,6 +314,7 @@ public class LearnerKnowledgeStateStore {
         return String.join(",", java.util.Collections.nCopies(count, "?"));
     }
     public record StateRow(String knowledgePointId, KnowledgeMasteryModel.State state) {}
+    public record StateIdentity(String learnerId, String knowledgePointId) {}
     private record FocusRow(String learnerId, int sortOrder) {}
     private record DiagnosisDependencyRow(String diagnosisId, int sortOrder, String status) {}
 }

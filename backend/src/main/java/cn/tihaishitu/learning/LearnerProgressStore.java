@@ -7,15 +7,17 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Repository
 public class LearnerProgressStore {
     public record BookRow(String id, String name, String description) {}
-    public record ChapterRow(String id, String bookId, String parentId, String code, String name) {}
+    public record ChapterRow(String id, String bookId, String code, String name) {}
     public record MembershipRow(String bookId, String chapterId, String knowledgePointId,
                                 String name, String subject, String section, String chapter) {}
     public record RecentTotals(int gradedAttempts, int distinctKnowledgePoints) {}
-    public record DailyRow(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
+    public record DailyRow(LocalDate date, int gradedAttempts, Set<String> knowledgePointIds) {}
+    public record RecentAttempt(Instant answeredAt, String knowledgePointId) {}
 
     private final JdbcTemplate jdbc;
 
@@ -40,14 +42,14 @@ public class LearnerProgressStore {
 
     public List<ChapterRow> selectedChapters(String learnerId) {
         return jdbc.query("""
-                SELECT c.id,c.bank_id,c.parent_id,c.chapter_code,c.name
+                SELECT c.id,c.bank_id,c.chapter_code,c.name
                   FROM learner_selected_book selected
                   JOIN question_bank b ON b.id=selected.bank_id AND b.enabled=TRUE
                   JOIN question_bank_chapter c ON c.bank_id=b.id
                  WHERE selected.learner_id=?
                  ORDER BY selected.created_at,c.sort_order,c.id
                 """, (rs, row) -> new ChapterRow(rs.getString("id"), rs.getString("bank_id"),
-                rs.getString("parent_id"), rs.getString("chapter_code"), rs.getString("name")), learnerId);
+                rs.getString("chapter_code"), rs.getString("name")), learnerId);
     }
 
     public List<MembershipRow> selectedMemberships(String learnerId) {
@@ -70,22 +72,26 @@ public class LearnerProgressStore {
         return jdbc.query("""
                 SELECT COUNT(*) graded_attempts,
                        COUNT(DISTINCT target_knowledge_point_id) distinct_points
-                  FROM study_attempt
-                 WHERE learner_id=? AND status='graded' AND answered_at>=? AND answered_at<=?
+                  FROM study_attempt a
+                  JOIN question_resource q ON q.id=a.question_id
+                 WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
+                   AND q.status='published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                 """, (rs, row) -> new RecentTotals(rs.getInt("graded_attempts"),
                 rs.getInt("distinct_points")), learnerId, Timestamp.from(from), Timestamp.from(through)).get(0);
     }
 
-    public List<DailyRow> recentDaily(String learnerId, Instant from, Instant through) {
+    public List<RecentAttempt> recentAttempts(String learnerId, Instant from, Instant through) {
         return jdbc.query("""
-                SELECT CAST(answered_at AS DATE) study_date,COUNT(*) graded_attempts,
-                       COUNT(DISTINCT target_knowledge_point_id) distinct_points
-                  FROM study_attempt
-                 WHERE learner_id=? AND status='graded' AND answered_at>=? AND answered_at<=?
-                 GROUP BY CAST(answered_at AS DATE)
-                 ORDER BY study_date
-                """, (rs, row) -> new DailyRow(rs.getDate("study_date").toLocalDate(),
-                rs.getInt("graded_attempts"), rs.getInt("distinct_points")), learnerId,
+                SELECT answered_at,target_knowledge_point_id
+                  FROM study_attempt a
+                  JOIN question_resource q ON q.id=a.question_id
+                 WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
+                   AND q.status='published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                 ORDER BY answered_at,a.id
+                """, (rs, row) -> new RecentAttempt(rs.getTimestamp("answered_at").toInstant(),
+                rs.getString("target_knowledge_point_id")), learnerId,
                 Timestamp.from(from), Timestamp.from(through));
     }
 }

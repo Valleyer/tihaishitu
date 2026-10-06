@@ -191,12 +191,29 @@ abstract class DiagnosticWorldTestSupport {
     }
 
     void ready(String learner, String point) {
+        List<String> formalQuestions = jdbc.queryForList("""
+                SELECT q.id FROM question_resource q
+                JOIN question_resource_knowledge qk ON qk.question_id=q.id
+                WHERE qk.knowledge_point_id=? AND qk.relation_role='core' AND q.status='published'
+                  AND q.parent_question_id IS NULL
+                """, String.class, point);
+        if (formalQuestions.isEmpty()) {
+            String unavailableDependency = knowledge("BLOCKER");
+            formalQuestions = List.of(question(2, List.of(
+                    relation(point, "core"), relation(unavailableDependency, "auxiliary"))));
+        }
         jdbc.update("""
                 INSERT INTO learner_knowledge_state(learner_id,knowledge_point_id,mastery_score,stability_days,
                     target_difficulty,evidence_count,correct_streak,wrong_streak,last_outcome,last_evidence_at,
                     last_correct_at,model_version,revision)
-                VALUES (?,?,100,365,2,1,1,0,'correct',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'v1',1)
+                VALUES (?,?,100,365,2,1,1,0,'correct',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'v3-question-reinforcement',1)
                 """, learner, point);
+        formalQuestions.forEach(question -> jdbc.update("""
+                INSERT INTO learner_question_mastery(learner_id,knowledge_point_id,question_id,score,
+                    first_correct_at,last_correct_at,last_reward_date,last_decay_date,last_assessment,last_attempt_at,
+                    decay_frozen,revision)
+                VALUES (?,?,?,100,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_DATE,CURRENT_DATE,NULL,CURRENT_TIMESTAMP,TRUE,1)
+                """, learner, point, question));
     }
 
     static Relation relation(String point, String role) { return new Relation(point, role); }

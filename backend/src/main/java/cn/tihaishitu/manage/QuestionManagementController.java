@@ -42,7 +42,7 @@ public class QuestionManagementController {
             @RequestParam(required = false) String creator,
             @RequestParam(required = false) String knowledge,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "30") @Min(1) int size) {
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
         return store.search(query, subject, sourceType, examYear, questionType, gradingMode, status,
                 creator, knowledge, page, Math.min(size, 100));
     }

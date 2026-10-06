@@ -8,11 +8,12 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 public class LearnerStatisticsService {
@@ -32,41 +33,45 @@ public class LearnerStatisticsService {
         }
         String learnerId = LearnerContext.learnerId();
         Instant now = clock.instant();
-        LocalDate today = now.atZone(ZoneOffset.UTC).toLocalDate();
-        Instant from = today.minusDays(days - 1L).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Summary summary = jdbc.query("""
-                SELECT COUNT(*) graded_attempts,
-                       COUNT(DISTINCT CAST(a.answered_at AS DATE)) active_days,
-                       COUNT(DISTINCT a.target_knowledge_point_id) distinct_points,
-                       SUM(CASE WHEN p.intent='knowledge_drill' THEN 1 ELSE 0 END) knowledge_drill,
-                       SUM(CASE WHEN p.intent='wrong_review' THEN 1 ELSE 0 END) wrong_review,
-                       SUM(CASE WHEN a.world_id IS NOT NULL THEN 1 ELSE 0 END) world_attempts,
-                       SUM(CASE WHEN a.assessment='correct' THEN 1 ELSE 0 END) correct_count,
-                       SUM(CASE WHEN a.assessment='partial' THEN 1 ELSE 0 END) partial_count,
-                       SUM(CASE WHEN a.assessment='wrong' THEN 1 ELSE 0 END) wrong_count
+        LocalDate today = now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+        Instant from = today.minusDays(days - 1L).atStartOfDay(LearnerQuestionMasteryStore.BUSINESS_ZONE).toInstant();
+        record Activity(Instant answeredAt, String pointId, String intent, boolean world, String assessment) {}
+        List<Activity> activities = jdbc.query("""
+                SELECT a.answered_at,a.target_knowledge_point_id,p.intent,a.world_id,a.assessment
                   FROM study_attempt a
+                  JOIN question_resource q ON q.id=a.question_id
                   LEFT JOIN learner_practice_session p ON p.id=a.practice_session_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
-                """, (row, index) -> new Summary(row.getInt("graded_attempts"), row.getInt("active_days"),
-                row.getInt("distinct_points"), row.getInt("knowledge_drill"), row.getInt("wrong_review"),
-                row.getInt("world_attempts"), row.getInt("correct_count"), row.getInt("partial_count"),
-                row.getInt("wrong_count")), learnerId, Timestamp.from(from), Timestamp.from(now)).get(0);
+                   AND q.status='published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                 ORDER BY a.answered_at,a.id
+                """, (row, index) -> new Activity(row.getTimestamp("answered_at").toInstant(),
+                row.getString("target_knowledge_point_id"), row.getString("intent"),
+                row.getString("world_id") != null, row.getString("assessment")),
+                learnerId, Timestamp.from(from), Timestamp.from(now));
 
-        Map<LocalDate, Daily> byDate = new HashMap<>();
-        jdbc.query("""
-                SELECT CAST(answered_at AS DATE) study_date, COUNT(*) graded_attempts,
-                       COUNT(DISTINCT target_knowledge_point_id) distinct_points
-                  FROM study_attempt
-                 WHERE learner_id=? AND status='graded' AND answered_at>=? AND answered_at<=?
-                 GROUP BY CAST(answered_at AS DATE)
-                """, row -> {
-            LocalDate date = row.getDate("study_date").toLocalDate();
-            byDate.put(date, new Daily(date, row.getInt("graded_attempts"), row.getInt("distinct_points")));
-        }, learnerId, Timestamp.from(from), Timestamp.from(now));
+        Set<LocalDate> activeDates = new HashSet<>();
+        Set<String> points = new HashSet<>();
+        Map<LocalDate, List<Activity>> byDate = new HashMap<>();
+        int knowledgeDrill = 0, wrongReview = 0, worldAttempts = 0, correct = 0, partial = 0, wrong = 0;
+        for (Activity activity : activities) {
+            LocalDate date = activity.answeredAt().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+            activeDates.add(date); points.add(activity.pointId());
+            byDate.computeIfAbsent(date, ignored -> new ArrayList<>()).add(activity);
+            if ("knowledge_drill".equals(activity.intent())) knowledgeDrill++;
+            if ("wrong_review".equals(activity.intent())) wrongReview++;
+            if (activity.world()) worldAttempts++;
+            if ("correct".equals(activity.assessment())) correct++;
+            else if ("partial".equals(activity.assessment())) partial++;
+            else if ("wrong".equals(activity.assessment())) wrong++;
+        }
+        Summary summary = new Summary(activities.size(), activeDates.size(), points.size(), knowledgeDrill,
+                wrongReview, worldAttempts, correct, partial, wrong);
         List<Daily> daily = new ArrayList<>();
         for (int offset = days - 1; offset >= 0; offset--) {
             LocalDate date = today.minusDays(offset);
-            daily.add(byDate.getOrDefault(date, new Daily(date, 0, 0)));
+            List<Activity> rows = byDate.getOrDefault(date, List.of());
+            daily.add(new Daily(date, rows.size(), (int) rows.stream().map(Activity::pointId).distinct().count()));
         }
 
         List<BookMastery> books = progress.progressAt(learnerId, now).books().stream()

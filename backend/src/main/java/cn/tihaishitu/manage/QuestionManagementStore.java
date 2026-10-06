@@ -160,6 +160,7 @@ public class QuestionManagementStore {
                         + placeholders + ")", (row, index) -> row.getString("bank_id"), ids.toArray());
         jdbc.update("UPDATE learner_practice_session SET source_question_id=NULL WHERE status='ended' "
                 + "AND source_question_id IN (" + placeholders + ")", ids.toArray());
+        jdbc.update("DELETE FROM learner_question_mastery WHERE question_id IN (" + placeholders + ")", ids.toArray());
 
         Map<String, String> parents = new LinkedHashMap<>();
         rows.forEach(row -> parents.put(row.id(), row.parentId()));

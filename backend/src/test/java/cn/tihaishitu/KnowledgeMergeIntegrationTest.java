@@ -77,6 +77,7 @@ class KnowledgeMergeIntegrationTest {
     void mergeMigratesAndCollapsesRelationsWithoutDeletingSource() throws Exception {
         Cookie admin = login("merge-admin", "merge-admin-test-password");
         Cookie reviewer = login("merge-reviewer", "merge-reviewer-test-password");
+        jdbc.update("UPDATE global_knowledge_point SET subject_name='408' WHERE id=?", targetId);
         String request = mapper.writeValueAsString(Map.of(
                 "targetId", targetId, "reason", "细分口径重复，统一到正式知识点", "expectedRevision", 1));
 

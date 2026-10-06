@@ -39,10 +39,20 @@ public class KnowledgeManagementController {
             @RequestParam(required = false) String section,
             @RequestParam(required = false) String chapter,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String bookId,
+            @RequestParam(required = false) String chapterId,
+            @RequestParam(defaultValue = "all") String membership,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "50") @Min(1) int size) {
-        return store.search(query, subject, section, chapter, status, page, Math.min(size, 100));
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
+        if (!Set.of("all", "assigned", "unassigned").contains(membership)) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "文集归属筛选不合法。");
+        }
+        return store.search(query, subject, section, chapter, status, bookId, chapterId,
+                membership, page, Math.min(size, 100));
     }
+
+    @GetMapping("/facets")
+    KnowledgeManagementStore.KnowledgeFacets facets() { return store.facets(); }
 
     @GetMapping("/{id}")
     KnowledgeManagementStore.KnowledgeView get(@PathVariable String id) {
@@ -71,6 +81,16 @@ public class KnowledgeManagementController {
                 store.userId(authentication.getName()));
     }
 
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("hasRole('ADMIN')")
+    KnowledgeManagementService.BulkDeleteResult bulkDelete(
+            @RequestBody BulkDeleteRequest body, Authentication authentication) {
+        if (body == null || body.ids() == null || body.ids().isEmpty()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "请选择要删除的知识点。");
+        }
+        return service.bulkDelete(body.ids(), store.userId(authentication.getName()));
+    }
+
     private static String value(String input) { return input == null ? "" : input; }
 
     public record UpdateRequest(
@@ -87,4 +107,6 @@ public class KnowledgeManagementController {
             @NotBlank String targetId,
             @NotBlank String reason,
             @NotNull Long expectedRevision) {}
+
+    public record BulkDeleteRequest(List<String> ids) {}
 }

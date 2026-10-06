@@ -41,16 +41,20 @@ export function People({ game }: { game: Game }) {
   );
 }
 export function Journal({ game }: { game: Game }) {
+  const entries = Array.isArray(game.journal) ? game.journal : [];
+  const pace = game.config?.pace === "slow" ? "slow" : "normal";
+  const daysPerChapter = Number(gameDesign.calendar[pace]) || 8;
   return (
     <div className="timeline">
-      {[...game.journal]
+      {entries.length === 0 && <div className="empty-state"><h3>尚无札记</h3></div>}
+      {[...entries]
         .reverse()
         .slice(0, 150)
         .map((entry) => (
           <article key={entry.id} className={entry.kind}>
             <small>
               第{" "}
-              {Math.floor(entry.day / gameDesign.calendar[game.config.pace]) +
+              {Math.floor(entry.day / daysPerChapter) +
                 1}{" "}
               日 ·{" "}
               {entry.kind === "choice"

@@ -73,6 +73,13 @@ class LearnerKnowledgeMergeIntegrationTest {
                 actor, "active-actor-" + actor);
         insertKnowledge(source, "ACTIVE-MERGE-SOURCE");
         insertKnowledge(target, "ACTIVE-MERGE-TARGET");
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','true_false','true_false','auto','并发题','true','解析',3,'published',1)
+                """, questionId);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
+                questionId, source);
 
         ObjectNode question = mapper.createObjectNode();
         question.put("id", questionId);
@@ -119,8 +126,16 @@ class LearnerKnowledgeMergeIntegrationTest {
 
     private String evidence(String learner, String world, String point, String mode, String outcome, Instant at) {
         String attemptId = UUID.randomUUID().toString();
+        String questionId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','true_false','true_false','auto','题','true','解析',3,'published',1)
+                """, questionId);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
+                questionId, point);
         WorldActionContext.run(learner, world, () -> {
-            var question = mapper.createObjectNode().put("id", UUID.randomUUID().toString()).put("gradingMode", "auto");
+            var question = mapper.createObjectNode().put("id", questionId).put("gradingMode", "auto");
             attempts.create(attemptId, world, question.path("id").asText(), question,
                     mapper.getNodeFactory().booleanNode(true), "auto", point, mode, 3);
             var snapshot = attempts.find(attemptId, world);

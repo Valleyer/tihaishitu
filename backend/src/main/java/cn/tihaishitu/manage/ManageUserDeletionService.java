@@ -46,6 +46,8 @@ public class ManageUserDeletionService {
             jdbc.update("UPDATE question_resource SET updated_by=NULL WHERE updated_by=?", identity);
             jdbc.update("UPDATE question_resource SET reviewed_by=NULL WHERE reviewed_by=?", identity);
             jdbc.update("UPDATE question_resource_knowledge SET created_by=NULL WHERE created_by=?", identity);
+            jdbc.update("UPDATE knowledge_point_guide SET created_by=NULL WHERE created_by=?", identity);
+            jdbc.update("UPDATE knowledge_point_guide SET updated_by=NULL WHERE updated_by=?", identity);
         }
         jdbc.update("UPDATE content_audit_log SET actor_learner_id=NULL WHERE actor_learner_id=?", targetId);
         jdbc.update("UPDATE knowledge_merge_history SET actor_learner_id=NULL WHERE actor_learner_id=?", targetId);
@@ -53,6 +55,7 @@ public class ManageUserDeletionService {
         jdbc.update("UPDATE learner_practice_session SET current_attempt_id=NULL WHERE learner_id=?", targetId);
         jdbc.update("UPDATE study_attempt SET diagnosis_session_id=NULL, practice_session_id=NULL WHERE learner_id=?", targetId);
         jdbc.update("UPDATE learner_diagnosis_session SET practice_session_id=NULL WHERE learner_id=?", targetId);
+        jdbc.update("DELETE FROM learner_wrong_question WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM learner_knowledge_evidence WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM answer_record WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM learner_diagnosis_session WHERE learner_id=?", targetId);

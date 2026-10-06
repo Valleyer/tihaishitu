@@ -29,7 +29,13 @@ export type KnowledgeView = {
   mergedIntoId?: string;
   aliases: string[];
   questionCount: number;
+  books: { bookId: string; bookName: string; chapterId: string; chapterName: string }[];
   revision: number;
+};
+
+export type BulkKnowledgeDeleteResult = {
+  deleted: number;
+  blocked: { id: string; name: string; reason: string }[];
 };
 
 export type QuestionOption = {
@@ -120,7 +126,7 @@ export type ManagedBook = {
   chapterCount: number; selectedLearnerCount: number;
 };
 export type ManagedChapter = {
-  id: string; parentId?: string; code: string; name: string; description: string;
+  id: string; code: string; name: string; description: string;
   sortOrder: number; revision: number;
 };
 export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
@@ -211,10 +217,16 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ targetId, reason, expectedRevision: source.revision }),
     }),
+  bulkDeleteKnowledge: (ids: string[]) =>
+    request<BulkKnowledgeDeleteResult>("/knowledge-points/bulk-delete", {
+      method: "POST", body: JSON.stringify({ ids }),
+    }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
   books: () => request<ManagedBook[]>("/books"),
   book: (id: string) => request<ManagedBookDetail>(`/books/${id}`),
+  createBook: (input: { name: string; description: string; enabled: boolean }) =>
+    request<ManagedBookDetail>("/books", { method: "POST", body: JSON.stringify(input) }),
   saveBook: (book: ManagedBook) => request<ManagedBookDetail>(`/books/${book.id}`, {
     method: "PUT", body: JSON.stringify({ name: book.name, description: book.description,
       enabled: book.enabled, expectedRevision: book.revision }),
@@ -223,6 +235,16 @@ export const manageApi = {
     request<ManagedChapter>(`/books/${bookId}/chapters/${chapter.id}`, {
       method: "PUT", body: JSON.stringify({ name: chapter.name, description: chapter.description,
         expectedRevision: chapter.revision }),
+    }),
+  createChapter: (bookId: string, input: { name: string; description: string }) =>
+    request<ManagedChapter>(`/books/${bookId}/chapters`, {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  deleteChapter: (bookId: string, chapterId: string) =>
+    request<void>(`/books/${bookId}/chapters/${chapterId}`, { method: "DELETE" }),
+  reorderChapters: (bookId: string, chapterIds: string[]) =>
+    request<ManagedChapter[]>(`/books/${bookId}/chapters/reorder`, {
+      method: "POST", body: JSON.stringify({ chapterIds }),
     }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: "DELETE" }),
   questions: (filters: Record<string, string | number | undefined>) =>
@@ -268,6 +290,22 @@ export const manageApi = {
     }),
   importKnowledgeBatch: (payload: unknown) =>
     request<KnowledgeBatchImportResult>("/imports/knowledge", {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  exportKnowledgeGuides: (input: { knowledgePointIds: string[]; bookId?: string; chapterId?: string }) =>
+    request<Record<string, unknown>>("/knowledge-points/export-guides", {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  importKnowledgeGuides: (payload: unknown) =>
+    request<{ schemaVersion: string; created: number; updated: number }>("/imports/knowledge-guides", {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  exportRemedialSource: (input: { questionIds: string[]; bookId?: string; chapterId?: string; knowledgePointId?: string; examYear?: number }) =>
+    request<Record<string, unknown>>("/questions/export-remedial-source", {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  importRemedialQuestions: (payload: unknown) =>
+    request<{ schemaVersion: string; parentCount: number; created: number; updated: number; archived: number }>("/imports/remedial-questions", {
       method: "POST", body: JSON.stringify(payload),
     }),
   users: () => request<ManageUser[]>("/users"),

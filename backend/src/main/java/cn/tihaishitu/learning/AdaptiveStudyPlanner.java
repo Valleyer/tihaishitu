@@ -4,6 +4,7 @@ import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.game.KnowledgeQuestionPoolStore;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -29,12 +30,20 @@ public class AdaptiveStudyPlanner {
 
     private final KnowledgeQuestionPoolStore pool;
     private final LearnerKnowledgeStateStore states;
+    private final LearnerKnowledgeStateService stateService;
     private final KnowledgeMasteryModel model = new KnowledgeMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
     public AdaptiveStudyPlanner(KnowledgeQuestionPoolStore pool, LearnerKnowledgeStateStore states) {
+        this(pool, states, null);
+    }
+
+    @Autowired
+    public AdaptiveStudyPlanner(KnowledgeQuestionPoolStore pool, LearnerKnowledgeStateStore states,
+                                LearnerKnowledgeStateService stateService) {
         this.pool = pool;
         this.states = states;
+        this.stateService = stateService;
     }
 
     public AdaptiveStudyPlan plan(String learnerId, Set<String> selectedBookIds,
@@ -46,7 +55,7 @@ public class AdaptiveStudyPlanner {
         List<KnowledgePointDto> scope = pool.bookScope(selectedBookIds);
         Set<String> allowed = new LinkedHashSet<>();
         scope.forEach(point -> allowed.add(point.id()));
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed);
+        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, clock.instant());
         Set<String> ready = readySet(allowed, effectiveMap(stateByPoint, clock.instant()));
         Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
         List<String> candidates = scope.stream().map(KnowledgePointDto::id)
@@ -68,7 +77,7 @@ public class AdaptiveStudyPlanner {
         List<KnowledgePointDto> scope = pool.bookScope(selectedBookIds);
         Set<String> allowed = new LinkedHashSet<>();
         scope.forEach(point -> allowed.add(point.id()));
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed);
+        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, now);
         Map<String, Double> effectiveByPoint = effectiveMap(stateByPoint, now);
         Set<String> ready = readySet(allowed, effectiveByPoint);
         Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
@@ -108,7 +117,7 @@ public class AdaptiveStudyPlanner {
     QuestionContext questionContextAt(String learnerId, Set<String> frozenAllowedKnowledgePointIds,
                                       String targetKnowledgePointId, String profileDifficulty, Instant now) {
         Set<String> allowed = new LinkedHashSet<>(frozenAllowedKnowledgePointIds);
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed);
+        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, now);
         Map<String, Double> effectiveByPoint = effectiveMap(stateByPoint, now);
         Set<String> ready = readySet(allowed, effectiveByPoint);
         KnowledgeMasteryModel.State target = stateByPoint.get(targetKnowledgePointId);
@@ -117,7 +126,8 @@ public class AdaptiveStudyPlanner {
         return new QuestionContext(Collections.unmodifiableSet(ready), preferred);
     }
 
-    private Map<String, KnowledgeMasteryModel.State> stateMap(String learnerId, Set<String> pointIds) {
+    private Map<String, KnowledgeMasteryModel.State> stateMap(String learnerId, Set<String> pointIds, Instant now) {
+        if (stateService != null) return stateService.settledStates(learnerId, pointIds, now);
         Map<String, KnowledgeMasteryModel.State> result = new LinkedHashMap<>();
         states.findForKnowledgePoints(learnerId, pointIds)
                 .forEach(row -> result.put(row.knowledgePointId(), row.state()));

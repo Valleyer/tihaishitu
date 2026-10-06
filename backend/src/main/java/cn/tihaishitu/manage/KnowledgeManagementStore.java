@@ -15,11 +15,14 @@ import java.util.UUID;
 
 @Repository
 public class KnowledgeManagementStore {
+    public record BookMembership(String bookId, String bookName, String chapterId, String chapterName) {}
     public record KnowledgeView(
             String id, String code, String name, String subject, String section, String chapter,
             String defaultRole, String status, String description, String explanation,
             String introducedVersion, String mergedIntoId, int sortOrder, long revision,
-            List<String> aliases, int questionCount) {}
+            List<String> aliases, int questionCount, List<BookMembership> books) {}
+
+    public record KnowledgeFacets(List<String> subjects) {}
 
     public record KnowledgeUpdate(
             String name, String defaultRole, String status, String description, String explanation,
@@ -38,8 +41,9 @@ public class KnowledgeManagementStore {
     }
 
     public PageResult<KnowledgeView> search(
-            String query, String subject, String section, String chapter, String status, int page, int size) {
-        SqlFilter filter = filter(query, subject, section, chapter, status);
+            String query, String subject, String section, String chapter, String status,
+            String bookId, String chapterId, String membership, int page, int size) {
+        SqlFilter filter = filter(query, subject, section, chapter, status, bookId, chapterId, membership);
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM global_knowledge_point k " + filter.where(),
                 Long.class, filter.params().toArray());
         List<Object> params = new ArrayList<>(filter.params());
@@ -49,6 +53,13 @@ public class KnowledgeManagementStore {
                         + " ORDER BY k.sort_order, k.code LIMIT ? OFFSET ?",
                 (result, row) -> map(result.getString("id"), result), params.toArray());
         return PageResult.of(rows, page, size, total == null ? 0 : total);
+    }
+
+    public KnowledgeFacets facets() {
+        return new KnowledgeFacets(jdbc.query("""
+                SELECT DISTINCT subject_name FROM global_knowledge_point
+                 WHERE subject_name IS NOT NULL AND subject_name <> '' ORDER BY subject_name
+                """, (result, row) -> result.getString("subject_name")));
     }
 
     public Optional<KnowledgeView> find(String id) {
@@ -112,7 +123,6 @@ public class KnowledgeManagementStore {
         KnowledgeView target = find(targetId).orElseThrow(() -> missing("目标知识点不存在。"));
         if (!"active".equals(source.status()) || source.mergedIntoId() != null) bad("源知识点已经停用或合并。");
         if (!"active".equals(target.status()) || target.mergedIntoId() != null) bad("目标知识点必须是有效知识点。");
-        if (!source.subject().equals(target.subject())) bad("只能合并同一学科的知识点。");
         if (reason == null || reason.isBlank()) bad("请填写合并原因。");
 
         List<String> membershipBankIds = jdbc.query("""
@@ -193,6 +203,14 @@ public class KnowledgeManagementStore {
                     bankId);
         }
 
+        Integer targetGuide = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM knowledge_point_guide WHERE knowledge_point_id=?", Integer.class, targetId);
+        if (targetGuide == null || targetGuide == 0) {
+            jdbc.update("UPDATE knowledge_point_guide SET knowledge_point_id=? WHERE knowledge_point_id=?", targetId, sourceId);
+        } else {
+            jdbc.update("DELETE FROM knowledge_point_guide WHERE knowledge_point_id=?", sourceId);
+        }
+
         int sourceChanged = jdbc.update("""
                 UPDATE global_knowledge_point
                    SET status = 'deprecated', merged_into_id = ?, revision = revision + 1,
@@ -248,13 +266,60 @@ public class KnowledgeManagementStore {
         }
     }
 
+    public String deleteBlockedReason(String id) {
+        int questions = count("question_resource_knowledge", "knowledge_point_id", id);
+        if (questions > 0) return "仍有 " + questions + " 道题绑定";
+        int memberships = count("question_bank_knowledge", "knowledge_point_id", id);
+        if (memberships > 0) return "仍属于 " + memberships + " 部文集";
+        if (count("legacy_knowledge_map", "global_id", id) > 0) return "仍被旧文集映射引用";
+        int merges = countWhere("""
+                SELECT COUNT(*) FROM knowledge_merge_history
+                 WHERE source_knowledge_id=? OR target_knowledge_id=?
+                """, id, id) + count("global_knowledge_point", "merged_into_id", id);
+        if (merges > 0) return "存在知识点合并历史";
+        int learning = count("learner_focus_knowledge", "knowledge_point_id", id)
+                + count("study_attempt", "target_knowledge_point_id", id)
+                + count("learner_knowledge_state", "knowledge_point_id", id)
+                + count("learner_knowledge_evidence", "knowledge_point_id", id)
+                + count("learner_diagnosis_session", "target_knowledge_point_id", id)
+                + count("learner_diagnosis_dependency", "knowledge_point_id", id)
+                + count("learner_practice_session", "target_knowledge_point_id", id)
+                + count("learner_practice_session", "current_knowledge_point_id", id)
+                + count("learner_question_mastery", "knowledge_point_id", id)
+                + count("learner_practice_scope", "knowledge_point_id", id);
+        if (learning > 0) return "存在正式学习历史";
+        return null;
+    }
+
+    public boolean lockForDelete(String id) {
+        return !jdbc.query("SELECT id FROM global_knowledge_point WHERE id=? FOR UPDATE",
+                (result, row) -> result.getString("id"), id).isEmpty();
+    }
+
+    public int deleteOrphan(String id) {
+        return jdbc.update("DELETE FROM global_knowledge_point WHERE id=?", id);
+    }
+
     private KnowledgeView map(String id, java.sql.ResultSet result) throws java.sql.SQLException {
         return new KnowledgeView(id, result.getString("code"), result.getString("name"),
                 result.getString("subject_name"), result.getString("section_name"),
                 result.getString("chapter_name"), result.getString("default_role"),
                 result.getString("status"), result.getString("description"), result.getString("explanation"),
                 result.getString("introduced_version"), result.getString("merged_into_id"),
-                result.getInt("sort_order"), result.getLong("revision"), aliases(id), result.getInt("question_count"));
+                result.getInt("sort_order"), result.getLong("revision"), aliases(id),
+                result.getInt("question_count"), memberships(id));
+    }
+
+    private List<BookMembership> memberships(String id) {
+        return jdbc.query("""
+                SELECT b.id book_id,b.name book_name,c.id chapter_id,c.name chapter_name
+                  FROM question_bank_knowledge bk
+                  JOIN question_bank b ON b.id=bk.bank_id
+                  JOIN question_bank_chapter c ON c.id=bk.chapter_id AND c.bank_id=bk.bank_id
+                 WHERE bk.knowledge_point_id=? ORDER BY b.name,c.sort_order,c.id
+                """, (result, row) -> new BookMembership(result.getString("book_id"),
+                result.getString("book_name"), result.getString("chapter_id"),
+                result.getString("chapter_name")), id);
     }
 
     private List<String> aliases(String id) {
@@ -271,7 +336,8 @@ public class KnowledgeManagementStore {
                 """;
     }
 
-    private static SqlFilter filter(String query, String subject, String section, String chapter, String status) {
+    private static SqlFilter filter(String query, String subject, String section, String chapter, String status,
+                                    String bookId, String chapterId, String membership) {
         List<String> clauses = new ArrayList<>();
         List<Object> params = new ArrayList<>();
         if (query != null && !query.isBlank()) {
@@ -284,7 +350,31 @@ public class KnowledgeManagementStore {
         add(clauses, params, "k.section_name", section);
         add(clauses, params, "k.chapter_name", chapter);
         add(clauses, params, "k.status", status);
+        if (bookId != null && !bookId.isBlank()) {
+            clauses.add("EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.knowledge_point_id=k.id AND bk.bank_id=?)");
+            params.add(bookId.trim());
+        }
+        if (chapterId != null && !chapterId.isBlank()) {
+            clauses.add("EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.knowledge_point_id=k.id AND bk.chapter_id=?)");
+            params.add(chapterId.trim());
+        }
+        if ("assigned".equals(membership)) {
+            clauses.add("EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.knowledge_point_id=k.id)");
+        } else if ("unassigned".equals(membership)) {
+            clauses.add("NOT EXISTS (SELECT 1 FROM question_bank_knowledge bk WHERE bk.knowledge_point_id=k.id)");
+        }
         return new SqlFilter(clauses.isEmpty() ? "" : " WHERE " + String.join(" AND ", clauses), params);
+    }
+
+    private int count(String table, String column, String id) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE " + column + "=?",
+                Integer.class, id);
+        return count == null ? 0 : count;
+    }
+
+    private int countWhere(String sql, Object... params) {
+        Integer count = jdbc.queryForObject(sql, Integer.class, params);
+        return count == null ? 0 : count;
     }
 
     private static void add(List<String> clauses, List<Object> params, String column, String value) {

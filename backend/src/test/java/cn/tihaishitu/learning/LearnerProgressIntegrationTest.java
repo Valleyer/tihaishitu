@@ -26,7 +26,7 @@ class LearnerProgressIntegrationTest {
     @Autowired ObjectMapper mapper;
 
     @Test
-    void deduplicatesOverallScopeUsesEffectiveBandsAndAggregatesChapterSubtrees() {
+    void deduplicatesOverallScopeUsesEffectiveBandsAndReturnsFlatChapters() {
         String learner = learner();
         String shared = knowledge("共享知识点"), decayed = knowledge("已衰减知识点");
         String ready = knowledge("基本掌握知识点"), proficient = knowledge("熟练知识点");
@@ -39,10 +39,10 @@ class LearnerProgressIntegrationTest {
         member(second.id(), second.root(), shared, 0); member(second.id(), second.root(), proficient, 1);
         select(learner, first.id()); select(learner, second.id());
 
-        states.save(learner, shared, state(20, 365, NOW));
-        states.save(learner, decayed, state(100, 10, NOW.minusSeconds(10 * 86_400L)));
-        states.save(learner, ready, state(75, 365, NOW));
-        states.save(learner, proficient, state(90, 365, NOW));
+        saveMastery(learner, shared, 20, 365, NOW);
+        saveMastery(learner, decayed, 60, 10, NOW.minusSeconds(10 * 86_400L));
+        saveMastery(learner, ready, 75, 365, NOW);
+        saveMastery(learner, proficient, 100, 365, NOW);
 
         LearnerProgressService.ProgressView view = progress.progressAt(learner, NOW);
 
@@ -56,12 +56,12 @@ class LearnerProgressIntegrationTest {
                 .containsExactlyInAnyOrder(3, 2);
         LearnerProgressService.BookProgress firstView = view.books().stream()
                 .filter(item -> item.bookId().equals(first.id())).findFirst().orElseThrow();
-        LearnerProgressService.ChapterProgress parent = firstView.chapters().get(0);
-        assertThat(parent.total()).isEqualTo(3);
+        assertThat(firstView.chapters()).extracting(LearnerProgressService.ChapterProgress::total)
+                .containsExactly(0, 1, 2);
         assertThat(firstView.masteryProgress()).isGreaterThan(0).isLessThan(100);
-        assertThat(parent.masteryProgress()).isGreaterThan(0).isLessThan(100);
-        assertThat(parent.children()).extracting(LearnerProgressService.ChapterProgress::total)
-                .containsExactly(1, 2);
+        assertThat(firstView.chapters()).allMatch(chapter -> chapter.total() == 0
+                ? chapter.masteryProgress() == 0
+                : chapter.masteryProgress() > 0 && chapter.masteryProgress() < 100);
     }
 
     @Test
@@ -96,9 +96,16 @@ class LearnerProgressIntegrationTest {
     void reusesReviewAndWrongQueueSemanticsWithoutNegativeRateFields() throws Exception {
         String learner = learner(), point = knowledge("需要巩固");
         BookFixture book = book("正向进度"); member(book.id(), book.root(), point, 0); select(learner, book.id());
-        states.save(learner, point, state(90, 10, NOW.minusSeconds(4 * 86_400L)));
+        saveMastery(learner, point, 90, 10, NOW.minusSeconds(4 * 86_400L));
         String question = question();
-        attempt(learner, "ancient-official", null, question, point, "graded", NOW.minusSeconds(600), "wrong");
+        String wrongAttempt = attempt(learner, "ancient-official", null, question, point,
+                "graded", NOW.minusSeconds(600), "wrong");
+        jdbc.update("""
+                INSERT INTO learner_wrong_question(learner_id,question_id,target_knowledge_point_id,
+                    first_wrong_at,last_wrong_at,last_wrong_attempt_id,status)
+                VALUES (?,?,?,?,?,?,'active')
+                """, learner, question, point, Timestamp.from(NOW.minusSeconds(600)),
+                Timestamp.from(NOW.minusSeconds(600)), wrongAttempt);
 
         LearnerProgressService.ProgressView view = progress.progressAt(learner, NOW);
         String json = mapper.writeValueAsString(view);
@@ -170,22 +177,24 @@ class LearnerProgressIntegrationTest {
         return id;
     }
 
-    private void attempt(String learner, String world, String practice, String question, String point,
-                         String status, Instant answeredAt) {
-        attempt(learner, world, practice, question, point, status, answeredAt, "correct");
+    private String attempt(String learner, String world, String practice, String question, String point,
+                           String status, Instant answeredAt) {
+        return attempt(learner, world, practice, question, point, status, answeredAt, "correct");
     }
 
-    private void attempt(String learner, String world, String practice, String question, String point,
-                         String status, Instant answeredAt, String assessment) {
+    private String attempt(String learner, String world, String practice, String question, String point,
+                           String status, Instant answeredAt, String assessment) {
+        String attemptId = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO study_attempt(id,game_id,learner_id,world_id,practice_session_id,question_id,
                     question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,
                     target_knowledge_point_id,evidence_mode,question_difficulty,answered_at)
                 VALUES (?,NULL,?,?,?,?, '{}','true',?,'auto',?,?,?,'normal',2,?)
-                """, UUID.randomUUID().toString(), learner, world, practice, question, status,
+                """, attemptId, learner, world, practice, question, status,
                 "graded".equals(status) ? "automatic" : null,
                 "graded".equals(status) ? assessment : null, point,
                 answeredAt == null ? null : Timestamp.from(answeredAt));
+        return attemptId;
     }
 
     private void legacyAttempt(String question, String point, Instant answeredAt) {
@@ -199,9 +208,22 @@ class LearnerProgressIntegrationTest {
                 """, UUID.randomUUID().toString(), game, question, point, Timestamp.from(answeredAt));
     }
 
-    private static KnowledgeMasteryModel.State state(double mastery, double stability, Instant at) {
-        return new KnowledgeMasteryModel.State(mastery, stability, 3, 1, 1, 0,
-                "correct", at, at, "v1", 1);
+    private void saveMastery(String learner, String point, double mastery, double stability, Instant at) {
+        String question = jdbc.queryForObject("""
+                SELECT q.id FROM question_resource q
+                JOIN question_resource_knowledge qk ON qk.question_id=q.id
+                WHERE qk.knowledge_point_id=? AND qk.relation_role='core' AND q.parent_question_id IS NULL
+                ORDER BY q.id LIMIT 1
+                """, String.class, point);
+        java.time.LocalDate today = NOW.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+        jdbc.update("""
+                INSERT INTO learner_question_mastery(learner_id,knowledge_point_id,question_id,score,
+                    first_correct_at,last_correct_at,last_reward_date,last_decay_date,last_assessment,last_attempt_at,
+                    decay_frozen,revision) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE,1)
+                """, learner, point, question, mastery, Timestamp.from(at), Timestamp.from(at),
+                java.sql.Date.valueOf(today), java.sql.Date.valueOf(today), "correct", Timestamp.from(at));
+        states.save(learner, point, new KnowledgeMasteryModel.State(mastery, stability, 3, 1, 1, 0,
+                "correct", at, at, KnowledgeModelPolicy.MODEL_VERSION, 1));
     }
 
     private record BookFixture(String id, String root) {}

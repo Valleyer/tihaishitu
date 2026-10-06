@@ -26,7 +26,8 @@ class AdaptiveQuestionSelectionIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
-    void masteryCapProfilePreferenceNearestDifficultyTrainingAndSeenCompose() {
+    void masteryCapProfilePreferenceSoftDifficultyTrainingAndSeenCompose() {
+        String learner = learner();
         String point = knowledge();
         Map<Integer, String> questions = new LinkedHashMap<>();
         for (int difficulty = 1; difficulty <= 5; difficulty++)
@@ -38,27 +39,35 @@ class AdaptiveQuestionSelectionIntegrationTest {
 
         assertThat(standard).isEqualTo(2);
         assertThat(gentle).isEqualTo(1);
-        assertThat(select(point, Set.of(), standard, false).id()).isEqualTo(questions.get(2));
-        assertThat(select(point, Set.of(), gentle, false).id()).isEqualTo(questions.get(1));
+        assertThat(select(learner, point, Set.of(), standard, false).id()).isEqualTo(questions.get(2));
+        assertThat(select(learner, point, Set.of(), gentle, false).id()).isEqualTo(questions.get(1));
 
         KnowledgeMasteryModel.State restored = state(90, 4, now);
         int restoredPreferred = AdaptiveSchedulingPolicy.preferredDifficulty(restored, 90, "standard");
         assertThat(restoredPreferred).isEqualTo(4);
-        assertThat(select(point, Set.of(), restoredPreferred, false).id()).isEqualTo(questions.get(4));
+        assertThat(select(learner, point, Set.of(), restoredPreferred, false).id()).isEqualTo(questions.get(4));
 
         Set<String> withoutExact = Set.of(questions.get(1), questions.get(3), questions.get(5));
-        assertThat(select(point, withoutExact, 3, false).id()).isEqualTo(questions.get(2));
-        assertThat(select(point, Set.of(), 4, true).id()).isEqualTo(questions.get(2));
-        assertThat(select(point, Set.of(questions.get(1), questions.get(2)), 4, true).id())
+        assertThat(select(learner, point, withoutExact, 3, false).id())
+                .isIn(questions.get(2), questions.get(4));
+        assertThat(select(learner, point, Set.of(), 4, true).id()).isEqualTo(questions.get(2));
+        assertThat(select(learner, point, Set.of(questions.get(1), questions.get(2)), 4, true).id())
                 .isEqualTo(questions.get(3));
     }
 
-    private cn.tihaishitu.catalog.QuestionDto select(String point, Set<String> seen,
+    private cn.tihaishitu.catalog.QuestionDto select(String learner, String point, Set<String> seen,
                                                        int preferred, boolean training) {
-        return pool.selectQuestionForLearner(new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
+        return pool.selectQuestionForLearner(learner, new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
                 point, Set.of(point), Set.of(), seen, preferred, training
                 ? KnowledgeQuestionPoolService.Mode.TRAINING
                 : KnowledgeQuestionPoolService.Mode.NORMAL));
+    }
+
+    private String learner() {
+        String id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,?,'x','active',1)",
+                id, "adaptive-" + id, "难度学习者");
+        return id;
     }
 
     private String knowledge() {

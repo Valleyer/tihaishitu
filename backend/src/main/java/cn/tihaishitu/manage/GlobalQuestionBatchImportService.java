@@ -22,7 +22,8 @@ import java.util.UUID;
 
 @Service
 public class GlobalQuestionBatchImportService {
-    public static final String SCHEMA_VERSION = "global-question-batch/v2";
+    public static final String SCHEMA_VERSION = "global-question-batch/v3";
+    public static final String LEGACY_SCHEMA_VERSION = "global-question-batch/v2";
 
     private static final Set<String> FORBIDDEN_BOOK_FIELDS = Set.of(
             "bank", "book", "targetBookId", "weight", "enabled", "chapter");
@@ -60,7 +61,7 @@ public class GlobalQuestionBatchImportService {
     private record ResolvedKnowledge(String id, String code, String role, int sortOrder) {}
     private record ValidQuestion(QuestionInput input, List<OptionInput> options,
                                  List<ResolvedKnowledge> knowledgePoints) {}
-    private record ValidImport(boolean publish, ValidBatch batch, List<ValidQuestion> questions) {}
+    private record ValidImport(String schemaVersion, boolean publish, ValidBatch batch, List<ValidQuestion> questions) {}
     private record KnowledgeRef(String id, String subject) {}
     private record ExistingQuestionIdentity(
             String subject, String sourceType, Integer examYear, String questionNumber) {}
@@ -112,7 +113,7 @@ public class GlobalQuestionBatchImportService {
 
         audit(actorId, importId, valid, optionCount, relationCount, created, updated);
         ValidBatch batch = valid.batch();
-        return new ImportResult(SCHEMA_VERSION, importId, valid.publish(), batch.subject(),
+        return new ImportResult(valid.schemaVersion(), importId, valid.publish(), batch.subject(),
                 batch.sourceType(), batch.sourceName(), batch.examYear(), valid.questions().size(),
                 optionCount, relationCount, created, updated);
     }
@@ -137,8 +138,8 @@ public class GlobalQuestionBatchImportService {
     }
 
     private ValidImport validate(ImportRequest request) {
-        if (request == null || !SCHEMA_VERSION.equals(request.schemaVersion())) {
-            bad("schemaVersion 必须为 " + SCHEMA_VERSION + "。");
+        if (request == null || !Set.of(SCHEMA_VERSION, LEGACY_SCHEMA_VERSION).contains(request.schemaVersion())) {
+            bad("schemaVersion 必须为 " + SCHEMA_VERSION + "（旧 v2 仍兼容）。");
         }
         BatchInput inputBatch = request.batch();
         if (inputBatch == null || blank(inputBatch.subject()) || blank(inputBatch.sourceName())
@@ -187,10 +188,11 @@ public class GlobalQuestionBatchImportService {
                     .ifPresent(message -> bad(at + "：" + message));
             if (question.knowledgePoints() == null) bad(at + "必须提供 knowledgePoints 字段。");
             List<ResolvedKnowledge> points = resolveKnowledgePoints(
-                    question.knowledgePoints(), batch.subject(), at);
+                    question.knowledgePoints(), batch.subject(), at,
+                    LEGACY_SCHEMA_VERSION.equals(request.schemaVersion()));
             validated.add(new ValidQuestion(question, options, points));
         }
-        return new ValidImport(Boolean.TRUE.equals(request.publish()), batch, validated);
+        return new ValidImport(request.schemaVersion(), Boolean.TRUE.equals(request.publish()), batch, validated);
     }
 
     private void validateSchemaFields(JsonNode document) {
@@ -333,7 +335,7 @@ public class GlobalQuestionBatchImportService {
     }
 
     private List<ResolvedKnowledge> resolveKnowledgePoints(
-            List<KnowledgeInput> relations, String subject, String at) {
+            List<KnowledgeInput> relations, String subject, String at, boolean enforceSubject) {
         if (relations.isEmpty() || relations.size() > 3) bad(at + "必须关联 1–3 个知识点。");
         Set<String> codes = new HashSet<>();
         boolean hasCore = false;
@@ -347,8 +349,8 @@ public class GlobalQuestionBatchImportService {
             if (!codes.add(code)) bad(at + "存在重复知识点 code：" + code + "。");
             KnowledgeRef point = activeKnowledge(code);
             if (point == null) bad(at + "引用了不存在或已停用的知识点 code：" + code + "。");
-            if (!subject.equals(point.subject())) {
-                bad(at + "引用的知识点 " + code + " 不属于 batch.subject：" + subject + "。");
+            if (enforceSubject && !subject.equals(point.subject())) {
+                bad(at + "引用的知识点不属于 batch.subject：" + code + "。");
             }
             hasCore |= "core".equals(relation.role());
             resolved.add(new ResolvedKnowledge(point.id(), code, relation.role(),
@@ -413,7 +415,7 @@ public class GlobalQuestionBatchImportService {
                        int relationCount, int created, int updated) {
         ValidBatch batch = valid.batch();
         Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("schemaVersion", SCHEMA_VERSION);
+        metadata.put("schemaVersion", valid.schemaVersion());
         metadata.put("publish", valid.publish());
         metadata.put("subject", batch.subject());
         metadata.put("sourceType", batch.sourceType());

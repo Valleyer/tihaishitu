@@ -59,7 +59,7 @@ function question(index: number, status = "pending_review"): QuestionView {
 }
 
 function result(content: QuestionView[], page: number, totalElements: number, totalPages: number): PageResult<QuestionView> {
-  return { content, page, size: 30, totalElements, totalPages };
+  return { content, page, size: 20, totalElements, totalPages };
 }
 
 beforeEach(() => {
@@ -80,6 +80,7 @@ describe("QuestionPage pagination", () => {
     const { container } = render(<QuestionPage user={reviewer} fail={vi.fn()} />);
     expect(await screen.findByText("共 22 道")).toBeTruthy();
     expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
+    expect(screen.queryByLabelText("每页数量")).toBeNull();
     expect(container.querySelector(".question-management-table.data-table")).toBeTruthy();
 
     const previous = screen.getByRole("button", { name: "上一页" }) as HTMLButtonElement;
@@ -89,7 +90,7 @@ describe("QuestionPage pagination", () => {
     fireEvent.click(next);
 
     expect(await screen.findByText("第 2 / 2 页")).toBeTruthy();
-    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 30 })));
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 20 })));
     expect((screen.getByRole("button", { name: "上一页" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "下一页" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -121,7 +122,7 @@ describe("QuestionPage pagination", () => {
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
       status: "pending_review",
       page: 0,
-      size: 30,
+      size: 20,
     })));
     expect(questionsMock.mock.calls.slice(callsBeforeReviewMode)
       .every(([filters]) => filters.status === "pending_review")).toBe(true);
@@ -152,7 +153,7 @@ describe("QuestionPage pagination", () => {
 
     expect(await screen.findByText("第 1 / 1 页")).toBeTruthy();
     expect(screen.getByText("待审核共 20 道")).toBeTruthy();
-    expect(requestedPagesAfterReview).toEqual([1, 0]);
+    await waitFor(() => expect(requestedPagesAfterReview).toEqual([1, 0]));
     expect(questionsMock.mock.calls.every(([filters]) => filters.status === "pending_review")).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ public class LearningBrowseController {
             @RequestParam(required = false) String chapterId,
             @RequestParam(required = false) String subject,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "30") int size) {
+            @RequestParam(defaultValue = "20") int size) {
         if (page < 0 || size < 1 || size > 100) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.BAD_REQUEST, "分页参数不合法。");
@@ -42,5 +42,14 @@ public class LearningBrowseController {
     @GetMapping("/knowledge-points/{id}/questions") public List<Map<String, Object>> knowledgeQuestions(@PathVariable String id) {
         return store.questionsForKnowledge(id, LearnerContext.learnerId());
     }
-    @GetMapping("/questions/{id}") public Map<String, Object> question(@PathVariable String id) { return store.question(id); }
+    @GetMapping("/knowledge-points/{id}/guide") public Map<String,Object> guide(@PathVariable String id) {
+        return store.guide(id,LearnerContext.learnerId());
+    }
+    @GetMapping("/knowledge-points/{id}/neighbors") public Map<String,Object> neighbors(
+            @PathVariable String id,@RequestParam String bookId,@RequestParam String chapterId) {
+        return store.neighbors(id,bookId,chapterId,LearnerContext.learnerId());
+    }
+    @GetMapping("/questions/{id}") public Map<String, Object> question(@PathVariable String id) {
+        return store.question(id, LearnerContext.learnerId());
+    }
 }
