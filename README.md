@@ -28,7 +28,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 判断、单选、多选继续支持，选项每次发卷打乱。正式联机流程中每位 Learner 在每个 World 只有一份服务端权威状态；旧多存档只保留兼容数据。
 
-掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位：首次答对 30，跨自然日首次答对 +7，每满 3 天惰性衰减 1；KnowledgePoint 掌握度按当前正式父题总数聚合，全部 100 时冻结衰减，新增正式题会自动扩大分母。子题只用于补救教学，不产生 Mastery、错题本或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生证据。
+掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位，按 `Asia/Shanghai` 业务日结算（详见 [项目长期规则 §7.1](docs/PROJECT_RULES.md)）：每个业务日只有当天第一次正式 graded 作答有资格决定该题当天的熟练度奖励。当天首答正确时，历史第一次有效正确记 30，之后其他业务日首答正确 +7，最高 100；当天首答为 wrong / partial 时该题当天不增加熟练度，之后同日即使重新答对也不奖励。错误不直接扣熟练度，熟练度下降只来自自然衰减：每满 3 天无有效强化惰性衰减 1。KnowledgePoint 掌握度按当前正式父题槽位平均聚合，全部达到 100 时进入“彻底掌握”并冻结自然衰减，新增正式题会自动扩大分母并退出 100%。子题只用于补救教学，不产生 Mastery、错题本或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生正式学习证据。
 
 Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。World target 从当前 Selected Books 的 playable KnowledgePoints 中随机抽取，Mastery、Review 与 Manual Focus 不决定 target 优先级；target 确定后，题目关联的其他 core/auxiliary 知识点必须达到基本掌握，并继续使用自适应难度、发布状态、本轮去重与题目轮换规则。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
