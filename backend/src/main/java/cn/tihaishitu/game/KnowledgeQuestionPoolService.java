@@ -5,6 +5,7 @@ import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.learning.LearnerKnowledgeStateStore;
 import cn.tihaishitu.learning.LearnerQuestionProgressStore;
+import cn.tihaishitu.learning.LearnerQuestionMasteryStore;
 import cn.tihaishitu.learning.ReviewSchedulingPolicy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -174,9 +175,12 @@ public class KnowledgeQuestionPoolService {
                 learnerId, request.currentKnowledgePointId(), candidates.stream().map(QuestionDto::id).toList());
         boolean due = states.find(learnerId, request.currentKnowledgePointId())
                 .map(state -> ReviewSchedulingPolicy.dueWithin24Hours(state, clock.instant())).orElse(false);
+        var today = clock.instant().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
         return candidates.stream().filter(question -> {
             var item = history.get(question.id());
-            return item == null || !item.graded() || !"correct".equals(item.assessment()) || due;
+            boolean newRewardDay = item != null && item.answeredAt() != null
+                    && item.answeredAt().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate().isBefore(today);
+            return item == null || !item.graded() || !"correct".equals(item.assessment()) || newRewardDay || due;
         }).toList();
     }
 

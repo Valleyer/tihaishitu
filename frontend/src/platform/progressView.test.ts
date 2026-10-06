@@ -4,8 +4,8 @@ import { progressBandLabels, progressPercent } from "./progressView";
 describe("progress view helpers", () => {
   it("uses the existing mastery bands with positive Chinese labels", () => {
     expect(progressBandLabels).toEqual({
-      unstarted: "未开始", unmastered: "尚未稳固", learning: "学习中",
-      ready: "基本掌握", proficient: "熟练掌握",
+      unstarted: "尚未稳固", unmastered: "尚未稳固", learning: "基本掌握",
+      ready: "熟练掌握", proficient: "彻底掌握",
     });
   });
 

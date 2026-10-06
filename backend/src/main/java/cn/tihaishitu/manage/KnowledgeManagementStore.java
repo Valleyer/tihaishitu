@@ -203,6 +203,14 @@ public class KnowledgeManagementStore {
                     bankId);
         }
 
+        Integer targetGuide = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM knowledge_point_guide WHERE knowledge_point_id=?", Integer.class, targetId);
+        if (targetGuide == null || targetGuide == 0) {
+            jdbc.update("UPDATE knowledge_point_guide SET knowledge_point_id=? WHERE knowledge_point_id=?", targetId, sourceId);
+        } else {
+            jdbc.update("DELETE FROM knowledge_point_guide WHERE knowledge_point_id=?", sourceId);
+        }
+
         int sourceChanged = jdbc.update("""
                 UPDATE global_knowledge_point
                    SET status = 'deprecated', merged_into_id = ?, revision = revision + 1,
@@ -276,6 +284,8 @@ public class KnowledgeManagementStore {
                 + count("learner_diagnosis_session", "target_knowledge_point_id", id)
                 + count("learner_diagnosis_dependency", "knowledge_point_id", id)
                 + count("learner_practice_session", "target_knowledge_point_id", id)
+                + count("learner_practice_session", "current_knowledge_point_id", id)
+                + count("learner_question_mastery", "knowledge_point_id", id)
                 + count("learner_practice_scope", "knowledge_point_id", id);
         if (learning > 0) return "存在正式学习历史";
         return null;

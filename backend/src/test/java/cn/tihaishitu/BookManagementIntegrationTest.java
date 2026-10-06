@@ -47,6 +47,8 @@ class BookManagementIntegrationTest {
         JsonNode first = createChapter(admin, bookId, "第一章", null);
         JsonNode second = createChapter(admin, bookId, "第二章", null);
         JsonNode child = createChapter(admin, bookId, "子章节", first.path("id").asText());
+        assertThat(jdbc.queryForObject("SELECT parent_id FROM question_bank_chapter WHERE id=?",
+                String.class, child.path("id").asText())).isNull();
 
         mvc.perform(put("/api/v1/manage/books/{bookId}/chapters/{chapterId}", bookId, second.path("id").asText())
                         .cookie(admin).with(csrf()).contentType("application/json")
@@ -55,15 +57,16 @@ class BookManagementIntegrationTest {
 
         mvc.perform(post("/api/v1/manage/books/{bookId}/chapters/reorder", bookId)
                         .cookie(admin).with(csrf()).contentType("application/json")
-                        .content("{\"parentId\":null,\"chapterIds\":[\"%s\",\"%s\"]}"
-                                .formatted(second.path("id").asText(), first.path("id").asText())))
+                        .content("{\"parentId\":null,\"chapterIds\":[\"%s\",\"%s\",\"%s\"]}"
+                                .formatted(second.path("id").asText(), first.path("id").asText(),
+                                        child.path("id").asText())))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForList("SELECT id FROM question_bank_chapter WHERE bank_id=? AND parent_id IS NULL ORDER BY sort_order", String.class, bookId))
-                .containsExactly(second.path("id").asText(), first.path("id").asText());
+                .containsExactly(second.path("id").asText(), first.path("id").asText(), child.path("id").asText());
 
         mvc.perform(delete("/api/v1/manage/books/{bookId}/chapters/{chapterId}", bookId, first.path("id").asText())
                         .cookie(admin).with(csrf()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNoContent());
 
         String point = UUID.randomUUID().toString();
         jdbc.update("""

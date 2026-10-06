@@ -27,8 +27,13 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 
 - `GET /learner/statistics?days=7|30|90`：从正式 graded attempts 和当前 Selected Books 动态派生学习统计。
 - `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量。
+- `GET /learning/knowledge-points/{id}/guide`：读取独立维护的 Markdown/LaTeX 知识讲解。
+- `GET /learning/knowledge-points/{id}/neighbors?bookId=&chapterId=`：读取同一文集章节中的前后知识点。
+- `POST /learner/practice-sessions`：以 `chapter_drill` 启动章节知识练习，或以既有 intent 启动知识点/错题练习。
 - `POST /manage/questions/bulk-delete`：事务性批量删除题目资源；活动中的错题练习和未同时选择的派生题会阻止整批删除。
-- `POST /manage/imports/knowledge`：管理员导入 `global-knowledge-batch/v1`，事务性 upsert Book、Chapter、Global KnowledgePoint、alias 与 membership。
+- `POST /manage/imports/knowledge`：管理员导入 `global-knowledge-batch/v2`，事务性 upsert Book、Chapter、Global KnowledgePoint、alias 与 membership。
+- `POST /manage/questions/export-remedial-source`、`POST /manage/imports/remedial-questions`：导出正式父题并导入 3–5 步补救子题。
+- `POST /manage/knowledge-points/export-guides`、`POST /manage/imports/knowledge-guides`：导出知识上下文并导入独立知识讲解。
 
 `GET /learner/progress` 的 Book 与 Chapter 聚合同时返回 `masteryProgress`，值为对应去重 KnowledgePoint 在同一时刻的 `effectiveMastery` 算术平均值，未开始按 0 计算。
 
@@ -81,11 +86,11 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
 | POST | /admin/question-banks/import | QuestionBankDto | 新增或修订后的 Bank |
-| POST | /admin/questions/import | global-question-batch/v2 | 幂等导入全局题目批次，不写入 Book |
+| POST | /admin/questions/import | global-question-batch/v3 | 幂等导入全局题目批次，不写入 Book |
 | POST | /admin/global-question-banks/import | global-question-bank/v1 | 已弃用；仅兼容未采用 KnowledgePoint 路径的旧文集 |
 | PUT | /admin/question-banks/{uuid}/metadata | {name?,description?,enabled?,weight?} | 改名后的 Bank |
 
-V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创建或修改任何 Book；旧 V1 仅供尚未采用 KnowledgePoint 路径的兼容文集使用。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
+V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创建或修改任何 Book；V3 的 `batch.subject` 只作为稳定元数据，不限制 KnowledgePoint 的 legacy subject。旧 V2 继续兼容，旧 V1 仅供尚未采用 KnowledgePoint 路径的兼容文集使用。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
 
 ## 全服管理后台 API
 
@@ -105,28 +110,28 @@ V2 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
 | POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
-| POST | /manage/imports/questions | ADMIN | 事务校验并导入 global-question-batch/v2 题目批次 |
+| POST | /manage/imports/questions | ADMIN | 事务校验并导入 global-question-batch/v3 题目批次 |
 | POST | /manage/imports/question-bank | ADMIN | 已弃用；仅兼容旧版 global-question-bank/v1 文集导入 |
 | GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 
 知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。知识点合并会把源记录标为 deprecated 并写入 `merged_into_id`，逐题迁移关系；目标关系已存在时折叠为一条，任一原关系为 core 则保留 core。源记录、合并历史和审计记录均不删除。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
 
-知识点合并还会在同一事务中迁移 Learner Focus、attempt target 和 Knowledge Evidence。若源与目标同时已有状态，服务端将两边 evidence 归一到目标知识点，按 `occurredAt, id` 使用 V1 模型重放并重建唯一目标状态。
+知识点合并还会在同一事务中迁移 Learner Focus、attempt target、Knowledge Evidence、题目级掌握槽位与 Knowledge Guide。若源与目标同时已有状态，服务端会把题目关系与历史正式作答归一到目标知识点，并重建唯一的 V3 聚合状态。
 
-## Learner Knowledge State V1
+## Learner Knowledge State V3
 
 正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（normal/training）与 1–5 级题目难度。清晰可归因的 graded attempt 只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。normal composite wrong/partial 是明确例外：raw `study_attempt` 与 `answer_record` 立即保存，根 target evidence 延迟到诊断确认。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态或诊断会话。
 
-`masteryScore` 是 `lastEvidenceAt` 时刻的基础掌握值。读取时的有效掌握度为：
+每个 `(learner, KnowledgePoint, formal parent Question)` 拥有一个 0–100 的题目级掌握槽位。首次答对为 30；以 Asia/Shanghai 为日界线，同一天重复答对不增加槽位分数，后续每个首次跨日答对增加 7，最高 100。wrong/partial 保留正式 attempt 与 evidence，但不直接扣减槽位分数。Remedial SubQuestion 不创建槽位，也不进入分母。
 
 ```text
-effectiveMastery = masteryScore × 2 ^ (-elapsedDays / stabilityDays)
+Knowledge Mastery = 所有正式父题槽位分数之和 / 当前正式父题总数
 ```
 
-`stabilityDays` 是 0.5–365 天的记忆半衰期。服务端没有后台衰减任务；读取时计算有效值，下一条证据到来时先计算惰性遗忘，再应用新证据。ready 阈值保持为 70；正式 World 的 Adaptive Scheduling V1 会消费 `effectiveMastery`、`targetDifficulty` 与 Study Profile，但不会修改 Mastery V1 参数。
+每个题目槽位按完整 3 个 Asia/Shanghai 自然日惰性衰减 1 分。KnowledgePoint 的全部正式题均达到 100 时冻结衰减；新增正式题会扩大分母并解除冻结，既有槽位从解除当天重新开始衰减。聚合档位为 0–29 尚未稳固、30–69 基本掌握、70–99 熟练掌握、100 彻底掌握。`stabilityDays` 与 `targetDifficulty` 继续供既有 Review Queue 和 Adaptive Scheduling 使用，原参数不变。
 
-V1 quality 为 automatic correct 1.00、automatic wrong 0、self correct 0.90、self partial 0.50、self wrong 0；source factor 为 automatic 1.00 / self 0.85，mode factor 为 normal 1.00 / training 0.55。高难题答对证据更强，低难题答错证据更强。Learning Hub 浏览题目、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
+正式 Hub 与 World 共用同一套 target-only grading、Evidence、Diagnosis、Question Rotation 和 V3 槽位。题目浏览、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
 
 ## Adaptive Scheduling V1
 
@@ -150,7 +155,7 @@ Exposure 不删除候选，不设置固定 cooldown 或 blacklist。所有题都
 
 Review Queue 是 `LearnerKnowledgeState` 的动态派生视图，不新增 Review 表、`next_review_at`、定时任务或 migration。只有 `evidenceCount > 0` 且最近证据后的原始 `masteryScore >= 70` 的状态具备复习资格；未开始和最新 mastery 低于 70 的知识点继续属于正常学习队列。
 
-建议复习时间沿用 Mastery V1 的半衰期模型反推：
+建议复习时间继续沿用现有 Stability 与聚合 Mastery 反推：
 
 ```text
 reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)
@@ -164,9 +169,9 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 ## Learning Progress Dashboard V1
 
-`GET /learner/progress` 是只读动态派生视图，不保存 progress、completion 或 daily summary。总体范围取当前 Learner 的 Selected Books，并沿正式 `question_bank → question_bank_chapter → question_bank_knowledge` 模型读取 active KnowledgePoints；总体按 KnowledgePoint ID 去重，单本文集仍按自己的 membership 统计。状态通过一次批量查询读取，`started` 定义为 `evidenceCount > 0`，`ready` 使用惰性遗忘后的 `effectiveMastery >= 70`，`proficient` 复用 Mastery V1 的现有 band。
+`GET /learner/progress` 是只读动态派生视图，不保存 progress、completion 或 daily summary。总体范围取当前 Learner 的 Selected Books，并沿正式 `question_bank → question_bank_chapter → question_bank_knowledge` 模型读取 active KnowledgePoints；总体按 KnowledgePoint ID 去重，单本文集仍按自己的 membership 统计。状态通过一次批量查询读取，`started` 定义为 `evidenceCount > 0`，`ready` 使用 V3 惰性结算后的聚合 Mastery `>= 70`，`proficient` 表示聚合 Mastery 正好为 100。
 
-文集响应包含按正式章节树组织的聚合；父章节统计自身直接成员和整棵子树，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量复用 Wrong Queue 的 latest graded result 语义。
+文集响应包含按单层正式章节组织的聚合；每个章节只统计自己的直接 KnowledgePoint membership，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量复用 Wrong Queue 的 latest graded result 语义。
 
 近 7 日足迹仅查询当前 Learner 在 UTC 最近 7 个自然日内 `status=graded` 的 `study_attempt`。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
 
@@ -176,7 +181,7 @@ normal composite Question 的 wrong/partial 会从 root `question_snapshot_json.
 
 状态机使用 `diagnosing_dependencies → remediating_dependency → rechecking_target → remediating_target → resolved`，并支持 `abandoned`。dependency probe 使用 normal evidence、目标例外与 Phase F 实时 readiness，难度先按当前 Profile/状态计算再 cap 到 3；wrong/partial 立即成为该 dependency 的正常证据并停止探查其他依赖，training remediation 答对后回到原 target。所有 dependency 均通过时，才用 root 原始 assessment、grading source 与 answeredAt 延迟写入 target negative evidence；存在 unavailable dependency 时改走 target recheck，根错误永远不强行归因。用户 abandon 同样保留 raw answer 而不补根 evidence。
 
-`study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据强度仍只使用既有 normal/training；Mastery V1 和 Adaptive Scheduling V1 参数未改变。所有诊断题继续受冻结 Selected Book scope、published、实时 readiness 和 run seen 约束。Probe 无合法 unseen 候选时标为 unavailable；不会回退已见题、未发布题或未 ready 的依赖题。
+`study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据模式仍只使用既有 normal/training；Mastery V3 只改变题目级掌握聚合，Adaptive Scheduling V1 参数未改变。所有诊断题继续受冻结 Selected Book scope、published、实时 readiness 和 run seen 约束。Probe 无合法 unseen 候选时标为 unavailable；不会回退已见题、未发布题或未 ready 的依赖题。
 
 根正式题一旦答错，本轮对应知识点的游戏分已经失去。后续 probe、remediation 和 recheck 不增加 `run.correct`；`diagnosticAnswered` 统计 probe/recheck，`trainingAnswered` 统计补强。新 run 会重置 answered、correct 与 seen，可重新取得满分。正式 World 的长期考试/任务状态不累计失败或应试次数，只让 bestScore 上升；passed/cleared 与一次性奖励保持永久、单次和单调。未完成任务可以重新开始，完成后永久关闭且不能重进。
 

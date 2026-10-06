@@ -176,3 +176,5 @@
 .question-management-toolbar { grid-template-columns: minmax(260px,1fr) 170px auto auto auto; }
 .audit-pagination { margin-top: 14px; }
 @media(max-width:1250px){.manage-toolbar.knowledge-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.manage-toolbar.knowledge-filters>input{grid-column:1/-1}.manage-toolbar.knowledge-filters>button{grid-column:auto}.create-book-form,.create-chapter-form{grid-template-columns:1fr 1fr}}
+
+.create-chapter-form { grid-template-columns: minmax(150px,.8fr) minmax(180px,1fr) auto; }

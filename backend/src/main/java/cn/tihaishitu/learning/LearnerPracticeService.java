@@ -24,8 +24,10 @@ import java.util.UUID;
 
 @Service
 public class LearnerPracticeService {
-    public record StartRequest(String intent, String targetKnowledgePointId, String sourceQuestionId) {}
+    public record StartRequest(String intent, String targetKnowledgePointId, String sourceQuestionId,
+                               String targetBookId,String targetChapterId) {}
     public record SessionView(String id, String intent, String targetKnowledgePointId, String sourceQuestionId,
+                              String targetBookId,String targetChapterId,String currentKnowledgePointId,
                               String status, long revision, AttemptView currentAttempt,
                               boolean flowComplete, boolean canRepeat) {}
     public record AttemptView(String id, String status, String targetKnowledgePointId, String targetKnowledgePointName,
@@ -44,6 +46,7 @@ public class LearnerPracticeService {
     private final ObjectMapper mapper;
     private final QuestionAttemptVariantService variants;
     private final LearnerQuestionProgressStore questionProgress;
+    private final RemedialQuestionStore remedial;
 
     public LearnerPracticeService(LearnerPracticeStore store, QuestionAttemptStore attempts,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService pool,
@@ -51,7 +54,8 @@ public class LearnerPracticeService {
                                   DiagnosticLearningService diagnostics, DiagnosticLearningStore diagnosisStore,
                                   LearnerStore learners, ObjectMapper mapper,
                                   QuestionAttemptVariantService variants,
-                                  LearnerQuestionProgressStore questionProgress) {
+                                  LearnerQuestionProgressStore questionProgress,
+                                  RemedialQuestionStore remedial) {
         this.store = store;
         this.attempts = attempts;
         this.profiles = profiles;
@@ -64,6 +68,7 @@ public class LearnerPracticeService {
         this.mapper = mapper;
         this.variants = variants;
         this.questionProgress = questionProgress;
+        this.remedial = remedial;
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
@@ -75,10 +80,11 @@ public class LearnerPracticeService {
         String learnerId = LearnerContext.learnerId();
         learners.lockForUpdate(learnerId);
         String intent = request.intent();
-        if (!Set.of("knowledge_drill", "wrong_review").contains(intent))
+        if (!Set.of("knowledge_drill", "wrong_review", "chapter_drill").contains(intent))
             throw bad("练习类型不合法。");
         var profile = profiles.rawCurrent();
         Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
+        if ("chapter_drill".equals(intent)) return startChapter(request,learnerId,allowed,profile.difficulty());
         QuestionAttemptStore.Snapshot source = null;
         String targetId = request.targetKnowledgePointId();
         if ("wrong_review".equals(intent)) {
@@ -118,8 +124,7 @@ public class LearnerPracticeService {
             Instant occurredAt = Instant.now();
             if (!attempts.recordAnswer(snapshot, answer, correct, occurredAt))
                 throw conflict("这道题已经完成评分。");
-            diagnostics.handleGradedAttempt(snapshot, correct ? "correct" : "wrong", "automatic", occurredAt,
-                    store.scope(id));
+            grade(snapshot,correct ? "correct" : "wrong","automatic",occurredAt,id);
         });
     }
 
@@ -138,7 +143,7 @@ public class LearnerPracticeService {
             Instant occurredAt = Instant.now();
             if (!attempts.recordSelfAssessment(snapshot, assessment, occurredAt))
                 throw conflict("请先查看参考解答，或此题已经完成自评。");
-            diagnostics.handleGradedAttempt(snapshot, assessment, "self", occurredAt, store.scope(id));
+            grade(snapshot,assessment,"self",occurredAt,id);
         });
     }
 
@@ -155,16 +160,26 @@ public class LearnerPracticeService {
         PracticeActionContext.within(learnerId, id, () -> {
             DiagnosticLearningStore.Session diagnosis = diagnosisForCurrent(id, current);
             String nextId;
-            if (diagnosis != null && !Set.of("resolved", "abandoned").contains(diagnosis.status())) {
+            RemedialQuestionStore.ParentInfo parent = remedial.parentInfo(current.questionId());
+            if(parent!=null){
+                List<RemedialQuestionStore.Step> steps=remedial.steps(parent.parentQuestionId());
+                RemedialQuestionStore.Step nextStep=steps.stream().filter(step->step.order()>parent.order()).findFirst().orElse(null);
+                nextId=nextStep==null?createStoredAttempt(learnerId,session.currentKnowledgePointId()!=null?session.currentKnowledgePointId():session.targetKnowledgePointId(),remedial.parent(parent.parentQuestionId()),"normal",null):createStoredAttempt(learnerId,current.targetKnowledgePointId(),nextStep,"remedial",null);
+            } else if(isFirstFailedParent(id,current)){
+                RemedialQuestionStore.Step first=remedial.steps(current.questionId()).get(0);
+                nextId=createStoredAttempt(learnerId,current.targetKnowledgePointId(),first,"remedial",null);
+            } else if (diagnosis != null && !Set.of("resolved", "abandoned").contains(diagnosis.status())) {
                 DiagnosticLearningService.Directive directive = diagnostics.nextDirective(diagnosis.id());
                 nextId = draw(id, learnerId, directive.targetKnowledgePointId(), allowed, difficulty, directive);
-            } else if (needsTraining(current)) {
-                nextId = draw(id, learnerId, session.targetKnowledgePointId(), allowed, difficulty,
-                        new DiagnosticLearningService.Directive(null, null, session.targetKnowledgePointId(), "training"));
             } else {
                 if ("wrong_review".equals(session.intent()))
                     throw conflict("本轮错题流程已经完成，可以结束练习。");
-                nextId = draw(id, learnerId, session.targetKnowledgePointId(), allowed, difficulty, null);
+                if("chapter_drill".equals(session.intent())){
+                    String point=nextChapterPoint(session,allowed,difficulty);
+                    if(point==null)throw conflict("本轮章节可练题目已完成，可以结束练习。");
+                    store.setCurrentKnowledgePoint(id,learnerId,point);
+                    nextId=draw(id,learnerId,point,allowed,difficulty,null);
+                }else nextId = draw(id, learnerId, session.targetKnowledgePointId(), allowed, difficulty, null);
             }
             store.setCurrentAttempt(id, learnerId, nextId);
             return null;
@@ -256,9 +271,10 @@ public class LearnerPracticeService {
                 : attempts.findForPractice(session.currentAttemptId(), session.learnerId(), session.id());
         AttemptView attempt = snapshot == null ? null : attemptView(snapshot);
         boolean complete = snapshot != null && flowComplete(session, snapshot);
-        boolean canRepeat = complete && "knowledge_drill".equals(session.intent()) && hasNext(session);
+        boolean canRepeat = complete && Set.of("knowledge_drill","chapter_drill").contains(session.intent()) && hasNext(session);
         return new SessionView(session.id(), session.intent(), session.targetKnowledgePointId(),
-                session.sourceQuestionId(), session.status(), session.revision(), attempt, complete,
+                session.sourceQuestionId(),session.targetBookId(),session.targetChapterId(),session.currentKnowledgePointId(),
+                session.status(), session.revision(), attempt, complete,
                 canRepeat);
     }
 
@@ -277,10 +293,13 @@ public class LearnerPracticeService {
 
     private boolean flowComplete(LearnerPracticeStore.Session session, QuestionAttemptStore.Snapshot snapshot) {
         if (!"graded".equals(snapshot.status())) return false;
+        RemedialQuestionStore.ParentInfo parent=remedial.parentInfo(snapshot.questionId());
+        if(parent!=null)return false;
+        if(isFirstFailedParent(session.id(),snapshot))return false;
         DiagnosticLearningStore.Session diagnosis = diagnosisForCurrent(session.id(), snapshot);
         if (diagnosis != null) return "resolved".equals(diagnosis.status());
         if ("training".equals(snapshot.evidenceMode())) return "correct".equals(snapshot.assessment());
-        return "correct".equals(snapshot.assessment());
+        return true;
     }
 
     private DiagnosticLearningStore.Session diagnosisForCurrent(
@@ -309,6 +328,7 @@ public class LearnerPracticeService {
         if (!"active".equals(session.status())) return false;
         Set<String> allowed = store.scope(session.id());
         var profile = profiles.rawCurrent();
+        if("chapter_drill".equals(session.intent()))return nextChapterPoint(session,allowed,profile.difficulty())!=null;
         AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
                 session.learnerId(), allowed, session.targetKnowledgePointId(), profile.difficulty());
         var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
@@ -317,6 +337,50 @@ public class LearnerPracticeService {
                 KnowledgeQuestionPoolService.Mode.NORMAL,
                 KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
         return !pool.eligibleKnowledgeDrillQuestions(session.learnerId(), request).isEmpty();
+    }
+
+    public SessionView latestChapter(){
+        return store.latestActiveChapter(LearnerContext.learnerId()).map(this::view).orElse(null);
+    }
+
+    private SessionView startChapter(StartRequest request,String learnerId,Set<String> allowed,String difficulty){
+        if(request.targetBookId()==null||request.targetChapterId()==null)throw bad("请选择文集和章节。");
+        List<String> points=store.chapterKnowledgePoints(learnerId,request.targetBookId(),request.targetChapterId());
+        String point=points.stream().filter(id->available(learnerId,id,allowed,difficulty,Set.of())).findFirst().orElseThrow(()->bad("这个章节当前没有待练的新题。"));
+        String id=UUID.randomUUID().toString();store.createChapter(id,learnerId,request.targetBookId(),request.targetChapterId(),point,allowed);
+        PracticeActionContext.within(learnerId,id,()->{String attempt=draw(id,learnerId,point,allowed,difficulty,null);store.setCurrentAttempt(id,learnerId,attempt);return null;});
+        return get(id);
+    }
+
+    private void grade(QuestionAttemptStore.Snapshot snapshot,String assessment,String source,Instant at,String practiceId){
+        if (remedial.parentInfo(snapshot.questionId()) != null) return;
+        boolean parentFailure=Set.of("wrong","partial").contains(assessment)&&!remedial.steps(snapshot.questionId()).isEmpty();
+        if(parentFailure)knowledgeStates.apply(snapshot,assessment,source,at);
+        else diagnostics.handleGradedAttempt(snapshot,assessment,source,at,store.scope(practiceId));
+    }
+
+    private boolean isFirstFailedParent(String sessionId,QuestionAttemptStore.Snapshot snapshot){
+        return Set.of("wrong","partial").contains(snapshot.assessment())
+                && !remedial.steps(snapshot.questionId()).isEmpty()&&store.attemptCount(sessionId,snapshot.questionId())==1;
+    }
+
+    private String createStoredAttempt(String learnerId,String targetId,RemedialQuestionStore.Step step,String evidenceMode,String role){
+        String id=UUID.randomUUID().toString();var previous=questionProgress.latestAttemptForQuestion(learnerId,step.id()).orElse(null);
+        var variant=variants.create(step.question(),step.standard(),previous==null?step.question():previous.questionSnapshot(),previous==null?step.standard():previous.standardAnswer());
+        attempts.create(id,null,step.id(),variant.question(),variant.standard(),step.gradingMode(),targetId,evidenceMode,step.difficulty(),null,role);return id;
+    }
+
+    private String nextChapterPoint(LearnerPracticeStore.Session session,Set<String> allowed,String difficulty){
+        List<String> points=store.chapterKnowledgePoints(session.learnerId(),session.targetBookId(),session.targetChapterId());
+        if(points.isEmpty())return null;int current=Math.max(0,points.indexOf(session.currentKnowledgePointId()));
+        Set<String> seen=store.seenQuestions(session.id());
+        for(int offset=1;offset<=points.size();offset++){String point=points.get((current+offset)%points.size());if(available(session.learnerId(),point,allowed,difficulty,seen))return point;}return null;
+    }
+
+    private boolean available(String learnerId,String point,Set<String> allowed,String difficulty,Set<String> seen){
+        AdaptiveStudyPlanner.QuestionContext context=planner.questionContext(learnerId,allowed,point,difficulty);
+        var request=new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(point,allowed,context.readyKnowledgePointIds(),seen,context.preferredDifficulty(),KnowledgeQuestionPoolService.Mode.NORMAL,KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
+        return !pool.eligibleKnowledgeDrillQuestions(learnerId,request).isEmpty();
     }
 
     private static boolean needsTraining(QuestionAttemptStore.Snapshot snapshot) {

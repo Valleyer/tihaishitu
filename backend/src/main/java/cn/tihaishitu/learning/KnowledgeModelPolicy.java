@@ -3,9 +3,9 @@ package cn.tihaishitu.learning;
 /** Shared thresholds and spacing parameters for the versioned mastery model. */
 public final class KnowledgeModelPolicy {
     private KnowledgeModelPolicy() {}
-    public static final String MODEL_VERSION = "v2-coverage";
+    public static final String MODEL_VERSION = "v3-question-reinforcement";
     public static final double MIN_MASTERY = 0, MAX_MASTERY = 100;
-    public static final double LEARNING_THRESHOLD = 40, READY_THRESHOLD = 70, PROFICIENT_THRESHOLD = 85;
+    public static final double LEARNING_THRESHOLD = 30, READY_THRESHOLD = 70, PROFICIENT_THRESHOLD = 100;
     public static final double INITIAL_STABILITY = 1, MIN_STABILITY = .5, MAX_STABILITY = 365;
     public static final int INITIAL_DIFFICULTY = 2, MIN_DIFFICULTY = 1, MAX_DIFFICULTY = 5;
     public static final int PROMOTION_STREAK = 2;

@@ -1,10 +1,10 @@
 {
-  "schemaVersion": "global-question-batch/v2",
+  "schemaVersion": "global-question-batch/v3",
   "publish": false,
   "batch": {
     "subject": "数学一",
     "sourceType": "custom",
-    "sourceName": "V2 格式示例"
+    "sourceName": "V3 格式示例"
   },
   "questions": [
     {

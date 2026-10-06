@@ -187,6 +187,7 @@ public class LearnerKnowledgeStateStore {
         }
         jdbc.update("UPDATE learner_knowledge_evidence SET knowledge_point_id = ? WHERE knowledge_point_id = ?", targetId, sourceId);
         jdbc.update("UPDATE study_attempt SET target_knowledge_point_id = ? WHERE target_knowledge_point_id = ?", targetId, sourceId);
+        jdbc.update("UPDATE learner_practice_session SET current_knowledge_point_id=? WHERE current_knowledge_point_id=?", targetId, sourceId);
         canonicalizePracticeScopes(sourceId, targetId);
         jdbc.update("""
                 UPDATE learner_practice_session

@@ -24,12 +24,12 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 public class ReviewQueueService {
     private final StudyProfileStore profiles;
     private final KnowledgeQuestionPoolStore pool;
-    private final LearnerKnowledgeStateStore states;
+    private final LearnerKnowledgeStateService states;
     private final KnowledgeMasteryModel model = new KnowledgeMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
     public ReviewQueueService(StudyProfileStore profiles, KnowledgeQuestionPoolStore pool,
-                              LearnerKnowledgeStateStore states) {
+                              LearnerKnowledgeStateService states) {
         this.profiles = profiles;
         this.pool = pool;
         this.states = states;
@@ -48,9 +48,7 @@ public class ReviewQueueService {
         scope.forEach(point -> pointById.putIfAbsent(point.id(), point));
         Set<String> allowed = new LinkedHashSet<>(pointById.keySet());
 
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = new HashMap<>();
-        states.findForKnowledgePoints(learnerId, allowed)
-                .forEach(row -> stateByPoint.put(row.knowledgePointId(), row.state()));
+        Map<String, KnowledgeMasteryModel.State> stateByPoint = states.settledStates(learnerId, allowed, now);
         Set<String> ready = new LinkedHashSet<>();
         stateByPoint.forEach((id, state) -> {
             if (model.effectiveMastery(state, now) >= READY_THRESHOLD) ready.add(id);

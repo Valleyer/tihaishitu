@@ -126,7 +126,7 @@ export type ManagedBook = {
   chapterCount: number; selectedLearnerCount: number;
 };
 export type ManagedChapter = {
-  id: string; parentId?: string; code: string; name: string; description: string;
+  id: string; code: string; name: string; description: string;
   sortOrder: number; revision: number;
 };
 export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
@@ -236,15 +236,15 @@ export const manageApi = {
       method: "PUT", body: JSON.stringify({ name: chapter.name, description: chapter.description,
         expectedRevision: chapter.revision }),
     }),
-  createChapter: (bookId: string, input: { name: string; description: string; parentId?: string }) =>
+  createChapter: (bookId: string, input: { name: string; description: string }) =>
     request<ManagedChapter>(`/books/${bookId}/chapters`, {
       method: "POST", body: JSON.stringify(input),
     }),
   deleteChapter: (bookId: string, chapterId: string) =>
     request<void>(`/books/${bookId}/chapters/${chapterId}`, { method: "DELETE" }),
-  reorderChapters: (bookId: string, parentId: string | undefined, chapterIds: string[]) =>
+  reorderChapters: (bookId: string, chapterIds: string[]) =>
     request<ManagedChapter[]>(`/books/${bookId}/chapters/reorder`, {
-      method: "POST", body: JSON.stringify({ parentId: parentId || null, chapterIds }),
+      method: "POST", body: JSON.stringify({ chapterIds }),
     }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: "DELETE" }),
   questions: (filters: Record<string, string | number | undefined>) =>
@@ -290,6 +290,22 @@ export const manageApi = {
     }),
   importKnowledgeBatch: (payload: unknown) =>
     request<KnowledgeBatchImportResult>("/imports/knowledge", {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  exportKnowledgeGuides: (input: { knowledgePointIds: string[]; bookId?: string; chapterId?: string }) =>
+    request<Record<string, unknown>>("/knowledge-points/export-guides", {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  importKnowledgeGuides: (payload: unknown) =>
+    request<{ schemaVersion: string; created: number; updated: number }>("/imports/knowledge-guides", {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  exportRemedialSource: (input: { questionIds: string[]; bookId?: string; chapterId?: string; knowledgePointId?: string; examYear?: number }) =>
+    request<Record<string, unknown>>("/questions/export-remedial-source", {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  importRemedialQuestions: (payload: unknown) =>
+    request<{ schemaVersion: string; parentCount: number; created: number; updated: number; archived: number }>("/imports/remedial-questions", {
       method: "POST", body: JSON.stringify(payload),
     }),
   users: () => request<ManageUser[]>("/users"),

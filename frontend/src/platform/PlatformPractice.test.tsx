@@ -35,11 +35,11 @@ describe("practice interaction closure", () => {
   it("selects a saved trainable book by clicking the whole card and keeps draft scope separate", async () => {
     vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [{ id: "chapter", code: "C",
       name: "函数章", description: "", knowledgePoints: [{ id: "point", code: "P", name: "函数", subject: "数学",
-        section: "函数", chapter: "函数章", description: "", explanation: "" }], children: [] }] });
+        section: "函数", chapter: "函数章", description: "", explanation: "" }], sortOrder: 1 }] });
     vi.spyOn(platformApi, "knowledgeStatesForBook").mockResolvedValue([]);
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
     vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
-    vi.spyOn(platformApi, "startKnowledgePractice").mockResolvedValue(session());
+    vi.spyOn(platformApi, "startChapterPractice").mockResolvedValue({ ...session(), intent: "chapter_drill" });
     Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
     render(<StudyPage data={data} reload={vi.fn()} />);
 
@@ -53,7 +53,7 @@ describe("practice interaction closure", () => {
     fireEvent.click(screen.getByLabelText(/408/));
     expect(screen.queryByRole("button", { name: /408/ })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "函数章" }));
-    fireEvent.click(await screen.findByRole("button", { name: "开始专项" }));
+    fireEvent.click(await screen.findByRole("button", { name: "开始章节练习" }));
     await waitFor(() => expect(`${window.location.pathname}${window.location.search}`)
       .toBe("/practice/session?returnTo=%2Fstudy"));
   });

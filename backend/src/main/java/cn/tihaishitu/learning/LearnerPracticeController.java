@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +24,12 @@ public class LearnerPracticeController {
     @ResponseStatus(HttpStatus.CREATED)
     LearnerPracticeService.SessionView start(@RequestBody LearnerPracticeService.StartRequest request) {
         return practice.start(request);
+    }
+
+    @GetMapping("/practice-sessions/active-chapter")
+    ResponseEntity<LearnerPracticeService.SessionView> activeChapter() {
+        var session = practice.latestChapter();
+        return session == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(session);
     }
 
     @GetMapping("/practice-sessions/{id}")

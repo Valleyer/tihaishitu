@@ -21,7 +21,8 @@ import java.util.UUID;
 
 @Service
 public class GlobalKnowledgeBatchImportService {
-    public static final String SCHEMA_VERSION = "global-knowledge-batch/v1";
+    public static final String SCHEMA_VERSION = "global-knowledge-batch/v2";
+    public static final String LEGACY_SCHEMA_VERSION = "global-knowledge-batch/v1";
     private static final Set<String> ROLES = Set.of("core", "auxiliary");
     private static final Set<String> STATUSES = Set.of("active", "deprecated");
 
@@ -55,38 +56,32 @@ public class GlobalKnowledgeBatchImportService {
         }
 
         Map<String, String> chapterIds = new LinkedHashMap<>();
-        for (ChapterInput chapter : request.chapters()) {
+        Set<String> usedChapterCodes = request.knowledgePoints().stream()
+                .map(point -> point.chapterCode().trim()).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        for (ChapterInput chapter : request.chapters().stream().filter(item -> usedChapterCodes.contains(item.code().trim())).toList()) {
             List<String> existing = jdbc.query("SELECT id FROM question_bank_chapter WHERE bank_id=? AND chapter_code=?",
                     (row, index) -> row.getString("id"), book.id(), chapter.code().trim());
             chapterIds.put(chapter.code().trim(), existing.isEmpty()
                     ? UUID.nameUUIDFromBytes((book.id() + ":" + chapter.code().trim()).getBytes(StandardCharsets.UTF_8)).toString()
                     : existing.get(0));
         }
-        Set<String> processed = new HashSet<>();
-        List<ChapterInput> pending = new ArrayList<>(request.chapters());
-        while (!pending.isEmpty()) {
-            ChapterInput chapter = pending.stream().filter(item -> blank(item.parentCode())
-                    || processed.contains(item.parentCode().trim())).findFirst()
-                    .orElseThrow(() -> bad("章节 parentCode 存在循环。"));
+        for (ChapterInput chapter : request.chapters().stream().filter(item -> usedChapterCodes.contains(item.code().trim())).toList()) {
             String code = chapter.code().trim();
             String id = chapterIds.get(code);
-            String parentId = blank(chapter.parentCode()) ? null : chapterIds.get(chapter.parentCode().trim());
             int changed = jdbc.update("""
                     UPDATE question_bank_chapter SET parent_id=?,name=?,description=?,sort_order=?,
                            revision=revision+1,updated_at=CURRENT_TIMESTAMP
                      WHERE bank_id=? AND chapter_code=?
-                    """, parentId, chapter.name().trim(), value(chapter.description()), chapter.sortOrder(),
+                    """, null, chapter.name().trim(), value(chapter.description()), chapter.sortOrder(),
                     book.id(), code);
             if (changed == 0) {
                 jdbc.update("""
                         INSERT INTO question_bank_chapter(
                             id,bank_id,parent_id,chapter_code,name,description,sort_order,revision)
                         VALUES (?,?,?,?,?,?,?,1)
-                        """, id, book.id(), parentId, code, chapter.name().trim(),
+                        """, id, book.id(), null, code, chapter.name().trim(),
                         value(chapter.description()), chapter.sortOrder());
             }
-            processed.add(code);
-            pending.remove(chapter);
         }
 
         int created = 0, updated = 0, aliases = 0;
@@ -100,18 +95,22 @@ public class GlobalKnowledgeBatchImportService {
             String id;
             if (existing.isEmpty()) {
                 id = UUID.randomUUID().toString();
+                String chapterName = request.chapters().stream()
+                        .filter(chapter -> chapter.code().trim().equals(point.chapterCode().trim()))
+                        .map(ChapterInput::name).findFirst().orElse("");
                 jdbc.update("""
                         INSERT INTO global_knowledge_point(
                             id,code,name,subject_name,section_name,chapter_name,default_role,status,
                             description,explanation,introduced_version,sort_order,revision)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,1)
-                        """, id, code, point.name().trim(), request.subject().trim(), value(point.section()),
-                        point.chapter().trim(), point.defaultRole(), point.status(), value(point.description()),
-                        value(point.explanation()), SCHEMA_VERSION, point.sortOrder());
+                        """, id, code, point.name().trim(), legacySubject(request), value(point.section()),
+                        blank(point.chapter()) ? chapterName : point.chapter().trim(), point.defaultRole(), point.status(), value(point.description()),
+                        value(point.explanation()), request.schemaVersion(), point.sortOrder());
                 created++;
             } else {
                 ExistingKnowledge current = existing.get(0);
-                if (!current.subject().equals(request.subject().trim())) {
+                if (LEGACY_SCHEMA_VERSION.equals(request.schemaVersion())
+                        && !current.subject().equals(request.subject().trim())) {
                     throw bad("知识点 code " + code + " 已属于另一学科，整批导入已取消。");
                 }
                 id = current.id();
@@ -120,7 +119,9 @@ public class GlobalKnowledgeBatchImportService {
                            SET name=?,section_name=?,chapter_name=?,default_role=?,status=?,description=?,
                                explanation=?,sort_order=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP
                          WHERE id=?
-                        """, point.name().trim(), value(point.section()), point.chapter().trim(), point.defaultRole(),
+                        """, point.name().trim(), value(point.section()), blank(point.chapter())
+                                ? request.chapters().stream().filter(chapter -> chapter.code().trim().equals(point.chapterCode().trim()))
+                                .map(ChapterInput::name).findFirst().orElse("") : point.chapter().trim(), point.defaultRole(),
                         point.status(), value(point.description()), value(point.explanation()), point.sortOrder(), id);
                 updated++;
             }
@@ -139,10 +140,10 @@ public class GlobalKnowledgeBatchImportService {
         jdbc.update("UPDATE question_bank SET revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?", book.id());
         String importId = UUID.randomUUID().toString();
         Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("schemaVersion", SCHEMA_VERSION);
+        metadata.put("schemaVersion", request.schemaVersion());
         metadata.put("bookId", book.id());
         metadata.put("bookName", book.name());
-        metadata.put("subject", request.subject());
+        metadata.put("subject", legacySubject(request));
         metadata.put("chapterCount", request.chapters().size());
         metadata.put("knowledgePointCount", request.knowledgePoints().size());
         metadata.put("createdKnowledgePoints", created);
@@ -150,8 +151,8 @@ public class GlobalKnowledgeBatchImportService {
         metadata.put("membershipCount", importedCodes.size());
         metadata.put("aliasCount", aliases);
         knowledgeStore.audit(actorId, "KNOWLEDGE_BATCH_IMPORTED", "knowledge_batch", importId, metadata);
-        return new ImportResult(SCHEMA_VERSION, importId, book.id(), book.name(), request.subject(),
-                request.chapters().size(), request.knowledgePoints().size(), created, updated,
+        return new ImportResult(request.schemaVersion(), importId, book.id(), book.name(), legacySubject(request),
+                usedChapterCodes.size(), request.knowledgePoints().size(), created, updated,
                 importedCodes.size(), aliases);
     }
 
@@ -162,9 +163,10 @@ public class GlobalKnowledgeBatchImportService {
     }
 
     private void validate(ImportRequest request) {
-        if (request == null || !SCHEMA_VERSION.equals(request.schemaVersion())) throw bad("schemaVersion 必须为 " + SCHEMA_VERSION + "。");
+        if (request == null || !Set.of(SCHEMA_VERSION, LEGACY_SCHEMA_VERSION).contains(request.schemaVersion()))
+            throw bad("schemaVersion 必须为 " + SCHEMA_VERSION + "（旧 v1 仍兼容）。");
         if (request.book() == null || !uuid(request.book().id()) || blank(request.book().name())) throw bad("book 必须提供标准 UUID 和名称。");
-        if (blank(request.subject())) throw bad("subject 不能为空。");
+        if (LEGACY_SCHEMA_VERSION.equals(request.schemaVersion()) && blank(request.subject())) throw bad("v1 subject 不能为空。");
         List<ChapterInput> chapters = request.chapters() == null ? List.of() : request.chapters();
         List<KnowledgeInput> points = request.knowledgePoints() == null ? List.of() : request.knowledgePoints();
         if (chapters.isEmpty() || points.isEmpty()) throw bad("章节和知识点都不能为空。");
@@ -172,17 +174,19 @@ public class GlobalKnowledgeBatchImportService {
         for (ChapterInput chapter : chapters) {
             if (chapter == null || blank(chapter.code()) || blank(chapter.name()) || !chapterCodes.add(chapter.code().trim())) throw bad("章节 code/name 非法或重复。");
         }
-        for (ChapterInput chapter : chapters) if (!blank(chapter.parentCode()) && !chapterCodes.contains(chapter.parentCode().trim())) throw bad("章节引用了不存在的 parentCode：" + chapter.parentCode());
         Set<String> codes = new LinkedHashSet<>();
         for (KnowledgeInput point : points) {
-            if (point == null || blank(point.code()) || blank(point.name()) || blank(point.chapter())
-                    || blank(point.chapterCode()) || !codes.add(point.code().trim())) throw bad("知识点 code/name/chapter 非法或重复。");
+            if (point == null || blank(point.code()) || blank(point.name())
+                    || blank(point.chapterCode()) || !codes.add(point.code().trim())) throw bad("知识点 code/name/chapterCode 非法或重复。");
             if (!chapterCodes.contains(point.chapterCode().trim())) throw bad("知识点引用了不存在的 chapterCode：" + point.chapterCode());
             if (!ROLES.contains(point.defaultRole()) || !STATUSES.contains(point.status())) throw bad("知识点 defaultRole 或 status 不合法。");
         }
     }
 
     private long count(String sql, Object... params) { Long value = jdbc.queryForObject(sql, Long.class, params); return value == null ? 0 : value; }
+    private static String legacySubject(ImportRequest request) {
+        return blank(request.subject()) ? request.book().name().trim() : request.subject().trim();
+    }
     private static boolean uuid(String value) { try { UUID.fromString(value); return true; } catch (RuntimeException error) { return false; } }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String value(String value) { return value == null ? "" : value.trim(); }

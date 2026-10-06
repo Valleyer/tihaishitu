@@ -45,8 +45,11 @@ public class LearnerStatisticsService {
                        SUM(CASE WHEN a.assessment='partial' THEN 1 ELSE 0 END) partial_count,
                        SUM(CASE WHEN a.assessment='wrong' THEN 1 ELSE 0 END) wrong_count
                   FROM study_attempt a
+                  JOIN question_resource q ON q.id=a.question_id
                   LEFT JOIN learner_practice_session p ON p.id=a.practice_session_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
+                   AND q.status='published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                 """, (row, index) -> new Summary(row.getInt("graded_attempts"), row.getInt("active_days"),
                 row.getInt("distinct_points"), row.getInt("knowledge_drill"), row.getInt("wrong_review"),
                 row.getInt("world_attempts"), row.getInt("correct_count"), row.getInt("partial_count"),
@@ -56,8 +59,11 @@ public class LearnerStatisticsService {
         jdbc.query("""
                 SELECT CAST(answered_at AS DATE) study_date, COUNT(*) graded_attempts,
                        COUNT(DISTINCT target_knowledge_point_id) distinct_points
-                  FROM study_attempt
-                 WHERE learner_id=? AND status='graded' AND answered_at>=? AND answered_at<=?
+                  FROM study_attempt a
+                  JOIN question_resource q ON q.id=a.question_id
+                 WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
+                   AND q.status='published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  GROUP BY CAST(answered_at AS DATE)
                 """, row -> {
             LocalDate date = row.getDate("study_date").toLocalDate();

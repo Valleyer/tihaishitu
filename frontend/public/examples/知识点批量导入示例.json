@@ -1,22 +1,19 @@
 {
-  "schemaVersion": "global-knowledge-batch/v1",
+  "schemaVersion": "global-knowledge-batch/v2",
   "book": {
     "id": "11111111-1111-4111-8111-111111111111",
     "name": "408",
     "description": "计算机学科专业基础综合知识体系",
     "enabled": true
   },
-  "subject": "408",
   "chapters": [
-    { "code": "408-DS", "name": "数据结构", "parentCode": null, "description": "", "sortOrder": 0 },
-    { "code": "408-DS01", "name": "线性表", "parentCode": "408-DS", "description": "", "sortOrder": 0 }
+    { "code": "408-DS01", "name": "线性表", "description": "", "sortOrder": 0 }
   ],
   "knowledgePoints": [
     {
       "code": "408-DS01-001",
       "name": "顺序表插入与删除",
       "section": "数据结构",
-      "chapter": "线性表",
       "chapterCode": "408-DS01",
       "defaultRole": "core",
       "status": "active",

@@ -13,6 +13,7 @@ public final class TrainableKnowledge {
                      WHERE trainable_rel.knowledge_point_id = %s.id
                        AND trainable_rel.relation_role = 'core'
                        AND trainable_q.status = 'published'
+                       AND trainable_q.parent_question_id IS NULL
                        AND trainable_q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                 )
                 """.formatted(knowledgeAlias).trim();

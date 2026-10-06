@@ -12,7 +12,7 @@ export interface StudyProfile {
 }
 export interface WorldDefinition { id: string; name: string; description: string; enabled: boolean; initialized: boolean; updatedAt?: string; entryPath?: string }
 export interface BookSummary { id: string; name: string; description: string; revision: number; knowledgePointCount: number; totalKnowledgePointCount: number; questionCount: number }
-export interface Chapter { id: string; parentId?: string; code: string; name: string; description: string; knowledgePoints: KnowledgePoint[]; children: Chapter[] }
+export interface Chapter { id: string; code: string; name: string; description: string; sortOrder: number; knowledgePoints: KnowledgePoint[] }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
   id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string; questionType: string;
@@ -45,7 +45,7 @@ export interface ReviewQueue {
 export type MasteryBand = "unstarted" | "unmastered" | "learning" | "ready" | "proficient";
 export interface ProgressChapter {
   chapterId: string; code: string; name: string; total: number; started: number;
-  ready: number; proficient: number; masteryProgress: number; children: ProgressChapter[];
+  ready: number; proficient: number; masteryProgress: number;
 }
 export interface ProgressBook {
   bookId: string; name: string; description: string; totalKnowledgePoints: number;
@@ -76,7 +76,7 @@ export interface WrongQuestion {
 }
 export interface PracticeAttempt {
   id: string; status: "active" | "revealed" | "graded"; targetKnowledgePointId: string;
-  targetKnowledgePointName: string; evidenceMode: "normal" | "training"; diagnosisRole?: string;
+  targetKnowledgePointName: string; evidenceMode: "normal" | "training" | "remedial"; diagnosisRole?: string;
   question: {
     id: string; subject: string; chapter: string; presentationType: string; gradingMode: string;
     question: string; options: Record<string, string>; difficulty: number;
@@ -85,7 +85,8 @@ export interface PracticeAttempt {
   gradingSource?: string; answerRevealed: boolean;
 }
 export interface PracticeSession {
-  id: string; intent: "knowledge_drill" | "wrong_review"; targetKnowledgePointId: string;
+  id: string; intent: "knowledge_drill" | "wrong_review" | "chapter_drill"; targetKnowledgePointId?: string;
+  targetBookId?: string; targetChapterId?: string; currentKnowledgePointId?: string;
   sourceQuestionId?: string; status: "active" | "ended"; revision: number;
   currentAttempt: PracticeAttempt; flowComplete: boolean; canRepeat: boolean;
 }
@@ -105,6 +106,9 @@ export interface LearnerStatistics {
   daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
   books: { bookId: string; name: string; masteryProgress: number; knowledgePointCount: number }[];
 }
+export interface KnowledgeGuide { knowledgePointId: string; contentMarkdown?: string; revision: number; updatedAt?: string }
+export interface KnowledgeNeighbor { id: string; name: string; chapterId: string; chapterName: string }
+export interface KnowledgeNeighbors { previous?: KnowledgeNeighbor; next?: KnowledgeNeighbor }
 
 export const platformApi = {
   register: (username: string, displayName: string, password: string) =>
@@ -116,7 +120,7 @@ export const platformApi = {
   bootstrap: () => request<HubBootstrap>("/bootstrap"),
   books: () => request<BookSummary[]>("/learning/books"),
   book: (id: string) => request<BookDetail>("/learning/books/" + encodeURIComponent(id)),
-  knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string }[] }>(
+  knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string; chapterId: string; chapterName: string }[] }>(
     "/learning/knowledge-points/" + encodeURIComponent(id)),
   knowledgeDirectory: (filters: { query?: string; bookId?: string; chapterId?: string; subject?: string; page?: number; size?: number }) => {
     const params = new URLSearchParams();
@@ -131,6 +135,10 @@ export const platformApi = {
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),
   question: (id: string) => request<BrowseQuestion>("/learning/questions/" + encodeURIComponent(id)),
+  knowledgeGuide: (id: string) => request<KnowledgeGuide>(
+    "/learning/knowledge-points/" + encodeURIComponent(id) + "/guide"),
+  knowledgeNeighbors: (id: string, bookId: string, chapterId: string) => request<KnowledgeNeighbors>(
+    `/learning/knowledge-points/${encodeURIComponent(id)}/neighbors?bookId=${encodeURIComponent(bookId)}&chapterId=${encodeURIComponent(chapterId)}`),
   knowledgeState: (id: string) => request<KnowledgeState>(
     "/learner/knowledge-states/" + encodeURIComponent(id)),
   knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
@@ -147,6 +155,11 @@ export const platformApi = {
     request<PracticeSession>("/learner/practice-sessions", "POST", {
       intent: "wrong_review", sourceQuestionId,
     }),
+  startChapterPractice: (targetBookId: string, targetChapterId: string) =>
+    request<PracticeSession>("/learner/practice-sessions", "POST", {
+      intent: "chapter_drill", targetBookId, targetChapterId,
+    }),
+  activeChapterPractice: () => request<PracticeSession | undefined>("/learner/practice-sessions/active-chapter"),
   practice: (id: string) => request<PracticeSession>("/learner/practice-sessions/" + encodeURIComponent(id)),
   answerPractice: (session: PracticeSession, answer: unknown) =>
     request<PracticeSession>(`/learner/practice-sessions/${encodeURIComponent(session.id)}/answers`, "POST", {

@@ -118,6 +118,7 @@ public class LearnerQuestionProgressStore {
                 JOIN question_resource_knowledge qk ON qk.question_id=q.id
                 WHERE qk.knowledge_point_id=? AND qk.relation_role='core'
                   AND q.status='published'
+                  AND q.parent_question_id IS NULL
                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                 """, (row, index) -> row.getString(1), knowledgePointId);
         if (questionIds.isEmpty()) return new Coverage(0, 0, 0, null, null, null);

@@ -96,27 +96,29 @@ public class OfficialMath1BookBootstrap {
     }
 
     private Map<String, String> ensureChapters() {
+        jdbc.update("UPDATE question_bank_chapter SET parent_id=NULL WHERE bank_id=? AND parent_id IS NOT NULL", BOOK_ID);
+        jdbc.update("DELETE FROM question_bank_chapter WHERE bank_id=? AND chapter_code IN ('M1-H','M1-L','M1-P') "
+                + "AND NOT EXISTS (SELECT 1 FROM question_bank_knowledge membership WHERE membership.chapter_id=question_bank_chapter.id)", BOOK_ID);
         Map<String, String> ids = new LinkedHashMap<>();
-        for (ChapterDefinition chapter : CHAPTERS) {
+        int flatOrder = 0;
+        for (ChapterDefinition chapter : CHAPTERS.stream().filter(item -> item.parentCode() != null).toList()) {
             List<String> existing = jdbc.query("""
                     SELECT id FROM question_bank_chapter WHERE bank_id = ? AND chapter_code = ?
                     """, (result, row) -> result.getString("id"), BOOK_ID, chapter.code());
             String id;
             if (existing.isEmpty()) {
                 id = stableUuid("book-chapter:" + BOOK_ID + ":" + chapter.code());
-                String parentId = chapter.parentCode() == null ? null : ids.get(chapter.parentCode());
-                if (chapter.parentCode() != null && parentId == null) {
-                    throw new IllegalStateException("数学一章节父级尚未建立：" + chapter.parentCode());
-                }
                 jdbc.update("""
                         INSERT INTO question_bank_chapter(
                             id, bank_id, parent_id, chapter_code, name, description, sort_order, revision)
                         VALUES (?, ?, ?, ?, ?, '', ?, 1)
-                        """, id, BOOK_ID, parentId, chapter.code(), chapter.name(), chapter.sortOrder());
+                        """, id, BOOK_ID, null, chapter.code(), chapter.name(), flatOrder);
             } else {
                 id = existing.get(0);
+                jdbc.update("UPDATE question_bank_chapter SET parent_id=NULL,sort_order=? WHERE id=?", flatOrder, id);
             }
             ids.put(chapter.code(), id);
+            flatOrder++;
         }
         return ids;
     }

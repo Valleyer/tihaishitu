@@ -13,6 +13,7 @@ import java.util.Set;
 @Repository
 public class LearnerPracticeStore {
     public record Session(String id, String learnerId, String intent, String targetKnowledgePointId,
+                          String targetBookId, String targetChapterId, String currentKnowledgePointId,
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
@@ -36,6 +37,32 @@ public class LearnerPracticeStore {
         }
     }
 
+    public void createChapter(String id,String learnerId,String bookId,String chapterId,String currentPointId,Set<String> scope){
+        jdbc.update("""
+                INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,
+                    target_book_id,target_chapter_id,current_knowledge_point_id,status,revision)
+                VALUES (?,?,'chapter_drill',NULL,?,?,?,'active',1)
+                """,id,learnerId,bookId,chapterId,currentPointId);
+        for(String pointId:scope)jdbc.update("INSERT INTO learner_practice_scope(session_id,knowledge_point_id) VALUES (?,?)",id,pointId);
+    }
+
+    public List<String> chapterKnowledgePoints(String learnerId,String bookId,String chapterId){
+        return jdbc.query("""
+                SELECT bk.knowledge_point_id FROM question_bank_knowledge bk
+                JOIN learner_selected_book selected ON selected.bank_id=bk.bank_id AND selected.learner_id=?
+                JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id AND k.status='active'
+                WHERE bk.bank_id=? AND bk.chapter_id=? AND %s ORDER BY bk.sort_order,bk.knowledge_point_id
+                """.formatted(TrainableKnowledge.exists("k")),(rs,row)->rs.getString(1),learnerId,bookId,chapterId);
+    }
+
+    public void setCurrentKnowledgePoint(String id,String learnerId,String pointId){
+        jdbc.update("UPDATE learner_practice_session SET current_knowledge_point_id=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND learner_id=? AND status='active'",pointId,id,learnerId);
+    }
+
+    public Optional<Session> latestActiveChapter(String learnerId){
+        return sessions("WHERE learner_id=? AND intent='chapter_drill' AND status='active' ORDER BY updated_at DESC LIMIT 1",learnerId).stream().findFirst();
+    }
+
     public Optional<Session> find(String id, String learnerId) {
         return sessions("WHERE id=? AND learner_id=?", id, learnerId).stream().findFirst();
     }
@@ -57,6 +84,11 @@ public class LearnerPracticeStore {
                 SELECT DISTINCT question_id FROM study_attempt
                  WHERE practice_session_id=? ORDER BY question_id
                 """, (rs, row) -> rs.getString(1), id));
+    }
+
+    public int attemptCount(String sessionId,String questionId){
+        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM study_attempt WHERE practice_session_id=? AND question_id=?",Integer.class,sessionId,questionId);
+        return count==null?0:count;
     }
 
     public void setCurrentAttempt(String id, String learnerId, String attemptId) {
@@ -86,6 +118,7 @@ public class LearnerPracticeStore {
                   JOIN global_knowledge_point k ON k.id=a.target_knowledge_point_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.assessment IN ('wrong','partial')
                    AND q.status='published'
+                   AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND k.status='active'
                    AND """ + " " + TrainableKnowledge.exists("k") + """
@@ -104,11 +137,13 @@ public class LearnerPracticeStore {
 
     private List<Session> sessions(String predicate, Object... args) {
         return jdbc.query("""
-                SELECT id,learner_id,intent,target_knowledge_point_id,source_question_id,current_attempt_id,
+                SELECT id,learner_id,intent,target_knowledge_point_id,target_book_id,target_chapter_id,
+                       current_knowledge_point_id,source_question_id,current_attempt_id,
                        status,revision,created_at,updated_at,ended_at
                   FROM learner_practice_session %s
                 """.formatted(predicate), (rs, row) -> new Session(rs.getString("id"),
                 rs.getString("learner_id"), rs.getString("intent"), rs.getString("target_knowledge_point_id"),
+                rs.getString("target_book_id"),rs.getString("target_chapter_id"),rs.getString("current_knowledge_point_id"),
                 rs.getString("source_question_id"), rs.getString("current_attempt_id"), rs.getString("status"),
                 rs.getLong("revision"), rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant(),
