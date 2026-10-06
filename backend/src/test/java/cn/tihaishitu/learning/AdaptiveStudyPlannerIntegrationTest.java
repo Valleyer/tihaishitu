@@ -26,7 +26,7 @@ class AdaptiveStudyPlannerIntegrationTest {
     @Autowired LearnerKnowledgeStateStore states;
 
     @Test
-    void dependencyReadinessUsesEffectiveMasteryAndLeavesLegacyScopeOnly() {
+    void playableScopeNoLongerDependsOnDependencyReadinessOrMastery() {
         String learner = learner();
         String k1 = knowledge("K1"), k2 = knowledge("K2"), k3 = knowledge("K3");
         String book = book(List.of(k1, k2, k3));
@@ -36,26 +36,24 @@ class AdaptiveStudyPlannerIntegrationTest {
         AdaptiveStudyPlanner planner = new AdaptiveStudyPlanner(pool, states);
         Set<String> allowed = Set.of(k1, k2, k3);
 
-        var initial = planner.planAt(learner, Set.of(book), List.of(), false, 1, NOW);
-        assertThat(initial.readyKnowledgePointIds()).isEmpty();
-        assertThat(initial.targetKnowledgePointIds()).containsExactly(k1);
-        assertThat(pool.adaptivePlayableKnowledgePointIds(allowed, Set.of())).containsExactly(k1);
-
-        states.save(learner, k1, state(80, 365, 3, NOW));
-        var ready = planner.planAt(learner, Set.of(book), List.of(), false, 2, NOW);
-        assertThat(ready.readyKnowledgePointIds()).containsExactly(k1);
-        assertThat(pool.adaptivePlayableKnowledgePointIds(allowed, Set.of(k1)))
-                .containsExactlyInAnyOrder(k1, k2);
-
-        states.save(learner, k1, state(80, 1, 3, NOW.minusSeconds(2 * 86400L)));
-        var forgotten = planner.planAt(learner, Set.of(book), List.of(), false, 1, NOW);
-        assertThat(forgotten.readyKnowledgePointIds()).isEmpty();
-        assertThat(pool.adaptivePlayableKnowledgePointIds(allowed, Set.of())).containsExactly(k1);
+        // 最新规则：core + auxiliary 都算覆盖，前置知识点未 ready 也不再阻止登记为可练。
         assertThat(pool.playableKnowledgePointIds(allowed)).containsExactlyInAnyOrder(k1, k2, k3);
+
+        // 全部未开始：三个知识点都可作为目标，随机计划不能因为 mastery=0 失败。
+        var initial = planner.planAt(learner, Set.of(book), List.of(), false, 3, NOW);
+        assertThat(initial.targetKnowledgePointIds()).containsExactlyInAnyOrder(k1, k2, k3);
+
+        // 即使 K1 达到高掌握度，可练集合也不改变；忘记（effective 下降）同样不改变可练集合。
+        states.save(learner, k1, state(80, 365, 3, NOW));
+        assertThat(pool.playableKnowledgePointIds(allowed)).containsExactlyInAnyOrder(k1, k2, k3);
+        states.save(learner, k1, state(80, 1, 3, NOW.minusSeconds(2 * 86400L)));
+        assertThat(pool.playableKnowledgePointIds(allowed)).containsExactlyInAnyOrder(k1, k2, k3);
+        assertThat(planner.planAt(learner, Set.of(book), List.of(), false, 3, NOW).targetKnowledgePointIds())
+                .containsExactlyInAnyOrder(k1, k2, k3);
     }
 
     @Test
-    void autoPriorityAndManualFocusComposeWithoutReplacingMasteryOrder() {
+    void manualFocusPrioritizesFocusedTargetsWithoutDroppingOthers() {
         String learner = learner();
         String weak = knowledge("weak"), review = knowledge("review"), fresh = knowledge("new");
         String ready = knowledge("ready"), proficient = knowledge("proficient");
@@ -68,13 +66,17 @@ class AdaptiveStudyPlannerIntegrationTest {
         states.save(learner, proficient, state(90, 365, 5, NOW));
         AdaptiveStudyPlanner planner = new AdaptiveStudyPlanner(pool, states);
 
+        // 自动模式下候选只按随机池选取，不再使用 mastery / review 排序。
         var automatic = planner.planAt(learner, Set.of(book), List.of(), false, 5, NOW);
         assertThat(automatic.targetKnowledgePointIds())
-                .containsExactly(weak, review, fresh, ready, proficient);
+                .containsExactlyInAnyOrder(weak, review, fresh, ready, proficient);
 
+        // 手动 Focus 只做优先级前置：被聚焦的知识点排在最前，其余按随机顺序补齐。
         var manual = planner.planAt(learner, Set.of(book), List.of(fresh, review), true, 5, NOW);
+        assertThat(manual.targetKnowledgePointIds()).hasSize(5);
+        assertThat(manual.targetKnowledgePointIds().subList(0, 2)).containsExactly(fresh, review);
         assertThat(manual.targetKnowledgePointIds())
-                .containsExactly(review, fresh, weak, ready, proficient);
+                .containsExactlyInAnyOrder(weak, review, fresh, ready, proficient);
     }
 
     private String learner() {

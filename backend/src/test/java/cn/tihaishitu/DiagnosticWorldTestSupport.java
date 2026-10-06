@@ -61,9 +61,25 @@ abstract class DiagnosticWorldTestSupport {
         rootRelations.add(relation(target, "core"));
         dependencies.forEach(dependency -> rootRelations.add(relation(dependency, "auxiliary")));
         String root = question(2, rootRelations);
-        question(1, List.of(relation(target, "core")));
-        question(3, List.of(relation(target, "core")));
+        // 目标知识点只保留 root 一道正式题：
+        // 正式题抽取现在在候选池内随机，多留同知识点的干扰题会让“第一题必须是 root”的断言不确定；
+        // 同时也能覆盖“知识点只有一道题时核验 / 补救复用该题”的真实场景。
+        deleteExtraTargetQuestions(target, root);
         return new Scenario(book, target, List.copyOf(dependencies), List.copyOf(fillers), root);
+    }
+
+    /** 删除某个知识点除 keep 之外的正式父题及其关系，保证该知识点的候选题唯一。 */
+    private void deleteExtraTargetQuestions(String point, String keep) {
+        List<String> others = jdbc.queryForList("""
+                SELECT DISTINCT q.id FROM question_resource q
+                JOIN question_resource_knowledge qk ON qk.question_id = q.id
+                WHERE qk.knowledge_point_id = ? AND q.id <> ?
+                """, String.class, point, keep);
+        for (String id : others) {
+            jdbc.update("DELETE FROM question_resource_knowledge WHERE question_id=?", id);
+            jdbc.update("DELETE FROM question_resource_option WHERE question_id=?", id);
+            jdbc.update("DELETE FROM question_resource WHERE id=?", id);
+        }
     }
 
     ExamScenario examScenario() {
@@ -106,8 +122,7 @@ abstract class DiagnosticWorldTestSupport {
             List<String> targets = new ArrayList<>();
             targets.add(scenario.target());
             targets.addAll(scenario.fillers());
-            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed,
-                    new LinkedHashSet<>(scenario.dependencies()), List.copyOf(targets.subList(0, count)));
+            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed, List.copyOf(targets.subList(0, count)));
         }).when(planner).randomPlan(anyString(), anySet(), anyInt());
     }
 

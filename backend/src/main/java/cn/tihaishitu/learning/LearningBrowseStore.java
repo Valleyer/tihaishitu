@@ -33,7 +33,7 @@ public class LearningBrowseStore {
                           FROM question_bank_knowledge bk
                           JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
                           JOIN question_resource q ON q.id=qk.question_id
-                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                         WHERE bk.bank_id=b.id AND qk.relation_role IN ('core','auxiliary') AND q.status='published'
                            AND q.parent_question_id IS NULL
                            AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
                   FROM question_bank b
@@ -60,7 +60,7 @@ public class LearningBrowseStore {
                           FROM question_bank_knowledge bk
                           JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
                           JOIN question_resource q ON q.id=qk.question_id
-                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                         WHERE bk.bank_id=b.id AND qk.relation_role IN ('core','auxiliary') AND q.status='published'
                            AND q.parent_question_id IS NULL
                            AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
                   FROM question_bank b
@@ -97,7 +97,8 @@ public class LearningBrowseStore {
                   FROM question_bank_chapter c
                   LEFT JOIN question_bank_knowledge bk ON bk.chapter_id=c.id AND bk.bank_id=c.bank_id
                   LEFT JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id
-                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id
+                            AND qk.relation_role IN ('core','auxiliary')
                   LEFT JOIN question_resource q ON q.id=qk.question_id
                  WHERE c.bank_id=?
                  GROUP BY c.id
@@ -203,7 +204,7 @@ public class LearningBrowseStore {
                        MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
                        (SELECT COUNT(DISTINCT q.id) FROM question_resource_knowledge qk
                          JOIN question_resource q ON q.id=qk.question_id
-                        WHERE qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                        WHERE qk.knowledge_point_id=k.id AND qk.relation_role IN ('core','auxiliary')
                           AND q.status='published'
                           AND q.parent_question_id IS NULL
                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) published_count

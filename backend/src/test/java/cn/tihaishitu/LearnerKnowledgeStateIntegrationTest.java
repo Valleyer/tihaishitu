@@ -73,7 +73,7 @@ class LearnerKnowledgeStateIntegrationTest {
         doAnswer(invocation -> {
             int count = invocation.getArgument(2);
             List<String> targets = new ArrayList<>(); targets.add(k1); targets.addAll(fillers);
-            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed, java.util.Set.of(k2),
+            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed,
                     List.copyOf(targets.subList(0, count)));
         }).when(planner).randomPlan(anyString(), anySet(), anyInt());
         mvc.perform(get("/api/v1/learner/knowledge-states/{id}", k1).cookie(learner))

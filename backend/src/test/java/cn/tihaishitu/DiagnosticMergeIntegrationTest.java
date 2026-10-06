@@ -46,11 +46,18 @@ class DiagnosticMergeIntegrationTest extends DiagnosticWorldTestSupport {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_diagnosis_dependency WHERE diagnosis_id=? AND knowledge_point_id=?", Integer.class, diagnosis, source)).isZero();
         assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_dependency WHERE diagnosis_id=? AND knowledge_point_id=?", String.class, diagnosis, target)).isEqualTo("pending");
 
+        // 最新规则：题目关联的其他知识点不再是 prerequisite，因此该依赖仍然可练，
+        // 诊断继续走 dependency probe，而不是因为“依赖不可用”被整段跳过。
         game = next(cookie, game);
-        assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_dependency WHERE diagnosis_id=? AND knowledge_point_id=?", String.class, diagnosis, target)).isEqualTo("unavailable");
-        assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis)).isEqualTo("rechecking_target");
-        assertThat(jdbc.queryForObject("SELECT diagnosis_role FROM study_attempt WHERE id=?", String.class, currentAttempt(game))).isEqualTo("target_recheck");
+        String probe = currentAttempt(game);
+        assertThat(jdbc.queryForObject("SELECT diagnosis_role FROM study_attempt WHERE id=?", String.class,
+                probe)).isEqualTo("dependency_probe");
+        assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_dependency WHERE diagnosis_id=? AND knowledge_point_id=?",
+                String.class, diagnosis, target)).isEqualTo("pending");
+        assertThat(jdbc.queryForObject("SELECT target_knowledge_point_id FROM study_attempt WHERE id=?", String.class,
+                probe)).isEqualTo(target);
 
+        // 放弃诊断时不能把根错误强行归因到目标知识点。
         abandon(cookie, game);
         assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis)).isEqualTo("abandoned");
         assertThat(jdbc.queryForObject("SELECT resolution FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis)).isEqualTo("abandoned");

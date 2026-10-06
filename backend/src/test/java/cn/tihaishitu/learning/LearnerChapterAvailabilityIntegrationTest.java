@@ -3,6 +3,7 @@ package cn.tihaishitu.learning;
 import cn.tihaishitu.game.KnowledgeQuestionPoolService;
 import cn.tihaishitu.game.QuestionAttemptStore;
 import cn.tihaishitu.learner.LearnerAuthService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Study 章节练习入口的“当前可练知识点数”必须按学习者实时状态计算，而不是目录静态计数；
+ * Study 章节练习入口的“可练知识点数”等于章节内存在正式题的知识点数：
+ * 不再随每日答题情况、Review 到期或依赖 readiness 变化（最新长期规则）。
  * 同时 /learner/progress 的最近学习路径必须来自正式目录（Book → Chapter），
  * 不得再回落到 legacy subject_name / section_name / chapter_name。
  */
@@ -53,8 +55,8 @@ class LearnerChapterAvailabilityIntegrationTest {
                 "SELECT id FROM learner_account WHERE username='chapter-availability'", String.class);
         Fixture fixture = fixture(learner);
 
-        // 目录静态计数为 2：两个知识点都挂着已发布正式题，学习者尚未作答。
-        // 整本一次请求即可拿到两章各自的可用数。
+        // 目录静态计数为 2：两个知识点都挂着已发布正式题。
+        // 整本一次请求即可拿到两章各自的可练知识点数。
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chapters[0].knowledgePointCount").value(2))
@@ -67,32 +69,34 @@ class LearnerChapterAvailabilityIntegrationTest {
                 .containsEntry(fixture.secondChapter, 1);
         assertBatchMatchesSingleChapter(learner, fixture);
 
-        // 今天答对第一题后，该题当天不再待练，可用知识点数降到 1；目录静态值仍是 2。
+        // 今天答对第一题后仍然可以继续练：可练知识点数不下降，也不会因 Review 未到期变成 0。
         graded(learner, fixture.firstPoint, fixture.firstQuestion, true, Instant.now());
-        assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isEqualTo(1);
+        assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isEqualTo(2);
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.chapters[0].trainableKnowledgePointCount").value(2))
-                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(1))
+                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(2))
                 .andExpect(jsonPath("$.chapters[1].availableKnowledgePointCount").value(1));
         assertBatchMatchesSingleChapter(learner, fixture);
 
-        // 第二题也答对后章节内已无可练正式题，按钮应显示 0/禁用，而不是点击后才吃 400。
+        // 两道题都答对后依然可练：Playability 与 Mastery 每日奖励已经完全分离。
         graded(learner, fixture.secondPoint, fixture.secondQuestion, true, Instant.now());
-        assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isZero();
+        assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isEqualTo(2);
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.chapters[0].trainableKnowledgePointCount").value(2))
-                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(0))
-                .andExpect(jsonPath("$.chapters[1].availableKnowledgePointCount").value(1));
+                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(2));
         assertBatchMatchesSingleChapter(learner, fixture);
-        mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
+
+        // 章节练习仍然可以正常启动，并在 Session 内不重复同一道题。
+        JsonNode session = json(mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
                         .contentType("application/json")
                         .content("{\"intent\":\"chapter_drill\",\"targetBookId\":\"%s\",\"targetChapterId\":\"%s\"}"
                                 .formatted(fixture.book, fixture.chapter)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated()).andReturn());
+        String sessionId = session.path("id").asText();
+        String firstSeen = session.path("currentAttempt").path("question").path("id").asText();
+        assertThat(firstSeen).isIn(fixture.firstQuestion, fixture.secondQuestion);
 
-        // 第二个业务日：两个知识点都是“上一个业务日答对”，重新开放，可用知识点数回到 2。
+        // 第二个业务日不会改变可练性。
         jdbc.update("""
                 UPDATE study_attempt SET answered_at = TIMESTAMPADD('DAY', -1, answered_at)
                  WHERE learner_id=? AND target_knowledge_point_id IN (?,?)
@@ -249,6 +253,10 @@ class LearnerChapterAvailabilityIntegrationTest {
                         .content("{\"username\":\"%s\",\"displayName\":\"章节可用性\",\"password\":\"password-123\"}"
                                 .formatted(username)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+    }
+
+    private JsonNode json(org.springframework.test.web.servlet.MvcResult result) throws Exception {
+        return mapper.readTree(result.getResponse().getContentAsString());
     }
 
     private record Fixture(String book, String chapter, String chapterName, String secondChapter,

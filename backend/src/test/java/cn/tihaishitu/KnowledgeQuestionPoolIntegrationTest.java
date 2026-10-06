@@ -41,19 +41,22 @@ class KnowledgeQuestionPoolIntegrationTest {
     }
 
     @Test
-    void candidateRequiresCurrentCoreAndAllDependenciesInsideAllowedScope() {
+    void candidateCoversCoreAndAuxiliaryWithoutRequiringDependencies() {
         String pointA = knowledge("A");
         String pointB = knowledge("B");
         String pointC = knowledge("C");
-        String valid = question("core A", 3, relation(pointA, "core"));
-        question("A only auxiliary", 2, relation(pointA, "auxiliary"), relation(pointB, "core"));
-        question("outside dependency", 2, relation(pointA, "core"), relation(pointC, "auxiliary"));
+        String coreA = question("core A", 3, relation(pointA, "core"));
+        String auxiliaryA = question("A only auxiliary", 2, relation(pointA, "auxiliary"), relation(pointB, "core"));
+        String outsideDependency = question("outside dependency", 2,
+                relation(pointA, "core"), relation(pointC, "auxiliary"));
 
         List<String> candidates = pool.eligibleQuestions(
                         request(pointA, Set.of(pointA, pointB), Set.of(), false)).stream()
                 .map(question -> question.id()).toList();
 
-        assertThat(candidates).containsExactly(valid);
+        // 最新规则：core 与 auxiliary 都算该知识点的专项候选；
+        // 题目关联的其他知识点即使不在 allowed scope 内，也不再阻止发题。
+        assertThat(candidates).containsExactlyInAnyOrder(coreA, auxiliaryA, outsideDependency);
     }
 
     @Test

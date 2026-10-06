@@ -31,16 +31,12 @@ class LearnerPracticeIntegrationTest {
 
     @Test void explicitKnowledgeDrillUsesScopeWithoutRequiringDependencyMastery() throws Exception {
         DependencyFixture fixture = dependencyFixture("practice-scope-only");
-        var worldPolicy = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
-                fixture.target(), Set.of(fixture.target(), fixture.dependency()), Set.of(), Set.of(), 2,
-                KnowledgeQuestionPoolService.Mode.NORMAL,
-                KnowledgeQuestionPoolService.DependencyPolicy.REQUIRE_READY);
-        assertThat(pool.eligibleQuestionsForLearner(worldPolicy)).isEmpty();
-        var hubPolicy = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
-                fixture.target(), Set.of(fixture.target(), fixture.dependency()), Set.of(), Set.of(), 2,
-                KnowledgeQuestionPoolService.Mode.NORMAL,
-                KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
-        assertThat(pool.eligibleQuestionsForLearner(hubPolicy)).extracting(question -> question.id())
+        // 最新规则：不再存在“World 严格依赖 / Hub 只看范围”两套策略。
+        // 前置知识点未掌握也不能阻止发题，hub 与 world 使用同一个候选池。
+        var policy = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
+                fixture.target(), Set.of(fixture.target(), fixture.dependency()), Set.of(), 2,
+                KnowledgeQuestionPoolService.Mode.NORMAL);
+        assertThat(pool.eligibleQuestionsForLearner(policy)).extracting(question -> question.id())
                 .containsExactly(fixture.question());
 
         Cookie learner = register("practice-scope-only");
@@ -103,10 +99,11 @@ class LearnerPracticeIntegrationTest {
                 assertThat(question.path("learnerQuestionStatus").asText()).isEqualTo("mastered"));
         mvc.perform(post("/api/v1/learner/practice-sessions/{id}/end", sessionId).with(csrf()).cookie(learner))
                 .andExpect(status().isOk());
+        // 最新规则：今天已经答对的题仍然可以再练（重新开 Session 进入随机池），不再返回 400。
         mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(learner)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"intent\":\"knowledge_drill\",\"targetKnowledgePointId\":\"%s\"}".formatted(fixture.point())))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_world_state", Integer.class)).isZero();
     }
 
@@ -142,9 +139,9 @@ class LearnerPracticeIntegrationTest {
     }
 
     @Test void failedParentRunsRemedialStepsOnceThenRetriesParentWithoutChildEvidence() throws Exception {
-        Fixture fixture = fixture("practice-remedial");
-        String parent = jdbc.queryForObject(
-                "SELECT id FROM question_resource WHERE content_markdown='practice-remedial-q1'", String.class);
+        // 最新规则下正式题抽取是随机的，因此用只含一道正式题的 fixture 保证父题唯一。
+        SingleQuestionFixture fixture = singleQuestionFixture("practice-remedial");
+        String parent = fixture.question();
         for (int order = 1; order <= 3; order++) {
             String child = UUID.randomUUID().toString();
             jdbc.update("""
@@ -253,6 +250,23 @@ class LearnerPracticeIntegrationTest {
         return new Fixture(book, point);
     }
 
+    /**
+     * 只挂一道正式题的知识点：用于依赖“第一次一定抽到该题”的补救流程测试。
+     * 正式题抽取现在随机，多个候选会让断言不确定。
+     */
+    private SingleQuestionFixture singleQuestionFixture(String prefix) {
+        Fixture fixture = fixture(prefix);
+        String first = jdbc.queryForObject(
+                "SELECT id FROM question_resource WHERE content_markdown=? AND parent_question_id IS NULL",
+                String.class, prefix + "-q1");
+        String second = jdbc.queryForObject(
+                "SELECT id FROM question_resource WHERE content_markdown=? AND parent_question_id IS NULL",
+                String.class, prefix + "-q2");
+        jdbc.update("DELETE FROM question_resource_knowledge WHERE question_id=?", second);
+        jdbc.update("DELETE FROM question_resource WHERE id=?", second);
+        return new SingleQuestionFixture(fixture.book(), fixture.point(), first);
+    }
+
     private DependencyFixture dependencyFixture(String prefix) {
         String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
         String target = UUID.randomUUID().toString(), dependency = UUID.randomUUID().toString();
@@ -334,5 +348,6 @@ class LearnerPracticeIntegrationTest {
     }
     private JsonNode json(String value) throws Exception { return mapper.readTree(value); }
     private record Fixture(String book, String point) {}
+    private record SingleQuestionFixture(String book, String point, String question) {}
     private record DependencyFixture(String book, String target, String dependency, String question) {}
 }

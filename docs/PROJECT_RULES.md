@@ -171,8 +171,26 @@ core
 auxiliary
 ```
 
-Mastery 只按 `core` 计入对应知识点的正式熟练度；`auxiliary` 不进入该知识点的
-熟练度分母。若一题
+一个 KnowledgePoint 的**正式题集合**定义为：
+
+```text
+与该 KnowledgePoint 存在 question_resource_knowledge 关系的
+所有 published Formal Parent Question
+= core + auxiliary（按题目 ID 去重）
+```
+
+`relation_role` 只用于知识标签主次显示与诊断 / 内容解释，**不决定**：
+
+```text
+题目能不能做
+是否进入该 KnowledgePoint 的 Mastery 分母
+```
+
+UI 题数、Mastery 分母与专项候选必须共用同一个覆盖口径，统一由
+`KnowledgeQuestionCoveragePolicy` 提供 SQL 片段。禁止再出现“页面显示 3 道、
+Mastery 分母只算 core 的 2 道”这类多套口径。
+
+若一题
 
 ```text
 Q → K1 core
@@ -185,6 +203,9 @@ Q → K2 core
 Learner + K1 + Q
 Learner + K2 + Q
 ```
+
+一次 attempt 仍然只有一个 `targetKnowledgePointId`：一题绑定多个 KnowledgePoint
+**不会**在一次作答中同时给所有 KnowledgePoint 加分。
 
 ---
 
@@ -299,7 +320,26 @@ partial → -X
 ### 7.4 KnowledgePoint 熟练度
 
 ```text
-Knowledge Mastery = 当前所有正式 core 父题槽位分数的平均值
+Knowledge Mastery = 当前所有正式父题槽位分数之和 / 当前正式父题总数
+正式父题总数 = 与该 KnowledgePoint 有关系的 published Formal Parent Question
+             = core + auxiliary（按题目 ID 去重，见 §5）
+```
+
+口径必须唯一：知识点页面显示的“相关正式真题”数量、Mastery 分母与专项候选
+必须来自同一份覆盖口径（`KnowledgeQuestionCoveragePolicy`）。
+
+例如某 KnowledgePoint 关联 3 道正式父题：
+
+```text
+Q1 core
+Q2 core
+Q3 auxiliary
+```
+
+只做了 1 道且第一次正确（该题 slot = 30）：
+
+```text
+Knowledge Mastery = 30 / 3 = 10.0%
 ```
 
 新增正式题：
@@ -395,6 +435,33 @@ Question 被 archive / unavailable 时：
 批量删除返回 409 并引导改用下架 / 归档。用户学习历史优先于后台清理便利，
 外键不得改成 `ON DELETE CASCADE`。
 
+### 8.5 错题练习的两个 intent
+
+```text
+wrong_review  用户从错题本点某一题，只重做这一题（sourceQuestionId 必填）
+wrong_drill   快速练习错题：随机连续刷 active 错题
+```
+
+`wrong_drill` 行为：
+
+```text
+只读取 learner_wrong_question.status = 'active'
+排除下架 / 非 Formal 题
+限制在当前 selected Books 覆盖范围
+Session 内不重复
+全部做完后本轮结束
+0 道 active 错题时入口禁用并给出友好提示，不返回 500
+```
+
+永久错题规则在快练中不变：
+
+```text
+快速练习中答对 ≠ 自动移出错题本
+```
+
+只有用户手动移出才 `removed`。`wrong_review` 与 `wrong_drill` 都计入
+Statistics 的错题练习作答统计（`wrongReviewAttempts`）。
+
 ---
 
 ## 9. Study 与 Question Bank 职责
@@ -427,40 +494,131 @@ Evidence
 ```
 
 不能做两套独立学习状态。Study 只展示已加入学习范围的 Book；题库也以当前
-selected books 为准。章节入口的“当前可练知识点数”必须按 Learner 实时状态计算
-（scope + core 正式题 + 依赖满足 + 未见 / 上一业务日答对 / 复习到期），不得用目录静态
-计数冒充，避免“按钮可点、点击才报错”。
+selected books 为准。
+
+Chapter 入口的“可练知识点数”等于该 Chapter 内**存在至少一道正式父题**的知识点数
+（core + auxiliary 都算，见 §5）。它**不再**随以下因素变化：
+
+```text
+依赖 readiness
+今日是否已经答对
+Review 是否到期
+Mastery 高低
+```
+
+### 9.1 Playability 与 Mastery Reward 分离
+
+必须区分：
+
+```text
+能不能练
+```
+
+和：
+
+```text
+这次作答能不能增加 Mastery
+```
+
+今天已经答对过一道题：
+
+```text
+仍然可以再次练
+但同一业务日后续正确不再获得 Mastery 奖励
+```
+
+禁止再用：
+
+```text
+今天答对过，所以不可练
+等 Review 到期才能重新开放
+已掌握题禁止练
+```
+
+只要当前训练上下文里存在正式题，用户就能练。Knowledge Drill 不得因为今日做过或
+Review 未到期返回“当前没有待练题”。
 
 ---
 
-## 10. Question Rotation
+## 10. 正式题抽取
 
-当前 run：
-
-```text
-seenQuestionIds 是硬排除
-```
-
-跨 run 的排序原则：
+正式候选池确定后：
 
 ```text
-曝光更少
-→ 与 preferred difficulty 更接近
-→ 更久未见
-→ 完全并列时随机
+当前 Session / run 内优先排除 seenQuestionIds，避免立刻重复
+未见候选中随机选择
+新 Session / 新 run 重新进入随机池
 ```
 
-难度只是 **soft preference**：
+正式题发题条件只剩：
 
 ```text
-difficulty 只参与排序
-不形成 hard difficulty bucket
+status = published
+parent_question_id IS NULL
+正式题型
+当前训练上下文所属 Book / Chapter / KnowledgePoint 范围
+本 Session / run 未见
 ```
 
-禁止恢复“只在同难度题中轮换”“nearestDifficultyBucket 硬过滤”这类旧逻辑，
-否则其他难度的题可能永远抽不到。Exposure 是软排序，不设置固定 cooldown 或
-永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。
-Learning Hub 的只读题目浏览不创建 attempt，不计入正式 Exposure。
+禁止再用以下因素决定一题“能不能被抽到”：
+
+```text
+dependency readiness
+Mastery
+Review due
+preferred difficulty
+exposure soft ordering
+```
+
+`difficulty` 只是题目元数据；`AdaptiveSchedulingPolicy.preferredDifficulty` 仍然存在，
+但只作为 Remedial / training 出题的软提示，不阻止正式题被抽中。掌握上限按有效掌握度
+分档（未开始或低于 40 为 2、低于 70 为 3、低于 100 为 4、100 为 5），
+`standard` 取目标难度与上限的较小值，`gentle` 再下调一级但不低于 1。
+
+Remedial 子题内部若仍需要低难度策略可以保留，因为它不是普通 Formal Question 抽取。
+
+`study_attempt` 仍是 Question Exposure 的事实来源，Learning Hub 的只读题目浏览
+不创建 attempt，不计入 Exposure。全部候选都见过时不报错阻断，由调用方结束本轮。
+
+---
+
+## 10.1 真题来源与展示标签
+
+真题的事实来源是结构化字段：
+
+```text
+question_resource.exam_year
+question_resource.subject_name
+question_resource.source_name
+question_resource.question_number
+```
+
+展示标签由 API 动态生成，**不为显示文字新增 question_tag 表**：
+
+```text
+数学一 + 2021 → 2021年考研数学一真题
+408 + 2024    → 2024年408考研真题
+```
+
+所有正式做题页（KnowledgePoint 专项、Chapter Practice、单题错题重做、错题快速练习、
+World / 副本与其他共享 Question Engine 的页面）都要显示：
+
+```text
+sourceName
+examYear
+questionNumber
+examLabel
+knowledgePoints[{id, name, role}]（core / auxiliary 都显示）
+```
+
+这些元数据在发题时冻结进 `question_snapshot_json`，同一 attempt 刷新后保持稳定。
+前端不得通过字符串猜来源。
+
+**年份不是 KnowledgePoint。** 不要创建 `2021年` / `2022年` 这类 KnowledgePoint，
+否则会污染 Mastery。年份事实源只有 `question_resource.exam_year`。
+未来若做“历年真题 / 年份分组”，优先设计 Question Collection / Exam Paper / Year grouping；
+如果未来要做“基础书达标才能进入真题书”，也应实现为 **Book → Book prerequisite**，
+不得恢复 Question 级 KnowledgePoint prerequisite gating。
 
 ---
 
@@ -652,6 +810,11 @@ V1–V18 已冻结
 ```
 
 `V13__flatten_book_chapters.sql` 属于既有发布历史，保持原样。
+
+真题 metadata 整理（`exam_year` 回填、408 `source_name` 补年份前缀）属于数据维护，
+不是 schema 变更，使用幂等脚本 `scripts/normalize-exam-metadata.sql` 执行，不新增 migration。
+`exam_year` 只做确定性回填：已有值不覆盖，只对空值按 `question_number` 的
+`YYYY-` 前缀或 `source_name` 开头的四位年份推断；无法确定的一律不猜。
 
 ---
 

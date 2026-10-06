@@ -5,11 +5,12 @@ import { RichText } from "../components/RichText";
 import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
 import { AnswerDisplay } from "./practiceView";
+import { attemptKnowledgeTags, chapterProgressText, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
 import "./platform.css";
 
 const go = navigate;
@@ -47,7 +48,7 @@ export const safePracticeReturnTo = (intent: PracticeSession["intent"]) => {
   const allowed = value === "/study" || value === "/wrong-questions" || value === "/progress"
     || value?.startsWith("/progress/") || value?.startsWith("/knowledge/");
   return value && value.startsWith("/") && !value.startsWith("//") && !value.includes("://") && allowed
-    ? value : intent === "wrong_review" ? "/wrong-questions" : "/study";
+    ? value : intent === "wrong_review" || intent === "wrong_drill" ? "/wrong-questions" : "/study";
 };
 const practicePath = (id: string, returnTo: string) => `/practice/${id}?returnTo=${encodeURIComponent(returnTo)}`;
 
@@ -155,24 +156,33 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   const [profile, setProfile] = useState<StudyProfile>(data.studyProfile); const [selected, setSelected] = useState(data.studyProfile.selectedBookIds);
   const [details, setDetails] = useState<BookDetail[]>([]); const [wrongCount, setWrongCount] = useState(0);
   const [progress,setProgress]=useState<LearnerProgress|null>();
-  const [activeChapter,setActiveChapter]=useState<PracticeSession>();
+  const [recent,setRecent]=useState<RecentChapter|null>();
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.activeChapterPractice().then(setActiveChapter).catch(()=>setActiveChapter(undefined)); }, [data.studyProfile.selectedBookIds]);
+  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.recentChapter().then(setRecent).catch(()=>setRecent(null)); }, [data.studyProfile.selectedBookIds]);
   const book=details.find(item=>item.id===bookId); const chapters=book ? flattenChapters(book.chapters) : []; const chapter=chapters.find(item=>item.id===chapterId);
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
   const start=async()=>{if(!book||!chapter)return;try{const session=await platformApi.startChapterPractice(book.id,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
-  const activeBook=details.find(item=>item.id===activeChapter?.targetBookId); const activeChapterView=activeBook?.chapters.find(item=>item.id===activeChapter?.targetChapterId);
-  const activeIndex=activeChapterView?.knowledgePoints.findIndex(item=>item.id===activeChapter?.currentKnowledgePointId)??-1;
+  /** 再次练习：用最近一次章节练习的 Book + Chapter 新建 chapter_drill，不恢复已结束的 Session。 */
+  const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  /** 快速练习错题：随机连续刷 active 错题，答对不会自动移出错题本。 */
+  const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const mode=recentChapterMode(recent);
   return <Shell data={data}><main className="hub-main study-page">
-    <section className="learning-focus-grid"><article className="continue-card">{activeChapter?<><h2>{activeBook?.name||"章节练习"}</h2><div className="continue-mastery"><span>{activeChapterView?.name}</span><span>当前进度：{activeIndex>=0?activeIndex+1:"—"} / {activeChapterView?.knowledgePoints.length||"—"}</span></div><button className="hub-primary" onClick={()=>go(practicePath(activeChapter.id,"/study"))}>继续章节练习 →</button></>:<><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}</article><article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
+    <section className="learning-focus-grid">
+      <article className="continue-card">
+        {mode==="active"&&recent?<><h2>{recent.bookName||"章节练习"}</h2><div className="continue-mastery"><span>{recent.chapterName||"章节练习"}</span><span>{chapterProgressText(recent)}</span></div><button className="hub-primary" onClick={()=>go(practicePath(recent.activeSessionId!,"/study"))}>继续章节练习 →</button></>:
+         mode==="last"&&recent?<><p className="section-kicker">最近练习章节</p><h2>{recent.bookName||"章节练习"}</h2><div className="continue-meta"><span>{recent.chapterName||"章节练习"}</span><small className="continue-time">{recent.updatedAt?`最近练习 ${recentTime(recent.updatedAt)}`:"最近练习时间未知"}</small></div><button className="hub-primary" onClick={again}>再次练习 →</button></>:
+         <><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}
+      </article>
+      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
     <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
       <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
       {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
       {chapter && <div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
-      <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><HubLink className="hub-primary" href="/wrong-questions">进入错题本</HubLink></section>
+      <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><div className="wrong-entry-actions"><button className="hub-primary" disabled={wrongCount===0} onClick={quickWrong}>快速练习错题</button><HubLink href="/wrong-questions">进入错题本</HubLink></div></section>
     <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
     {message&&<p className="hub-message">{message}</p>}
   </main></Shell>;
@@ -255,7 +265,7 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
     {error && <p className="hub-error">{error}</p>}
     {items.length === 0 && <section className="hub-panel"><h2>错题本还是空的</h2></section>}
-    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><h2>{item.knowledgePointName}</h2><div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">{wrongQuestionUnavailableLabel(item.unavailableReason)}</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
+    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}>{item.examLabel&&<div className="practice-exam-meta"><span className="practice-exam-label">{item.examLabel}</span>{item.questionNumber&&<span className="practice-question-number">第{item.questionNumber}题</span>}</div>}<h2>{item.knowledgePointName}</h2>{item.knowledgePoints&&item.knowledgePoints.length>0&&<div className="tag-row">{item.knowledgePoints.map(point=><HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>)}</div>}<div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">{wrongQuestionUnavailableLabel(item.unavailableReason)}</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button className="secondary" onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
   </main></Shell>;
 }
 
@@ -277,13 +287,16 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
   const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer"><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</section>;
   const assessment = attempt.assessment || "wrong";
-  const practiceLabel=session.intent === "wrong_review" ? "错题重做" : session.intent === "chapter_drill" ? "章节知识练习" : "知识点练习";
-  return <Shell data={data}><main className="hub-main narrow practice-page"><button className="practice-exit" onClick={finish}>← 结束并返回</button><p className="eyebrow">{practiceLabel} · {attempt.targetKnowledgePointName}</p>
+  const title = examTitle(attempt);
+  const tags = attemptKnowledgeTags(attempt);
+  return <Shell data={data}><main className="hub-main narrow practice-page"><button className="practice-exit" onClick={finish}>← 结束并返回</button><p className="eyebrow">{practiceLabel(session.intent)} · {attempt.targetKnowledgePointName}</p>
+    {title&&<div className="practice-exam-meta">{attempt.examLabel&&<span className="practice-exam-label">{attempt.examLabel}</span>}{attempt.questionNumber&&<span className="practice-question-number">第{attempt.questionNumber}题</span>}{!attempt.examLabel&&attempt.sourceName&&<span className="practice-question-number">{attempt.sourceName}</span>}</div>}
+    {tags.length>0&&<div className="tag-row">{tags.map(tag=><HubLink className={`knowledge-tag ${tag.role||"core"}`} href={`/knowledge/${tag.id}`} key={tag.id}>{tag.name}</HubLink>)}</div>}
     <h1>{attempt.evidenceMode === "remedial" ? "分步讲练" : attempt.evidenceMode === "training" ? "补救训练" : "正式练习"}</h1>{error && <p className="hub-error">{error}</p>}
     <section className="hub-panel rich"><RichText>{question.question}</RichText><div className="practice-options">{Object.entries(practiceOptions).map(([key, text]) => <button className={selected.includes(key) ? "selected" : ""} disabled={attempt.status !== "active"} key={key} onClick={() => toggle(key)}><b>{key}.</b><RichText inline>{text}</RichText></button>)}</div></section>
     {attempt.status === "active" && question.gradingMode === "auto" && <button className="hub-primary" disabled={!selected.length} onClick={submit}>提交答案</button>}
     {attempt.status === "active" && question.gradingMode === "self_assessment" && <button className="hub-primary" onClick={() => update(platformApi.revealPractice(session))}>查看参考答案并自评</button>}
-    {attempt.status === "graded" && <section className={`practice-result ${assessment}`}><h2>{assessment === "correct" ? "✓ 回答正确" : assessment === "partial" ? "△ 部分正确" : "✕ 回答错误"}</h2><p>{session.flowComplete ? session.canRepeat ? "当前知识点流程已经完成。" : "本轮可练题目已完成" : "继续进入同一套诊断或补救流程。"}</p><div className="practice-actions">{session.flowComplete ? session.intent === "wrong_review" ? <button className="hub-primary" onClick={finish}>返回错题列表</button> : <>{session.canRepeat&&<button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>下一道题</button>}<button onClick={finish}>结束专项</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续下一题</button>}</div></section>}
+    {attempt.status === "graded" && <section className={`practice-result ${assessment}`}><h2>{assessment === "correct" ? "✓ 回答正确" : assessment === "partial" ? "△ 部分正确" : "✕ 回答错误"}</h2><p>{session.flowComplete ? session.canRepeat ? (session.intent === "wrong_drill" ? "还有没练过的错题，可以继续下一道。" : "当前知识点流程已经完成。") : "本轮可练题目已完成" : "继续进入同一套诊断或补救流程。"}</p><div className="practice-actions">{session.flowComplete ? <>{session.canRepeat&&<button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>下一道题</button>}<button onClick={finish}>{session.intent === "wrong_review" || session.intent === "wrong_drill" ? "返回错题列表" : "结束专项"}</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续下一题</button>}</div></section>}
     {attempt.status === "revealed" && <>{answerDetails}<div className="practice-assessment"><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div></>}
     {attempt.status === "graded" && answerDetails}
   </main></Shell>;

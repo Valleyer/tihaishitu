@@ -47,8 +47,10 @@ class ReviewQueueIntegrationTest {
                 .containsExactly(due, upcoming);
         assertThat(queue.items()).extracting(ReviewQueueService.ReviewItem::status)
                 .containsExactly("due", "upcoming");
+        // Playability 不再依赖 readiness：只要该知识点存在正式题（core 或 auxiliary 都算）就可安排复习。
         assertThat(queue.items()).extracting(ReviewQueueService.ReviewItem::playable)
-                .containsExactly(true, false);
+                .containsExactly(true, true);
+        // playableDueOrSoon 只统计 due / soon 窗口，upcoming 不计入。
         assertThat(queue.summary()).isEqualTo(new ReviewQueueService.ReviewSummary(1, 0, 1, 1));
         assertThat(count("learner_knowledge_state")).isEqualTo(stateCount);
         assertThat(count("learner_knowledge_evidence")).isEqualTo(evidenceCount);

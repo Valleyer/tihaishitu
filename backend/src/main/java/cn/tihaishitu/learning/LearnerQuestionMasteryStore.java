@@ -82,9 +82,10 @@ public class LearnerQuestionMasteryStore {
                   JOIN question_resource q ON q.id=a.question_id
                   JOIN question_resource_knowledge qk ON qk.question_id=q.id
                  WHERE a.learner_id=? AND a.target_knowledge_point_id=? AND a.status='graded'
-                   AND qk.knowledge_point_id=? AND qk.relation_role='core' AND %s
+                   AND qk.knowledge_point_id=? AND %s AND %s
                  ORDER BY a.answered_at,a.id
-                """.formatted(FormalQuestionPolicy.published("q")), (rs, row) ->
+                """.formatted(KnowledgeQuestionCoveragePolicy.anyRelationRole("qk"),
+                        FormalQuestionPolicy.published("q")), (rs, row) ->
                 new History(rs.getString(1), rs.getString(2), rs.getTimestamp(3).toInstant()),
                 learnerId, pointId, pointId);
         Map<String, List<History>> grouped = new LinkedHashMap<>();
@@ -153,12 +154,13 @@ public class LearnerQuestionMasteryStore {
                 latest == null ? null : latest.lastAttemptAt(), lastCorrect, frozen);
     }
 
+    /**
+     * KnowledgePoint 的正式题分母。core 与 auxiliary 都计入，与知识点页面显示的
+     * “相关正式真题”数量保持同一口径。
+     */
     private int formalQuestionCount(String pointId) {
-        Integer count = jdbc.queryForObject("""
-                SELECT COUNT(DISTINCT q.id) FROM question_resource q
-                JOIN question_resource_knowledge qk ON qk.question_id=q.id
-                WHERE qk.knowledge_point_id=? AND qk.relation_role='core' AND %s
-                """.formatted(FormalQuestionPolicy.published("q")), Integer.class, pointId);
+        Integer count = jdbc.queryForObject(
+                KnowledgeQuestionCoveragePolicy.countSql("?"), Integer.class, pointId);
         return count == null ? 0 : count;
     }
 
@@ -179,8 +181,9 @@ public class LearnerQuestionMasteryStore {
                   JOIN question_resource q ON q.id=m.question_id
                   JOIN question_resource_knowledge qk ON qk.question_id=q.id
                  WHERE m.learner_id=? AND m.knowledge_point_id=?
-                   AND qk.knowledge_point_id=? AND qk.relation_role='core' AND %s
-                """.formatted(FormalQuestionPolicy.published("q")), (rs, row) -> slot(rs),
+                   AND qk.knowledge_point_id=? AND %s AND %s
+                """.formatted(KnowledgeQuestionCoveragePolicy.anyRelationRole("qk"),
+                        FormalQuestionPolicy.published("q")), (rs, row) -> slot(rs),
                 learnerId, pointId, pointId);
     }
 

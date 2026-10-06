@@ -19,14 +19,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
-
 @Service
 public class AdaptiveStudyPlanner {
     public record AdaptiveStudyPlan(Set<String> allowedKnowledgePointIds,
-                                    Set<String> readyKnowledgePointIds,
                                     List<String> targetKnowledgePointIds) {}
-    public record QuestionContext(Set<String> readyKnowledgePointIds, int preferredDifficulty) {}
+    public record QuestionContext(int preferredDifficulty) {}
 
     private final KnowledgeQuestionPoolStore pool;
     private final LearnerKnowledgeStateStore states;
@@ -46,29 +43,17 @@ public class AdaptiveStudyPlanner {
         this.stateService = stateService;
     }
 
+    /**
+     * 正式目标随机抽取：候选池是 Selected Books 覆盖到、且至少存在一道正式父题的知识点。
+     * 不再使用 dependency readiness、Mastery 带宽或 Review due 决定谁能进入本轮计划。
+     */
     public AdaptiveStudyPlan plan(String learnerId, Set<String> selectedBookIds,
                                   List<String> focusedKnowledgePointIds, boolean manualFocus, int count) {
         return planAt(learnerId, selectedBookIds, focusedKnowledgePointIds, manualFocus, count, clock.instant());
     }
 
     public AdaptiveStudyPlan randomPlan(String learnerId, Set<String> selectedBookIds, int count) {
-        List<KnowledgePointDto> scope = pool.bookScope(selectedBookIds);
-        Set<String> allowed = new LinkedHashSet<>();
-        scope.forEach(point -> allowed.add(point.id()));
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, clock.instant());
-        Set<String> ready = readySet(allowed, effectiveMap(stateByPoint, clock.instant()));
-        Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
-        List<String> candidates = scope.stream().map(KnowledgePointDto::id)
-                .filter(playable::contains).distinct()
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        if (candidates.size() < count) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "当前学习范围只有 " + candidates.size() + " 个可挑战知识点，本活动需要 "
-                            + count + " 个不同知识点。");
-        }
-        Collections.shuffle(candidates);
-        return new AdaptiveStudyPlan(Collections.unmodifiableSet(allowed), Collections.unmodifiableSet(ready),
-                List.copyOf(candidates.subList(0, count)));
+        return planAt(learnerId, selectedBookIds, List.of(), false, count, clock.instant());
     }
 
     AdaptiveStudyPlan planAt(String learnerId, Set<String> selectedBookIds,
@@ -77,17 +62,14 @@ public class AdaptiveStudyPlanner {
         List<KnowledgePointDto> scope = pool.bookScope(selectedBookIds);
         Set<String> allowed = new LinkedHashSet<>();
         scope.forEach(point -> allowed.add(point.id()));
-        Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, now);
-        Map<String, Double> effectiveByPoint = effectiveMap(stateByPoint, now);
-        Set<String> ready = readySet(allowed, effectiveByPoint);
-        Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
+        Set<String> playable = pool.playableKnowledgePointIds(allowed);
 
         List<String> candidates = scope.stream().map(KnowledgePointDto::id)
                 .filter(playable::contains).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (candidates.size() < count) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "当前学习状态下只有 " + candidates.size() + " 个可训练知识点，部分综合题的前置知识尚未达到基本掌握；"
-                            + "本活动需要 " + count + " 个不同知识点。请先巩固前置知识或调整学习范围。");
+                    "当前学习范围只有 " + candidates.size() + " 个可挑战知识点，本活动需要 "
+                            + count + " 个不同知识点。");
         }
 
         Collections.shuffle(candidates);
@@ -95,19 +77,16 @@ public class AdaptiveStudyPlanner {
         Map<String, Integer> focusOrder = new HashMap<>();
         for (int index = 0; index < focusedKnowledgePointIds.size(); index++)
             focusOrder.putIfAbsent(focusedKnowledgePointIds.get(index), index);
-        Comparator<String> priority = Comparator
+        candidates.sort(Comparator
                 .comparingInt((String id) -> focused.contains(id) ? 0 : 1)
-                .thenComparingInt(id -> AdaptiveSchedulingPolicy.targetPriority(
-                        stateByPoint.get(id), effectiveByPoint.getOrDefault(id, 0d),
-                        ReviewSchedulingPolicy.dueWithin24Hours(stateByPoint.get(id), now)))
-                .thenComparingDouble(id -> effectiveByPoint.getOrDefault(id, 0d))
-                .thenComparing(id -> lastEvidence(stateByPoint.get(id)), Comparator.nullsFirst(Comparator.naturalOrder()))
-                .thenComparingInt(id -> focusOrder.getOrDefault(id, Integer.MAX_VALUE));
-        candidates.sort(priority);
-        return new AdaptiveStudyPlan(Collections.unmodifiableSet(allowed), Collections.unmodifiableSet(ready),
+                .thenComparingInt(id -> focusOrder.getOrDefault(id, Integer.MAX_VALUE)));
+        return new AdaptiveStudyPlan(Collections.unmodifiableSet(allowed),
                 List.copyOf(candidates.subList(0, count)));
     }
 
+    /**
+     * 目标确定后的出题上下文。只保留难度软提示：难度不阻止任何正式题被抽中。
+     */
     public QuestionContext questionContext(String learnerId, Set<String> frozenAllowedKnowledgePointIds,
                                            String targetKnowledgePointId, String profileDifficulty) {
         return questionContextAt(learnerId, frozenAllowedKnowledgePointIds, targetKnowledgePointId,
@@ -119,11 +98,10 @@ public class AdaptiveStudyPlanner {
         Set<String> allowed = new LinkedHashSet<>(frozenAllowedKnowledgePointIds);
         Map<String, KnowledgeMasteryModel.State> stateByPoint = stateMap(learnerId, allowed, now);
         Map<String, Double> effectiveByPoint = effectiveMap(stateByPoint, now);
-        Set<String> ready = readySet(allowed, effectiveByPoint);
         KnowledgeMasteryModel.State target = stateByPoint.get(targetKnowledgePointId);
         int preferred = AdaptiveSchedulingPolicy.preferredDifficulty(target,
                 effectiveByPoint.getOrDefault(targetKnowledgePointId, 0d), profileDifficulty);
-        return new QuestionContext(Collections.unmodifiableSet(ready), preferred);
+        return new QuestionContext(preferred);
     }
 
     private Map<String, KnowledgeMasteryModel.State> stateMap(String learnerId, Set<String> pointIds, Instant now) {
@@ -138,16 +116,5 @@ public class AdaptiveStudyPlanner {
         Map<String, Double> result = new HashMap<>();
         stateByPoint.forEach((id, state) -> result.put(id, model.effectiveMastery(state, now)));
         return result;
-    }
-
-    private static Set<String> readySet(Set<String> allowed, Map<String, Double> effectiveByPoint) {
-        Set<String> result = new LinkedHashSet<>();
-        allowed.stream().filter(id -> effectiveByPoint.getOrDefault(id, 0d) >= READY_THRESHOLD)
-                .forEach(result::add);
-        return result;
-    }
-
-    private static Instant lastEvidence(KnowledgeMasteryModel.State state) {
-        return state == null ? null : state.lastEvidenceAt();
     }
 }

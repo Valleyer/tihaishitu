@@ -438,11 +438,18 @@ public class GameActionService {
                 int preferred = DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
                         ? Math.min(3, context.preferredDifficulty()) : context.preferredDifficulty();
                 var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                        context.readyKnowledgePointIds(), seen, preferred, mode);
+                        seen, preferred, mode);
                 if (DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
                         && questionPool.eligibleQuestionsForLearner(request).isEmpty()) {
                     diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), pointId);
                     continue;
+                }
+                if (!DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
+                        && questionPool.eligibleQuestionsForLearner(request).isEmpty()) {
+                    // 知识点的正式题可能只有 root 一道。核验 / 补救必须针对该题重新发卷，
+                    // 因此这一种诊断题允许复用本轮已见题，而不是让整轮诊断失效。
+                    request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
+                            Set.of(), preferred, mode);
                 }
                 question = questionPool.selectQuestionForLearner(world.learnerId(), request);
                 break;
@@ -461,7 +468,7 @@ public class GameActionService {
                         world.learnerId(), allowed, pointId, profile.difficulty());
                 question = questionPool.selectQuestionForLearner(world.learnerId(),
                         new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                                context.readyKnowledgePointIds(), seen, context.preferredDifficulty(), mode));
+                                seen, context.preferredDifficulty(), mode));
             }
         }
         String attemptId = UUID.randomUUID().toString();
