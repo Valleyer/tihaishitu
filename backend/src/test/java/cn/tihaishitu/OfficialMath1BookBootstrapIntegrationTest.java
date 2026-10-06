@@ -37,6 +37,15 @@ class OfficialMath1BookBootstrapIntegrationTest {
         List<String> chapterIds = jdbc.query("""
                 SELECT id FROM question_bank_chapter WHERE bank_id = ? ORDER BY chapter_code
                 """, (result, row) -> result.getString("id"), OfficialMath1BookBootstrap.BOOK_ID);
+        String legacyChapter = UUID.randomUUID().toString();
+        String h05Knowledge = jdbc.queryForObject(
+                "SELECT id FROM global_knowledge_point WHERE code LIKE 'M1-H05-%' ORDER BY code LIMIT 1", String.class);
+        jdbc.update("""
+                INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision)
+                VALUES (?,?,'M1-H','高等数学','',99,1)
+                """, legacyChapter, OfficialMath1BookBootstrap.BOOK_ID);
+        jdbc.update("UPDATE question_bank_knowledge SET chapter_id=? WHERE bank_id=? AND knowledge_point_id=?",
+                legacyChapter, OfficialMath1BookBootstrap.BOOK_ID, h05Knowledge);
         jdbc.update("UPDATE question_bank SET description = '管理员补充说明' WHERE id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID);
         jdbc.update("UPDATE question_bank_chapter SET name = '管理员章节名' WHERE bank_id = ? AND chapter_code = 'M1-H01'",
@@ -56,6 +65,15 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("管理员补充说明");
         assertThat(jdbc.queryForObject("SELECT name FROM question_bank_chapter WHERE bank_id = ? AND chapter_code = 'M1-H01'",
                 String.class, OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("管理员章节名");
+        assertThat(count("SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id=? AND chapter_code IN ('M1-H','M1-L','M1-P')",
+                OfficialMath1BookBootstrap.BOOK_ID)).isZero();
+        assertThat(jdbc.queryForObject("SELECT name FROM question_bank_chapter WHERE bank_id=? AND chapter_code='M1-H05'",
+                String.class, OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("多元函数微分学");
+        assertThat(jdbc.queryForObject("""
+                SELECT c.chapter_code FROM question_bank_knowledge bk
+                JOIN question_bank_chapter c ON c.id=bk.chapter_id
+                WHERE bk.bank_id=? AND bk.knowledge_point_id=?
+                """, String.class, OfficialMath1BookBootstrap.BOOK_ID, h05Knowledge)).isEqualTo("M1-H05");
     }
 
     @Test

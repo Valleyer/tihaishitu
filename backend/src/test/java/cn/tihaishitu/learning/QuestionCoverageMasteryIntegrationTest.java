@@ -139,6 +139,64 @@ class QuestionCoverageMasteryIntegrationTest {
                 .isEqualTo(49.5);
     }
 
+    @Test
+    void onlyTheFirstFormalAttemptOfEachShanghaiDayCanRewardMastery() {
+        String learner = learner("daily-first");
+        String point = point("DAILY-FIRST");
+        String question = UUID.randomUUID().toString();
+        question(question, point, 2);
+        Instant day1 = Instant.parse("2026-01-01T08:00:00Z");
+
+        assertThat(questionMastery.apply(learner, point, question, "correct", day1).projection().masteryScore())
+                .isEqualTo(30);
+        assertThat(questionMastery.apply(learner, point, question, "correct", day1.plus(1, ChronoUnit.HOURS)).projection().masteryScore())
+                .isEqualTo(30);
+        assertThat(questionMastery.apply(learner, point, question, "wrong", day1.plus(1, ChronoUnit.DAYS)).projection().masteryScore())
+                .isEqualTo(30);
+        assertThat(questionMastery.apply(learner, point, question, "correct", day1.plus(1, ChronoUnit.DAYS).plus(1, ChronoUnit.HOURS)).projection().masteryScore())
+                .isEqualTo(30);
+        assertThat(questionMastery.apply(learner, point, question, "correct", day1.plus(2, ChronoUnit.DAYS)).projection().masteryScore())
+                .isEqualTo(37);
+        assertThat(questionMastery.apply(learner, point, question, "wrong", day1.plus(2, ChronoUnit.DAYS).plus(1, ChronoUnit.HOURS)).projection().masteryScore())
+                .isEqualTo(37);
+        assertThat(questionMastery.apply(learner, point, question, "partial", day1.plus(3, ChronoUnit.DAYS)).projection().masteryScore())
+                .isEqualTo(37);
+        assertThat(questionMastery.apply(learner, point, question, "correct", day1.plus(3, ChronoUnit.DAYS).plus(1, ChronoUnit.HOURS)).projection().masteryScore())
+                .isEqualTo(37);
+    }
+
+    @Test
+    void knowledgeMasteryAveragesDailyFirstAnswerScoresAcrossFormalQuestions() {
+        String learner = learner("daily-average");
+        String point = point("DAILY-AVERAGE");
+        String a = UUID.randomUUID().toString(), b = UUID.randomUUID().toString(), c = UUID.randomUUID().toString();
+        question(a, point, 2); question(b, point, 2); question(c, point, 2);
+        Instant at = Instant.parse("2026-01-01T08:00:00Z");
+        questionMastery.apply(learner, point, a, "correct", at);
+        questionMastery.apply(learner, point, b, "correct", at.plusSeconds(1));
+        assertThat(questionMastery.apply(learner, point, c, "wrong", at.plusSeconds(2)).projection().masteryScore())
+                .isEqualTo(20);
+    }
+
+    @Test
+    void rebuildUsesOnlyEachShanghaiDaysFirstAttempt() {
+        String learner = learner("daily-rebuild");
+        String point = point("DAILY-REBUILD");
+        String question = UUID.randomUUID().toString();
+        question(question, point, 2);
+        Instant day1 = Instant.parse("2026-01-01T08:00:00Z");
+        insertGraded(learner, point, question, "wrong", day1);
+        insertGraded(learner, point, question, "correct", day1.plus(1, ChronoUnit.HOURS));
+        insertGraded(learner, point, question, "correct", day1.plus(1, ChronoUnit.DAYS));
+
+        questionMastery.rebuild(learner, point, day1.plus(1, ChronoUnit.DAYS));
+
+        assertThat(questionMastery.projection(learner, point, day1.plus(1, ChronoUnit.DAYS)).masteryScore())
+                .isEqualTo(30);
+        assertThat(jdbc.queryForObject("SELECT first_correct_at FROM learner_question_mastery WHERE learner_id=? AND knowledge_point_id=? AND question_id=?",
+                Timestamp.class, learner, point, question).toInstant()).isEqualTo(day1.plus(1, ChronoUnit.DAYS));
+    }
+
     private void apply(String learner, String point, String question, String outcome, Instant at) throws Exception {
         String attempt = insertGraded(learner, point, question, outcome, at);
         var snapshot = new QuestionAttemptStore.Snapshot(attempt, null, learner, null, null, question,

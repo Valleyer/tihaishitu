@@ -12,7 +12,11 @@ export interface StudyProfile {
 }
 export interface WorldDefinition { id: string; name: string; description: string; enabled: boolean; initialized: boolean; updatedAt?: string; entryPath?: string }
 export interface BookSummary { id: string; name: string; description: string; revision: number; knowledgePointCount: number; totalKnowledgePointCount: number; questionCount: number }
-export interface Chapter { id: string; code: string; name: string; description: string; sortOrder: number; knowledgePoints: KnowledgePoint[] }
+export interface Chapter {
+  id: string; code: string; name: string; description: string; sortOrder: number;
+  knowledgePointCount: number; trainableKnowledgePointCount: number; publishedQuestionCount: number;
+  knowledgePoints: KnowledgePoint[];
+}
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
   id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string; questionType: string;
@@ -72,7 +76,7 @@ export interface LearnerProgress {
 }
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
-  contentMarkdown: string; lastGradedAt: string;
+  contentMarkdown: string; lastGradedAt: string; available: boolean;
 }
 export interface PracticeAttempt {
   id: string; status: "active" | "revealed" | "graded"; targetKnowledgePointId: string;
@@ -147,6 +151,8 @@ export const platformApi = {
   progress: () => request<LearnerProgress>("/learner/progress"),
   statistics: (days: 7 | 30 | 90) => request<LearnerStatistics>(`/learner/statistics?days=${days}`),
   wrongQuestions: () => request<WrongQuestion[]>("/learner/wrong-questions"),
+  removeWrongQuestion: (questionId: string) => request<void>(
+    "/learner/wrong-questions/" + encodeURIComponent(questionId), "DELETE"),
   startKnowledgePractice: (targetKnowledgePointId: string) =>
     request<PracticeSession>("/learner/practice-sessions", "POST", {
       intent: "knowledge_drill", targetKnowledgePointId,

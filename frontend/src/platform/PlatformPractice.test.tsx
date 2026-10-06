@@ -34,7 +34,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("practice interaction closure", () => {
   it("selects a saved trainable book by clicking the whole card and keeps draft scope separate", async () => {
     vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [{ id: "chapter", code: "C",
-      name: "函数章", description: "", knowledgePoints: [{ id: "point", code: "P", name: "函数", subject: "数学",
+      name: "函数章", description: "", knowledgePointCount: 1, trainableKnowledgePointCount: 1,
+      publishedQuestionCount: 1, knowledgePoints: [{ id: "point", code: "P", name: "函数", subject: "数学",
         section: "函数", chapter: "函数章", description: "", explanation: "" }], sortOrder: 1 }] });
     vi.spyOn(platformApi, "knowledgeStatesForBook").mockResolvedValue([]);
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
@@ -89,7 +90,7 @@ describe("practice interaction closure", () => {
 
   it("renders wrong-question Markdown and LaTeX from the complete source", async () => {
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{ questionId: "q", targetKnowledgePointId: "k",
-      knowledgePointName: "函数", contentMarkdown: "求 $f(x)=x^2$ 的导数", lastGradedAt: "2026-10-06T00:00:00Z" }]);
+      knowledgePointName: "函数", contentMarkdown: "求 $f(x)=x^2$ 的导数", lastGradedAt: "2026-10-06T00:00:00Z", available: true }]);
     const view = render(<WrongQuestionsPage data={data} />);
     await waitFor(() => expect(view.container.querySelector(".wrong-question-content .katex")).toBeTruthy());
     expect(view.container.querySelector(".wrong-question-content")).toBeTruthy();
@@ -99,7 +100,7 @@ describe("practice interaction closure", () => {
   it("keeps the wrong-question empty state concise and returns to Study", async () => {
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
     render(<WrongQuestionsPage data={data} />);
-    expect(await screen.findByText("当前没有待重做题目")).toBeTruthy();
+    expect(await screen.findByText("错题本还是空的")).toBeTruthy();
     expect(screen.getByRole("link", { name: "← 返回学习" }).getAttribute("href")).toBe("/study");
     expect(screen.queryByText(/这里只保留/)).toBeNull();
     expect(screen.queryByText(/之后若同一道题/)).toBeNull();

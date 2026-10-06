@@ -30,6 +30,7 @@ class KnowledgeDrivenBookCountIntegrationTest {
     void manifestsAndLearningHubCountPublishedQuestionsThroughKnowledgeScope() throws Exception {
         String bookId = UUID.randomUUID().toString();
         String chapterId = UUID.randomUUID().toString();
+        String emptyChapterId = UUID.randomUUID().toString();
         String pointId = UUID.randomUUID().toString();
         String unavailablePointId = UUID.randomUUID().toString();
         String questionId = UUID.randomUUID().toString();
@@ -39,6 +40,7 @@ class KnowledgeDrivenBookCountIntegrationTest {
         String unselectedQuestionId = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'知识驱动卷','',TRUE,1,1)", bookId);
         jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C1','第一章','',0,1)", chapterId, bookId);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C2','暂无题章节','',1,1)", emptyChapterId, bookId);
         jdbc.update("""
                 INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,
                                                    default_role,status,description,explanation,sort_order,revision)
@@ -50,7 +52,7 @@ class KnowledgeDrivenBookCountIntegrationTest {
                 VALUES (?,'COUNT-K2','没有正式题目的知识点','测试','分部','章节','core','active','','',1,1)
                 """, unavailablePointId);
         jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", bookId, pointId, chapterId);
-        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,1)", bookId, unavailablePointId, chapterId);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,1)", bookId, unavailablePointId, emptyChapterId);
         jdbc.update("""
                 INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,
                                               content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
@@ -85,6 +87,12 @@ class KnowledgeDrivenBookCountIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == '%s')].questionCount".formatted(bookId)).value(1))
                 .andExpect(jsonPath("$[?(@.id == '%s')].knowledgePointCount".formatted(bookId)).value(1));
+        mvc.perform(get("/api/v1/learning/books/{id}", bookId).cookie(learner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chapters.length()").value(2))
+                .andExpect(jsonPath("$.chapters[?(@.id == '%s')].knowledgePointCount".formatted(emptyChapterId)).value(1))
+                .andExpect(jsonPath("$.chapters[?(@.id == '%s')].trainableKnowledgePointCount".formatted(emptyChapterId)).value(0))
+                .andExpect(jsonPath("$.chapters[?(@.id == '%s')].publishedQuestionCount".formatted(emptyChapterId)).value(0));
         mvc.perform(get("/api/v1/learning/knowledge-points").cookie(learner)
                         .param("bookId", bookId).param("page", "0").param("size", "1"))
                 .andExpect(status().isOk())

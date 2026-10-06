@@ -20,6 +20,10 @@ public class LearnerPracticeController {
     @GetMapping("/wrong-questions")
     List<LearnerPracticeStore.WrongQuestion> wrongQuestions() { return practice.wrongQuestions(); }
 
+    @DeleteMapping("/wrong-questions/{questionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void removeWrongQuestion(@PathVariable String questionId) { practice.removeWrongQuestion(questionId); }
+
     @PostMapping("/practice-sessions")
     @ResponseStatus(HttpStatus.CREATED)
     LearnerPracticeService.SessionView start(@RequestBody LearnerPracticeService.StartRequest request) {

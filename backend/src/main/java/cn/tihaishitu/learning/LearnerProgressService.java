@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -86,17 +85,24 @@ public class LearnerProgressService {
                 chaptersByBook.getOrDefault(book.id(), List.of()),
                 membershipsByBook.getOrDefault(book.id(), List.of()), points, dueOrSoon)).toList();
 
-        LocalDate today = now.atZone(ZoneOffset.UTC).toLocalDate();
-        Instant from = today.minusDays(6).atStartOfDay(ZoneOffset.UTC).toInstant();
+        LocalDate today = now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+        Instant from = today.minusDays(6).atStartOfDay(LearnerQuestionMasteryStore.BUSINESS_ZONE).toInstant();
         LearnerProgressStore.RecentTotals recentTotals = progress.recentTotals(learnerId, from, now);
         Map<LocalDate, LearnerProgressStore.DailyRow> dailyRows = new HashMap<>();
-        progress.recentDaily(learnerId, from, now).forEach(row -> dailyRows.put(row.date(), row));
+        progress.recentAttempts(learnerId, from, now).forEach(row -> {
+            LocalDate date = row.answeredAt().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
+            LearnerProgressStore.DailyRow previous = dailyRows.get(date);
+            Set<String> distinct = previous == null ? new LinkedHashSet<>() : new LinkedHashSet<>(previous.knowledgePointIds());
+            distinct.add(row.knowledgePointId());
+            dailyRows.put(date, new LearnerProgressStore.DailyRow(date,
+                    previous == null ? 1 : previous.gradedAttempts() + 1, distinct));
+        });
         List<DailyProgress> daily = new ArrayList<>();
         for (int offset = 6; offset >= 0; offset--) {
             LocalDate date = today.minusDays(offset);
             LearnerProgressStore.DailyRow row = dailyRows.get(date);
             daily.add(new DailyProgress(date, row == null ? 0 : row.gradedAttempts(),
-                    row == null ? 0 : row.distinctKnowledgePoints()));
+                    row == null ? 0 : row.knowledgePointIds().size()));
         }
         List<RecentKnowledgePoint> recentPoints = points.values().stream()
                 .filter(point -> point.evidenceCount() > 0 && point.lastEvidenceAt() != null)
@@ -132,7 +138,7 @@ public class LearnerProgressService {
             return new ChapterProgress(chapter.id(), chapter.code(), chapter.name(), chapterCounts.total(),
                     chapterCounts.started(), chapterCounts.ready(), chapterCounts.proficient(),
                     chapterCounts.masteryProgress());
-        }).filter(chapter -> chapter.total() > 0).toList();
+        }).toList();
         return new BookProgress(book.id(), book.name(), book.description(), counts.total(), counts.started(),
                 counts.ready(), counts.proficient(), counts.masteryProgress(), reviewDueOrSoon, chapterViews);
     }

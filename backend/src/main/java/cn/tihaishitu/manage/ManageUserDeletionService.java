@@ -55,6 +55,7 @@ public class ManageUserDeletionService {
         jdbc.update("UPDATE learner_practice_session SET current_attempt_id=NULL WHERE learner_id=?", targetId);
         jdbc.update("UPDATE study_attempt SET diagnosis_session_id=NULL, practice_session_id=NULL WHERE learner_id=?", targetId);
         jdbc.update("UPDATE learner_diagnosis_session SET practice_session_id=NULL WHERE learner_id=?", targetId);
+        jdbc.update("DELETE FROM learner_wrong_question WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM learner_knowledge_evidence WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM answer_record WHERE learner_id=?", targetId);
         jdbc.update("DELETE FROM learner_diagnosis_session WHERE learner_id=?", targetId);

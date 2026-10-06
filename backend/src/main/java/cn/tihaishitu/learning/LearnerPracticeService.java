@@ -85,24 +85,36 @@ public class LearnerPracticeService {
         var profile = profiles.rawCurrent();
         Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
         if ("chapter_drill".equals(intent)) return startChapter(request,learnerId,allowed,profile.difficulty());
-        QuestionAttemptStore.Snapshot source = null;
+        QuestionDto wrongQuestion = null;
         String targetId = request.targetKnowledgePointId();
         if ("wrong_review".equals(intent)) {
             if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
-            source = attempts.latestWrongForQuestion(learnerId, request.sourceQuestionId())
-                    .orElseThrow(() -> bad("这道题已不在待重做队列中。"));
-            targetId = source.targetKnowledgePointId();
+            var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
+                    .orElseThrow(() -> bad("这道题已不在错题本中。"));
+            if (!wrong.available()) throw bad("该题当前不可练习。你仍可将它移出错题本。");
+            targetId = wrong.targetKnowledgePointId();
+            if (!allowed.contains(targetId)) throw bad("该题当前不在所选文集范围内。你仍可将它移出错题本。");
+            AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
+                    learnerId, allowed, targetId, profile.difficulty());
+            var poolRequest = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
+                    context.readyKnowledgePointIds(), Set.of(), context.preferredDifficulty(),
+                    KnowledgeQuestionPoolService.Mode.NORMAL,
+                    KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
+            wrongQuestion = pool.eligibleQuestionsForLearner(poolRequest).stream()
+                    .filter(question -> question.id().equals(request.sourceQuestionId())).findFirst()
+                    .orElseThrow(() -> bad("该题当前不可练习。你仍可将它移出错题本。"));
+        } else {
+            requirePlayable(learnerId, targetId, allowed, profile.difficulty());
         }
-        requirePlayable(learnerId, targetId, allowed, profile.difficulty());
         String id = UUID.randomUUID().toString();
         store.create(id, learnerId, intent, targetId,
                 "wrong_review".equals(intent) ? request.sourceQuestionId() : null, allowed);
-        QuestionAttemptStore.Snapshot frozenSource = source;
+        QuestionDto frozenWrongQuestion = wrongQuestion;
         String frozenTargetId = targetId;
         PracticeActionContext.within(learnerId, id, () -> {
-            String attemptId = frozenSource == null
+            String attemptId = frozenWrongQuestion == null
                     ? draw(id, learnerId, frozenTargetId, allowed, profile.difficulty(), null)
-                    : drawExact(id, frozenTargetId, frozenSource);
+                    : createAttempt(learnerId, frozenTargetId, frozenWrongQuestion, "normal", null);
             store.setCurrentAttempt(id, learnerId, attemptId);
             return null;
         });
@@ -114,6 +126,14 @@ public class LearnerPracticeService {
         LearnerPracticeStore.Session session = store.find(id, learnerId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "专项练习不存在。"));
         return view(session);
+    }
+
+    @Transactional
+    public void removeWrongQuestion(String questionId) {
+        String learnerId = LearnerContext.learnerId();
+        learners.lockForUpdate(learnerId);
+        if (!store.removeWrongQuestion(learnerId, questionId, Instant.now()))
+            throw new ApiException(HttpStatus.NOT_FOUND, "错题记录不存在或已经移出。");
     }
 
     @Transactional
@@ -238,17 +258,6 @@ public class LearnerPracticeService {
                 ? pool.selectKnowledgeDrillQuestion(learnerId, request)
                 : pool.selectQuestionForLearner(learnerId, request);
         return createAttempt(learnerId, targetId, question, training ? "training" : "normal", directive);
-    }
-
-    private String drawExact(String sessionId, String targetId, QuestionAttemptStore.Snapshot source) {
-        String id = UUID.randomUUID().toString();
-        var previous = questionProgress.latestAttemptForQuestion(source.learnerId(), source.questionId()).orElse(null);
-        QuestionAttemptVariantService.AttemptVariant variant = variants.create(source.question(), source.standard(),
-                previous == null ? source.question() : previous.questionSnapshot(),
-                previous == null ? source.standard() : previous.standardAnswer());
-        attempts.create(id, null, source.questionId(), variant.question(), variant.standard(),
-                source.gradingMode(), targetId, "normal", source.questionDifficulty(), null, null);
-        return id;
     }
 
     private String createAttempt(String learnerId, String targetId, QuestionDto question, String evidenceMode,

@@ -86,11 +86,33 @@ public class LearningBrowseStore {
                  WHERE bk.bank_id = ? AND k.status = 'active' AND %s ORDER BY bk.sort_order, k.id
                 """.formatted(TrainableKnowledge.exists("k")), (RowCallbackHandler) result -> points.computeIfAbsent(result.getString("chapter_id"), ignored -> new ArrayList<>())
                 .add(knowledge(result)), id);
+        Map<String, int[]> chapterCounts = new HashMap<>();
+        jdbc.query("""
+                SELECT c.id,
+                       COUNT(DISTINCT CASE WHEN k.status='active' THEN bk.knowledge_point_id END) knowledge_count,
+                       COUNT(DISTINCT CASE WHEN k.status='active' AND %s THEN bk.knowledge_point_id END) trainable_count,
+                       COUNT(DISTINCT CASE WHEN q.status='published' AND q.parent_question_id IS NULL
+                                                AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                                           THEN q.id END) question_count
+                  FROM question_bank_chapter c
+                  LEFT JOIN question_bank_knowledge bk ON bk.chapter_id=c.id AND bk.bank_id=c.bank_id
+                  LEFT JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id
+                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                  LEFT JOIN question_resource q ON q.id=qk.question_id
+                 WHERE c.bank_id=?
+                 GROUP BY c.id
+                """.formatted(TrainableKnowledge.exists("k")), (RowCallbackHandler) result -> chapterCounts.put(
+                result.getString("id"), new int[]{result.getInt("knowledge_count"),
+                        result.getInt("trainable_count"), result.getInt("question_count")}), id);
         List<Map<String, Object>> flat = chapters.stream().map(chapter -> {
             Map<String, Object> node = new LinkedHashMap<>(chapter);
             node.put("knowledgePoints", points.getOrDefault(chapter.get("id"), List.of()));
+            int[] counts = chapterCounts.getOrDefault(chapter.get("id"), new int[3]);
+            node.put("knowledgePointCount", counts[0]);
+            node.put("trainableKnowledgePointCount", counts[1]);
+            node.put("publishedQuestionCount", counts[2]);
             return node;
-        }).filter(chapter -> !((List<?>) chapter.get("knowledgePoints")).isEmpty()).toList();
+        }).toList();
         Map<String, Object> result = new LinkedHashMap<>(book);
         result.put("chapters", flat);
         return result;

@@ -7,6 +7,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Repository
 public class LearnerProgressStore {
@@ -15,7 +16,8 @@ public class LearnerProgressStore {
     public record MembershipRow(String bookId, String chapterId, String knowledgePointId,
                                 String name, String subject, String section, String chapter) {}
     public record RecentTotals(int gradedAttempts, int distinctKnowledgePoints) {}
-    public record DailyRow(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
+    public record DailyRow(LocalDate date, int gradedAttempts, Set<String> knowledgePointIds) {}
+    public record RecentAttempt(Instant answeredAt, String knowledgePointId) {}
 
     private final JdbcTemplate jdbc;
 
@@ -79,19 +81,17 @@ public class LearnerProgressStore {
                 rs.getInt("distinct_points")), learnerId, Timestamp.from(from), Timestamp.from(through)).get(0);
     }
 
-    public List<DailyRow> recentDaily(String learnerId, Instant from, Instant through) {
+    public List<RecentAttempt> recentAttempts(String learnerId, Instant from, Instant through) {
         return jdbc.query("""
-                SELECT CAST(answered_at AS DATE) study_date,COUNT(*) graded_attempts,
-                       COUNT(DISTINCT target_knowledge_point_id) distinct_points
+                SELECT answered_at,target_knowledge_point_id
                   FROM study_attempt a
                   JOIN question_resource q ON q.id=a.question_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
                    AND q.status='published' AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                 GROUP BY CAST(answered_at AS DATE)
-                 ORDER BY study_date
-                """, (rs, row) -> new DailyRow(rs.getDate("study_date").toLocalDate(),
-                rs.getInt("graded_attempts"), rs.getInt("distinct_points")), learnerId,
+                 ORDER BY answered_at,a.id
+                """, (rs, row) -> new RecentAttempt(rs.getTimestamp("answered_at").toInstant(),
+                rs.getString("target_knowledge_point_id")), learnerId,
                 Timestamp.from(from), Timestamp.from(through));
     }
 }

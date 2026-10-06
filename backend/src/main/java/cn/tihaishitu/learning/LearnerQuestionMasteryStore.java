@@ -44,12 +44,15 @@ public class LearnerQuestionMasteryStore {
         Instant lastCorrect = previous == null ? null : previous.lastCorrectAt();
         LocalDate lastReward = previous == null ? null : previous.lastRewardDate();
         boolean rewarded = false;
-        if ("correct".equals(assessment)) {
+        LocalDate previousAttemptDate = previous == null || previous.lastAttemptAt() == null ? null
+                : previous.lastAttemptAt().atZone(BUSINESS_ZONE).toLocalDate();
+        boolean firstAttemptToday = previousAttemptDate == null || !businessDate.equals(previousAttemptDate);
+        if (firstAttemptToday && "correct".equals(assessment)) {
             if (firstCorrect == null) {
                 score = 30;
                 firstCorrect = occurredAt;
                 rewarded = true;
-            } else if (!businessDate.equals(lastReward)) {
+            } else {
                 score = Math.min(100, score + 7);
                 rewarded = true;
             }
@@ -87,13 +90,15 @@ public class LearnerQuestionMasteryStore {
         Map<String, List<History>> grouped = new LinkedHashMap<>();
         rows.forEach(row -> grouped.computeIfAbsent(row.questionId(), ignored -> new ArrayList<>()).add(row));
         grouped.forEach((questionId, history) -> {
-            List<History> correct = history.stream().filter(item -> "correct".equals(item.assessment())).toList();
+            Map<LocalDate, History> firstByDay = new LinkedHashMap<>();
+            history.forEach(item -> firstByDay.putIfAbsent(
+                    item.answeredAt().atZone(BUSINESS_ZONE).toLocalDate(), item));
+            List<History> correct = firstByDay.values().stream()
+                    .filter(item -> "correct".equals(item.assessment())).toList();
             double score = 0; Instant first = null, lastCorrect = null; LocalDate rewardDate = null;
             if (!correct.isEmpty()) {
                 first = correct.get(0).answeredAt(); lastCorrect = correct.get(correct.size() - 1).answeredAt();
-                long dates = correct.stream().map(item -> item.answeredAt().atZone(BUSINESS_ZONE).toLocalDate())
-                        .distinct().count();
-                score = Math.min(100, 30 + Math.max(0, dates - 1) * 7);
+                score = Math.min(100, 30 + Math.max(0, correct.size() - 1) * 7);
                 rewardDate = lastCorrect.atZone(BUSINESS_ZONE).toLocalDate();
             }
             History last = history.get(history.size() - 1);

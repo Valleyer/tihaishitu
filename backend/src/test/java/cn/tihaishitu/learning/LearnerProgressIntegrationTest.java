@@ -57,10 +57,11 @@ class LearnerProgressIntegrationTest {
         LearnerProgressService.BookProgress firstView = view.books().stream()
                 .filter(item -> item.bookId().equals(first.id())).findFirst().orElseThrow();
         assertThat(firstView.chapters()).extracting(LearnerProgressService.ChapterProgress::total)
-                .containsExactly(1, 2);
+                .containsExactly(0, 1, 2);
         assertThat(firstView.masteryProgress()).isGreaterThan(0).isLessThan(100);
-        assertThat(firstView.chapters()).allMatch(chapter -> chapter.masteryProgress() > 0
-                && chapter.masteryProgress() < 100);
+        assertThat(firstView.chapters()).allMatch(chapter -> chapter.total() == 0
+                ? chapter.masteryProgress() == 0
+                : chapter.masteryProgress() > 0 && chapter.masteryProgress() < 100);
     }
 
     @Test
@@ -97,7 +98,14 @@ class LearnerProgressIntegrationTest {
         BookFixture book = book("正向进度"); member(book.id(), book.root(), point, 0); select(learner, book.id());
         saveMastery(learner, point, 90, 10, NOW.minusSeconds(4 * 86_400L));
         String question = question();
-        attempt(learner, "ancient-official", null, question, point, "graded", NOW.minusSeconds(600), "wrong");
+        String wrongAttempt = attempt(learner, "ancient-official", null, question, point,
+                "graded", NOW.minusSeconds(600), "wrong");
+        jdbc.update("""
+                INSERT INTO learner_wrong_question(learner_id,question_id,target_knowledge_point_id,
+                    first_wrong_at,last_wrong_at,last_wrong_attempt_id,status)
+                VALUES (?,?,?,?,?,?,'active')
+                """, learner, question, point, Timestamp.from(NOW.minusSeconds(600)),
+                Timestamp.from(NOW.minusSeconds(600)), wrongAttempt);
 
         LearnerProgressService.ProgressView view = progress.progressAt(learner, NOW);
         String json = mapper.writeValueAsString(view);
@@ -169,22 +177,24 @@ class LearnerProgressIntegrationTest {
         return id;
     }
 
-    private void attempt(String learner, String world, String practice, String question, String point,
-                         String status, Instant answeredAt) {
-        attempt(learner, world, practice, question, point, status, answeredAt, "correct");
+    private String attempt(String learner, String world, String practice, String question, String point,
+                           String status, Instant answeredAt) {
+        return attempt(learner, world, practice, question, point, status, answeredAt, "correct");
     }
 
-    private void attempt(String learner, String world, String practice, String question, String point,
-                         String status, Instant answeredAt, String assessment) {
+    private String attempt(String learner, String world, String practice, String question, String point,
+                           String status, Instant answeredAt, String assessment) {
+        String attemptId = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO study_attempt(id,game_id,learner_id,world_id,practice_session_id,question_id,
                     question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,
                     target_knowledge_point_id,evidence_mode,question_difficulty,answered_at)
                 VALUES (?,NULL,?,?,?,?, '{}','true',?,'auto',?,?,?,'normal',2,?)
-                """, UUID.randomUUID().toString(), learner, world, practice, question, status,
+                """, attemptId, learner, world, practice, question, status,
                 "graded".equals(status) ? "automatic" : null,
                 "graded".equals(status) ? assessment : null, point,
                 answeredAt == null ? null : Timestamp.from(answeredAt));
+        return attemptId;
     }
 
     private void legacyAttempt(String question, String point, Instant answeredAt) {

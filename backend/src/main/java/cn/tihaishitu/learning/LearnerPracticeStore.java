@@ -17,7 +17,7 @@ public class LearnerPracticeStore {
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
-                                String contentMarkdown, Instant lastGradedAt) {}
+                                String contentMarkdown, Instant lastGradedAt, boolean available) {}
 
     private final JdbcTemplate jdbc;
 
@@ -111,28 +111,31 @@ public class LearnerPracticeStore {
 
     public List<WrongQuestion> wrongQuestions(String learnerId) {
         return jdbc.query("""
-                SELECT a.question_id,a.target_knowledge_point_id,k.name knowledge_name,
-                       q.content_markdown,a.answered_at
-                  FROM study_attempt a
-                  JOIN question_resource q ON q.id=a.question_id
-                  JOIN global_knowledge_point k ON k.id=a.target_knowledge_point_id
-                 WHERE a.learner_id=? AND a.status='graded' AND a.assessment IN ('wrong','partial')
-                   AND q.status='published'
-                   AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                   AND k.status='active'
-                   AND """ + " " + TrainableKnowledge.exists("k") + """
-                   AND NOT EXISTS (
-                       SELECT 1 FROM study_attempt newer
-                        WHERE newer.learner_id=a.learner_id AND newer.question_id=a.question_id
-                          AND newer.status='graded'
-                          AND (newer.answered_at>a.answered_at
-                               OR (newer.answered_at=a.answered_at AND newer.id>a.id))
-                   )
-                 ORDER BY a.answered_at DESC,a.id DESC
-                """, (rs, row) -> new WrongQuestion(rs.getString("question_id"),
+                SELECT wrong.question_id,wrong.target_knowledge_point_id,k.name knowledge_name,
+                       q.content_markdown,wrong.last_wrong_at,
+                       CASE WHEN q.status='published' AND q.parent_question_id IS NULL
+                                  AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                                  AND k.status='active' AND %s THEN TRUE ELSE FALSE END available
+                  FROM learner_wrong_question wrong
+                  JOIN question_resource q ON q.id=wrong.question_id
+                  JOIN global_knowledge_point k ON k.id=wrong.target_knowledge_point_id
+                 WHERE wrong.learner_id=? AND wrong.status='active'
+                 ORDER BY wrong.last_wrong_at DESC,wrong.question_id
+                """.formatted(TrainableKnowledge.exists("k")), (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
-                rs.getString("content_markdown"), rs.getTimestamp("answered_at").toInstant()), learnerId);
+                rs.getString("content_markdown"), rs.getTimestamp("last_wrong_at").toInstant(),
+                rs.getBoolean("available")), learnerId);
+    }
+
+    public Optional<WrongQuestion> activeWrongQuestion(String learnerId, String questionId) {
+        return wrongQuestions(learnerId).stream().filter(item -> item.questionId().equals(questionId)).findFirst();
+    }
+
+    public boolean removeWrongQuestion(String learnerId, String questionId, Instant now) {
+        return jdbc.update("""
+                UPDATE learner_wrong_question SET status='removed',removed_at=?,updated_at=CURRENT_TIMESTAMP
+                 WHERE learner_id=? AND question_id=? AND status='active'
+                """, Timestamp.from(now), learnerId, questionId) == 1;
     }
 
     private List<Session> sessions(String predicate, Object... args) {
