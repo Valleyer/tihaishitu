@@ -75,6 +75,41 @@ public class LearnerPracticeService {
         return store.wrongQuestions(LearnerContext.learnerId());
     }
 
+    /**
+     * Chapter 内“学习者当前可练”的知识点数量（Study 章节练习入口的可用量）。
+     * 与 startChapter 的校验语义一致：知识点在所选文集范围内，且存在至少一道
+     * 当前可练的正式真题。批量计算，供书籍/章节列表展示 Y 值，避免用户点击后才吃 400。
+     */
+    public int availableChapterKnowledgePointCount(String learnerId, String bookId, String chapterId) {
+        if (learnerId == null || bookId == null || chapterId == null) return 0;
+        return availableChapterKnowledgePointIds(learnerId, bookId, chapterId, Instant.now()).size();
+    }
+
+    private Set<String> availableChapterKnowledgePointIds(String learnerId, String bookId, String chapterId,
+                                                          Instant now) {
+        var profile = profiles.rawCurrent(learnerId);
+        Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
+        List<String> chapterPoints = store.chapterKnowledgePoints(learnerId, bookId, chapterId);
+        if (chapterPoints.isEmpty() || allowed.isEmpty()) return Set.of();
+        java.sql.Date businessDate = java.sql.Date.valueOf(now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate());
+        Set<String> available = new LinkedHashSet<>();
+        for (LearnerPracticeStore.ChapterCandidate candidate : store.chapterCandidates(learnerId, bookId, chapterId, businessDate)) {
+            if (!chapterPoints.contains(candidate.knowledgePointId())) continue;
+            if (candidate.readyQuestion() || reviewDue(candidate, now)) available.add(candidate.knowledgePointId());
+        }
+        return available;
+    }
+
+    /** 复用 ReviewSchedulingPolicy，保证与复习队列/入口校验的“到期”判定完全一致。 */
+    private static boolean reviewDue(LearnerPracticeStore.ChapterCandidate candidate, Instant now) {
+        if (candidate.masteryScore() == null || candidate.stabilityDays() == null
+                || candidate.lastEvidenceAt() == null) return false;
+        var state = new KnowledgeMasteryModel.State(candidate.masteryScore(),
+                Math.max(KnowledgeModelPolicy.MIN_STABILITY, candidate.stabilityDays()), 1, 1, 0, 0,
+                null, candidate.lastEvidenceAt(), null, "review-probe", 0);
+        return ReviewSchedulingPolicy.dueWithin24Hours(state, now);
+    }
+
     @Transactional
     public SessionView start(StartRequest request) {
         String learnerId = LearnerContext.learnerId();
@@ -91,9 +126,8 @@ public class LearnerPracticeService {
             if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
             var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
                     .orElseThrow(() -> bad("这道题已不在错题本中。"));
-            if (!wrong.available()) throw bad("该题当前不可练习。你仍可将它移出错题本。");
+            if (!wrong.available()) throw bad(wrongQuestionUnavailableMessage(wrong.unavailableReason()));
             targetId = wrong.targetKnowledgePointId();
-            if (!allowed.contains(targetId)) throw bad("该题当前不在所选文集范围内。你仍可将它移出错题本。");
             AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
                     learnerId, allowed, targetId, profile.difficulty());
             var poolRequest = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
@@ -402,4 +436,15 @@ public class LearnerPracticeService {
     }
     private static ApiException bad(String message) { return new ApiException(HttpStatus.BAD_REQUEST, message); }
     private static ApiException conflict(String message) { return new ApiException(HttpStatus.CONFLICT, message); }
+
+    /** 错题卡不可练习时的用户文案；原因由 LearnerPracticeStore.wrongQuestions 的 SQL 判定。 */
+    private static String wrongQuestionUnavailableMessage(String unavailableReason) {
+        if ("out_of_scope".equals(unavailableReason)) {
+            return "该题当前不在所选文集范围内。你仍可将它移出错题本。";
+        }
+        if ("knowledge_unavailable".equals(unavailableReason)) {
+            return "该题所属知识点当前不可练习。你仍可将它移出错题本。";
+        }
+        return "该题当前不可练习。你仍可将它移出错题本。";
+    }
 }

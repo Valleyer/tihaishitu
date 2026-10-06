@@ -55,17 +55,19 @@ public class LearnerProgressStore {
     public List<MembershipRow> selectedMemberships(String learnerId) {
         return jdbc.query("""
                 SELECT membership.bank_id,membership.chapter_id,k.id,k.name,k.subject_name,
-                       k.section_name,k.chapter_name
+                       k.section_name,catalog.name catalog_chapter
                   FROM learner_selected_book selected
                   JOIN question_bank b ON b.id=selected.bank_id AND b.enabled=TRUE
                   JOIN question_bank_knowledge membership ON membership.bank_id=b.id
+                  JOIN question_bank_chapter catalog ON catalog.bank_id=membership.bank_id
+                                                    AND catalog.id=membership.chapter_id
                   JOIN global_knowledge_point k ON k.id=membership.knowledge_point_id AND k.status='active'
                  WHERE selected.learner_id=?
                    AND """ + " " + TrainableKnowledge.exists("k") + """
                  ORDER BY selected.created_at,membership.sort_order,k.id
                 """, (rs, row) -> new MembershipRow(rs.getString("bank_id"), rs.getString("chapter_id"),
                 rs.getString("id"), rs.getString("name"), rs.getString("subject_name"),
-                rs.getString("section_name"), rs.getString("chapter_name")), learnerId);
+                rs.getString("section_name"), rs.getString("catalog_chapter")), learnerId);
     }
 
     public RecentTotals recentTotals(String learnerId, Instant from, Instant through) {
