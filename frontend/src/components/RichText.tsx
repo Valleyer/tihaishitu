@@ -18,11 +18,17 @@ export function RichText({
   className?: string;
   inline?: boolean;
 }) {
+  const content = (
+    <Markdown
+      remarkPlugins={[remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+      components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
+    >
+      {children}
+    </Markdown>
+  );
+  if (inline) return <span className={`rich-text rich-inline ${className}`}>{content}</span>;
   return (
-    <div className={`rich-text ${inline ? "rich-inline" : ""} ${className}`}>
-      <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-        {children}
-      </Markdown>
-    </div>
+    <div className={`rich-text ${className}`}>{content}</div>
   );
 }

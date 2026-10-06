@@ -38,6 +38,67 @@ public class BookManagementStore {
                 rs.getInt("sort_order"), rs.getLong("revision")), id)));
     }
 
+    public void create(String id, String name, String description, boolean enabled) {
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,?,?,?,100,1)",
+                id, name, description, enabled);
+    }
+
+    public Optional<ChapterView> findChapter(String bookId, String chapterId) {
+        return jdbc.query("""
+                SELECT id,parent_id,chapter_code,name,description,sort_order,revision
+                  FROM question_bank_chapter WHERE bank_id=? AND id=?
+                """, (rs, row) -> new ChapterView(rs.getString("id"), rs.getString("parent_id"),
+                rs.getString("chapter_code"), rs.getString("name"), rs.getString("description"),
+                rs.getInt("sort_order"), rs.getLong("revision")), bookId, chapterId).stream().findFirst();
+    }
+
+    public void createChapter(String id, String bookId, String parentId, String code,
+                              String name, String description) {
+        Integer sort = jdbc.queryForObject("""
+                SELECT COALESCE(MAX(sort_order),-1)+1 FROM question_bank_chapter
+                 WHERE bank_id=? AND ((parent_id IS NULL AND ? IS NULL) OR parent_id=?)
+                """, Integer.class, bookId, parentId, parentId);
+        jdbc.update("""
+                INSERT INTO question_bank_chapter(id,bank_id,parent_id,chapter_code,name,description,sort_order,revision)
+                VALUES (?,?,?,?,?,?,?,1)
+                """, id, bookId, parentId, code, name, description, sort == null ? 0 : sort);
+    }
+
+    public int childCount(String bookId, String chapterId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id=? AND parent_id=?",
+                Integer.class, bookId, chapterId);
+        return count == null ? 0 : count;
+    }
+
+    public int chapterMembershipCount(String bookId, String chapterId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id=? AND chapter_id=?",
+                Integer.class, bookId, chapterId);
+        return count == null ? 0 : count;
+    }
+
+    public int deleteChapter(String bookId, String chapterId) {
+        return jdbc.update("DELETE FROM question_bank_chapter WHERE bank_id=? AND id=?", bookId, chapterId);
+    }
+
+    public List<String> siblingIds(String bookId, String parentId) {
+        return jdbc.query("""
+                SELECT id FROM question_bank_chapter
+                 WHERE bank_id=? AND ((parent_id IS NULL AND ? IS NULL) OR parent_id=?)
+                 ORDER BY sort_order,id
+                """, (rs, row) -> rs.getString("id"), bookId, parentId, parentId);
+    }
+
+    public void reorder(String bookId, String parentId, List<String> chapterIds) {
+        for (int index = 0; index < chapterIds.size(); index++) {
+            jdbc.update("""
+                    UPDATE question_bank_chapter SET sort_order=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP
+                     WHERE bank_id=? AND id=? AND ((parent_id IS NULL AND ? IS NULL) OR parent_id=?)
+                    """, index, bookId, chapterIds.get(index), parentId, parentId);
+        }
+    }
+
     public int update(String id, String name, String description, boolean enabled, long revision) {
         return jdbc.update("""
                 UPDATE question_bank SET name=?,description=?,enabled=?,revision=revision+1,

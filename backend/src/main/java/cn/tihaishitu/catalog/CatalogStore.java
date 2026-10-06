@@ -75,14 +75,17 @@ public class CatalogStore {
                           WHERE bi.bank_id = b.id AND qr.status = 'published'
                             AND qk.relation_role='core' AND k.status='active'
                             AND qr.question_type IN ('single_choice','multiple_choice','true_false','solution'))
-                            ELSE 0 END point_count
+                            ELSE 0 END point_count,
+                       (SELECT COUNT(*) FROM question_bank_knowledge total_bk
+                         WHERE total_bk.bank_id = b.id) total_point_count
                   FROM question_bank b
                  ORDER BY b.created_at, b.id
                 """.formatted(TrainableKnowledge.exists("k")),
                 (result, row) -> new QuestionBankManifest(
                         result.getString("id"), result.getString("name"), result.getString("description"),
                         result.getBoolean("enabled"), result.getInt("weight_value"), result.getLong("revision"),
-                        result.getInt("question_count"), result.getInt("point_count")
+                        result.getInt("question_count"), result.getInt("point_count"),
+                        result.getInt("total_point_count")
                 )
         );
     }

@@ -106,29 +106,29 @@ function ImportPage({ fail }: { fail: (value: string) => void }) {
 }
 
 function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string) => void }) {
-  const [query, setQuery] = useState("");
-  const [subject, setSubject] = useState("数学一");
-  const [section, setSection] = useState("");
-  const [chapter, setChapter] = useState("");
-  const [status, setStatus] = useState("");
-  const [items, setItems] = useState<KnowledgeView[]>([]);
-  const [total, setTotal] = useState(0);
-  const [selected, setSelected] = useState<KnowledgeView | null>(null);
+  const [query,setQuery]=useState(""); const [subject,setSubject]=useState(""); const [bookId,setBookId]=useState(""); const [chapterId,setChapterId]=useState(""); const [membership,setMembership]=useState("all");
+  const [items,setItems]=useState<KnowledgeView[]>([]); const [subjects,setSubjects]=useState<string[]>([]); const [books,setBooks]=useState<ManagedBook[]>([]); const [bookDetail,setBookDetail]=useState<ManagedBookDetail>();
+  const [page,setPage]=useState(0); const [size,setSize]=useState(50); const [total,setTotal]=useState(0); const [totalPages,setTotalPages]=useState(0); const [checked,setChecked]=useState<string[]>([]); const [selected,setSelected]=useState<KnowledgeView|null>(null);
   const editable = user.roles.some((role) => role === "REVIEWER" || role === "ADMIN");
-  const load = useCallback(() => manageApi.knowledge({ query, subject, section, chapter, status, size: 50 })
-    .then((page) => { setItems(page.content); setTotal(page.totalElements); })
-    .catch((e) => fail(e.message)), [query, subject, section, chapter, status, fail]);
+  const admin=user.roles.includes("ADMIN");
+  const load=useCallback(()=>manageApi.knowledge({query,subject,bookId,chapterId,membership,page,size}).then(result=>{setItems(result.content);setTotal(result.totalElements);setTotalPages(result.totalPages);setChecked([]);if(page>0&&!result.content.length)setPage(page-1)}).catch(e=>fail(e.message)),[query,subject,bookId,chapterId,membership,page,size,fail]);
+  useEffect(()=>{Promise.all([manageApi.knowledgeFacets(),manageApi.books()]).then(([facets,bookItems])=>{setSubjects(facets.subjects);setBooks(bookItems)}).catch(e=>fail(e.message))},[fail]);
+  useEffect(()=>{if(bookId)manageApi.book(bookId).then(setBookDetail).catch(e=>fail(e.message));else setBookDetail(undefined)},[bookId,fail]);
   useEffect(() => { void load(); }, [load]);
-  return <section><PageTitle title="知识点管理" detail={`共 ${total} 条；知识点编码是永久稳定身份`} />
-    <div className="manage-toolbar knowledge-filters"><input placeholder="搜索知识点编码 / 名称 / 别名" value={query} onChange={(e) => setQuery(e.target.value)} />
-      <select value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">全部科目</option><option>数学一</option></select>
-      <select value={section} onChange={(e) => setSection(e.target.value)}><option value="">全部分科</option><option>高等数学</option><option>线性代数</option><option>概率论与数理统计</option></select>
-      <input placeholder="章节精确筛选" value={chapter} onChange={(e) => setChapter(e.target.value)} />
-      <select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">全部状态</option><option value="active">有效</option><option value="deprecated">已停用/合并</option></select>
-      <button onClick={load}>查询</button></div>
-    <div className="split-workspace"><div className="data-table"><div className="table-head"><span>知识点编码</span><span>名称</span><span>章节</span><span>题目数</span><span>状态</span></div>
-      {items.map((item) => <button className="table-row" key={item.id} onClick={() => setSelected(item)}><code>{item.code}</code><b>{item.name}</b><span>{item.chapter}</span><span>{item.questionCount}</span><i>{manageLabel("knowledgeStatus", item.status)}</i></button>)}</div>
-      <aside className="detail-panel">{selected ? <KnowledgeEditor key={selected.id + selected.revision} point={selected} editable={editable} admin={user.roles.includes("ADMIN")} fail={fail} saved={(point) => { setSelected(point); load(); }} /> : <Empty>选择一条知识点查看详情</Empty>}</aside></div>
+  const toggle=(id:string)=>setChecked(values=>values.includes(id)?values.filter(value=>value!==id):[...values,id]);
+  const remove=async()=>{if(!checked.length||!window.confirm(`确认尝试永久删除所选 ${checked.length} 个知识点？\n\n只有无题目、无文集归属、无合并历史且无学习历史的孤儿知识点会被删除。`))return;try{const result=await manageApi.bulkDeleteKnowledge(checked);setSelected(null);await load();const blocked=result.blocked.map(item=>`“${item.name}”：${item.reason}`).join("\n");window.alert(`已删除 ${result.deleted} 个知识点。${blocked?`\n\n未删除：\n${blocked}`:""}`)}catch(error){fail((error as Error).message)}};
+  const chapters=bookDetail?.chapters||[];
+  const pager=<div className="manage-pagination"><span>共 {total} 条 · 已选 {checked.length} 条</span>{admin&&<button className="danger" disabled={!checked.length} onClick={remove}>批量删除（{checked.length}）</button>}<span>第 {totalPages?page+1:0} / {totalPages} 页</span><div><button disabled={page===0} onClick={()=>setPage(page-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(page+1)}>下一页</button></div></div>;
+  return <section className="knowledge-management-page"><PageTitle title="知识点管理" detail={`共 ${total} 条`} />
+    <div className="manage-toolbar knowledge-filters"><input placeholder="搜索名称 / 编码 / 别名" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}} />
+      <select value={subject} onChange={e=>{setSubject(e.target.value);setPage(0)}}><option value="">全部科目</option>{subjects.map(item=><option key={item}>{item}</option>)}</select>
+      <select value={bookId} onChange={e=>{setBookId(e.target.value);setChapterId("");setPage(0)}}><option value="">全部文集</option>{books.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select>
+      <select value={chapterId} disabled={!bookId} onChange={e=>{setChapterId(e.target.value);setPage(0)}}><option value="">全部章节</option>{chapters.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select>
+      <select value={membership} onChange={e=>{setMembership(e.target.value);setPage(0)}}><option value="all">全部</option><option value="assigned">已加入文集</option><option value="unassigned">未加入文集</option></select>
+      <select value={size} onChange={e=>{setSize(Number(e.target.value));setPage(0)}}>{[30,50,100].map(value=><option value={value} key={value}>每页 {value}</option>)}</select><button onClick={load}>查询</button></div>
+    <div className="split-workspace knowledge-management-workspace"><div className="knowledge-list-panel"><div className="data-table knowledge-management-table"><div className="table-head knowledge-cols"><input aria-label="全选当前页" type="checkbox" checked={items.length>0&&items.every(item=>checked.includes(item.id))} onChange={e=>setChecked(e.target.checked?items.map(item=>item.id):[])}/><span>名称</span><span>所属文集</span><span>章节</span><span>题目数</span><span>状态</span></div>
+      {items.map(item=>{const bookText=item.books.length===0?"未加入文集":item.books.length>2?`${item.books.length} 个文集`:item.books.map(book=>book.bookName).join("、");const chapterText=item.books.length?item.books.map(book=>book.chapterName).filter((value,index,array)=>array.indexOf(value)===index).join("、"):"—";return <div className="table-row knowledge-cols" key={item.id}><input aria-label={`选择 ${item.name}`} type="checkbox" checked={checked.includes(item.id)} onChange={()=>toggle(item.id)}/><button className="knowledge-open" onClick={()=>setSelected(item)}><b>{item.name}</b></button><span className={item.books.length?"":"unassigned-tag"}>{bookText}</span><span>{chapterText}</span><span>{item.questionCount}</span><i>{manageLabel("knowledgeStatus",item.status)}</i></div>})}</div>{pager}</div>
+      <aside className="detail-panel">{selected?<KnowledgeEditor key={selected.id+selected.revision} point={selected} editable={editable} admin={admin} fail={fail} saved={point=>{setSelected(point);load()}}/>:<Empty>选择一条知识点查看详情</Empty>}</aside></div>
   </section>;
 }
 
@@ -145,7 +145,7 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
     manageApi.mergeKnowledge(point, target.id, mergeReason)
       .then((result) => saved(result.target)).catch((error) => fail(error.message)).finally(() => setBusy(false));
   };
-  return <div className="editor"><header><code>{point.code}</code><span>修订版本 {point.revision}</span></header>
+  return <div className="editor"><header><b>{point.name}</b><span>{point.books.length?point.books.map(book=>`${book.bookName} / ${book.chapterName}`).join("；"):"未加入文集"}</span></header>
     <label>名称<input disabled={!editable} value={point.name} onChange={(e) => setPoint({ ...point, name: e.target.value })} /></label>
     <div className="form-row"><label>默认角色<select disabled={!editable} value={point.defaultRole} onChange={(e) => setPoint({ ...point, defaultRole: e.target.value as KnowledgeView["defaultRole"] })}>{manageOptions("knowledgeRole").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>状态<select disabled={!editable} value={point.status} onChange={(e) => setPoint({ ...point, status: e.target.value as KnowledgeView["status"] })}>{manageOptions("knowledgeStatus").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>
@@ -153,6 +153,7 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
     <label>别名（每行一个）<textarea disabled={!editable} value={point.aliases.join("\n")} onChange={(e) => setPoint({ ...point, aliases: e.target.value.split("\n").filter(Boolean) })} /></label>
     <label>说明<textarea disabled={!editable} value={point.description} onChange={(e) => setPoint({ ...point, description: e.target.value })} /></label>
     <label>知识点解析（Markdown + LaTeX）<textarea disabled={!editable} rows={8} value={point.explanation} onChange={(e) => setPoint({ ...point, explanation: e.target.value })} /></label>
+    <details><summary>技术信息</summary><dl className="technical-info"><dt>KnowledgePoint ID</dt><dd><code>{point.id}</code></dd><dt>知识点编码</dt><dd><code>{point.code}</code></dd><dt>revision</dt><dd>{point.revision}</dd></dl></details>
     {editable && <button disabled={busy} onClick={() => { setBusy(true); manageApi.saveKnowledge(point).then(saved).catch((e) => fail(e.message)).finally(() => setBusy(false)); }}>保存知识点</button>}
     {admin && point.status === "active" && <fieldset className="editor-group merge-panel"><legend>合并知识点</legend>
       <p>旧知识点会保留为已停用或已合并状态；题目关系、原知识点编码、名称和别名将迁移到目标知识点。</p>
@@ -168,6 +169,8 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
 function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
   const [items, setItems] = useState<ManagedBook[]>([]);
   const [selected, setSelected] = useState<ManagedBookDetail>();
+  const [creating,setCreating]=useState(false); const [newBook,setNewBook]=useState({name:"",description:"",enabled:true});
+  const [newChapter,setNewChapter]=useState({name:"",description:"",parentId:""});
   const load = useCallback(() => manageApi.books().then(setItems).catch(error => fail(error.message)), [fail]);
   useEffect(() => { void load(); }, [load]);
   const open = (id: string) => manageApi.book(id).then(setSelected).catch(error => fail(error.message));
@@ -175,6 +178,10 @@ function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
   const saveChapter = (chapter: ManagedChapter) => selected && manageApi.saveChapter(selected.book.id, chapter)
     .then(saved => setSelected({ ...selected, chapters: selected.chapters.map(item => item.id === saved.id ? saved : item) }))
     .catch(error => fail(error.message));
+  const createBook=async()=>{if(!newBook.name.trim())return;try{const value=await manageApi.createBook(newBook);setSelected(value);setCreating(false);setNewBook({name:"",description:"",enabled:true});await load()}catch(error){fail((error as Error).message)}};
+  const createChapter=async()=>{if(!selected||!newChapter.name.trim())return;try{await manageApi.createChapter(selected.book.id,{...newChapter,parentId:newChapter.parentId||undefined});setNewChapter({name:"",description:"",parentId:""});setSelected(await manageApi.book(selected.book.id));await load()}catch(error){fail((error as Error).message)}};
+  const deleteChapter=async(chapter:ManagedChapter)=>{if(!selected||!window.confirm(`确认删除章节“${chapter.name}”？\n\n删除章节会移除该章节及其知识点在本书中的归属关系，不会删除全局知识点和题目。`))return;try{await manageApi.deleteChapter(selected.book.id,chapter.id);setSelected(await manageApi.book(selected.book.id));await load()}catch(error){fail((error as Error).message)}};
+  const moveChapter=async(chapter:ManagedChapter,offset:number)=>{if(!selected)return;const siblings=selected.chapters.filter(item=>(item.parentId||"")===(chapter.parentId||""));const index=siblings.findIndex(item=>item.id===chapter.id);const target=index+offset;if(target<0||target>=siblings.length)return;const ordered=[...siblings];[ordered[index],ordered[target]]=[ordered[target],ordered[index]];try{const chapters=await manageApi.reorderChapters(selected.book.id,chapter.parentId,ordered.map(item=>item.id));setSelected({...selected,chapters})}catch(error){fail((error as Error).message)}};
   const remove = async () => {
     if (!selected) return;
     const message = `确认删除文集“${selected.book.name}”？\n\n将删除该文集本身、章节结构和文集-知识点关系。\n不会删除全局知识点、全局题目和学习历史。`;
@@ -182,7 +189,8 @@ function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
     try { await manageApi.deleteBook(selected.book.id); setSelected(undefined); await load(); }
     catch (error) { fail((error as Error).message); }
   };
-  return <section><PageTitle title="文集管理" detail="维护文集、章节名称与学习范围；稳定 ID 和章节编码保持不变" />
+  return <section><div className="page-title-actions"><PageTitle title="文集管理" detail="维护文集、章节和学习范围；稳定 ID 与章节编码由系统管理"/><button className="primary" onClick={()=>setCreating(value=>!value)}>新建文集</button></div>
+    {creating&&<div className="manage-card create-book-form"><input placeholder="文集名称" value={newBook.name} onChange={e=>setNewBook({...newBook,name:e.target.value})}/><input placeholder="文集描述" value={newBook.description} onChange={e=>setNewBook({...newBook,description:e.target.value})}/><label className="inline-check"><input type="checkbox" checked={newBook.enabled} onChange={e=>setNewBook({...newBook,enabled:e.target.checked})}/>启用文集</label><button className="primary" disabled={!newBook.name.trim()} onClick={createBook}>创建文集</button></div>}
     <div className="split-workspace book-management"><div className="data-table"><div className="table-head book-cols"><span>文集</span><span>成员</span><span>可学习</span><span>题目</span><span>状态</span></div>
       {items.map(item => <button className="table-row book-cols" key={item.id} onClick={() => open(item.id)}><b>{item.name}</b><span>{item.membershipCount}</span><span>{item.trainableKnowledgePointCount}</span><span>{item.publishedQuestionCount}</span><i>{item.enabled ? "正常" : "已停用"}</i></button>)}</div>
       <aside className="detail-panel wide">{selected ? <div className="editor book-editor"><header><b>{selected.book.name}</b><span>{selected.book.membershipCount} 个成员 · {selected.book.trainableKnowledgePointCount} 个可学习知识点 · {selected.book.publishedQuestionCount} 道已发布题目</span></header>
@@ -190,14 +198,15 @@ function BooksManagementPage({ fail }: { fail: (value: string) => void }) {
         <label>文集描述<textarea rows={4} value={selected.book.description} onChange={event => setSelected({ ...selected, book: { ...selected.book, description: event.target.value } })} /></label>
         <label className="inline-check"><input type="checkbox" checked={selected.book.enabled} onChange={event => setSelected({ ...selected, book: { ...selected.book, enabled: event.target.checked } })} />启用文集</label>
         <button className="primary" onClick={saveBook}>保存文集</button>
-        <fieldset className="editor-group"><legend>章节</legend>{selected.chapters.map(chapter => <ChapterEditor key={chapter.id} chapter={chapter} changed={next => setSelected({ ...selected, chapters: selected.chapters.map(item => item.id === next.id ? next : item) })} save={() => saveChapter(chapter)} />)}</fieldset>
+        <details><summary>技术信息</summary><dl className="technical-info"><dt>Book ID</dt><dd><code>{selected.book.id}</code></dd><dt>revision</dt><dd>{selected.book.revision}</dd></dl></details>
+        <fieldset className="editor-group"><legend>章节</legend><div className="create-chapter-form"><input placeholder="新章节名称" value={newChapter.name} onChange={e=>setNewChapter({...newChapter,name:e.target.value})}/><input placeholder="章节描述" value={newChapter.description} onChange={e=>setNewChapter({...newChapter,description:e.target.value})}/><select value={newChapter.parentId} onChange={e=>setNewChapter({...newChapter,parentId:e.target.value})}><option value="">顶级章节</option>{selected.chapters.map(item=><option value={item.id} key={item.id}>作为“{item.name}”的子章节</option>)}</select><button disabled={!newChapter.name.trim()} onClick={createChapter}>+ 新建章节</button></div>{selected.chapters.map(chapter=>{const siblings=selected.chapters.filter(item=>(item.parentId||"")===(chapter.parentId||""));const index=siblings.findIndex(item=>item.id===chapter.id);return <ChapterEditor key={chapter.id} chapter={chapter} changed={next=>setSelected({...selected,chapters:selected.chapters.map(item=>item.id===next.id?next:item)})} save={()=>saveChapter(chapter)} moveUp={()=>moveChapter(chapter,-1)} moveDown={()=>moveChapter(chapter,1)} canUp={index>0} canDown={index<siblings.length-1} remove={()=>deleteChapter(chapter)}/>})}</fieldset>
         <section className="danger-zone"><div><b>危险操作</b><p>删除后将移除该文集及章节结构和文集绑定关系，不会删除全局题目、知识点和学习历史。</p></div><button className="danger" onClick={remove}>删除文集</button></section>
       </div> : <Empty>选择一部文集查看详情</Empty>}</aside></div>
   </section>;
 }
 
-function ChapterEditor({ chapter, changed, save }: { chapter: ManagedChapter; changed: (chapter: ManagedChapter) => void; save: () => void }) {
-  return <div className="chapter-editor"><div><b>{chapter.name}</b><details><summary>技术信息</summary><code>{chapter.code}</code></details></div><label>章节名称<input value={chapter.name} onChange={event => changed({ ...chapter, name: event.target.value })} /></label><label>章节描述<input value={chapter.description} onChange={event => changed({ ...chapter, description: event.target.value })} /></label><button onClick={save}>保存章节</button></div>;
+function ChapterEditor({chapter,changed,save,moveUp,moveDown,canUp,canDown,remove}:{chapter:ManagedChapter;changed:(chapter:ManagedChapter)=>void;save:()=>void;moveUp:()=>void;moveDown:()=>void;canUp:boolean;canDown:boolean;remove:()=>void}) {
+  return <div className="chapter-editor"><div><b>{chapter.name}</b><details><summary>技术信息</summary><code>{chapter.id}</code><code>{chapter.code}</code><small>revision {chapter.revision}</small></details></div><label>章节名称<input value={chapter.name} onChange={event=>changed({...chapter,name:event.target.value})}/></label><label>章节描述<input value={chapter.description} onChange={event=>changed({...chapter,description:event.target.value})}/></label><div className="chapter-actions"><button disabled={!canUp} onClick={moveUp}>↑</button><button disabled={!canDown} onClick={moveDown}>↓</button><button onClick={save}>保存</button><button className="danger" onClick={remove}>删除</button></div></div>;
 }
 
 export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {

@@ -29,7 +29,14 @@ export type KnowledgeView = {
   mergedIntoId?: string;
   aliases: string[];
   questionCount: number;
+  books: { bookId: string; bookName: string; chapterId: string; chapterName: string }[];
   revision: number;
+};
+
+export type KnowledgeFacets = { subjects: string[] };
+export type BulkKnowledgeDeleteResult = {
+  deleted: number;
+  blocked: { id: string; name: string; reason: string }[];
 };
 
 export type QuestionOption = {
@@ -192,6 +199,7 @@ export const manageApi = {
   },
   knowledge: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<KnowledgeView>>(`/knowledge-points?${params(filters)}`),
+  knowledgeFacets: () => request<KnowledgeFacets>("/knowledge-points/facets"),
   saveKnowledge: (point: KnowledgeView) =>
     request<KnowledgeView>(`/knowledge-points/${point.id}`, {
       method: "PUT",
@@ -211,10 +219,16 @@ export const manageApi = {
       method: "POST",
       body: JSON.stringify({ targetId, reason, expectedRevision: source.revision }),
     }),
+  bulkDeleteKnowledge: (ids: string[]) =>
+    request<BulkKnowledgeDeleteResult>("/knowledge-points/bulk-delete", {
+      method: "POST", body: JSON.stringify({ ids }),
+    }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
   books: () => request<ManagedBook[]>("/books"),
   book: (id: string) => request<ManagedBookDetail>(`/books/${id}`),
+  createBook: (input: { name: string; description: string; enabled: boolean }) =>
+    request<ManagedBookDetail>("/books", { method: "POST", body: JSON.stringify(input) }),
   saveBook: (book: ManagedBook) => request<ManagedBookDetail>(`/books/${book.id}`, {
     method: "PUT", body: JSON.stringify({ name: book.name, description: book.description,
       enabled: book.enabled, expectedRevision: book.revision }),
@@ -223,6 +237,16 @@ export const manageApi = {
     request<ManagedChapter>(`/books/${bookId}/chapters/${chapter.id}`, {
       method: "PUT", body: JSON.stringify({ name: chapter.name, description: chapter.description,
         expectedRevision: chapter.revision }),
+    }),
+  createChapter: (bookId: string, input: { name: string; description: string; parentId?: string }) =>
+    request<ManagedChapter>(`/books/${bookId}/chapters`, {
+      method: "POST", body: JSON.stringify(input),
+    }),
+  deleteChapter: (bookId: string, chapterId: string) =>
+    request<void>(`/books/${bookId}/chapters/${chapterId}`, { method: "DELETE" }),
+  reorderChapters: (bookId: string, parentId: string | undefined, chapterIds: string[]) =>
+    request<ManagedChapter[]>(`/books/${bookId}/chapters/reorder`, {
+      method: "POST", body: JSON.stringify({ parentId: parentId || null, chapterIds }),
     }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: "DELETE" }),
   questions: (filters: Record<string, string | number | undefined>) =>

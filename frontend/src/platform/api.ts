@@ -11,7 +11,7 @@ export interface StudyProfile {
   focusedKnowledgePointIds: string[]; focusedKnowledgePoints: KnowledgePoint[];
 }
 export interface WorldDefinition { id: string; name: string; description: string; enabled: boolean; initialized: boolean; updatedAt?: string; entryPath?: string }
-export interface BookSummary { id: string; name: string; description: string; revision: number; knowledgePointCount: number; questionCount: number }
+export interface BookSummary { id: string; name: string; description: string; revision: number; knowledgePointCount: number; totalKnowledgePointCount: number; questionCount: number }
 export interface Chapter { id: string; parentId?: string; code: string; name: string; description: string; knowledgePoints: KnowledgePoint[]; children: Chapter[] }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
