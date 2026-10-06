@@ -73,6 +73,13 @@ class LearnerKnowledgeMergeIntegrationTest {
                 actor, "active-actor-" + actor);
         insertKnowledge(source, "ACTIVE-MERGE-SOURCE");
         insertKnowledge(target, "ACTIVE-MERGE-TARGET");
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','true_false','true_false','auto','并发题','true','解析',3,'published',1)
+                """, questionId);
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
+                questionId, source);
 
         ObjectNode question = mapper.createObjectNode();
         question.put("id", questionId);

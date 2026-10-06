@@ -28,9 +28,9 @@ class OfficialMath1BookBootstrapIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT name FROM question_bank WHERE id = ?", String.class,
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("数学一");
         assertThat(count("SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id = ?",
-                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(25);
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(22);
         assertThat(count("SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id = ? AND parent_id IS NULL",
-                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(3);
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(22);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(469);
         assertThat(catalog.loadBookKnowledgePoints(OfficialMath1BookBootstrap.BOOK_ID)).hasSize(469);
@@ -39,7 +39,7 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 """, (result, row) -> result.getString("id"), OfficialMath1BookBootstrap.BOOK_ID);
         jdbc.update("UPDATE question_bank SET description = '管理员补充说明' WHERE id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID);
-        jdbc.update("UPDATE question_bank_chapter SET name = '管理员章节名' WHERE bank_id = ? AND chapter_code = 'M1-H'",
+        jdbc.update("UPDATE question_bank_chapter SET name = '管理员章节名' WHERE bank_id = ? AND chapter_code = 'M1-H01'",
                 OfficialMath1BookBootstrap.BOOK_ID);
 
         bootstrap.bootstrapAfterCatalogMigration();
@@ -49,12 +49,12 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 """, (result, row) -> result.getString("id"), OfficialMath1BookBootstrap.BOOK_ID))
                 .containsExactlyElementsOf(chapterIds);
         assertThat(count("SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id = ?",
-                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(25);
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(22);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(469);
         assertThat(jdbc.queryForObject("SELECT description FROM question_bank WHERE id = ?", String.class,
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("管理员补充说明");
-        assertThat(jdbc.queryForObject("SELECT name FROM question_bank_chapter WHERE bank_id = ? AND chapter_code = 'M1-H'",
+        assertThat(jdbc.queryForObject("SELECT name FROM question_bank_chapter WHERE bank_id = ? AND chapter_code = 'M1-H01'",
                 String.class, OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo("管理员章节名");
     }
 
@@ -77,7 +77,7 @@ class OfficialMath1BookBootstrapIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT weight_value FROM question_bank WHERE id = ?", Integer.class,
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(5);
         assertThat(count("SELECT COUNT(*) FROM question_bank_chapter WHERE bank_id = ?",
-                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(25);
+                OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(22);
         assertThat(count("SELECT COUNT(*) FROM question_bank_knowledge WHERE bank_id = ?",
                 OfficialMath1BookBootstrap.BOOK_ID)).isEqualTo(469);
     }

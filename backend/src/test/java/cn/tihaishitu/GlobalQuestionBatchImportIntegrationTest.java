@@ -242,13 +242,13 @@ class GlobalQuestionBatchImportIntegrationTest {
     }
 
     @Test
-    void repositoryExampleIsAcceptedByV2Importer() throws Exception {
+    void repositoryExampleIsAcceptedByV3Importer() throws Exception {
         String example = Files.readString(Path.of("../frontend/public/examples/题库示例.json"));
         mvc.perform(post("/api/v1/admin/questions/import")
                         .header("X-Admin-Key", "question-batch-key")
                         .contentType("application/json").content(example))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.schemaVersion").value("global-question-batch/v2"))
+                .andExpect(jsonPath("$.schemaVersion").value("global-question-batch/v3"))
                 .andExpect(jsonPath("$.questionCount").value(2))
                 .andExpect(jsonPath("$.createdQuestions").value(2));
     }
