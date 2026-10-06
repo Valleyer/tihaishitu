@@ -95,6 +95,7 @@ class KnowledgeDrivenBookCountIntegrationTest {
         mvc.perform(get("/api/v1/learning/knowledge-points").cookie(learner)
                         .param("query", "未选知识点"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.content.length()").value(0))
                 .andExpect(jsonPath("$.totalElements").value(0));
         mvc.perform(get("/api/v1/learning/knowledge-points/facets").cookie(learner))

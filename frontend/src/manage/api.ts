@@ -33,7 +33,6 @@ export type KnowledgeView = {
   revision: number;
 };
 
-export type KnowledgeFacets = { subjects: string[] };
 export type BulkKnowledgeDeleteResult = {
   deleted: number;
   blocked: { id: string; name: string; reason: string }[];
@@ -199,7 +198,6 @@ export const manageApi = {
   },
   knowledge: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<KnowledgeView>>(`/knowledge-points?${params(filters)}`),
-  knowledgeFacets: () => request<KnowledgeFacets>("/knowledge-points/facets"),
   saveKnowledge: (point: KnowledgeView) =>
     request<KnowledgeView>(`/knowledge-points/${point.id}`, {
       method: "PUT",

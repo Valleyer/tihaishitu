@@ -583,3 +583,4 @@
 .learning-hub article.book-cover-card { padding: 18px; text-align: center; }
 .learning-hub .book-cover-card em { color: var(--zj-text-tertiary); font-size: 12px; font-style: normal; }
 .learning-hub .book-cover-card > button { min-height: 36px; padding: 7px 12px; }
+.learning-hub .book-cover-icon svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

@@ -64,7 +64,12 @@ class KnowledgeManagementFilteringIntegrationTest {
         mvc.perform(get("/api/v1/manage/knowledge-points").cookie(admin).param("subject", "408").param("chapterId", chapter))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         mvc.perform(get("/api/v1/manage/knowledge-points").cookie(admin).param("subject", "408").param("membership", "unassigned"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.size").value(20));
+        mvc.perform(get("/api/v1/manage/questions").cookie(admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(20));
+        mvc.perform(get("/api/v1/manage/audit-logs").cookie(admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(20));
 
         for (int index = 0; index < 51; index++) point("分页测试", "分页知识点" + index);
         mvc.perform(get("/api/v1/manage/knowledge-points").cookie(admin)

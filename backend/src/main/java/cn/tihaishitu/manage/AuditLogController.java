@@ -23,7 +23,7 @@ public class AuditLogController {
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) String actor,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "50") @Min(1) int size) {
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
         return store.search(action, entityType, actor, page, Math.min(size, 100));
     }
 }

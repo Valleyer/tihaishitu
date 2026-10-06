@@ -43,7 +43,7 @@ public class KnowledgeManagementController {
             @RequestParam(required = false) String chapterId,
             @RequestParam(defaultValue = "all") String membership,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "50") @Min(1) int size) {
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
         if (!Set.of("all", "assigned", "unassigned").contains(membership)) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "文集归属筛选不合法。");
         }
