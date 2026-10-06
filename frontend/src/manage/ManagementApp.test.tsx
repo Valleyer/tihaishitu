@@ -153,7 +153,7 @@ describe("QuestionPage pagination", () => {
 
     expect(await screen.findByText("第 1 / 1 页")).toBeTruthy();
     expect(screen.getByText("待审核共 20 道")).toBeTruthy();
-    expect(requestedPagesAfterReview).toEqual([1, 0]);
+    await waitFor(() => expect(requestedPagesAfterReview).toEqual([1, 0]));
     expect(questionsMock.mock.calls.every(([filters]) => filters.status === "pending_review")).toBe(true);
   });
 });
