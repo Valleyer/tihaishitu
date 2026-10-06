@@ -132,6 +132,12 @@ function KnowledgePage({ user, fail }: { user: ManageUser; fail: (value: string)
   </section>;
 }
 
+function knowledgeMembershipLabel(point: KnowledgeView) {
+  if (!point.books.length) return "未加入文集";
+  if (point.books.length > 1) return `${point.books.length} 个文集`;
+  return `${point.books[0].bookName} / ${point.books[0].chapterName}`;
+}
+
 function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { point: KnowledgeView; editable: boolean; admin: boolean; fail: (v: string) => void; saved: (v: KnowledgeView) => void }) {
   const [point, setPoint] = useState(initial); const [busy, setBusy] = useState(false);
   const [targetQuery, setTargetQuery] = useState("");
@@ -149,7 +155,6 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
     <label>名称<input disabled={!editable} value={point.name} onChange={(e) => setPoint({ ...point, name: e.target.value })} /></label>
     <div className="form-row"><label>默认角色<select disabled={!editable} value={point.defaultRole} onChange={(e) => setPoint({ ...point, defaultRole: e.target.value as KnowledgeView["defaultRole"] })}>{manageOptions("knowledgeRole").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>状态<select disabled={!editable} value={point.status} onChange={(e) => setPoint({ ...point, status: e.target.value as KnowledgeView["status"] })}>{manageOptions("knowledgeStatus").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>
-    <p>{point.subject} / {point.section} / {point.chapter}</p>
     <label>别名（每行一个）<textarea disabled={!editable} value={point.aliases.join("\n")} onChange={(e) => setPoint({ ...point, aliases: e.target.value.split("\n").filter(Boolean) })} /></label>
     <label>说明<textarea disabled={!editable} value={point.description} onChange={(e) => setPoint({ ...point, description: e.target.value })} /></label>
     <label>知识点解析（Markdown + LaTeX）<textarea disabled={!editable} rows={8} value={point.explanation} onChange={(e) => setPoint({ ...point, explanation: e.target.value })} /></label>
@@ -158,7 +163,7 @@ function KnowledgeEditor({ point: initial, editable, admin, fail, saved }: { poi
     {admin && point.status === "active" && <fieldset className="editor-group merge-panel"><legend>合并知识点</legend>
       <p>旧知识点会保留为已停用或已合并状态；题目关系、原知识点编码、名称和别名将迁移到目标知识点。</p>
       <div className="inline-search"><input placeholder="搜索目标知识点编码 / 名称 / 别名" value={targetQuery} onChange={(e) => setTargetQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: targetQuery, status: "active", size: 10 }).then((page) => setTargets(page.content.filter((item) => item.id !== point.id))).catch((error) => fail(error.message))}>搜索</button></div>
-      {targets.length > 0 && <div className="merge-targets">{targets.map((item) => <button className={target?.id === item.id ? "selected" : ""} key={item.id} onClick={() => setTarget(item)}><code>{item.code}</code><span>{item.name}</span><small>{item.chapter}</small></button>)}</div>}
+      {targets.length > 0 && <div className="merge-targets">{targets.map((item) => <button className={target?.id === item.id ? "selected" : ""} key={item.id} onClick={() => setTarget(item)}><code>{item.code}</code><span>{item.name}</span><small>{knowledgeMembershipLabel(item)}</small></button>)}</div>}
       {target && <p className="selected-target">目标：<code>{target.code}</code> {target.name}</p>}
       <label>合并原因<textarea rows={3} value={mergeReason} onChange={(event) => setMergeReason(event.target.value)} placeholder="记录口径重复、命名修订或知识体系调整原因" /></label>
       <button className="danger" disabled={busy || !target || !mergeReason.trim()} onClick={merge}>确认迁移并合并</button>

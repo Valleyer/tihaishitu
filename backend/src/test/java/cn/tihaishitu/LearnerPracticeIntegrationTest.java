@@ -74,8 +74,14 @@ class LearnerPracticeIntegrationTest {
 
         JsonNode restored = json(mvc.perform(get("/api/v1/learner/practice-sessions/{id}", sessionId)
                         .cookie(learner)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        JsonNode restoredAgain = json(mvc.perform(get("/api/v1/learner/practice-sessions/{id}", sessionId)
+                        .cookie(learner)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(restored.path("currentAttempt").path("id").asText()).isEqualTo(attemptId);
         assertThat(restored.path("currentAttempt").path("status").asText()).isEqualTo("graded");
+        assertThat(restored.path("currentAttempt").path("question"))
+                .isEqualTo(restoredAgain.path("currentAttempt").path("question"));
+        assertThat(restored.path("currentAttempt").path("standard"))
+                .isEqualTo(restoredAgain.path("currentAttempt").path("standard"));
 
         JsonNode next = json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/next", sessionId)
                         .with(csrf()).cookie(learner))

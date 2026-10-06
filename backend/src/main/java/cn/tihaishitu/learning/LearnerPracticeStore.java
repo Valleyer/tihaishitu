@@ -16,7 +16,7 @@ public class LearnerPracticeStore {
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
-                                String subject, String chapter, String summary, Instant lastGradedAt) {}
+                                String contentMarkdown, Instant lastGradedAt) {}
 
     private final JdbcTemplate jdbc;
 
@@ -80,7 +80,7 @@ public class LearnerPracticeStore {
     public List<WrongQuestion> wrongQuestions(String learnerId) {
         return jdbc.query("""
                 SELECT a.question_id,a.target_knowledge_point_id,k.name knowledge_name,
-                       q.subject_name,k.chapter_name,q.content_markdown,a.answered_at
+                       q.content_markdown,a.answered_at
                   FROM study_attempt a
                   JOIN question_resource q ON q.id=a.question_id
                   JOIN global_knowledge_point k ON k.id=a.target_knowledge_point_id
@@ -99,8 +99,7 @@ public class LearnerPracticeStore {
                  ORDER BY a.answered_at DESC,a.id DESC
                 """, (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
-                rs.getString("subject_name"), rs.getString("chapter_name"),
-                summary(rs.getString("content_markdown")), rs.getTimestamp("answered_at").toInstant()), learnerId);
+                rs.getString("content_markdown"), rs.getTimestamp("answered_at").toInstant()), learnerId);
     }
 
     private List<Session> sessions(String predicate, Object... args) {
@@ -116,8 +115,4 @@ public class LearnerPracticeStore {
                 rs.getTimestamp("ended_at") == null ? null : rs.getTimestamp("ended_at").toInstant()), args);
     }
 
-    private static String summary(String value) {
-        String plain = value == null ? "" : value.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\s+", " ").trim();
-        return plain.length() <= 120 ? plain : plain.substring(0, 117) + "...";
-    }
 }

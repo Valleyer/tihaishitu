@@ -70,7 +70,7 @@ export interface LearnerProgress {
 }
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
-  subject: string; chapter: string; summary: string; lastGradedAt: string;
+  contentMarkdown: string; lastGradedAt: string;
 }
 export interface PracticeAttempt {
   id: string; status: "active" | "revealed" | "graded"; targetKnowledgePointId: string;

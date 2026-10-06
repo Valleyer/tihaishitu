@@ -123,7 +123,6 @@ public class KnowledgeManagementStore {
         KnowledgeView target = find(targetId).orElseThrow(() -> missing("目标知识点不存在。"));
         if (!"active".equals(source.status()) || source.mergedIntoId() != null) bad("源知识点已经停用或合并。");
         if (!"active".equals(target.status()) || target.mergedIntoId() != null) bad("目标知识点必须是有效知识点。");
-        if (!source.subject().equals(target.subject())) bad("只能合并同一学科的知识点。");
         if (reason == null || reason.isBlank()) bad("请填写合并原因。");
 
         List<String> membershipBankIds = jdbc.query("""

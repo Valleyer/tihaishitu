@@ -42,12 +42,14 @@ public class LearnerPracticeService {
     private final DiagnosticLearningStore diagnosisStore;
     private final LearnerStore learners;
     private final ObjectMapper mapper;
+    private final QuestionAttemptVariantService variants;
 
     public LearnerPracticeService(LearnerPracticeStore store, QuestionAttemptStore attempts,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService pool,
                                   AdaptiveStudyPlanner planner, LearnerKnowledgeStateService knowledgeStates,
                                   DiagnosticLearningService diagnostics, DiagnosticLearningStore diagnosisStore,
-                                  LearnerStore learners, ObjectMapper mapper) {
+                                  LearnerStore learners, ObjectMapper mapper,
+                                  QuestionAttemptVariantService variants) {
         this.store = store;
         this.attempts = attempts;
         this.profiles = profiles;
@@ -58,6 +60,7 @@ public class LearnerPracticeService {
         this.diagnosisStore = diagnosisStore;
         this.learners = learners;
         this.mapper = mapper;
+        this.variants = variants;
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
@@ -219,7 +222,9 @@ public class LearnerPracticeService {
 
     private String drawExact(String sessionId, String targetId, QuestionAttemptStore.Snapshot source) {
         String id = UUID.randomUUID().toString();
-        attempts.create(id, null, source.questionId(), source.question(), source.standard(),
+        QuestionAttemptVariantService.AttemptVariant variant = variants.create(
+                source.question(), source.standard(), source.question());
+        attempts.create(id, null, source.questionId(), variant.question(), variant.standard(),
                 source.gradingMode(), targetId, "normal", source.questionDifficulty(), null, null);
         return id;
     }
@@ -228,7 +233,8 @@ public class LearnerPracticeService {
                                  DiagnosticLearningService.Directive directive) {
         String id = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
-        attempts.create(id, null, question.id(), full, question.answer(),
+        QuestionAttemptVariantService.AttemptVariant variant = variants.create(full, question.answer(), null);
+        attempts.create(id, null, question.id(), variant.question(), variant.standard(),
                 full.path("gradingMode").asText("auto"), targetId, evidenceMode, question.difficulty(),
                 directive == null ? null : directive.diagnosisSessionId(),
                 directive == null ? null : directive.role());
