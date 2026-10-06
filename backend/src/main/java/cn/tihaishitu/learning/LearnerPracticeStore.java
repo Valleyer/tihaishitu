@@ -5,6 +5,8 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -57,19 +59,53 @@ public class LearnerPracticeStore {
     }
 
     /**
+     * 整本文集的 Chapter → KnowledgePoint 归属，一次查询取回。
+     * 判定条件与 chapterKnowledgePoints 完全一致（在所选文集内、知识点 active、存在可练正式题），
+     * 供书级批量 availability 使用，避免逐章重复查询。
+     */
+    public record ChapterMembership(String chapterId, String knowledgePointId) {}
+
+    public List<ChapterMembership> bookChapterMemberships(String learnerId, String bookId) {
+        return jdbc.query("""
+                SELECT bk.chapter_id,bk.knowledge_point_id FROM question_bank_knowledge bk
+                JOIN learner_selected_book selected ON selected.bank_id=bk.bank_id AND selected.learner_id=?
+                JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id AND k.status='active'
+                WHERE bk.bank_id=? AND %s ORDER BY bk.chapter_id,bk.sort_order,bk.knowledge_point_id
+                """.formatted(TrainableKnowledge.exists("k")),
+                (rs,row)->new ChapterMembership(rs.getString("chapter_id"),rs.getString("knowledge_point_id")),
+                learnerId,bookId);
+    }
+
+    /**
      * 章节内仍可能出题的候选知识点及其复习排期数据。是否真正“可练”由
      * LearnerPracticeService 用同一条 ReviewSchedulingPolicy 判定，避免在 SQL 里
      * 使用 MySQL 5.7 不支持的日期函数。
      * 语义与 chapter_drill 入口校验一致：已发布父真题、依赖满足、且该题对 Learner
      * 而言仍是未见 / 最近一次答错或部分正确 / 上一个业务日答对 / 知识点复习到期。
      */
-    public record ChapterCandidate(String knowledgePointId, Double masteryScore, Double stabilityDays,
-                                   Instant lastEvidenceAt, boolean readyQuestion) {}
+    public record ChapterCandidate(String chapterId, String knowledgePointId, Double masteryScore,
+                                   Double stabilityDays, Instant lastEvidenceAt, boolean readyQuestion) {}
 
-    public List<ChapterCandidate> chapterCandidates(String learnerId, String bookId, String chapterId,
-                                                    java.sql.Date businessDate) {
+    /**
+     * 整本文集一次批量取回所有 Chapter 的候选知识点与复习排期数据。
+     * 语义与原先的单章节 chapterCandidates 完全一致（scope / core 正式父题 / 允许题型 /
+     * 依赖满足 / 未见或上一业务日答对、非满分已掌握），只是把 chapter 维度合并为一次查询，
+     * 由 Service 在 Java 内按 chapterId 分组，从而消除 /learning/books/{id} 的逐章查询放大。
+     */
+    public List<ChapterCandidate> bookChapterCandidates(String learnerId, Collection<String> chapterIds,
+                                                        java.sql.Date businessDate) {
+        if (chapterIds == null || chapterIds.isEmpty()) return List.of();
+        String marks = String.join(",", java.util.Collections.nCopies(chapterIds.size(), "?"));
+        // JdbcTemplate 按 '?' 在 SQL 文本中的出现顺序绑定参数，必须与文本顺序一致。
+        List<Object> args = new ArrayList<>();
+        args.add(learnerId);                                // ready_question: exposure
+        args.add(learnerId);                                // ready_question: latest graded
+        args.add(businessDate);                             // ready_question: 上一业务日答对
+        args.add(learnerId);                                // state: 掌握度
+        args.addAll(chapterIds);                            // membership: 章节范围
+        args.add(learnerId);                                // dependency: 学习范围
         return jdbc.query("""
-                SELECT candidate.knowledge_point_id,
+                SELECT membership.chapter_id,candidate.knowledge_point_id,
                        MAX(CASE
                            WHEN NOT EXISTS (
                                SELECT 1 FROM study_attempt exposure
@@ -122,6 +158,7 @@ public class LearnerPracticeStore {
                   FROM question_resource_knowledge candidate
                   JOIN question_resource q ON q.id = candidate.question_id
                   JOIN global_knowledge_point current_k ON current_k.id = candidate.knowledge_point_id
+                  JOIN question_bank_knowledge membership ON membership.knowledge_point_id = candidate.knowledge_point_id
                   LEFT JOIN learner_knowledge_state state ON state.learner_id = ?
                                                         AND state.knowledge_point_id = candidate.knowledge_point_id
                  WHERE candidate.relation_role = 'core'
@@ -129,10 +166,7 @@ public class LearnerPracticeStore {
                    AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND current_k.status = 'active'
-                   AND candidate.knowledge_point_id IN (
-                       SELECT bk.knowledge_point_id FROM question_bank_knowledge bk
-                        WHERE bk.bank_id = ? AND bk.chapter_id = ?
-                   )
+                   AND membership.chapter_id IN (%s)
                    AND NOT EXISTS (
                        SELECT 1 FROM question_resource_knowledge dependency
                          LEFT JOIN global_knowledge_point dependency_k ON dependency_k.id = dependency.knowledge_point_id
@@ -145,13 +179,13 @@ public class LearnerPracticeStore {
                                      AND allowed.knowledge_point_id = dependency.knowledge_point_id
                                ))
                    )
-                 GROUP BY candidate.knowledge_point_id, state.mastery_score, state.stability_days,
-                          state.last_evidence_at
-                """, (rs, row) -> new ChapterCandidate(rs.getString("knowledge_point_id"),
+                 GROUP BY membership.chapter_id, candidate.knowledge_point_id, state.mastery_score,
+                          state.stability_days, state.last_evidence_at
+                """.formatted(marks), (rs, row) -> new ChapterCandidate(rs.getString("chapter_id"),
+                rs.getString("knowledge_point_id"),
                 number(rs.getObject("mastery_score")), number(rs.getObject("stability_days")),
                 rs.getTimestamp("last_evidence_at") == null ? null : rs.getTimestamp("last_evidence_at").toInstant(),
-                rs.getBoolean("ready_question")), learnerId, learnerId, businessDate, learnerId,
-                bookId, chapterId, learnerId);
+                rs.getBoolean("ready_question")), args.toArray());
     }
 
     /** DECIMAL 列在 H2/MySQL 上可能返回 BigDecimal、Double 或 Float，统一按 Number 取值。 */

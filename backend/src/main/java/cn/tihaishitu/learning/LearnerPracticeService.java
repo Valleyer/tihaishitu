@@ -17,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -78,26 +81,48 @@ public class LearnerPracticeService {
     /**
      * Chapter 内“学习者当前可练”的知识点数量（Study 章节练习入口的可用量）。
      * 与 startChapter 的校验语义一致：知识点在所选文集范围内，且存在至少一道
-     * 当前可练的正式真题。批量计算，供书籍/章节列表展示 Y 值，避免用户点击后才吃 400。
+     * 当前可练的正式真题。委托给书级批量实现，避免逐章重复加载 profile / scope。
      */
     public int availableChapterKnowledgePointCount(String learnerId, String bookId, String chapterId) {
         if (learnerId == null || bookId == null || chapterId == null) return 0;
-        return availableChapterKnowledgePointIds(learnerId, bookId, chapterId, Instant.now()).size();
+        return availableChapterKnowledgePointCounts(learnerId, bookId, List.of(chapterId))
+                .getOrDefault(chapterId, 0);
     }
 
-    private Set<String> availableChapterKnowledgePointIds(String learnerId, String bookId, String chapterId,
-                                                          Instant now) {
+    /**
+     * 整本文集一次批量计算每个 Chapter 的“学习者当前可练”知识点数。
+     * profile 与 allowed scope 只读取一次，Chapter → KnowledgePoint 归属与候选题判定
+     * 各只查一次，随后在 Java 内按 chapterId 分组，消除 /learning/books/{id} 的 N+1。
+     */
+    public Map<String, Integer> availableChapterKnowledgePointCounts(String learnerId, String bookId,
+                                                                    Collection<String> chapterIds) {
+        if (learnerId == null || bookId == null || chapterIds == null || chapterIds.isEmpty()) return Map.of();
+        Set<String> requested = new LinkedHashSet<>(chapterIds);
         var profile = profiles.rawCurrent(learnerId);
         Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
-        List<String> chapterPoints = store.chapterKnowledgePoints(learnerId, bookId, chapterId);
-        if (chapterPoints.isEmpty() || allowed.isEmpty()) return Set.of();
-        java.sql.Date businessDate = java.sql.Date.valueOf(now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate());
-        Set<String> available = new LinkedHashSet<>();
-        for (LearnerPracticeStore.ChapterCandidate candidate : store.chapterCandidates(learnerId, bookId, chapterId, businessDate)) {
-            if (!chapterPoints.contains(candidate.knowledgePointId())) continue;
-            if (candidate.readyQuestion() || reviewDue(candidate, now)) available.add(candidate.knowledgePointId());
+        if (allowed.isEmpty()) return requested.stream().collect(
+                java.util.stream.Collectors.toMap(id -> id, id -> 0, (left, right) -> left, LinkedHashMap::new));
+        Set<String> memberships = new LinkedHashSet<>();
+        for (LearnerPracticeStore.ChapterMembership membership : store.bookChapterMemberships(learnerId, bookId)) {
+            if (requested.contains(membership.chapterId()) && allowed.contains(membership.knowledgePointId())) {
+                memberships.add(membership.chapterId() + "\u0000" + membership.knowledgePointId());
+            }
         }
-        return available;
+        Instant now = Instant.now();
+        java.sql.Date businessDate = java.sql.Date.valueOf(
+                now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate());
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        requested.forEach(id -> counts.put(id, 0));
+        Set<String> available = new LinkedHashSet<>();
+        for (LearnerPracticeStore.ChapterCandidate candidate
+                : store.bookChapterCandidates(learnerId, requested, businessDate)) {
+            if (!memberships.contains(candidate.chapterId() + "\u0000" + candidate.knowledgePointId())) continue;
+            if (!candidate.readyQuestion() && !reviewDue(candidate, now)) continue;
+            if (available.add(candidate.chapterId() + "\u0000" + candidate.knowledgePointId())) {
+                counts.merge(candidate.chapterId(), 1, Integer::sum);
+            }
+        }
+        return counts;
     }
 
     /** 复用 ReviewSchedulingPolicy，保证与复习队列/入口校验的“到期”判定完全一致。 */

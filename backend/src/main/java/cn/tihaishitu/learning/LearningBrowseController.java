@@ -29,18 +29,27 @@ public class LearningBrowseController {
     /**
      * Chapter 列表统一补充 availableKnowledgePointCount（学习者当前真正可练的知识点数）。
      * trainableKnowledgePointCount 是目录静态值，二者不一致时前端应以 availableKnowledgePointCount 为准。
+     * 整本文集只调用一次 Service：profile / scope 只读一次，Chapter 归属与候选题各查一次。
      */
     private Map<String, Object> withChapterAvailability(Map<String, Object> book, String bookId, String learnerId) {
         Object chapters = book.get("chapters");
-        if (!(chapters instanceof List<?> list)) return book;
-        List<Map<String, Object>> enriched = new ArrayList<>(list.size());
+        if (!(chapters instanceof List<?> list) || list.isEmpty()) return book;
+        List<Map<String, Object>> normalized = new ArrayList<>(list.size());
+        List<String> chapterIds = new ArrayList<>(list.size());
         for (Object item : list) {
             if (!(item instanceof Map<?, ?> raw)) continue;
             Map<String, Object> chapter = new LinkedHashMap<>();
             raw.forEach((key, value) -> chapter.put(String.valueOf(key), value));
             Object chapterId = chapter.get("id");
-            chapter.put("availableKnowledgePointCount", chapterId == null ? 0
-                    : practice.availableChapterKnowledgePointCount(learnerId, bookId, String.valueOf(chapterId)));
+            if (chapterId != null) chapterIds.add(String.valueOf(chapterId));
+            normalized.add(chapter);
+        }
+        Map<String, Integer> counts = practice.availableChapterKnowledgePointCounts(learnerId, bookId, chapterIds);
+        List<Map<String, Object>> enriched = new ArrayList<>(normalized.size());
+        for (Map<String, Object> chapter : normalized) {
+            Object chapterId = chapter.get("id");
+            chapter.put("availableKnowledgePointCount",
+                    chapterId == null ? 0 : counts.getOrDefault(String.valueOf(chapterId), 0));
             enriched.add(chapter);
         }
         Map<String, Object> result = new LinkedHashMap<>(book);
