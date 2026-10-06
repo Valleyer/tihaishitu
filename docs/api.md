@@ -148,7 +148,7 @@ Legacy `/games/**` 保持 Phase C 的 scope-only dependency 与原有随机/低�
 
 正式 Learner World 把 `study_attempt.created_at` 作为 Question Exposure 的事实来源：题目一经发出即计入，不要求存在 `answer_record`，因此 active、revealed 和 graded attempt 都有效。Exposure 以 `(learner_id, question_id)` 聚合，不按 World 隔离；Learning Hub 的知识点或题目浏览不会创建 attempt，也不会进入 Exposure 历史。Legacy `/games/**` 继续使用原有随机选择。
 
-当前 run 的 `seenQuestionIds` 仍是硬排除。对剩余合法候选，NORMAL 先完全沿用 Phase F 的 exact / nearest / lower tie 规则确定 difficulty；TRAINING 先沿用 `min(2, normalPreferred)`、低难优先和最低难 fallback。只有最终同 difficulty bucket 内会应用软轮换：never seen、最早 `lastExposedAt`、较少 `exposureCount`，完全相同时随机。
+当前 run 的 `seenQuestionIds` 仍是硬排除。对剩余合法候选，NORMAL 与 TRAINING 都不做难度硬分桶：NORMAL 直接进入软排序，TRAINING 先用 `difficulty <= 2` 的低难候选，没有时退回最低难度候选。软轮换按曝光更少 → 与偏好难度更接近 → 最久未见排序，完全相同时随机；difficulty 只是排序偏好，不会把其他难度题永久排除。
 
 Exposure 不删除候选，不设置固定 cooldown 或 blacklist。所有题都见过以后会选择最久未见的题，单题题库也可在新 run 中继续返回同一题，因此不会阻断 Task 无限重试或 Diagnosis。V10 只为 `study_attempt(learner_id, question_id, created_at)` 增加查询索引，不新增 Exposure 表、状态列、Evidence mode 或前端 Exposure UI。
 
@@ -174,7 +174,7 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 文集响应包含按单层正式章节组织的聚合；每个章节只统计自己的直接 KnowledgePoint membership，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量直接读取永久错题本 `learner_wrong_question` 中该 Learner 的 `active` 记录数（不受该题后来是否答对影响）。
 
-近 7 日足迹仅查询当前 Learner 在 UTC 最近 7 个自然日内 `status=graded` 的 `study_attempt`。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
+近 7 日足迹仅查询当前 Learner 在 Asia/Shanghai 业务日最近 7 个自然日内 `status=graded` 的 `study_attempt`（统计与 Progress 的业务日边界统一为 Asia/Shanghai，不使用 UTC 自然日）。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
 
 ## Diagnostic State Machine V1
 

@@ -20,7 +20,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
 - **自适应学习 V1**：正式 World 从 Selected Books 范围内可玩的知识点随机确定目标；目标确定后，再按当前掌握状态与学习设置选择合适难度并校验前置知识。
 - **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
-- **跨轮次题目轮换 V1**：正式 World 在维持自适应难度的前提下优先选择 Learner 尚未见过或更久未见的同难度题；题量不足时允许自然重用，不阻断任务重试。
+- **跨轮次题目轮换 V1**：正式 World 优先选择 Learner 尚未见过或更久未见、且曝光更少的题；难度只作为软偏好参与排序，不把候选硬切成“必须同难度”的桶。题量不足时允许自然重用，不阻断任务重试。
 - **综合题诊断 V1**：综合题答错时先保留原始作答，再核验最可疑的前置知识、补强薄弱点并复核目标知识点；只有诊断确认后才把根错误归因到目标。
 - **正向挑战记录**：同一轮补救不追回首题失分，新一轮仍可重新拿满分；正式 World 只保留最高分、已通关和首次奖励等正向成就，不累计失败或应试次数。
 
@@ -36,7 +36,7 @@ Permanent Wrong Book V1 把“错题”定义为长期学习资产而不是临�
 
 目录与练习分工固定为 `Book → Chapter → KnowledgePoint` 三层（Chapter 只有一层，不再有“高等数学”这类中间 Section）：Study 负责按章节攻克，题库负责单点攻克 KnowledgePoint，两者共享同一份 Formal Question Mastery 与错题本。用户界面只使用 `question_bank` / `question_bank_chapter` / `question_bank_knowledge` 提供的书名与章节名，数据库中的 legacy `subject_name` / `section_name` / `chapter_name` 仅保留兼容，不再作为展示路径。
 
-Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；服务端先沿用 Phase F 规则确定难度，再在同难度候选中按“未曝光 → 最久未见 → 曝光更少 → 随机”选择。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
+Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；对剩余合法候选，服务端按“曝光更少 → 与偏好难度更接近 → 最久未见”的顺序软排序，完全相同时随机。difficulty 只参与排序，不形成“必须同难度”的 hard bucket，因此其他难度的题不会被永久抽不到。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
 
 Diagnostic State Machine V1 将 raw answer 与 KnowledgePoint 归因分开。单知识点错误仍立即归因目标；normal composite wrong/partial 会建立 Diagnosis Session，依次执行 dependency probe、必要的 dependency remediation、target recheck 与 target remediation。Probe 使用 normal evidence 且难度不超过 3，补强使用 training evidence。诊断题都遵守本轮冻结 Book scope、实时 readiness、published 和 seen 约束。用户放弃或依赖无题时，不会把含糊的根错误强行扣到目标知识点。
 

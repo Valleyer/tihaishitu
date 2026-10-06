@@ -168,6 +168,7 @@ V8 当前经自动校验为：44 项活动、26 件物品、6 位互动人物、
 - 部分通用界面文案和技术限制仍写在 TSX/TS；并非任意玩法都能纯 JSON 配出。新增规则类型需实现引擎语义。
 - 题库编辑、人物长对话、完整正文弹窗有局部滚动；主世界与答题页在已查看桌面窗口中可完整展示。
 - 地图和人物美术当前复用已有两张图，符合用户允许立绘重复的要求，不必先花时间重新生成素材。
+- **World Legacy Library Cleanup（后续单独任务）**：`frontend/src/components/Library.tsx` 是寒门仕途“藏书阁”的真实入口（`panel === "library"`），并非死代码。它仍沿用 World legacy Bank 模型：按“科目 / 分类”筛选、显示 `subject · category`（`category` 来自 legacy `section_name`），且分页为每页 5 条。这与现行正式原则（`Book → Chapter → KnowledgePoint → Question`、正式分页每页 20）冲突。V6.1 稳定化 PR 明确不改写该组件，避免扩大范围；待后续单独任务按正式目录重构。
 
 ## 8. 环境与启动
 
