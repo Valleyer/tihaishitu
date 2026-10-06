@@ -53,6 +53,7 @@ public class LearnerProgressService {
             KnowledgeMasteryModel.State state = stateByPoint.getOrDefault(id, KnowledgeMasteryModel.State.initial());
             double effective = mastery.effectiveMastery(state, now);
             points.put(id, new PointProgress(id, row.name(), row.subject(), row.section(), row.chapter(),
+                    row.bookName(), row.chapterName(),
                     mastery.band(state, now), effective, state.stabilityDays(), state.evidenceCount(),
                     state.lastEvidenceAt()));
         });
@@ -109,8 +110,8 @@ public class LearnerProgressService {
                 .sorted(Comparator.comparing(PointProgress::lastEvidenceAt).reversed()
                         .thenComparing(PointProgress::knowledgePointId))
                 .limit(10)
-                .map(point -> new RecentKnowledgePoint(point.knowledgePointId(), point.name(), point.subject(),
-                        point.section(), point.chapter(), point.band(), point.effectiveMastery(),
+                .map(point -> new RecentKnowledgePoint(point.knowledgePointId(), point.name(),
+                        point.bookName(), point.chapterName(), point.band(), point.effectiveMastery(),
                         point.stabilityDays(), point.lastEvidenceAt()))
                 .toList();
         int activeDays = (int) daily.stream().filter(day -> day.gradedAttempts() > 0).count();
@@ -159,7 +160,8 @@ public class LearnerProgressService {
     }
 
     private record PointProgress(String knowledgePointId, String name, String subject, String section,
-                                 String chapter, String band, double effectiveMastery, double stabilityDays,
+                                 String chapter, String bookName, String chapterName, String band,
+                                 double effectiveMastery, double stabilityDays,
                                  int evidenceCount, Instant lastEvidenceAt) {}
     private record Counts(int total, int started, int ready, int proficient, double masteryProgress) {}
     public record ProgressView(Instant generatedAt, Summary summary, Map<String, Integer> bands,
@@ -175,7 +177,11 @@ public class LearnerProgressService {
     public record RecentProgress(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
                                  List<DailyProgress> daily, List<RecentKnowledgePoint> knowledgePoints) {}
     public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
-    public record RecentKnowledgePoint(String knowledgePointId, String name, String subject, String section,
-                                       String chapter, String band, double effectiveMastery,
+    /**
+     * 首页“最近学习”只暴露正式目录 Book → Chapter 路径，不再携带 legacy subject / section /
+     * legacy chapter_name，避免用户界面回落到旧字段。
+     */
+    public record RecentKnowledgePoint(String knowledgePointId, String name, String bookName, String chapterName,
+                                       String band, double effectiveMastery,
                                        double stabilityDays, Instant lastEvidenceAt) {}
 }

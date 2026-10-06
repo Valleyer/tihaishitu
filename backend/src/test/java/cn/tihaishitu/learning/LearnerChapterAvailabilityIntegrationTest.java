@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -53,11 +54,18 @@ class LearnerChapterAvailabilityIntegrationTest {
         Fixture fixture = fixture(learner);
 
         // 目录静态计数为 2：两个知识点都挂着已发布正式题，学习者尚未作答。
+        // 整本一次请求即可拿到两章各自的可用数。
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chapters[0].knowledgePointCount").value(2))
                 .andExpect(jsonPath("$.chapters[0].trainableKnowledgePointCount").value(2))
-                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(2));
+                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(2))
+                .andExpect(jsonPath("$.chapters[1].availableKnowledgePointCount").value(1));
+        assertThat(practice.availableChapterKnowledgePointCounts(learner, fixture.book,
+                List.of(fixture.chapter, fixture.secondChapter)))
+                .containsEntry(fixture.chapter, 2)
+                .containsEntry(fixture.secondChapter, 1);
+        assertBatchMatchesSingleChapter(learner, fixture);
 
         // 今天答对第一题后，该题当天不再待练，可用知识点数降到 1；目录静态值仍是 2。
         graded(learner, fixture.firstPoint, fixture.firstQuestion, true, Instant.now());
@@ -65,7 +73,9 @@ class LearnerChapterAvailabilityIntegrationTest {
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chapters[0].trainableKnowledgePointCount").value(2))
-                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(1));
+                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(1))
+                .andExpect(jsonPath("$.chapters[1].availableKnowledgePointCount").value(1));
+        assertBatchMatchesSingleChapter(learner, fixture);
 
         // 第二题也答对后章节内已无可练正式题，按钮应显示 0/禁用，而不是点击后才吃 400。
         graded(learner, fixture.secondPoint, fixture.secondQuestion, true, Instant.now());
@@ -73,7 +83,9 @@ class LearnerChapterAvailabilityIntegrationTest {
         mvc.perform(get("/api/v1/learning/books/{id}", fixture.book).cookie(cookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chapters[0].trainableKnowledgePointCount").value(2))
-                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(0));
+                .andExpect(jsonPath("$.chapters[0].availableKnowledgePointCount").value(0))
+                .andExpect(jsonPath("$.chapters[1].availableKnowledgePointCount").value(1));
+        assertBatchMatchesSingleChapter(learner, fixture);
         mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
                         .contentType("application/json")
                         .content("{\"intent\":\"chapter_drill\",\"targetBookId\":\"%s\",\"targetChapterId\":\"%s\"}"
@@ -86,11 +98,16 @@ class LearnerChapterAvailabilityIntegrationTest {
                  WHERE learner_id=? AND target_knowledge_point_id IN (?,?)
                 """, learner, fixture.firstPoint, fixture.secondPoint);
         assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isEqualTo(2);
+        assertBatchMatchesSingleChapter(learner, fixture);
 
-        // 进度最近学习路径取自正式目录章节名（多元函数微分学），不是 legacy section_name（高等数学）。
+        // 进度最近学习路径必须来自正式目录 Book → Chapter，不得回落 legacy subject/section/chapter_name。
         mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapter").value(fixture.chapterName));
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].bookName").value("章节可用性文集"))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapterName").value(fixture.chapterName))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].subject").doesNotExist())
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].section").doesNotExist())
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapter").doesNotExist());
     }
 
     @Test
@@ -137,15 +154,39 @@ class LearnerChapterAvailabilityIntegrationTest {
         String firstQuestion = question(firstPoint, "概念题");
         String secondQuestion = question(secondPoint, "计算题");
 
+        // 第二个 Chapter：用于验证整本批量计算按章分组，而不是只算一章。
+        String secondChapter = UUID.randomUUID().toString();
+        String secondChapterName = "多元函数积分学";
+        jdbc.update("""
+                INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision)
+                VALUES (?,?,'M1-H06',?,'',1,1)
+                """, secondChapter, book, secondChapterName);
+        String thirdPoint = chapterPoint(book, secondChapter, secondChapterName, "二重积分计算", 0);
+        String thirdQuestion = question(thirdPoint, "积分题");
+
         jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
         jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
                 learner, book);
 
         Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(List.of(book)));
-        assertThat(allowed).contains(firstPoint, secondPoint);
+        assertThat(allowed).contains(firstPoint, secondPoint, thirdPoint);
         assertThat(store.chapterKnowledgePoints(learner, book, chapter)).containsExactlyInAnyOrder(
                 firstPoint, secondPoint);
-        return new Fixture(book, chapter, chapterName, firstPoint, secondPoint, firstQuestion, secondQuestion);
+        assertThat(store.chapterKnowledgePoints(learner, book, secondChapter)).containsExactly(thirdPoint);
+        assertThat(store.bookChapterMemberships(learner, book)).hasSize(3);
+        return new Fixture(book, chapter, chapterName, secondChapter, secondChapterName,
+                firstPoint, secondPoint, thirdPoint, firstQuestion, secondQuestion, thirdQuestion);
+    }
+
+    /** 校验：整本批量结果必须与逐章单章计算完全一致（N+1 优化不改变语义）。 */
+    private void assertBatchMatchesSingleChapter(String learner, Fixture fixture) {
+        Map<String, Integer> batch = practice.availableChapterKnowledgePointCounts(
+                learner, fixture.book, List.of(fixture.chapter, fixture.secondChapter));
+        int singleFirst = practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter);
+        int singleSecond = practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.secondChapter);
+        assertThat(batch).containsEntry(fixture.chapter, singleFirst)
+                .containsEntry(fixture.secondChapter, singleSecond);
+        assertThat(batch.keySet()).containsExactlyInAnyOrder(fixture.chapter, fixture.secondChapter);
     }
 
     private String book() {
@@ -210,6 +251,7 @@ class LearnerChapterAvailabilityIntegrationTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
     }
 
-    private record Fixture(String book, String chapter, String chapterName, String firstPoint, String secondPoint,
-                           String firstQuestion, String secondQuestion) {}
+    private record Fixture(String book, String chapter, String chapterName, String secondChapter,
+                           String secondChapterName, String firstPoint, String secondPoint, String thirdPoint,
+                           String firstQuestion, String secondQuestion, String thirdQuestion) {}
 }

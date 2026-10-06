@@ -70,7 +70,7 @@ export interface LearnerProgress {
     gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
     daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
     knowledgePoints: {
-      knowledgePointId: string; name: string; subject: string; section: string; chapter: string;
+      knowledgePointId: string; name: string; bookName: string; chapterName: string;
       band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
     }[];
   };
