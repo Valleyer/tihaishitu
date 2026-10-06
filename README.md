@@ -32,6 +32,10 @@ Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖
 
 Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 展示与解释计划，并可进入共享 Question Engine 的正式专项练习；Review 与 Focus 不改变 World target 的随机选择。
 
+Permanent Wrong Book V1 把“错题”定义为长期学习资产而不是临时待办：正式父题出现 wrong 或 partial 即写入 `learner_wrong_question`，此后的正确答案不会删除该记录，只有学习者在错题本中手动移出才置为 `removed`，再次做错会自动重新激活。错题卡返回 `available` 与 `unavailableReason`（`out_of_scope` / `question_unavailable` / `knowledge_unavailable`），离开学习范围的错题会提前标记为不可练并禁用入口，避免点击后才报错；错题记录本身仍然永久保留。子题只用于父题拆解教学，永远不进入错题本、Mastery、复习队列或正式题数量。
+
+目录与练习分工固定为 `Book → Chapter → KnowledgePoint` 三层（Chapter 只有一层，不再有“高等数学”这类中间 Section）：Study 负责按章节攻克，题库负责单点攻克 KnowledgePoint，两者共享同一份 Formal Question Mastery 与错题本。用户界面只使用 `question_bank` / `question_bank_chapter` / `question_bank_knowledge` 提供的书名与章节名，数据库中的 legacy `subject_name` / `section_name` / `chapter_name` 仅保留兼容，不再作为展示路径。
+
 Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；服务端先沿用 Phase F 规则确定难度，再在同难度候选中按“未曝光 → 最久未见 → 曝光更少 → 随机”选择。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
 
 Diagnostic State Machine V1 将 raw answer 与 KnowledgePoint 归因分开。单知识点错误仍立即归因目标；normal composite wrong/partial 会建立 Diagnosis Session，依次执行 dependency probe、必要的 dependency remediation、target recheck 与 target remediation。Probe 使用 normal evidence 且难度不超过 3，补强使用 training evidence。诊断题都遵守本轮冻结 Book scope、实时 readiness、published 和 seen 约束。用户放弃或依赖无题时，不会把含糊的根错误强行扣到目标知识点。
@@ -108,6 +112,6 @@ build 包含配置引用、图片路径、题目知识点数量检查与类型�
 
 学习与管理现在共用唯一的 `learner_account` 身份和 Learner Session；`CONTRIBUTOR / REVIEWER / ADMIN` 只是附加权限，管理后台不再维护第二套登录页或管理账号来源。
 
-Learning Hub 新增 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。错题队列按 Learner + Question 最近一次 graded attempt 动态派生，latest wrong/partial 进入，later correct 移除，Wrong Practice 首题固定为原 Question。
+Learning Hub 新增 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。错题本为**永久错题本**：正式父题一旦 wrong 或 partial 即进入错题本，之后即使重做正确也**不会自动移出**，只有学习者确认掌握并手动移出才消失；以后再次做错会自动重新加入。错题本与 Mastery 相互独立，允许 KnowledgePoint 掌握度 100% 的同时仍保留历史错题。Wrong Practice 首题固定为原 Question。
 
 World target 从 Selected Books 范围内 active、adaptive playable 的 KnowledgePoint 随机抽取，包含 unstarted、weak 与 proficient，不使用 Review、Mastery 或 Manual Focus 排序。target 确定后，Hub 与 World 共用 dependency readiness、Adaptive Difficulty、Question Pool、Question Rotation、grading、Evidence、Diagnosis、Training 和 Mastery 更新。

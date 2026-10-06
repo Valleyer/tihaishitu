@@ -29,8 +29,9 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 - `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量。
 - `GET /learning/knowledge-points/{id}/guide`：读取独立维护的 Markdown/LaTeX 知识讲解。
 - `GET /learning/knowledge-points/{id}/neighbors?bookId=&chapterId=`：读取同一文集章节中的前后知识点。
+- `GET /learning/books/{id}`：返回单层正式 Chapter 列表；每个 Chapter 同时带目录静态值 `trainableKnowledgePointCount`、已发布题数 `publishedQuestionCount`，以及按当前 Learner 实时计算的 `availableKnowledgePointCount`。前端以 `availableKnowledgePointCount` 决定“开始章节练习”是否可点，它等于 0 时按钮禁用并显示“暂无可练正式题”，不再让用户点击后才收到 400。
 - `POST /learner/practice-sessions`：以 `chapter_drill` 启动章节知识练习，或以既有 intent 启动知识点/错题练习。
-- `POST /manage/questions/bulk-delete`：事务性批量删除题目资源；活动中的错题练习和未同时选择的派生题会阻止整批删除。
+- `POST /manage/questions/bulk-delete`：事务性批量删除题目资源；活动中的错题练习、未同时选择的派生题，以及**已存在 `learner_wrong_question` 错题历史（无论 active 还是 removed）**的题目都会阻止整批删除并返回 409，错误题请改为下架/归档。
 - `POST /manage/imports/knowledge`：管理员导入 `global-knowledge-batch/v2`，事务性 upsert Book、Chapter、Global KnowledgePoint、alias 与 membership。
 - `POST /manage/questions/export-remedial-source`、`POST /manage/imports/remedial-questions`：导出正式父题并导入 3–5 步补救子题。
 - `POST /manage/knowledge-points/export-guides`、`POST /manage/imports/knowledge-guides`：导出知识上下文并导入独立知识讲解。
@@ -171,7 +172,7 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 `GET /learner/progress` 是只读动态派生视图，不保存 progress、completion 或 daily summary。总体范围取当前 Learner 的 Selected Books，并沿正式 `question_bank → question_bank_chapter → question_bank_knowledge` 模型读取 active KnowledgePoints；总体按 KnowledgePoint ID 去重，单本文集仍按自己的 membership 统计。状态通过一次批量查询读取，`started` 定义为 `evidenceCount > 0`，`ready` 使用 V3 惰性结算后的聚合 Mastery `>= 70`，`proficient` 表示聚合 Mastery 正好为 100。
 
-文集响应包含按单层正式章节组织的聚合；每个章节只统计自己的直接 KnowledgePoint membership，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量复用 Wrong Queue 的 latest graded result 语义。
+文集响应包含按单层正式章节组织的聚合；每个章节只统计自己的直接 KnowledgePoint membership，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量直接读取永久错题本 `learner_wrong_question` 中该 Learner 的 `active` 记录数（不受该题后来是否答对影响）。
 
 近 7 日足迹仅查询当前 Learner 在 UTC 最近 7 个自然日内 `status=graded` 的 `study_attempt`。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
 
@@ -289,7 +290,7 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 
 | Method | Path | Request | Response / 语义 |
 |---|---|---|---|
-| GET | /learner/wrong-questions | 无 | 按每道 Question 最近一次 graded 结果派生的待重做队列 |
+| GET | /learner/wrong-questions | 无 | 永久错题本列表：每项 `questionId`、`targetKnowledgePointId`、`knowledgePointName`、`contentMarkdown`、`lastGradedAt`、`available`、`unavailableReason` |
 | POST | /learner/practice-sessions | intent, targetKnowledgePointId/sourceQuestionId | 开始知识点专项或错题练习 |
 | GET | /learner/practice-sessions/{id} | 无 | 恢复 Session 与 current attempt |
 | POST | /learner/practice-sessions/{id}/answers | attemptId, questionId, answer | 自动判题并进入共享学习流程 |
