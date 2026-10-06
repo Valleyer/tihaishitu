@@ -88,6 +88,29 @@ describe("practice interaction closure", () => {
     expect(wrongView.container.querySelector(".practice-result.wrong")).toBeTruthy();
   });
 
+  it("disables chapter practice when no knowledge point is currently available", async () => {
+    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [{ id: "chapter", code: "C",
+      name: "多元函数微分学", description: "", knowledgePointCount: 2, trainableKnowledgePointCount: 2,
+      availableKnowledgePointCount: 0, publishedQuestionCount: 2, sortOrder: 1,
+      knowledgePoints: [{ id: "point", code: "P", name: "多元函数微分学", subject: "数学一",
+        section: "高等数学", chapter: "多元函数微分学", description: "", explanation: "" }] }] });
+    vi.spyOn(platformApi, "knowledgeStatesForBook").mockResolvedValue([]);
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
+    vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
+    const startChapter = vi.spyOn(platformApi, "startChapterPractice")
+      .mockResolvedValue({ ...session(), intent: "chapter_drill" });
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
+    render(<StudyPage data={data} reload={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /考研数学一/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "多元函数微分学" }));
+    expect(await screen.findByText("本章共 2 个知识点，当前 0 个知识点可练。")).toBeTruthy();
+    const button = screen.getByRole("button", { name: "暂无可练正式题" });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(button);
+    expect(startChapter).not.toHaveBeenCalled();
+  });
+
   it("renders wrong-question Markdown and LaTeX from the complete source", async () => {
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{ questionId: "q", targetKnowledgePointId: "k",
       knowledgePointName: "函数", contentMarkdown: "求 $f(x)=x^2$ 的导数", lastGradedAt: "2026-10-06T00:00:00Z", available: true }]);

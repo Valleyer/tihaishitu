@@ -31,6 +31,7 @@ public class StudyProfileService {
 
     public StudyProfileResponse current() { return response(store.find(LearnerContext.learnerId())); }
     public StudyProfileStore.Profile rawCurrent() { return store.find(LearnerContext.learnerId()); }
+    public StudyProfileStore.Profile rawCurrent(String learnerId) { return store.find(learnerId); }
 
     @Transactional
     public StudyProfileResponse update(UpdateStudyProfileRequest request) {

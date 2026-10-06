@@ -10,6 +10,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -33,9 +35,12 @@ class LearnerStatisticsIntegrationTest {
         String learner=jdbc.queryForObject("SELECT id FROM learner_account WHERE username='stats-user'",String.class);
         String point=knowledge(), question=question();
         String drill=practice(learner,point,"knowledge_drill"), wrong=practice(learner,point,"wrong_review");
-        attempt(learner,drill,null,question,point,"correct");
-        attempt(learner,wrong,null,question,point,"partial");
-        attempt(learner,null,"ancient-official",question,point,"wrong");
+        // 固定落在统计窗口内部：不使用 CURRENT_TIMESTAMP，避免测试数据贴在
+        // `answered_at <= now` 的上边界上，导致数据库时间与 JVM 时间的微小差异随机翻红。
+        Instant occurredAt = Instant.now().minusSeconds(60);
+        attempt(learner,drill,null,question,point,"correct",occurredAt);
+        attempt(learner,wrong,null,question,point,"partial",occurredAt);
+        attempt(learner,null,"ancient-official",question,point,"wrong",occurredAt);
 
         mvc.perform(get("/api/v1/learner/statistics?days=30").cookie(cookie))
                 .andExpect(status().isOk())
@@ -54,5 +59,5 @@ class LearnerStatisticsIntegrationTest {
     private String knowledge(){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,?,?,'测试','节','章','core','active','','',0,1)",id,"STATS-"+id,"统计知识");return id;}
     private String question(){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision) VALUES (?,'测试','custom','true_false','true_false','auto','题干','true','解析',1,'published',1)",id);return id;}
     private String practice(String learner,String point,String intent){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,status,revision) VALUES (?,?,?,?, 'active',1)",id,learner,intent,point);return id;}
-    private void attempt(String learner,String practice,String world,String question,String point,String assessment){jdbc.update("INSERT INTO study_attempt(id,learner_id,world_id,practice_session_id,question_id,question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,question_difficulty,answered_at) VALUES (?,?,?,?,?,'{}','true','graded','auto','automatic',?,?,'normal',1,CURRENT_TIMESTAMP)",UUID.randomUUID().toString(),learner,world,practice,question,assessment,point);}
+    private void attempt(String learner,String practice,String world,String question,String point,String assessment,Instant answeredAt){jdbc.update("INSERT INTO study_attempt(id,learner_id,world_id,practice_session_id,question_id,question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,question_difficulty,answered_at) VALUES (?,?,?,?,?,'{}','true','graded','auto','automatic',?,?,'normal',1,?)",UUID.randomUUID().toString(),learner,world,practice,question,assessment,point,Timestamp.from(answeredAt));}
 }

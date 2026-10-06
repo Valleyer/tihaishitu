@@ -15,6 +15,18 @@ import "./platform.css";
 const go = navigate;
 const idAfter = (prefix: string) => decodeURIComponent(window.location.pathname.slice(prefix.length));
 const flattenChapters = (chapters: BookDetail["chapters"]): BookDetail["chapters"] => chapters;
+/**
+ * Chapter 当前可练知识点数：优先使用后端按学习者实时计算的 availableKnowledgePointCount；
+ * 旧接口缺少该字段时回退到目录静态值 trainableKnowledgePointCount。缺字段时按 0 处理，
+ * 避免 undefined 让按钮意外可点。
+ */
+const availableChapterPoints = (chapter: BookDetail["chapters"][number]) =>
+  chapter.availableKnowledgePointCount ?? chapter.trainableKnowledgePointCount ?? 0;
+/** 错题卡不可练习的原因文案；原因由后端 WrongQuestion.unavailableReason 判定，错题记录本身永久保留。 */
+const wrongQuestionUnavailableLabel = (reason?: string | null) =>
+  reason === "out_of_scope" ? "当前不在学习范围"
+    : reason === "knowledge_unavailable" ? "该题所属知识点当前不可练习"
+      : "该题当前不可练习";
 const greeting = () => {
   const hour = new Date().getHours();
   if (hour < 6) return "夜深了";
@@ -25,6 +37,11 @@ const greeting = () => {
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
+/** 只读题目标题取自来源/年份，不再使用 legacy subject_name 作为用户可见路径。 */
+const questionTitle = (question: BrowseQuestion) =>
+  [question.sourceName || sourceTypeLabel[question.sourceType] || "题目",
+    question.examYear ? String(question.examYear) : "",
+    question.questionNumber ? `${question.questionNumber} 题` : ""].filter(Boolean).join(" · ");
 export const safePracticeReturnTo = (intent: PracticeSession["intent"]) => {
   const value = new URLSearchParams(window.location.search).get("returnTo");
   const allowed = value === "/study" || value === "/wrong-questions" || value === "/progress"
@@ -94,7 +111,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <HubLink className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</HubLink> : <span className="world-unavailable">尚未开放</span>}</div>
       </article> })}</div>
     </section>
-    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.subject} · {point.chapter}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
+    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.bookName} · {point.chapterName}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
       <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览题库</b><span>按知识点查看已发布题目</span></HubLink><HubLink href="/statistics"><b>学习统计</b><span>查看近期正式学习足迹</span></HubLink></div></section></div>
   </main></Shell>;
 }
@@ -152,7 +169,7 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
     <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
       <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
       {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
-      {chapter && <div className="chapter-drill-action"><p>{chapter.knowledgePointCount} 个知识点{chapter.trainableKnowledgePointCount>0?"，将按章节顺序轮流练习。":"，暂无可练正式题。"}</p><button className="hub-primary" disabled={chapter.trainableKnowledgePointCount===0} onClick={start}>{chapter.trainableKnowledgePointCount>0?"开始章节练习":"暂无可练正式题"}</button></div>}
+      {chapter && <div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
       <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><HubLink className="hub-primary" href="/wrong-questions">进入错题本</HubLink></section>
@@ -238,7 +255,7 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
     {error && <p className="hub-error">{error}</p>}
     {items.length === 0 && <section className="hub-panel"><h2>错题本还是空的</h2></section>}
-    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><h2>{item.knowledgePointName}</h2><div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">该题当前不可练习</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
+    <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}><h2>{item.knowledgePointName}</h2><div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">{wrongQuestionUnavailableLabel(item.unavailableReason)}</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
   </main></Shell>;
 }
 
@@ -275,7 +292,7 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
 function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   const [question, setQuestion] = useState<BrowseQuestion>(); const [error, setError] = useState(""); const [showAnswer, setShowAnswer] = useState(false);
   useEffect(() => { platformApi.question(id).then(setQuestion).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{question.subject}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(question.standardAnswer, null, 2)}</pre><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></section>}</>}</main></Shell>;
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(question.standardAnswer, null, 2)}</pre><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></section>}</>}</main></Shell>;
 }
 
 function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回知境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }

@@ -15,6 +15,7 @@ export interface BookSummary { id: string; name: string; description: string; re
 export interface Chapter {
   id: string; code: string; name: string; description: string; sortOrder: number;
   knowledgePointCount: number; trainableKnowledgePointCount: number; publishedQuestionCount: number;
+  availableKnowledgePointCount?: number;
   knowledgePoints: KnowledgePoint[];
 }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
@@ -69,7 +70,7 @@ export interface LearnerProgress {
     gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
     daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
     knowledgePoints: {
-      knowledgePointId: string; name: string; subject: string; section: string; chapter: string;
+      knowledgePointId: string; name: string; bookName: string; chapterName: string;
       band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
     }[];
   };
@@ -77,6 +78,7 @@ export interface LearnerProgress {
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
   contentMarkdown: string; lastGradedAt: string; available: boolean;
+  unavailableReason?: "out_of_scope" | "question_unavailable" | "knowledge_unavailable" | null;
 }
 export interface PracticeAttempt {
   id: string; status: "active" | "revealed" | "graded"; targetKnowledgePointId: string;

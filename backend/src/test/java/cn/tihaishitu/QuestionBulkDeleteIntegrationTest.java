@@ -45,10 +45,37 @@ class QuestionBulkDeleteIntegrationTest {
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?",question)).isEqualTo(1);
     }
 
+    @Test
+    void persistentWrongQuestionHistoryBlocksPhysicalDeletion() {
+        String actor=learner("bulk-wrong"), point=knowledge(), question=question(null), clean=question(null);
+        wrongQuestion(actor,question,point,"active");
+
+        assertThatThrownBy(() -> store.bulkDelete(java.util.Set.of(question),actor))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("该题已存在用户错题历史，不能物理删除，请改为下架/归档。");
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?",question)).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM learner_wrong_question WHERE question_id=?",question)).isEqualTo(1);
+
+        assertThat(store.bulkDelete(java.util.Set.of(clean),actor)).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?",clean)).isZero();
+    }
+
+    @Test
+    void manuallyRemovedWrongQuestionStillBlocksPhysicalDeletion() {
+        String actor=learner("bulk-removed"), point=knowledge(), question=question(null);
+        wrongQuestion(actor,question,point,"removed");
+
+        assertThatThrownBy(() -> store.bulkDelete(java.util.Set.of(question),actor))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("该题已存在用户错题历史");
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?",question)).isEqualTo(1);
+    }
+
     private String learner(String username){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,?,'x','active',1)",id,username,username);return id;}
     private String knowledge(){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,?,?,'测试','节','章','core','active','','',0,1)",id,"BULK-"+id,"批量知识");return id;}
     private String question(String parent){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,parent_question_id,revision) VALUES (?,'测试','custom','true_false','true_false','auto','题干','true','解析',1,'draft',?,1)",id,parent);return id;}
     private String practice(String learner,String point,String question,String status){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,source_question_id,status,revision) VALUES (?,?,'wrong_review',?,?,?,1)",id,learner,point,question,status);return id;}
+    private String wrongQuestion(String learner,String question,String point,String status){String removed="removed".equals(status)?"CURRENT_TIMESTAMP":"NULL";jdbc.update("INSERT INTO learner_wrong_question(learner_id,question_id,target_knowledge_point_id,first_wrong_at,last_wrong_at,status,removed_at) VALUES (?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,"+removed+")",learner,question,point,status);return question;}
     private String attempt(String learner,String session,String question,String point){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO study_attempt(id,learner_id,practice_session_id,question_id,question_snapshot_json,standard_answer_json,status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,question_difficulty,answered_at) VALUES (?,?,?,?,'{}','true','graded','auto','automatic','wrong',?,'normal',1,CURRENT_TIMESTAMP)",id,learner,session,question,point);return id;}
     private long count(String sql,Object...args){Long value=jdbc.queryForObject(sql,Long.class,args);return value==null?0:value;}
 }

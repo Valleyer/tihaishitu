@@ -6,6 +6,8 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 本次改名仅调整产品展示名。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、World ID `ancient-official`、既有数据库结构与路由继续保持稳定，不参与展示名迁移。
 
+> **开始开发前先读**：[`AGENTS.md`](AGENTS.md)（Agent 开发流程与文档纪律）与 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md)（跨 PR 长期规则的唯一主入口）。本仓库采用“一个 PR = 一个独立 Agent 对话”，长期规则不依赖聊天记录。
+
 ## 现在怎么玩
 
 默认进入知境中枢，题面不会自动出现。`寒门仕途` 是知境当前开放的第一个游戏世界：
@@ -20,19 +22,23 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
 - **自适应学习 V1**：正式 World 从 Selected Books 范围内可玩的知识点随机确定目标；目标确定后，再按当前掌握状态与学习设置选择合适难度并校验前置知识。
 - **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
-- **跨轮次题目轮换 V1**：正式 World 在维持自适应难度的前提下优先选择 Learner 尚未见过或更久未见的同难度题；题量不足时允许自然重用，不阻断任务重试。
+- **跨轮次题目轮换 V1**：正式 World 优先选择 Learner 尚未见过或更久未见、且曝光更少的题；难度只作为软偏好参与排序，不把候选硬切成“必须同难度”的桶。题量不足时允许自然重用，不阻断任务重试。
 - **综合题诊断 V1**：综合题答错时先保留原始作答，再核验最可疑的前置知识、补强薄弱点并复核目标知识点；只有诊断确认后才把根错误归因到目标。
 - **正向挑战记录**：同一轮补救不追回首题失分，新一轮仍可重新拿满分；正式 World 只保留最高分、已通关和首次奖励等正向成就，不累计失败或应试次数。
 
 判断、单选、多选继续支持，选项每次发卷打乱。正式联机流程中每位 Learner 在每个 World 只有一份服务端权威状态；旧多存档只保留兼容数据。
 
-掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位：首次答对 30，跨自然日首次答对 +7，每满 3 天惰性衰减 1；KnowledgePoint 掌握度按当前正式父题总数聚合，全部 100 时冻结衰减，新增正式题会自动扩大分母。子题只用于补救教学，不产生 Mastery、Wrong Queue 或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生证据。
+掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位，按 `Asia/Shanghai` 业务日结算（详见 [项目长期规则 §7.1](docs/PROJECT_RULES.md)）：每个业务日只有当天第一次正式 graded 作答有资格决定该题当天的熟练度奖励。当天首答正确时，历史第一次有效正确记 30，之后其他业务日首答正确 +7，最高 100；当天首答为 wrong / partial 时该题当天不增加熟练度，之后同日即使重新答对也不奖励。错误不直接扣熟练度，熟练度下降只来自自然衰减：每满 3 天无有效强化惰性衰减 1。KnowledgePoint 掌握度按当前正式父题槽位平均聚合，全部达到 100 时进入“彻底掌握”并冻结自然衰减，新增正式题会自动扩大分母并退出 100%。子题只用于补救教学，不产生 Mastery、错题本或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生正式学习证据。
 
 Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。World target 从当前 Selected Books 的 playable KnowledgePoints 中随机抽取，Mastery、Review 与 Manual Focus 不决定 target 优先级；target 确定后，题目关联的其他 core/auxiliary 知识点必须达到基本掌握，并继续使用自适应难度、发布状态、本轮去重与题目轮换规则。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
 Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 展示与解释计划，并可进入共享 Question Engine 的正式专项练习；Review 与 Focus 不改变 World target 的随机选择。
 
-Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；服务端先沿用 Phase F 规则确定难度，再在同难度候选中按“未曝光 → 最久未见 → 曝光更少 → 随机”选择。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
+Permanent Wrong Book V1 把“错题”定义为长期学习资产而不是临时待办：正式父题出现 wrong 或 partial 即写入 `learner_wrong_question`，此后的正确答案不会删除该记录，只有学习者在错题本中手动移出才置为 `removed`，再次做错会自动重新激活。错题卡返回 `available` 与 `unavailableReason`（`out_of_scope` / `question_unavailable` / `knowledge_unavailable`），离开学习范围的错题会提前标记为不可练并禁用入口，避免点击后才报错；错题记录本身仍然永久保留。子题只用于父题拆解教学，永远不进入错题本、Mastery、复习队列或正式题数量。
+
+目录与练习分工固定为 `Book → Chapter → KnowledgePoint` 三层（Chapter 只有一层，不再有“高等数学”这类中间 Section）：Study 负责按章节攻克，题库负责单点攻克 KnowledgePoint，两者共享同一份 Formal Question Mastery 与错题本。用户界面只使用 `question_bank` / `question_bank_chapter` / `question_bank_knowledge` 提供的书名与章节名，数据库中的 legacy `subject_name` / `section_name` / `chapter_name` 仅保留兼容，不再作为展示路径。
+
+Learner Question Rotation V1 将正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 run 的 `seenQuestionIds` 仍绝对排除；对剩余合法候选，服务端按“曝光更少 → 与偏好难度更接近 → 最久未见”的顺序软排序，完全相同时随机。difficulty 只参与排序，不形成“必须同难度”的 hard bucket，因此其他难度的题不会被永久抽不到。Exposure 是软排序，不设置固定 cooldown 或永久 blacklist；全部题都见过或题库只有一题时仍允许旧题再次出现。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
 
 Diagnostic State Machine V1 将 raw answer 与 KnowledgePoint 归因分开。单知识点错误仍立即归因目标；normal composite wrong/partial 会建立 Diagnosis Session，依次执行 dependency probe、必要的 dependency remediation、target recheck 与 target remediation。Probe 使用 normal evidence 且难度不超过 3，补强使用 training evidence。诊断题都遵守本轮冻结 Book scope、实时 readiness、published 和 seen 约束。用户放弃或依赖无题时，不会把含糊的根错误强行扣到目标知识点。
 
@@ -72,6 +78,8 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 
 | 想改什么 | 文档 |
 | --- | --- |
+| 项目长期规则、领域模型、业务算法（先读这个） | [项目长期规则](docs/PROJECT_RULES.md) |
+| Agent 开发流程与文档纪律 | [Agent 开发规则](AGENTS.md) |
 | 读书、奖励、副本、地图门槛、人物互动、装备 | [探索玩法修改手册](docs/adventure-guide.md) |
 | 题库、世界观、章首、素材等基础配置 | [基础配置手册](docs/configuration-guide.md) |
 | 代码分工、状态流 | [开发说明](docs/development.md) |
@@ -108,6 +116,6 @@ build 包含配置引用、图片路径、题目知识点数量检查与类型�
 
 学习与管理现在共用唯一的 `learner_account` 身份和 Learner Session；`CONTRIBUTOR / REVIEWER / ADMIN` 只是附加权限，管理后台不再维护第二套登录页或管理账号来源。
 
-Learning Hub 新增 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。错题队列按 Learner + Question 最近一次 graded attempt 动态派生，latest wrong/partial 进入，later correct 移除，Wrong Practice 首题固定为原 Question。
+Learning Hub 新增 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。错题本为**永久错题本**：正式父题一旦 wrong 或 partial 即进入错题本，之后即使重做正确也**不会自动移出**，只有学习者确认掌握并手动移出才消失；以后再次做错会自动重新加入。错题本与 Mastery 相互独立，允许 KnowledgePoint 掌握度 100% 的同时仍保留历史错题。Wrong Practice 首题固定为原 Question。
 
 World target 从 Selected Books 范围内 active、adaptive playable 的 KnowledgePoint 随机抽取，包含 unstarted、weak 与 proficient，不使用 Review、Mastery 或 Manual Focus 排序。target 确定后，Hub 与 World 共用 dependency readiness、Adaptive Difficulty、Question Pool、Question Rotation、grading、Evidence、Diagnosis、Training 和 Mastery 更新。

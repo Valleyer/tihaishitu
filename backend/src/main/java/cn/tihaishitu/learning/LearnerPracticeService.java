@@ -17,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -75,6 +78,63 @@ public class LearnerPracticeService {
         return store.wrongQuestions(LearnerContext.learnerId());
     }
 
+    /**
+     * Chapter 内“学习者当前可练”的知识点数量（Study 章节练习入口的可用量）。
+     * 与 startChapter 的校验语义一致：知识点在所选文集范围内，且存在至少一道
+     * 当前可练的正式真题。委托给书级批量实现，避免逐章重复加载 profile / scope。
+     */
+    public int availableChapterKnowledgePointCount(String learnerId, String bookId, String chapterId) {
+        if (learnerId == null || bookId == null || chapterId == null) return 0;
+        return availableChapterKnowledgePointCounts(learnerId, bookId, List.of(chapterId))
+                .getOrDefault(chapterId, 0);
+    }
+
+    /**
+     * 整本文集一次批量计算每个 Chapter 的“学习者当前可练”知识点数。
+     * profile 与 allowed scope 只读取一次，Chapter → KnowledgePoint 归属与候选题判定
+     * 各只查一次，随后在 Java 内按 chapterId 分组，消除 /learning/books/{id} 的 N+1。
+     */
+    public Map<String, Integer> availableChapterKnowledgePointCounts(String learnerId, String bookId,
+                                                                    Collection<String> chapterIds) {
+        if (learnerId == null || bookId == null || chapterIds == null || chapterIds.isEmpty()) return Map.of();
+        Set<String> requested = new LinkedHashSet<>(chapterIds);
+        var profile = profiles.rawCurrent(learnerId);
+        Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
+        if (allowed.isEmpty()) return requested.stream().collect(
+                java.util.stream.Collectors.toMap(id -> id, id -> 0, (left, right) -> left, LinkedHashMap::new));
+        Set<String> memberships = new LinkedHashSet<>();
+        for (LearnerPracticeStore.ChapterMembership membership : store.bookChapterMemberships(learnerId, bookId)) {
+            if (requested.contains(membership.chapterId()) && allowed.contains(membership.knowledgePointId())) {
+                memberships.add(membership.chapterId() + "\u0000" + membership.knowledgePointId());
+            }
+        }
+        Instant now = Instant.now();
+        java.sql.Date businessDate = java.sql.Date.valueOf(
+                now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate());
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        requested.forEach(id -> counts.put(id, 0));
+        Set<String> available = new LinkedHashSet<>();
+        for (LearnerPracticeStore.ChapterCandidate candidate
+                : store.bookChapterCandidates(learnerId, requested, businessDate)) {
+            if (!memberships.contains(candidate.chapterId() + "\u0000" + candidate.knowledgePointId())) continue;
+            if (!candidate.readyQuestion() && !reviewDue(candidate, now)) continue;
+            if (available.add(candidate.chapterId() + "\u0000" + candidate.knowledgePointId())) {
+                counts.merge(candidate.chapterId(), 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    /** 复用 ReviewSchedulingPolicy，保证与复习队列/入口校验的“到期”判定完全一致。 */
+    private static boolean reviewDue(LearnerPracticeStore.ChapterCandidate candidate, Instant now) {
+        if (candidate.masteryScore() == null || candidate.stabilityDays() == null
+                || candidate.lastEvidenceAt() == null) return false;
+        var state = new KnowledgeMasteryModel.State(candidate.masteryScore(),
+                Math.max(KnowledgeModelPolicy.MIN_STABILITY, candidate.stabilityDays()), 1, 1, 0, 0,
+                null, candidate.lastEvidenceAt(), null, "review-probe", 0);
+        return ReviewSchedulingPolicy.dueWithin24Hours(state, now);
+    }
+
     @Transactional
     public SessionView start(StartRequest request) {
         String learnerId = LearnerContext.learnerId();
@@ -91,9 +151,8 @@ public class LearnerPracticeService {
             if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
             var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
                     .orElseThrow(() -> bad("这道题已不在错题本中。"));
-            if (!wrong.available()) throw bad("该题当前不可练习。你仍可将它移出错题本。");
+            if (!wrong.available()) throw bad(wrongQuestionUnavailableMessage(wrong.unavailableReason()));
             targetId = wrong.targetKnowledgePointId();
-            if (!allowed.contains(targetId)) throw bad("该题当前不在所选文集范围内。你仍可将它移出错题本。");
             AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
                     learnerId, allowed, targetId, profile.difficulty());
             var poolRequest = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
@@ -402,4 +461,15 @@ public class LearnerPracticeService {
     }
     private static ApiException bad(String message) { return new ApiException(HttpStatus.BAD_REQUEST, message); }
     private static ApiException conflict(String message) { return new ApiException(HttpStatus.CONFLICT, message); }
+
+    /** 错题卡不可练习时的用户文案；原因由 LearnerPracticeStore.wrongQuestions 的 SQL 判定。 */
+    private static String wrongQuestionUnavailableMessage(String unavailableReason) {
+        if ("out_of_scope".equals(unavailableReason)) {
+            return "该题当前不在所选文集范围内。你仍可将它移出错题本。";
+        }
+        if ("knowledge_unavailable".equals(unavailableReason)) {
+            return "该题所属知识点当前不可练习。你仍可将它移出错题本。";
+        }
+        return "该题当前不可练习。你仍可将它移出错题本。";
+    }
 }

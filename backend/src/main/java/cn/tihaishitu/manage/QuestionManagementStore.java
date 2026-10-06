@@ -156,6 +156,12 @@ public class QuestionManagementStore {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "所选题目正在被错题练习使用，请先结束对应练习后再删除。");
         }
+        Integer wrongHistory = jdbc.queryForObject("SELECT COUNT(*) FROM learner_wrong_question "
+                        + "WHERE question_id IN (" + placeholders + ")", Integer.class, ids.toArray());
+        if (wrongHistory != null && wrongHistory > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "该题已存在用户错题历史，不能物理删除，请改为下架/归档。");
+        }
         List<String> bankIds = jdbc.query("SELECT DISTINCT bank_id FROM question_bank_item WHERE question_id IN ("
                         + placeholders + ")", (row, index) -> row.getString("bank_id"), ids.toArray());
         jdbc.update("UPDATE learner_practice_session SET source_question_id=NULL WHERE status='ended' "
