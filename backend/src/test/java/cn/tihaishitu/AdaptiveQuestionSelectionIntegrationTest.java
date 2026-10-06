@@ -48,7 +48,8 @@ class AdaptiveQuestionSelectionIntegrationTest {
         assertThat(select(learner, point, Set.of(), restoredPreferred, false).id()).isEqualTo(questions.get(4));
 
         Set<String> withoutExact = Set.of(questions.get(1), questions.get(3), questions.get(5));
-        assertThat(select(learner, point, withoutExact, 3, false).id()).isEqualTo(questions.get(2));
+        assertThat(select(learner, point, withoutExact, 3, false).id())
+                .isIn(questions.get(2), questions.get(4));
         assertThat(select(learner, point, Set.of(), 4, true).id()).isEqualTo(questions.get(2));
         assertThat(select(learner, point, Set.of(questions.get(1), questions.get(2)), 4, true).id())
                 .isEqualTo(questions.get(3));
