@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { platformApi, type HubBootstrap, type PracticeSession } from "./api";
-import { PracticePage, StudyPage, WrongQuestionsPage } from "./PlatformApp";
+import { PracticePage, QuestionPreviewCard, safePracticeReturnTo, StudyPage, WrongQuestionsPage } from "./PlatformApp";
 import { AnswerDisplay } from "./practiceView";
 
 const data = {
@@ -18,9 +18,9 @@ const data = {
   ],
 } as HubBootstrap;
 
-const session = (assessment: "correct" | "partial" | "wrong" = "correct"): PracticeSession => ({
+const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRepeat = true): PracticeSession => ({
   id: "session", intent: "knowledge_drill", targetKnowledgePointId: "point", status: "active", revision: 1,
-  flowComplete: true, canRepeat: true,
+  flowComplete: true, canRepeat,
   currentAttempt: {
     id: "attempt", status: "graded", targetKnowledgePointId: "point", targetKnowledgePointName: "函数",
     evidenceMode: "normal", question: { id: "question", subject: "数学一", chapter: "函数",
@@ -33,10 +33,14 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("practice interaction closure", () => {
   it("selects a saved trainable book by clicking the whole card and keeps draft scope separate", async () => {
-    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [] });
+    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [{ id: "chapter", code: "C",
+      name: "函数章", description: "", knowledgePoints: [{ id: "point", code: "P", name: "函数", subject: "数学",
+        section: "函数", chapter: "函数章", description: "", explanation: "" }], children: [] }] });
     vi.spyOn(platformApi, "knowledgeStatesForBook").mockResolvedValue([]);
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
     vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
+    vi.spyOn(platformApi, "startKnowledgePractice").mockResolvedValue(session());
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
     render(<StudyPage data={data} reload={vi.fn()} />);
 
     const mathCard = screen.getByRole("button", { name: /考研数学一.*267 个知识点/ });
@@ -45,10 +49,13 @@ describe("practice interaction closure", () => {
     fireEvent.click(mathCard);
     expect(mathCard.classList.contains("selected")).toBe(true);
 
-    const book408 = screen.getByRole("button", { name: /408.*0 个知识点.*未加入学习范围/ }) as HTMLButtonElement;
-    expect(book408.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /408/ })).toBeNull();
     fireEvent.click(screen.getByLabelText(/408/));
-    expect(book408.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /408/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "函数章" }));
+    fireEvent.click(await screen.findByRole("button", { name: "开始专项" }));
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`)
+      .toBe("/practice/session?returnTo=%2Fstudy"));
   });
 
   it("formats objective standards without JSON quotes", () => {
@@ -87,5 +94,43 @@ describe("practice interaction closure", () => {
     await waitFor(() => expect(view.container.querySelector(".wrong-question-content .katex")).toBeTruthy());
     expect(view.container.querySelector(".wrong-question-content")).toBeTruthy();
     expect(screen.queryByText(/数学一.*函数/)).toBeNull();
+  });
+
+  it("keeps the wrong-question empty state concise and returns to Study", async () => {
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
+    render(<WrongQuestionsPage data={data} />);
+    expect(await screen.findByText("当前没有待重做题目")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "← 返回学习" }).getAttribute("href")).toBe("/study");
+    expect(screen.queryByText(/这里只保留/)).toBeNull();
+    expect(screen.queryByText(/之后若同一道题/)).toBeNull();
+    expect(screen.queryByText("错题练习", { selector: ".eyebrow" })).toBeNull();
+  });
+
+  it("marks only mastered question previews", () => {
+    const summary = { id: "q", subject: "数学", sourceType: "custom", questionType: "single_choice",
+      presentationType: "single_choice", gradingMode: "auto", contentMarkdown: "题干", analysisMarkdown: "",
+      standardAnswer: "A", difficulty: 2, revision: 1, learnerQuestionStatus: "mastered" as const };
+    const view = render(<QuestionPreviewCard summary={summary} />);
+    expect(screen.getByText("✓ 已掌握")).toBeTruthy();
+    view.rerender(<QuestionPreviewCard summary={{ ...summary, learnerQuestionStatus: "unseen" }} />);
+    expect(screen.queryByText("✓ 已掌握")).toBeNull();
+  });
+
+  it("uses a safe return path and hides the unavailable next action", async () => {
+    window.history.replaceState(null, "", "/practice/session?returnTo=%2Fstudy");
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
+    vi.spyOn(platformApi, "practice").mockResolvedValue(session("correct", false));
+    vi.spyOn(platformApi, "endPractice").mockResolvedValue({ ...session("correct", false), status: "ended" });
+    render(<PracticePage data={data} id="session" />);
+    expect(await screen.findByText("本轮可练题目已完成")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "下一道题" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "结束专项" }));
+    await waitFor(() => expect(window.location.pathname).toBe("/study"));
+
+    window.history.replaceState(null, "", "/practice/session?returnTo=%2Fknowledge%2Fpoint");
+    expect(safePracticeReturnTo("knowledge_drill")).toBe("/knowledge/point");
+    window.history.replaceState(null, "", "/practice/session?returnTo=https%3A%2F%2Fevil.example");
+    expect(safePracticeReturnTo("knowledge_drill")).toBe("/study");
+    expect(safePracticeReturnTo("wrong_review")).toBe("/wrong-questions");
   });
 });

@@ -24,6 +24,11 @@ public class QuestionAttemptVariantService {
     }
 
     public AttemptVariant create(JsonNode question, JsonNode standard, JsonNode previousQuestion) {
+        return create(question, standard, previousQuestion, standard);
+    }
+
+    public AttemptVariant create(JsonNode question, JsonNode standard, JsonNode previousQuestion,
+                                 JsonNode previousStandard) {
         ObjectNode snapshot = question.deepCopy();
         JsonNode options = snapshot.path("options");
         String presentation = snapshot.path("presentationType").asText(snapshot.path("type").asText());
@@ -34,21 +39,17 @@ public class QuestionAttemptVariantService {
 
         List<String> sourceKeys = new ArrayList<>();
         options.fieldNames().forEachRemaining(sourceKeys::add);
-        List<String> sourceOrder = new ArrayList<>(sourceKeys);
         List<String> previousTexts = optionTexts(previousQuestion);
-        for (int attempt = 0; attempt < 5; attempt++) {
-            Collections.shuffle(sourceOrder);
-            AttemptVariant candidate = applyOrder(snapshot, standard, sourceOrder);
-            if (previousTexts.isEmpty() || !optionTexts(candidate.question()).equals(previousTexts)) return candidate;
+        Set<String> previousKeys = answerKeys(previousStandard);
+        List<List<String>> orders = candidateOrders(sourceKeys);
+        AttemptVariant changedOrder = null;
+        for (List<String> order : orders) {
+            AttemptVariant candidate = applyOrder(snapshot, standard, order);
+            if (!previousTexts.isEmpty() && optionTexts(candidate.question()).equals(previousTexts)) continue;
+            if (changedOrder == null) changedOrder = candidate;
+            if (!answerKeys(candidate.standard()).equals(previousKeys)) return candidate;
         }
-        Collections.rotate(sourceOrder, 1);
-        AttemptVariant candidate = applyOrder(snapshot, standard, sourceOrder);
-        if (!previousTexts.isEmpty() && optionTexts(candidate.question()).equals(previousTexts)) {
-            sourceOrder = new ArrayList<>(sourceKeys);
-            Collections.rotate(sourceOrder, 1);
-            candidate = applyOrder(snapshot, standard, sourceOrder);
-        }
-        return candidate;
+        return changedOrder == null ? new AttemptVariant(snapshot, standard.deepCopy()) : changedOrder;
     }
 
     AttemptVariant applyOrder(JsonNode question, JsonNode standard, List<String> sourceKeysInDisplayOrder) {
@@ -95,5 +96,35 @@ public class QuestionAttemptVariantService {
         List<String> values = new ArrayList<>();
         question.path("options").elements().forEachRemaining(value -> values.add(value.asText()));
         return values;
+    }
+
+    private static Set<String> answerKeys(JsonNode standard) {
+        if (standard == null) return Set.of();
+        Set<String> values = new HashSet<>();
+        if (standard.isArray()) standard.forEach(value -> values.add(value.asText()));
+        else if (standard.isTextual()) values.add(standard.asText());
+        return values;
+    }
+
+    private static List<List<String>> candidateOrders(List<String> sourceKeys) {
+        List<List<String>> orders = new ArrayList<>();
+        for (int attempt = 0; attempt < 32; attempt++) {
+            List<String> shuffled = new ArrayList<>(sourceKeys);
+            Collections.shuffle(shuffled);
+            if (!shuffled.equals(sourceKeys) && !orders.contains(shuffled)) orders.add(shuffled);
+        }
+        for (int shift = 1; shift < sourceKeys.size(); shift++) {
+            List<String> rotated = new ArrayList<>(sourceKeys);
+            Collections.rotate(rotated, shift);
+            if (!orders.contains(rotated)) orders.add(rotated);
+        }
+        for (int left = 0; left < sourceKeys.size(); left++) {
+            for (int right = left + 1; right < sourceKeys.size(); right++) {
+                List<String> swapped = new ArrayList<>(sourceKeys);
+                Collections.swap(swapped, left, right);
+                if (!orders.contains(swapped)) orders.add(swapped);
+            }
+        }
+        return orders;
     }
 }

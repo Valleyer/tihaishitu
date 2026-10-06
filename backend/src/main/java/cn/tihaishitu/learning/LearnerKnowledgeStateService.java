@@ -20,12 +20,16 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 public class LearnerKnowledgeStateService {
     private final LearnerKnowledgeStateStore store;
     private final LearnerStore learners;
+    private final LearnerQuestionProgressStore questionProgress;
     private final KnowledgeMasteryModel model = new KnowledgeMasteryModel();
+    private final QuestionCoverageMasteryModel coverageModel = new QuestionCoverageMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
-    public LearnerKnowledgeStateService(LearnerKnowledgeStateStore store, LearnerStore learners) {
+    public LearnerKnowledgeStateService(LearnerKnowledgeStateStore store, LearnerStore learners,
+                                        LearnerQuestionProgressStore questionProgress) {
         this.store = store;
         this.learners = learners;
+        this.questionProgress = questionProgress;
     }
 
     /** Formal World grading acquires this lock before reading the final attempt snapshot. */
@@ -43,9 +47,19 @@ public class LearnerKnowledgeStateService {
         if (store.evidenceExists(attempt.id())) return;
         var previous = store.find(attempt.learnerId(), attempt.targetKnowledgePointId())
                 .orElse(KnowledgeMasteryModel.State.initial());
+        if (!KnowledgeModelPolicy.MODEL_VERSION.equals(previous.modelVersion())) {
+            previous = coverageModel.rebuild(previous, questionProgress.coverage(
+                    attempt.learnerId(), attempt.targetKnowledgePointId(), attempt.id()));
+            store.save(attempt.learnerId(), attempt.targetKnowledgePointId(), previous);
+        }
+        String previousAssessment = questionProgress.latestAssessmentBeforeAttempt(attempt.learnerId(),
+                attempt.targetKnowledgePointId(), attempt.questionId(), attempt.id());
         var evidence = new KnowledgeMasteryModel.Evidence(outcome, gradingSource, attempt.evidenceMode(),
                 attempt.questionDifficulty(), occurredAt);
-        var calculation = model.apply(previous, evidence);
+        if (!coverageModel.shouldApply(previousAssessment, outcome, previous, occurredAt)) return;
+        var calculation = coverageModel.apply(previous,
+                questionProgress.coverageIncludingAttempt(attempt.learnerId(),
+                        attempt.targetKnowledgePointId(), attempt.id()), evidence);
         store.insertEvidence(UUID.randomUUID().toString(), attempt.learnerId(), attempt.targetKnowledgePointId(),
                 attempt.id(), attempt.questionId(), attempt.worldId(), evidence, calculation);
         store.save(attempt.learnerId(), attempt.targetKnowledgePointId(), calculation.next());
@@ -54,7 +68,8 @@ public class LearnerKnowledgeStateService {
     public StateView current(String pointId) {
         if (!store.activeKnowledgeExists(pointId))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "知识点不存在或已停用。");
-        return view(pointId, store.find(LearnerContext.learnerId(), pointId).orElse(null), clock.instant());
+        String learnerId = LearnerContext.learnerId();
+        return view(pointId, ensureV2(learnerId, pointId, store.find(learnerId, pointId).orElse(null)), clock.instant());
     }
 
     public List<StateView> currentForBook(String bookId) {
@@ -62,7 +77,9 @@ public class LearnerKnowledgeStateService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "文集不存在或已停用。");
         List<LearnerKnowledgeStateStore.StateRow> rows = store.findForBook(LearnerContext.learnerId(), bookId);
         Instant now = clock.instant();
-        return rows.stream().map(row -> view(row.knowledgePointId(), row.state(), now)).toList();
+        String learnerId = LearnerContext.learnerId();
+        return rows.stream().map(row -> view(row.knowledgePointId(),
+                ensureV2(learnerId, row.knowledgePointId(), row.state()), now)).toList();
     }
 
     @Transactional
@@ -71,17 +88,41 @@ public class LearnerKnowledgeStateService {
         learners.forEach(this.learners::lockForUpdate);
         store.canonicalizeForMerge(sourceId, targetId);
         for (String learnerId : learners) {
-            var state = KnowledgeMasteryModel.State.initial();
-            for (var row : store.evidenceForReplay(learnerId, targetId)) {
-                var evidence = new KnowledgeMasteryModel.Evidence(row.outcome(), row.gradingSource(), row.evidenceMode(),
-                        row.questionDifficulty(), row.occurredAt());
-                var calculation = model.apply(state, evidence);
-                store.updateReplayCalculation(row.id(), calculation);
-                state = calculation.next();
-            }
+            var previous = store.find(learnerId, targetId).orElse(KnowledgeMasteryModel.State.initial());
+            var state = coverageModel.rebuild(previous, questionProgress.coverage(learnerId, targetId));
             store.deleteState(learnerId, targetId);
             if (state.evidenceCount() > 0) store.save(learnerId, targetId, state);
         }
+    }
+
+    @Transactional
+    public void rebuildCoverage(String pointId) {
+        for (String learnerId : store.affectedLearners(pointId, pointId)) {
+            learners.lockForUpdate(learnerId);
+            var previous = store.find(learnerId, pointId).orElse(KnowledgeMasteryModel.State.initial());
+            var rebuilt = coverageModel.rebuild(previous, questionProgress.coverage(learnerId, pointId));
+            store.deleteState(learnerId, pointId);
+            if (rebuilt.evidenceCount() > 0) store.save(learnerId, pointId, rebuilt);
+        }
+    }
+
+    @Transactional
+    public void rebuildLegacyStates() {
+        for (var identity : store.legacyStates()) {
+            learners.lockForUpdate(identity.learnerId());
+            var existing = store.find(identity.learnerId(), identity.knowledgePointId()).orElse(null);
+            if (existing != null) store.save(identity.learnerId(), identity.knowledgePointId(),
+                    coverageModel.rebuild(existing,
+                            questionProgress.coverage(identity.learnerId(), identity.knowledgePointId())));
+        }
+    }
+
+    private KnowledgeMasteryModel.State ensureV2(String learnerId, String pointId,
+                                                   KnowledgeMasteryModel.State state) {
+        if (state == null || KnowledgeModelPolicy.MODEL_VERSION.equals(state.modelVersion())) return state;
+        KnowledgeMasteryModel.State rebuilt = coverageModel.rebuild(state, questionProgress.coverage(learnerId, pointId));
+        store.save(learnerId, pointId, rebuilt);
+        return rebuilt;
     }
 
     private StateView view(String pointId, KnowledgeMasteryModel.State state, Instant now) {

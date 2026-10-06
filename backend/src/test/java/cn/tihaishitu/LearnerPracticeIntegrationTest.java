@@ -69,6 +69,7 @@ class LearnerPracticeIntegrationTest {
 
         session = answer(learner, sessionId, attemptId, questionId, true);
         assertThat(session.path("flowComplete").asBoolean()).isTrue();
+        assertThat(session.path("canRepeat").asBoolean()).isTrue();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?",
                 Integer.class, attemptId)).isEqualTo(1);
 
@@ -88,7 +89,55 @@ class LearnerPracticeIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(next.path("targetKnowledgePointId").asText()).isEqualTo(fixture.point());
         assertThat(next.path("currentAttempt").path("question").path("id").asText()).isNotEqualTo(questionId);
+        next = answer(learner, sessionId, next.path("currentAttempt").path("id").asText(),
+                next.path("currentAttempt").path("question").path("id").asText(), true);
+        assertThat(next.path("canRepeat").asBoolean()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT mastery_score FROM learner_knowledge_state WHERE learner_id=(SELECT id FROM learner_account WHERE username='practice-main') AND knowledge_point_id=?",
+                Double.class, fixture.point())).isEqualTo(100d);
+        assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE learner_id=(SELECT id FROM learner_account WHERE username='practice-main') AND knowledge_point_id=?",
+                Integer.class, fixture.point())).isEqualTo(2);
+
+        JsonNode listed = json(mvc.perform(get("/api/v1/learning/knowledge-points/{id}/questions", fixture.point())
+                        .cookie(learner)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        listed.forEach(question ->
+                assertThat(question.path("learnerQuestionStatus").asText()).isEqualTo("mastered"));
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/end", sessionId).with(csrf()).cookie(learner))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(learner)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"intent\":\"knowledge_drill\",\"targetKnowledgePointId\":\"%s\"}".formatted(fixture.point())))
+                .andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_world_state", Integer.class)).isZero();
+    }
+
+    @Test void dueOrdinaryPracticeReusesQuestionWithANewFrozenOptionVariant() throws Exception {
+        Fixture fixture = choiceFixture("practice-variant");
+        Cookie learner = register("practice-variant");
+        String learnerId = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='practice-variant'", String.class);
+        JsonNode first = startKnowledge(learner, fixture.point());
+        String firstSession = first.path("id").asText();
+        String firstAttempt = first.path("currentAttempt").path("id").asText();
+        String questionId = first.path("currentAttempt").path("question").path("id").asText();
+        JsonNode firstOptions = first.path("currentAttempt").path("question").path("options");
+        String firstStandard = mapper.readTree(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?", String.class, firstAttempt)).asText();
+        answerJson(learner, firstSession, firstAttempt, questionId, mapper.writeValueAsString(firstStandard));
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/end", firstSession).with(csrf()).cookie(learner))
+                .andExpect(status().isOk());
+
+        jdbc.update("UPDATE learner_knowledge_state SET last_evidence_at=DATEADD('DAY',-30,CURRENT_TIMESTAMP),stability_days=.5 WHERE learner_id=? AND knowledge_point_id=?",
+                learnerId, fixture.point());
+        JsonNode second = startKnowledge(learner, fixture.point());
+        String secondAttempt = second.path("currentAttempt").path("id").asText();
+        JsonNode secondOptions = second.path("currentAttempt").path("question").path("options");
+        String secondStandard = mapper.readTree(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?", String.class, secondAttempt)).asText();
+
+        assertThat(second.path("currentAttempt").path("question").path("id").asText()).isEqualTo(questionId);
+        assertThat(secondOptions).isNotEqualTo(firstOptions);
+        assertThat(secondStandard).isNotEqualTo(firstStandard);
+        assertThat(secondOptions.path(secondStandard).asText()).isEqualTo("正确项");
     }
 
     private JsonNode startKnowledge(Cookie learner, String point) throws Exception {
@@ -99,6 +148,14 @@ class LearnerPracticeIntegrationTest {
     }
 
     private JsonNode answer(Cookie learner, String session, String attempt, String question, boolean answer) throws Exception {
+        return json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/answers", session)
+                        .with(csrf()).cookie(learner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
+                                .formatted(attempt, question, answer)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    private JsonNode answerJson(Cookie learner, String session, String attempt, String question, String answer) throws Exception {
         return json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/answers", session)
                         .with(csrf()).cookie(learner).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
@@ -124,7 +181,7 @@ class LearnerPracticeIntegrationTest {
                 VALUES (?,?,?,'测试','节','章','core','active','','',0,1)
                 """, point, prefix, prefix);
         jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", book, point, chapter);
-        question(point, prefix + "-q1"); question(point, prefix + "-q2");
+        question(point, prefix + "-q1", 2); question(point, prefix + "-q2", 4);
         return new Fixture(book, point);
     }
 
@@ -153,17 +210,46 @@ class LearnerPracticeIntegrationTest {
                 question, target);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)",
                 question, dependency);
-        question(dependency, prefix + "-dependency-q");
+        question(dependency, prefix + "-dependency-q", 2);
         return new DependencyFixture(book, target, dependency, question);
     }
 
+    private Fixture choiceFixture(String prefix) {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        String point = UUID.randomUUID().toString(), question = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,?, '',TRUE,1,1)", book, prefix);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C','章','',0,1)", chapter, book);
+        jdbc.update("""
+                INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,
+                    default_role,status,description,explanation,sort_order,revision)
+                VALUES (?,?,?,'测试','节','章','core','active','','',0,1)
+                """, point, prefix, prefix);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", book, point, chapter);
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','single_choice','single_choice','auto','选择题','\"D\"','解析',2,'published',1)
+                """, question);
+        for (int index = 0; index < 4; index++) {
+            String key = String.valueOf((char) ('A' + index));
+            jdbc.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                    UUID.randomUUID().toString(), question, key, index == 3 ? "正确项" : "干扰项" + key,
+                    index == 3, index);
+        }
+        jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", question, point);
+        return new Fixture(book, point);
+    }
+
     private void question(String point, String content) {
+        question(point, content, 2);
+    }
+    private void question(String point, String content, int difficulty) {
         String id = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
-                VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)
-                """, id, content);
+                VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',?,'published',1)
+                """, id, content, difficulty);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", id, point);
     }
     private JsonNode json(String value) throws Exception { return mapper.readTree(value); }

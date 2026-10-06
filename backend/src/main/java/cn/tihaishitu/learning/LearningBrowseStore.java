@@ -16,7 +16,11 @@ import java.util.*;
 public class LearningBrowseStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
-    public LearningBrowseStore(JdbcTemplate jdbc, ObjectMapper mapper) { this.jdbc = jdbc; this.mapper = mapper; }
+    private final LearnerQuestionProgressStore questionProgress;
+    public LearningBrowseStore(JdbcTemplate jdbc, ObjectMapper mapper,
+                               LearnerQuestionProgressStore questionProgress) {
+        this.jdbc = jdbc; this.mapper = mapper; this.questionProgress = questionProgress;
+    }
 
     public List<Map<String, Object>> books(String learnerId) {
         return jdbc.query("""
@@ -195,6 +199,16 @@ public class LearningBrowseStore {
                  ORDER BY q.id
                 """, (result, row) -> question(result), id);
         questions.forEach(question -> question.put("knowledgePoints", questionKnowledge((String) question.get("id"))));
+        Map<String, LearnerQuestionProgressStore.QuestionProgress> progress = questionProgress.latestGradedForQuestions(
+                learnerId, id, questions.stream().map(question -> (String) question.get("id")).toList());
+        questions.forEach(question -> {
+            var latest = progress.get((String) question.get("id"));
+            String assessment = latest == null ? null : latest.assessment();
+            question.put("learnerQuestionStatus", assessment == null ? "unseen"
+                    : "correct".equals(assessment) ? "mastered" : "needs_review");
+            question.put("latestAssessment", assessment);
+            question.put("lastGradedAt", latest == null ? null : latest.answeredAt());
+        });
         return questions;
     }
 

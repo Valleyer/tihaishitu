@@ -19,6 +19,8 @@ export interface BrowseQuestion {
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
   standardAnswer: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
+  learnerQuestionStatus?: "unseen" | "mastered" | "needs_review";
+  latestAssessment?: "correct" | "partial" | "wrong"; lastGradedAt?: string;
 }
 export interface HubBootstrap {
   learner: Learner; canManage: boolean; studyProfile: StudyProfile; worlds: WorldDefinition[];

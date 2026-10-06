@@ -1,9 +1,9 @@
 package cn.tihaishitu.learning;
 
-/** Versioned V1 policy; changes to these semantics require a new model version. */
+/** Shared thresholds and spacing parameters for the versioned mastery model. */
 public final class KnowledgeModelPolicy {
     private KnowledgeModelPolicy() {}
-    public static final String MODEL_VERSION = "v1";
+    public static final String MODEL_VERSION = "v2-coverage";
     public static final double MIN_MASTERY = 0, MAX_MASTERY = 100;
     public static final double LEARNING_THRESHOLD = 40, READY_THRESHOLD = 70, PROFICIENT_THRESHOLD = 85;
     public static final double INITIAL_STABILITY = 1, MIN_STABILITY = .5, MAX_STABILITY = 365;

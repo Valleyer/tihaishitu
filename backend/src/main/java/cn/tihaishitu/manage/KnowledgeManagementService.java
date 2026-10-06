@@ -26,7 +26,10 @@ public class KnowledgeManagementService {
     public KnowledgeManagementStore.KnowledgeMergeResult merge(
             String sourceId, String targetId, long expectedRevision, String reason, String actorId) {
         knowledgeStates.mergeKnowledge(sourceId, targetId);
-        return store.merge(sourceId, targetId, expectedRevision, reason, actorId);
+        KnowledgeManagementStore.KnowledgeMergeResult result =
+                store.merge(sourceId, targetId, expectedRevision, reason, actorId);
+        knowledgeStates.rebuildCoverage(targetId);
+        return result;
     }
 
     @Transactional

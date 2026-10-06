@@ -43,13 +43,15 @@ public class LearnerPracticeService {
     private final LearnerStore learners;
     private final ObjectMapper mapper;
     private final QuestionAttemptVariantService variants;
+    private final LearnerQuestionProgressStore questionProgress;
 
     public LearnerPracticeService(LearnerPracticeStore store, QuestionAttemptStore attempts,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService pool,
                                   AdaptiveStudyPlanner planner, LearnerKnowledgeStateService knowledgeStates,
                                   DiagnosticLearningService diagnostics, DiagnosticLearningStore diagnosisStore,
                                   LearnerStore learners, ObjectMapper mapper,
-                                  QuestionAttemptVariantService variants) {
+                                  QuestionAttemptVariantService variants,
+                                  LearnerQuestionProgressStore questionProgress) {
         this.store = store;
         this.attempts = attempts;
         this.profiles = profiles;
@@ -61,6 +63,7 @@ public class LearnerPracticeService {
         this.learners = learners;
         this.mapper = mapper;
         this.variants = variants;
+        this.questionProgress = questionProgress;
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
@@ -216,24 +219,31 @@ public class LearnerPracticeService {
             DiagnosticLearningService.Directive next = diagnostics.nextDirective(directive.diagnosisSessionId());
             return draw(sessionId, learnerId, next.targetKnowledgePointId(), allowed, profileDifficulty, next);
         }
-        QuestionDto question = pool.selectQuestionForLearner(learnerId, request);
-        return createAttempt(targetId, question, training ? "training" : "normal", directive);
+        QuestionDto question = directive == null
+                ? pool.selectKnowledgeDrillQuestion(learnerId, request)
+                : pool.selectQuestionForLearner(learnerId, request);
+        return createAttempt(learnerId, targetId, question, training ? "training" : "normal", directive);
     }
 
     private String drawExact(String sessionId, String targetId, QuestionAttemptStore.Snapshot source) {
         String id = UUID.randomUUID().toString();
-        QuestionAttemptVariantService.AttemptVariant variant = variants.create(
-                source.question(), source.standard(), source.question());
+        var previous = questionProgress.latestAttemptForQuestion(source.learnerId(), source.questionId()).orElse(null);
+        QuestionAttemptVariantService.AttemptVariant variant = variants.create(source.question(), source.standard(),
+                previous == null ? source.question() : previous.questionSnapshot(),
+                previous == null ? source.standard() : previous.standardAnswer());
         attempts.create(id, null, source.questionId(), variant.question(), variant.standard(),
                 source.gradingMode(), targetId, "normal", source.questionDifficulty(), null, null);
         return id;
     }
 
-    private String createAttempt(String targetId, QuestionDto question, String evidenceMode,
-                                 DiagnosticLearningService.Directive directive) {
+    private String createAttempt(String learnerId, String targetId, QuestionDto question, String evidenceMode,
+                                  DiagnosticLearningService.Directive directive) {
         String id = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
-        QuestionAttemptVariantService.AttemptVariant variant = variants.create(full, question.answer(), null);
+        var previous = questionProgress.latestAttemptForQuestion(learnerId, question.id()).orElse(null);
+        QuestionAttemptVariantService.AttemptVariant variant = variants.create(full, question.answer(),
+                previous == null ? full : previous.questionSnapshot(),
+                previous == null ? question.answer() : previous.standardAnswer());
         attempts.create(id, null, question.id(), variant.question(), variant.standard(),
                 full.path("gradingMode").asText("auto"), targetId, evidenceMode, question.difficulty(),
                 directive == null ? null : directive.diagnosisSessionId(),
@@ -246,9 +256,10 @@ public class LearnerPracticeService {
                 : attempts.findForPractice(session.currentAttemptId(), session.learnerId(), session.id());
         AttemptView attempt = snapshot == null ? null : attemptView(snapshot);
         boolean complete = snapshot != null && flowComplete(session, snapshot);
+        boolean canRepeat = complete && "knowledge_drill".equals(session.intent()) && hasNext(session);
         return new SessionView(session.id(), session.intent(), session.targetKnowledgePointId(),
                 session.sourceQuestionId(), session.status(), session.revision(), attempt, complete,
-                complete && "knowledge_drill".equals(session.intent()));
+                canRepeat);
     }
 
     private AttemptView attemptView(QuestionAttemptStore.Snapshot snapshot) {
@@ -290,6 +301,22 @@ public class LearnerPracticeService {
                 KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
         if (pool.eligibleQuestionsForLearner(request).isEmpty())
             throw bad("当前知识点暂无可用于专项练习的正式题。");
+        if (pool.eligibleKnowledgeDrillQuestions(learnerId, request).isEmpty())
+            throw bad("这个知识点当前没有待练的新题，已掌握题目会在复习到期后重新开放。");
+    }
+
+    private boolean hasNext(LearnerPracticeStore.Session session) {
+        if (!"active".equals(session.status())) return false;
+        Set<String> allowed = store.scope(session.id());
+        var profile = profiles.rawCurrent();
+        AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
+                session.learnerId(), allowed, session.targetKnowledgePointId(), profile.difficulty());
+        var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
+                session.targetKnowledgePointId(), allowed, context.readyKnowledgePointIds(),
+                store.seenQuestions(session.id()), context.preferredDifficulty(),
+                KnowledgeQuestionPoolService.Mode.NORMAL,
+                KnowledgeQuestionPoolService.DependencyPolicy.SCOPE_ONLY);
+        return !pool.eligibleKnowledgeDrillQuestions(session.learnerId(), request).isEmpty();
     }
 
     private static boolean needsTraining(QuestionAttemptStore.Snapshot snapshot) {
