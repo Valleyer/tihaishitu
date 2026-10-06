@@ -301,6 +301,6 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 
 V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。
 
-Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Wrong Queue 使用 `(learner_id, question_id)` 的 latest graded attempt 派生；Wrong Practice 首题固定 source Question。Hub Practice 与 World 在 target 确定后调用同一 AdaptiveStudyPlanner question context、KnowledgeQuestionPoolService、rotation、grading、Evidence 与 Diagnosis 服务。Hub mutation 校验 learner/session/diagnosis owner，且不写 `learner_world_state`。
+Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded attempt 派生：Formal Parent Question 出现 wrong / partial 即 upsert 为 `active`，之后 correct 不自动移除，只有 Learner 手动移出才置为 `removed`，以后再次 wrong / partial 重新回到 `active`。Wrong Practice 首题固定 source Question。Hub Practice 与 World 在 target 确定后调用同一 AdaptiveStudyPlanner question context、KnowledgeQuestionPoolService、rotation、grading、Evidence 与 Diagnosis 服务。Hub mutation 校验 learner/session/diagnosis owner，且不写 `learner_world_state`。
 
 World target 由 Selected Books scope 与 adaptive playable 集合求交后 shuffle，再 distinct 截取活动轮数；unstarted 不被排除，也不再按 weak/review/focus 排序。

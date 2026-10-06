@@ -6,6 +6,8 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 本次改名仅调整产品展示名。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、World ID `ancient-official`、既有数据库结构与路由继续保持稳定，不参与展示名迁移。
 
+> **开始开发前先读**：[`AGENTS.md`](AGENTS.md)（Agent 开发流程与文档纪律）与 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md)（跨 PR 长期规则的唯一主入口）。本仓库采用“一个 PR = 一个独立 Agent 对话”，长期规则不依赖聊天记录。
+
 ## 现在怎么玩
 
 默认进入知境中枢，题面不会自动出现。`寒门仕途` 是知境当前开放的第一个游戏世界：
@@ -26,7 +28,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 判断、单选、多选继续支持，选项每次发卷打乱。正式联机流程中每位 Learner 在每个 World 只有一份服务端权威状态；旧多存档只保留兼容数据。
 
-掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位：首次答对 30，跨自然日首次答对 +7，每满 3 天惰性衰减 1；KnowledgePoint 掌握度按当前正式父题总数聚合，全部 100 时冻结衰减，新增正式题会自动扩大分母。子题只用于补救教学，不产生 Mastery、Wrong Queue 或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生证据。
+掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位：首次答对 30，跨自然日首次答对 +7，每满 3 天惰性衰减 1；KnowledgePoint 掌握度按当前正式父题总数聚合，全部 100 时冻结衰减，新增正式题会自动扩大分母。子题只用于补救教学，不产生 Mastery、错题本或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生证据。
 
 Adaptive Scheduling V1 使用惰性遗忘后的有效掌握度判断题目依赖是否 ready。World target 从当前 Selected Books 的 playable KnowledgePoints 中随机抽取，Mastery、Review 与 Manual Focus 不决定 target 优先级；target 确定后，题目关联的其他 core/auxiliary 知识点必须达到基本掌握，并继续使用自适应难度、发布状态、本轮去重与题目轮换规则。`standard` 按目标难度与掌握上限选题，`gentle` 在此基础上下调一级；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
@@ -76,6 +78,8 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 
 | 想改什么 | 文档 |
 | --- | --- |
+| 项目长期规则、领域模型、业务算法（先读这个） | [项目长期规则](docs/PROJECT_RULES.md) |
+| Agent 开发流程与文档纪律 | [Agent 开发规则](AGENTS.md) |
 | 读书、奖励、副本、地图门槛、人物互动、装备 | [探索玩法修改手册](docs/adventure-guide.md) |
 | 题库、世界观、章首、素材等基础配置 | [基础配置手册](docs/configuration-guide.md) |
 | 代码分工、状态流 | [开发说明](docs/development.md) |
