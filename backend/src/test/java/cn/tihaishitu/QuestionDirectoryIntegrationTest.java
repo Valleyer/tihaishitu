@@ -168,28 +168,70 @@ class QuestionDirectoryIntegrationTest {
         String first = published(sourceId, "single_choice", 2020, "1", 1, "第 1 题", List.of(new Relation(pointId, 0)), List.of());
         String second = published(sourceId, "single_choice", 2020, "2", 1, "第 2 题", List.of(new Relation(pointId, 0)), List.of());
         String seventh = published(sourceId, "single_choice", 2020, "7", 1, "第 7 题", List.of(new Relation(pointId, 0)), List.of());
+        String legacySame = published(sourceId, "single_choice", 2020, "2020-7", 1, "历史第 7 题", List.of(new Relation(pointId, 0)), List.of());
         String tenth = published(sourceId, "single_choice", 2020, "10", 1, "第 10 题", List.of(new Relation(pointId, 0)), List.of());
         String twentySecond = published(sourceId, "single_choice", 2020, "22", 1, "第 22 题", List.of(new Relation(pointId, 0)), List.of());
-        String legacySame = published(sourceId, "single_choice", 2020, "2020-7", 1, "历史第 7 题", List.of(new Relation(pointId, 0)), List.of());
         String nextYear = published(sourceId, "single_choice", 2021, "1", 1, "次年第一题", List.of(new Relation(pointId, 0)), List.of());
         String otherSource = published(otherSourceId, "single_choice", 2019, "1", 1, "别来源", List.of(new Relation(pointId, 0)), List.of());
 
         Cookie learner = register();
         List<String> actual = ids(getJson(learner, "/api/v1/learning/questions", "sourceId", sourceId));
+        assertThat(actual).containsExactlyInAnyOrder(first, second, seventh, legacySame, tenth, twentySecond, nextYear);
         // 自然排序：1 < 2 < 7 < 10 < 22，绝不能出现 1, 10, 2。
         assertThat(actual.indexOf(first)).isLessThan(actual.indexOf(second));
         assertThat(actual.indexOf(second)).isLessThan(actual.indexOf(seventh));
         assertThat(actual.indexOf(seventh)).isLessThan(actual.indexOf(tenth));
         assertThat(actual.indexOf(tenth)).isLessThan(actual.indexOf(twentySecond));
-        // 同一年份内 "7" 与 "2020-7" 是同一个题号，都排在次年之前。
-        assertThat(actual.indexOf(seventh)).isLessThan(actual.indexOf(nextYear));
-        assertThat(actual.indexOf(legacySame)).isLessThan(actual.indexOf(nextYear));
-        // 排序稳定：完整顺序 = 年份升序 + 该年份内题号自然升序。
-        assertThat(actual).containsExactlyInAnyOrder(first, second, seventh, tenth, twentySecond, legacySame, nextYear);
-        assertThat(actual.get(6)).isEqualTo(nextYear);
+        // 核心回归：exam_year=2020 + "2020-7" 的 canonical 题号是 7，
+        // 必须落在 2 与 10 之间，而不是被排到 1,2,7,10,22 之后。
+        assertThat(actual.indexOf(legacySame)).isGreaterThan(actual.indexOf(second));
+        assertThat(actual.indexOf(legacySame)).isLessThan(actual.indexOf(tenth));
+        // "7" 与 "2020-7" canonical 相同，谁先谁后由 question_id 稳定兜底，只要求二者相邻。
+        assertThat(Math.abs(actual.indexOf(seventh) - actual.indexOf(legacySame))).isEqualTo(1);
+        // 年份是更高优先级的排序键：次年的题排在全部 2020 年题之后。
+        assertThat(actual.indexOf(twentySecond)).isLessThan(actual.indexOf(nextYear));
+        assertThat(actual.get(actual.size() - 1)).isEqualTo(nextYear);
         // 来源是第一个排序键：两个来源各自成组，互不交错。
         List<String> otherActual = ids(getJson(learner, "/api/v1/learning/questions", "sourceId", otherSourceId));
         assertThat(otherActual).containsExactly(otherSource);
+    }
+
+    /**
+     * 非纯数字题号与“年份前缀与 exam_year 不一致”的题号都不能猜成数字，
+     * 必须整体排到纯数字题号之后，不能插进 1–22 的自然序列里。
+     */
+    @Test
+    void nonNumericAndMismatchedYearNumbersSortAfterNumericOnes() throws Exception {
+        String one = published(sourceId, "single_choice", 2020, "1", 1, "第 1 题", List.of(new Relation(pointId, 0)), List.of());
+        String two = published(sourceId, "single_choice", 2020, "2", 1, "第 2 题", List.of(new Relation(pointId, 0)), List.of());
+        String seven = published(sourceId, "single_choice", 2020, "7", 1, "第 7 题", List.of(new Relation(pointId, 0)), List.of());
+        String legacySeven = published(sourceId, "single_choice", 2020, "2020-7", 1, "历史第 7 题", List.of(new Relation(pointId, 0)), List.of());
+        String ten = published(sourceId, "single_choice", 2020, "10", 1, "第 10 题", List.of(new Relation(pointId, 0)), List.of());
+        String twentyTwo = published(sourceId, "single_choice", 2020, "22", 1, "第 22 题", List.of(new Relation(pointId, 0)), List.of());
+        // 不猜数字：A-3 不能被当成 3，21A / 3(1) 同样不是纯数字。
+        String dashA = published(sourceId, "single_choice", 2020, "A-3", 1, "A-3 题", List.of(new Relation(pointId, 0)), List.of());
+        String trailingA = published(sourceId, "single_choice", 2020, "21A", 1, "21A 题", List.of(new Relation(pointId, 0)), List.of());
+        String bracketed = published(sourceId, "single_choice", 2020, "3(1)", 1, "3(1) 题", List.of(new Relation(pointId, 0)), List.of());
+        // 年份前缀与 exam_year 不一致时不能剥掉 2020。
+        String mismatched = published(sourceId, "single_choice", 2021, "2020-7", 1, "年份不一致", List.of(new Relation(pointId, 0)), List.of());
+
+        Cookie learner = register();
+        List<String> actual = ids(getJson(learner, "/api/v1/learning/questions", "sourceId", sourceId,
+                "size", "100"));
+        assertThat(actual).containsExactlyInAnyOrder(one, two, seven, legacySeven, ten, twentyTwo,
+                dashA, trailingA, bracketed, mismatched);
+        // 纯数字题号按自然顺序排在最前。
+        assertThat(actual.indexOf(one)).isLessThan(actual.indexOf(two));
+        assertThat(actual.indexOf(two)).isLessThan(actual.indexOf(seven));
+        assertThat(actual.indexOf(legacySeven)).isLessThan(actual.indexOf(ten));
+        assertThat(actual.indexOf(ten)).isLessThan(actual.indexOf(twentyTwo));
+        // 三个非纯数字题号都排在最后一个纯数字题号之后。
+        for (String nonNumeric : List.of(dashA, trailingA, bracketed)) {
+            assertThat(actual.indexOf(nonNumeric)).as("题号分档").isGreaterThan(actual.indexOf(twentyTwo));
+        }
+        // 2021 + "2020-7" 属于 2021 年份组，同样排在全部 2020 年题之后。
+        assertThat(actual.indexOf(mismatched)).isGreaterThan(actual.indexOf(twentyTwo));
+        assertThat(actual.indexOf(mismatched)).isGreaterThan(actual.indexOf(trailingA));
     }
 
     @Test

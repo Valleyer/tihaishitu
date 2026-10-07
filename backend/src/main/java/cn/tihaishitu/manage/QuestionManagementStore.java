@@ -1,5 +1,6 @@
 package cn.tihaishitu.manage;
 
+import cn.tihaishitu.learning.QuestionNumberFormatter;
 import cn.tihaishitu.learning.QuestionNumberSort;
 import cn.tihaishitu.learning.QuestionSearchQuery;
 import org.springframework.http.HttpStatus;
@@ -25,7 +26,8 @@ public class QuestionManagementStore {
     public record QuestionView(
             String id, String subject, String sourceId, String sourceType, String sourceName,
             String sourceCanonicalName, Integer examYear,
-            String questionNumber, String questionType, String presentationType, String gradingMode,
+            String questionNumber, String displayQuestionNumber, String questionType,
+            String presentationType, String gradingMode,
             String content, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
             String reviewedBy, String reviewComment, long revision, Instant updatedAt,
@@ -73,7 +75,6 @@ public class QuestionManagementStore {
         return QuestionNumberSort.orderBy("COALESCE(s.display_name,q.source_name,'')",
                 "q.exam_year", "q.question_number", "q.id");
     }
-
     public Optional<QuestionView> find(String id) {
         List<QuestionView> rows = jdbc.query(baseSelect() + " WHERE q.id = ?",
                 (result, row) -> map(result), id);
@@ -226,10 +227,16 @@ public class QuestionManagementStore {
 
     private QuestionView map(java.sql.ResultSet result) throws java.sql.SQLException {
         String id = result.getString("id");
+        Integer examYear = (Integer) result.getObject("exam_year");
+        String questionNumber = result.getString("question_number");
         return new QuestionView(id, result.getString("subject_name"), result.getString("source_id"),
                 result.getString("resolved_source_type"), result.getString("resolved_source_name"),
-                result.getString("source_canonical_name"), (Integer) result.getObject("exam_year"),
-                result.getString("question_number"), result.getString("question_type"),
+                result.getString("source_canonical_name"), examYear,
+                questionNumber,
+                // UI 一律使用 displayQuestionNumber；原始 questionNumber 只作为数据事实与编辑事实。
+                // 例如 examYear=2020 + raw "2020-7" 显示为 "7"，不会拼成 "2020-2020-7"。
+                QuestionNumberFormatter.display(questionNumber, examYear),
+                result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
                 result.getString("content_markdown"), result.getString("analysis_markdown"),
                 result.getInt("difficulty"), result.getString("status"),

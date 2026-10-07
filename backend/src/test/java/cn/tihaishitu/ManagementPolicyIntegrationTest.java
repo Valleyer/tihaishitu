@@ -212,32 +212,93 @@ class ManagementPolicyIntegrationTest {
         // 题型筛选：普通题目页只发送 questionType，不再发送 status。
         assertThat(searchIds(contributor, "questionType", "multiple_choice", "size", "100")).contains(draft);
 
-        // 默认排序：来源 → 年份 → 题号自然排序（1 < 2 < 3 < 4 < 7 < 10 < 22）→ question_id。
-        // draft 也在这个来源里，同样按“年份 + 题号 + id”排序，不再按 updated_at 优先。
-        // 同一个 JVM 共享内存库，因此只在“本来源的 8 道题”范围内断言相对顺序，
+        // 默认排序：来源 → 年份 → 题号自然排序 → question_id。
+        // 本来源题号的 canonical 值是：first=1, second=2, solution=3, draft=4,
+        // standard=7, legacy("2020-7")=7, tenth=10, twentySecond=22, otherYear=1（2021 年）。
+        // 因此期望顺序是 年份 2020 的 1,2,3,4,7,7,10,22 之后才轮到 2021 年的题。
+        // 同一个 JVM 共享内存库，因此只在“本来源的 9 道题”范围内断言，
         // 不用 containsExactly 绑定整个库的规模。
         java.util.List<String> ids = searchIds(contributor, "sourceType", "custom", "sourceId", sourceId, "size", "50");
         java.util.List<String> mine = java.util.List.of(first, second, solution, draft, standard, tenth,
                 twentySecond, legacy, otherYear);
         assertThat(ids).containsAll(mine);
+        java.util.List<String> siblingOrder = java.util.List.of(first, second, solution, draft, standard,
+                legacy, tenth, twentySecond);
         java.util.List<String> ourOrder = ids.stream().filter(mine::contains).toList();
-        assertThat(ourOrder).containsExactlyElementsOf(mine);
+        assertThat(ourOrder).containsExactlyElementsOf(
+                java.util.stream.Stream.concat(siblingOrder.stream(), java.util.stream.Stream.of(otherYear)).toList());
+        // standard("7") 与 legacy("2020-7") canonical 相同，由 question_id 稳定兜底。
+        assertThat(ids.indexOf(standard)).isGreaterThan(ids.indexOf(draft));
+        assertThat(ids.indexOf(standard)).isLessThan(ids.indexOf(tenth));
         // 字符串排序会得到 1, 10, 2, 20 这种顺序，这里必须证明不是字符串排序。
-        assertThat(ids.indexOf(tenth)).isGreaterThan(ids.indexOf(second));
-        assertThat(ids.indexOf(twentySecond)).isGreaterThan(ids.indexOf(tenth));
-        assertThat(ids.indexOf(legacy)).isGreaterThan(ids.indexOf(twentySecond));
-        // 本来源的题都来自本次 fixture，2021 年的 otherYear 排在所有 2020 年题之后。
-        assertThat(ids.indexOf(otherYear)).isGreaterThan(ids.indexOf(legacy));
+        assertThat(ids.indexOf(second)).isLessThan(ids.indexOf(tenth));
+        assertThat(ids.indexOf(tenth)).isLessThan(ids.indexOf(twentySecond));
+        // 核心回归：exam_year=2020 + 历史写法 "2020-7" 的 canonical 题号是 7，
+        // 必须落在 2 与 10 之间，而不是被排到 22 之后。
+        assertThat(ids.indexOf(legacy)).isGreaterThan(ids.indexOf(second));
+        assertThat(ids.indexOf(legacy)).isLessThan(ids.indexOf(tenth));
+        // "7"（standard）与 "2020-7"（legacy）canonical 相同，由 question_id 稳定兜底，二者相邻。
+        assertThat(Math.abs(ids.indexOf(standard) - ids.indexOf(legacy))).isEqualTo(1);
+        // 2021 年的 otherYear 排在所有 2020 年题之后。
+        assertThat(ids.indexOf(otherYear)).isGreaterThan(ids.indexOf(twentySecond));
+    }
+
+    /**
+     * 非纯数字题号不能被猜成数字；列表展示也要用后端格式化的 displayQuestionNumber，
+     * 不能把 examYear 与历史年份前缀题号拼成 "2020-2020-7"。
+     */
+    @Test
+    void nonNumericQuestionNumbersKeepOrderAndListExposesDisplayNumber() throws Exception {
+        String scope = UUID.randomUUID().toString().substring(0, 8);
+        String sourceId = testSource("管理端题号展示来源-" + scope);
+        String pointId = activeKnowledgeId();
+        String one = managedQuestion(sourceId, pointId, "single_choice", 2020, "1", "第 1 题");
+        String two = managedQuestion(sourceId, pointId, "single_choice", 2020, "2", "第 2 题");
+        String legacy = managedQuestion(sourceId, pointId, "single_choice", 2020, "2020-7", "历史题号题");
+        String ten = managedQuestion(sourceId, pointId, "single_choice", 2020, "10", "第 10 题");
+        String trailingA = managedQuestion(sourceId, pointId, "single_choice", 2020, "21A", "21A 题");
+        String dashA = managedQuestion(sourceId, pointId, "single_choice", 2020, "A-3", "A-3 题");
+        String bracketed = managedQuestion(sourceId, pointId, "single_choice", 2020, "3(1)", "3(1) 题");
+
+        Cookie contributor = login("policy-contributor");
+        java.util.List<String> ids = searchIds(contributor, "sourceType", "custom", "sourceId", sourceId, "size", "50");
+        java.util.List<String> mine = java.util.List.of(one, two, ten, legacy, trailingA, dashA, bracketed);
+        assertThat(ids).containsAll(mine);
+        // 纯数字题号按自然顺序；"2020-7" 落在 2 与 10 之间。
+        assertThat(ids.indexOf(one)).isLessThan(ids.indexOf(two));
+        assertThat(ids.indexOf(two)).isLessThan(ids.indexOf(legacy));
+        assertThat(ids.indexOf(legacy)).isLessThan(ids.indexOf(ten));
+        // 三个非纯数字题号都排在 10 之后，不会被错误插进 1–10 的自然序列。
+        for (String nonNumeric : java.util.List.of(trailingA, dashA, bracketed)) {
+            assertThat(ids.indexOf(nonNumeric)).as("题号分档").isGreaterThan(ids.indexOf(ten));
+        }
+
+        // displayQuestionNumber 由后端统一格式化：raw "2020-7" → "7"，raw "1" → "1"。
+        String body = rawSearch(contributor, "sourceType", "custom", "sourceId", sourceId, "size", "50");
+        JsonNode content = mapper.readTree(body).path("content");
+        java.util.Map<String, JsonNode> byId = new java.util.LinkedHashMap<>();
+        content.forEach(item -> byId.put(item.path("id").asText(), item));
+        assertThat(byId.get(legacy).path("questionNumber").asText()).isEqualTo("2020-7");
+        assertThat(byId.get(legacy).path("displayQuestionNumber").asText()).isEqualTo("7");
+        assertThat(byId.get(one).path("questionNumber").asText()).isEqualTo("1");
+        assertThat(byId.get(one).path("displayQuestionNumber").asText()).isEqualTo("1");
+        assertThat(byId.get(trailingA).path("displayQuestionNumber").asText()).isEqualTo("21A");
+        assertThat(byId.get(dashA).path("displayQuestionNumber").asText()).isEqualTo("A-3");
     }
 
 
     private java.util.List<String> searchIds(Cookie actor, String... params) throws Exception {
-        var request = get("/api/v1/manage/questions").cookie(actor);
-        for (int index = 0; index < params.length; index += 2) request = request.param(params[index], params[index + 1]);
-        String body = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         java.util.List<String> ids = new java.util.ArrayList<>();
+        String body = rawSearch(actor, params);
         mapper.readTree(body).path("content").forEach(item -> ids.add(item.path("id").asText()));
         return ids;
+    }
+
+    /** 原始响应体：用于断言 displayQuestionNumber 等字段。 */
+    private String rawSearch(Cookie actor, String... params) throws Exception {
+        var request = get("/api/v1/manage/questions").cookie(actor);
+        for (int index = 0; index < params.length; index += 2) request = request.param(params[index], params[index + 1]);
+        return mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     }
 
     private String testSource(String displayName) {

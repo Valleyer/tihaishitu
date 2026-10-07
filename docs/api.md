@@ -27,7 +27,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 
 - `GET /learner/statistics?days=7|30|90`：从正式 graded attempts 和当前 Selected Books 动态派生学习统计；其中 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`。
 - `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量（知识目录，技术 route 与 `/books` 一致，仍是“知识”而不是“题库”）。
-- `GET /learning/questions`：**全平台题库**。分页浏览所有 published Formal Parent Question，与 Learner 当前 selected Books 解耦。参数：`query`、`sourceId`、`examYear`、`questionType`、`difficulty`、`bookId`、`chapterId`、`knowledge`、`page`、`size`（前端正式页面固定 `size=20`，后端上限 100）。只返回 `status='published'` + `parent_question_id IS NULL` + 四个正式题型；`COUNT(DISTINCT q.id)` 作为 `totalElements`，多 KP / 多 Book 关联不会让卡片或总数重复。`knowledge` 匹配 KnowledgePoint 的 `id` / `code` / `name`。默认排序是“来源 → `exam_year` → `question_number` 自然排序 → `question_id`”，在 DB 级用 MySQL 5.7 安全表达式形成，分页稳定。浏览不创建 Attempt、不计 Exposure、不影响 Mastery / Wrong Book / RANDOM 每日额度。
+- `GET /learning/questions`：**全平台题库**。分页浏览所有 published Formal Parent Question，与 Learner 当前 selected Books 解耦。参数：`query`、`sourceId`、`examYear`、`questionType`、`difficulty`、`bookId`、`chapterId`、`knowledge`、`page`、`size`（前端正式页面固定 `size=20`，后端上限 100）。只返回 `status='published'` + `parent_question_id IS NULL` + 四个正式题型；`totalElements` 是 `COUNT(DISTINCT q.id)`，多 KP / 多 Book 关联不会让卡片或总数重复。分页 ID 查询只做 `question_resource LEFT JOIN question_source`（一对一），Book / Chapter / Knowledge 都通过 EXISTS 参与，因此使用 `SELECT q.id ... ORDER BY ... LIMIT/OFFSET` 且不用 `DISTINCT`——`DISTINCT` 与“ORDER BY 引用未出现在 SELECT list 的表达式”组合在真实 MySQL 5.7 严格 sql_mode 下有报错风险。`knowledge` 匹配 KnowledgePoint 的 `id` / `code` / `name`。默认排序是“来源 → `exam_year` → `question_number` 自然排序 → `question_id`”，在 DB 级用 MySQL 5.7 安全表达式形成，分页稳定；只有题号确实带“与 `exam_year` 相同的年份前缀”时才剥离该前缀，因此 `2020 + "7"` 与 `2020 + "2020-7"` 得到同一个自然题号 7，而 `A-3` / `21A` / `3(1)` 与年份不一致的前缀题号都归入最后一档，不会被猜成数字。浏览不创建 Attempt、不计 Exposure、不影响 Mastery / Wrong Book / RANDOM 每日额度。
 - `GET /learning/questions/facets`：题库过滤 UI 的只读事实。`sources` 只列实际有 published 正式题的来源，`examYears` 只列实际存在的年份并降序，`books` 是全平台 enabled Books（不受 selected Books 限制）且章节按 `sort_order`。题型与难度由前端固定，不为此增加数据库查询，也不新建表。
 - `GET /learning/knowledge-points/{id}/guide`：读取独立维护的 Markdown/LaTeX 知识讲解。
 - `GET /learning/knowledge-points/{id}/neighbors?bookId=&chapterId=`：读取同一文集章节中的前后知识点。
@@ -58,7 +58,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
 | GET | /learning/knowledge-points/{id} | 无 | active KnowledgePoint |
 | GET | /learning/knowledge-points/{id}/questions | 无 | published Questions |
-| GET | /learning/questions | 无 | 全平台 published Formal Parent Question 分页浏览；`query`（含 `2020-7` 结构化题号）/`sourceId`/`examYear`/`questionType`/`difficulty`/`bookId`/`chapterId`/`knowledge`/`page`/`size`，按 Question ID 去重 |
+| GET | /learning/questions | 无 | 全平台 published Formal Parent Question 分页浏览；`query`（含 `2020-7` 结构化题号）/`sourceId`/`examYear`/`questionType`/`difficulty`/`bookId`/`chapterId`/`knowledge`/`page`/`size`；`totalElements` 按 Question ID 去重，分页 ID 查询不用 DISTINCT |
 | GET | /learning/questions/facets | 无 | 题库过滤事实：有正式题的 `sources`、实际存在的 `examYears`（降序）、全平台 enabled `books` + `chapters` |
 | GET | /learning/questions/{id} | 无 | 全平台 published Formal Question 只读详情；不再要求该题属于当前 selected Books，客观题 `correctAnswer` 由 `option.correct_option` 派生，综合题只有 `analysisMarkdown` |
 | POST | /worlds/ancient-official/initialize | characterName, gender, origin | 唯一 WorldState |
@@ -158,9 +158,12 @@ v3 / v2 兼容：客观题 standardAnswer 只做一致性校验，不持久化�
 query 支持 “年份-题号” 结构化搜索：2020-7 / 2020 - 7 / 2020—7
   → 命中 exam_year=2020 且 question_number ∈ {"7","2020-7"}
 默认排序：来源 → exam_year → question_number 自然排序（1 < 2 < 7 < 10 < 22）→ question_id
+展示题号：displayQuestionNumber = QuestionNumberFormatter.display(questionNumber, examYear)
+  exam_year=2020 + raw "2020-7" → display "7"，列表显示 "2020-7"（不是 "2020-2020-7"）
+  编辑器输入框仍使用并保存原始 questionNumber，display 值不回写数据库
 ```
 
-普通题目管理页（`reviewOnly=false`）按 `questionType` 筛选，不再发送 `status`；审核中心继续固定 `status=pending_review`，因此后端 `status` 参数必须保留。默认排序的 sort key 由共享 `QuestionNumberSort` 在 DB 级形成（MySQL 5.7 兼容），Management 与全平台题库复用同一规则。
+普通题目管理页（`reviewOnly=false`）按 `questionType` 筛选，不再发送 `status`；审核中心继续固定 `status=pending_review`，因此后端 `status` 参数必须保留。默认排序的 sort key 由共享 `QuestionNumberSort` 在 DB 级形成（MySQL 5.7 兼容，接收题号与 `exam_year` 两个表达式以判断同年份前缀），Management 与全平台题库复用同一规则。
 
 题目管理请求与响应包含 `sourceId`；响应另带 `sourceType`、`sourceName`（当前展示名）和
 `sourceCanonicalName`。保存时服务端按 `sourceId` 重新读取来源，忽略客户端伪造的类型和名称，

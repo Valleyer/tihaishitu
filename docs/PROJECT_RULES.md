@@ -934,20 +934,47 @@ AND (q.question_number = '7' OR q.question_number = '2020-7')
 1 < 2 < 7 < 10 < 22
 ```
 
-历史写法 `question_number = "2020-7"` 与 `"7"` 取同一个数字事实。禁止字符串排序出
-`1, 10, 2`。排序键必须在 DB 级形成（分页排序不能只在取出一页之后用 Java 排序），
-并且只用 MySQL 5.7 安全的能力：
+历史写法 `question_number = "2020-7"`（`exam_year = 2020`）与 `"7"` 取同一个数字事实
+7，因此它们落在同一个自然位置（两者之间由 `question_id` 稳定兜底）。剥离年份前缀
+的条件必须与 `QuestionNumberFormatter` 一致：
 
 ```text
-允许：CASE / SUBSTRING / LOCATE / CHAR_LENGTH / REPLACE / CONCAT / COALESCE / LPAD
-禁止：Window Function、依赖隐式类型转换的“字符串与字母比较”
+2020 + "7"       → 7
+2020 + "2020-7"  → 7          只有题号确实带“相同 exam_year 前缀”时才剥离
+2021 + "2020-7"  → 非数字      年份前缀不一致，不能剥掉 2020
+2020 + "A-3"     → 非数字      绝不实现成“有连接符就取后半段”，否则 A-3 会变成 3
+2020 + "21A" / "3(1)" → 非数字
+```
+
+非纯数字题号统一归入最后一档，只按 `question_id` 兜底，不得插进 1–22 的自然序列。
+Unicode 破折号（`‐ ‑ ‒ – — ―`）在判断前缀之前先归一为 ASCII `-`。
+
+禁止字符串排序出 `1, 10, 2`。排序键必须在 DB 级形成（分页排序不能只在取出一页之后
+用 Java 排序），并且只用 MySQL 5.7 安全的能力：
+
+```text
+允许：CASE / SUBSTRING / LEFT / LOCATE / CHAR_LENGTH / TRIM / REPLACE / CONCAT / COALESCE / LPAD
+禁止：Window Function、REGEXP / REGEXP_LIKE、依赖隐式类型转换的“字符串与字母比较”
 ```
 
 不使用 `SUBSTRING_INDEX` 与 `CAST(... AS UNSIGNED)`：它们在生产 MySQL 5.7 可用，
 但本仓库后端集成测试使用的 H2 MySQL 兼容模式不支持，会让 DB 级排序无法被测试覆盖。
-排序规则由共享的 `QuestionNumberSort` 唯一实现，Management 与全平台题库必须复用。
+不使用 `REGEXP`：MySQL 5.7 没有 `REGEXP_LIKE` 函数，两种引擎的正则方言也不一致。
+排序规则由共享的 `QuestionNumberSort` 唯一实现，Management 与全平台题库必须复用；
+它同时接收题号与 `exam_year` 表达式，否则无法判断“前缀是否同年份”。
+
+全平台题库的分页 ID 查询只做 `question_resource LEFT JOIN question_source`（一对一），
+Book / Chapter / Knowledge 都通过 EXISTS 子查询参与，不会复制 Question 行，因此使用
+`SELECT q.id ... ORDER BY ... LIMIT/OFFSET`，**不用 `DISTINCT`**：`DISTINCT` 与
+“ORDER BY 引用未出现在 SELECT list 的表达式”组合在真实 MySQL 5.7 严格 sql_mode 下有
+报错风险。`totalElements` 继续使用 `COUNT(DISTINCT q.id)`。
 
 审核中心也使用同一默认排序，不再以“更新时间优先”。
+
+Management 题目列表与审核列表展示 `displayQuestionNumber`（由
+`QuestionNumberFormatter.display(questionNumber, examYear)` 生成），不要在前端拼
+`examYear + "-" + questionNumber`（会把历史写法显示成 `2020-2020-7`）。编辑器输入框
+继续使用并保存原始 `questionNumber`，display 值不回写数据库。
 
 #### 10.6.3 Management 题目列表筛选
 

@@ -46,6 +46,8 @@ function question(index: number, status = "pending_review"): QuestionView {
     sourceName: "2026年数学一",
     examYear: 2026,
     questionNumber: String(index),
+    // 后端格式化的展示题号；列表只用它，raw questionNumber 保留给编辑器。
+    displayQuestionNumber: String(index),
     questionType: "single_choice",
     presentationType: "single_choice",
     gradingMode: "auto",
@@ -296,6 +298,35 @@ describe("QuestionPage pagination", () => {
     await waitFor(() => expect(screen.getAllByRole("status").length).toBeGreaterThan(0));
     expect(screen.getAllByRole("status").map(node => node.textContent).join("|")).toContain("已保存修改");
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ id: item.id, revision: 1 }));
+  });
+
+  it("shows the backend-formatted display question number instead of concatenating the raw one", async () => {
+    // 历史数据：raw "2020-7" + examYear 2020 不能被前端拼成 "2020-2020-7"。
+    const legacy = { ...question(7), questionNumber: "2020-7", displayQuestionNumber: "7" };
+    const plain = { ...question(9), questionNumber: "9", displayQuestionNumber: "9" };
+    questionsMock.mockResolvedValue(result([legacy, plain], 0, 2, 1));
+
+    const view = render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    await screen.findByText("共 2 道");
+
+    expect(await screen.findByText("2026-7")).toBeTruthy();
+    expect(screen.queryByText("2026-2020-7")).toBeNull();
+    expect(screen.getByText("2026-9")).toBeTruthy();
+    // 编辑器仍使用原始 questionNumber：打开后输入框里必须是 raw 值。
+    questionMock.mockResolvedValue(legacy);
+    fireEvent.click(screen.getAllByRole("button", { name: "编辑" })[0]);
+    const rawInput = await screen.findByDisplayValue("2020-7");
+    expect(rawInput).toBeTruthy();
+    expect(view.container.querySelector('input[value="7"]')).toBeNull();
+  });
+
+  it("uses the display question number in the review list too", async () => {
+    const legacy = { ...question(21), questionNumber: "2026-21", displayQuestionNumber: "21" };
+    questionsMock.mockResolvedValue(result([legacy], 0, 1, 1));
+
+    render(<QuestionPage user={reviewer} fail={vi.fn()} reviewOnly />);
+    expect(await screen.findByText("2026 · 21")).toBeTruthy();
+    expect(screen.queryByText("2026 · 2026-21")).toBeNull();
   });
 
   it("steps back and reloads after reviewing the last item on a page", async () => {

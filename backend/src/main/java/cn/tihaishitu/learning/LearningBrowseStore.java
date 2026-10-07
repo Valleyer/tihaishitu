@@ -301,9 +301,12 @@ public class LearningBrowseStore {
      * <p>与 Learner 的 selected Books 解耦：没有选中某本文集也能浏览，但“浏览”不创建
      * Attempt、不影响 Mastery / Wrong Book / RANDOM 每日额度。</p>
      *
-     * <p>一题可能关联多个 KnowledgePoint、属于多个 Book，因此先取 {@code DISTINCT q.id}
-     * 再按 ID 顺序回读完整卡片：卡片不重复，{@code totalElements} 也是
-     * {@code COUNT(DISTINCT q.id)}。</p>
+     * <p>outer query 只做 {@code question_resource LEFT JOIN question_source}（一对一），
+     * Book / Chapter / Knowledge 全部通过 EXISTS 子查询参与，因此不会复制 Question 行：
+     * 分页 ID 查询直接用 {@code SELECT q.id ... ORDER BY ... LIMIT/OFFSET}，**不使用
+     * DISTINCT**。{@code DISTINCT} 与“ORDER BY 引用未出现在 SELECT list 的表达式”组合
+     * 在真实 MySQL 5.7 的 sql_mode 下有报错风险，而这里本来也不需要去重。
+     * {@code totalElements} 仍是 {@code COUNT(DISTINCT q.id)}，语义保持不变。</p>
      */
     public PageResult<Map<String, Object>> questions(String query, String sourceId, Integer examYear,
                                                      String questionType, Integer difficulty, String bookId,
@@ -316,7 +319,7 @@ public class LearningBrowseStore {
         List<Object> params = new ArrayList<>(filter.params());
         params.add(size);
         params.add(page * size);
-        List<String> ids = jdbc.query("SELECT DISTINCT q.id FROM question_resource q "
+        List<String> ids = jdbc.query("SELECT q.id FROM question_resource q "
                         + "LEFT JOIN question_source s ON s.id=q.source_id " + filter.where()
                         + " ORDER BY " + questionOrderBy() + " LIMIT ? OFFSET ?",
                 (result, row) -> result.getString(1), params.toArray());
