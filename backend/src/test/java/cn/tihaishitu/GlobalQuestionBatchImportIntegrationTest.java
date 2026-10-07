@@ -242,15 +242,44 @@ class GlobalQuestionBatchImportIntegrationTest {
     }
 
     @Test
-    void repositoryExampleIsAcceptedByV3Importer() throws Exception {
+    void repositoryExampleIsAcceptedAsCanonicalV4() throws Exception {
         String example = Files.readString(Path.of("../frontend/public/examples/题库示例.json"));
         mvc.perform(post("/api/v1/admin/questions/import")
                         .header("X-Admin-Key", "question-batch-key")
                         .contentType("application/json").content(example))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.schemaVersion").value("global-question-batch/v3"))
+                .andExpect(jsonPath("$.schemaVersion").value("global-question-batch/v4"))
                 .andExpect(jsonPath("$.questionCount").value(2))
                 .andExpect(jsonPath("$.createdQuestions").value(2));
+    }
+
+    @Test
+    void v4PersistsNoFormalStandardAndV3SolutionIsMergedByCompatibilityAdapter() throws Exception {
+        String objectiveId = UUID.randomUUID().toString();
+        String solutionId = UUID.randomUUID().toString();
+        mvc.perform(post("/api/v1/admin/questions/import")
+                        .header("X-Admin-Key", "question-batch-key")
+                        .contentType("application/json")
+                        .content(batchWithSchema("global-question-batch/v4", 2050, true, List.of(
+                                withoutStandard(singleChoice(objectiveId, "1", "V4 客观题", KNOWLEDGE_CODE)),
+                                v4Solution(solutionId, "2", KNOWLEDGE_CODE)))))
+                .andExpect(status().isCreated());
+        assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id IN (?,?) AND standard_answer_json IS NULL",
+                objectiveId, solutionId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT analysis_markdown FROM question_resource WHERE id=?",
+                String.class, solutionId)).isEqualTo("## 参考答案\n\nV4 答案\n\n## 解析\n\nV4 解析");
+
+        String legacyId = UUID.randomUUID().toString();
+        mvc.perform(post("/api/v1/admin/questions/import")
+                        .header("X-Admin-Key", "question-batch-key")
+                        .contentType("application/json")
+                        .content(batchWithSchema("global-question-batch/v3", 2051, true,
+                                List.of(solution(legacyId, "1", KNOWLEDGE_CODE)))))
+                .andExpect(status().isCreated());
+        assertThat(jdbc.queryForObject("SELECT standard_answer_json FROM question_resource WHERE id=?",
+                String.class, legacyId)).isNull();
+        assertThat(jdbc.queryForObject("SELECT analysis_markdown FROM question_resource WHERE id=?",
+                String.class, legacyId)).isEqualTo("## 参考答案\n\n先挖去奇点邻域，再应用高斯公式。\n\n## 解析\n\n完整参考步骤。");
     }
 
     private Cookie login() throws Exception {
@@ -262,8 +291,13 @@ class GlobalQuestionBatchImportIntegrationTest {
     }
 
     private String batch(int year, Boolean publish, List<Map<String, Object>> questions) throws Exception {
+        return batchWithSchema("global-question-batch/v2", year, publish, questions);
+    }
+
+    private String batchWithSchema(String schema, int year, Boolean publish,
+                                   List<Map<String, Object>> questions) throws Exception {
         Map<String, Object> document = new LinkedHashMap<>();
-        document.put("schemaVersion", "global-question-batch/v2");
+        document.put("schemaVersion", schema);
         if (publish != null) document.put("publish", publish);
         document.put("batch", Map.of(
                 "subject", "数学一",
@@ -272,6 +306,19 @@ class GlobalQuestionBatchImportIntegrationTest {
                 "examYear", year));
         document.put("questions", questions);
         return mapper.writeValueAsString(document);
+    }
+
+    private Map<String, Object> withoutStandard(Map<String, Object> question) {
+        Map<String, Object> result = new LinkedHashMap<>(question);
+        result.remove("standardAnswer");
+        return result;
+    }
+
+    private Map<String, Object> v4Solution(String id, String number, String knowledgeCode) {
+        Map<String, Object> result = new LinkedHashMap<>(solution(id, number, knowledgeCode));
+        result.remove("standardAnswer");
+        result.put("analysis", "## 参考答案\n\nV4 答案\n\n## 解析\n\nV4 解析");
+        return result;
     }
 
     private Map<String, Object> singleChoice(

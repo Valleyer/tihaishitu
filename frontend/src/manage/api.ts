@@ -68,7 +68,6 @@ export type QuestionView = {
   presentationType: string;
   gradingMode: string;
   content: string;
-  standardAnswer: unknown;
   analysis: string;
   difficulty: number;
   status: string;
@@ -351,7 +350,6 @@ function questionPayload(question: Partial<QuestionView>) {
     presentationType: question.presentationType || "single_choice",
     gradingMode: question.gradingMode || "auto",
     content: question.content || "",
-    standardAnswer: question.standardAnswer ?? "",
     analysis: question.analysis || "",
     difficulty: question.difficulty || 1,
     options: (question.options || []).map((item, index) => ({ ...item, sortOrder: index })),

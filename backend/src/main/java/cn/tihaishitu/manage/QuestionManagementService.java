@@ -143,7 +143,6 @@ public class QuestionManagementService {
         }
         if ("self_assessment".equals(input.gradingMode())
                 && !"self_assessment".equals(input.presentationType())) bad("自评题必须使用自评展示。");
-        if (input.standardAnswer() == null || input.standardAnswer().isNull()) bad("标准答案不能为空。");
         List<QuestionManagementStore.OptionInput> options = input.options() == null ? List.of() : input.options();
         List<QuestionManagementStore.RelationInput> relations = input.knowledgePoints() == null
                 ? List.of() : input.knowledgePoints();
@@ -155,9 +154,10 @@ public class QuestionManagementService {
             if (option.key() == null || option.key().isBlank() || option.text() == null || option.text().isBlank()
                     || !keys.add(option.key())) bad("选项键和值不能为空，且选项键不能重复。");
         }
-        QuestionContractValidator.validate(input.questionType(), input.presentationType(), input.gradingMode(),
-                input.standardAnswer(), options.stream().map(option -> new QuestionContractValidator.Option(
-                        option.key(), option.text(), option.correct())).toList()).ifPresent(QuestionManagementService::bad);
+        QuestionContractValidator.validateFormal(input.questionType(), input.presentationType(), input.gradingMode(),
+                input.analysis(), options.stream().map(option -> new QuestionContractValidator.Option(
+                        option.key(), option.text(), option.correct(), option.sortOrder())).toList())
+                .ifPresent(QuestionManagementService::bad);
         Set<String> points = new HashSet<>();
         boolean hasCore = false;
         for (var relation : relations) {
@@ -177,14 +177,14 @@ public class QuestionManagementService {
         var source = sources.requireForBinding(input.sourceId(), existingSourceId);
         return new QuestionManagementStore.QuestionInput(input.subject(), source.id(), source.sourceType(),
                 source.canonicalName(), input.examYear(), input.questionNumber(), input.questionType(),
-                input.presentationType(), input.gradingMode(), input.content(), input.standardAnswer(), input.analysis(),
+                input.presentationType(), input.gradingMode(), input.content(), input.analysis(),
                 input.difficulty(), input.parentQuestionId(), input.derivationType(), input.options(), input.knowledgePoints());
     }
 
     private void validateStored(QuestionManagementStore.QuestionView question) {
-        QuestionContractValidator.validate(question.questionType(), question.presentationType(), question.gradingMode(),
-                question.standardAnswer(), question.options().stream().map(option ->
-                        new QuestionContractValidator.Option(option.key(), option.text(), option.correct())).toList())
+        QuestionContractValidator.validateFormal(question.questionType(), question.presentationType(), question.gradingMode(),
+                question.analysis(), question.options().stream().map(option ->
+                        new QuestionContractValidator.Option(option.key(), option.text(), option.correct(), option.sortOrder())).toList())
                 .ifPresent(QuestionManagementService::bad);
     }
 

@@ -90,6 +90,25 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("题干")).toBeTruthy();
   });
 
+  it("shows solution content as one reference analysis without a separate standard answer", () => {
+    const solution = attempt();
+    // 后端 DTO 的 type 是展示类型；综合题展示为 self_assessment，原始题型是 solution。
+    solution.question.type = "self_assessment";
+    solution.question.originalType = "solution";
+    solution.question.presentationType = "self_assessment";
+    solution.question.gradingMode = "self_assessment";
+    solution.question.options = {};
+    solution.reveal = { explanation: "## 答案与解析\n\n完整过程", knowledgePoints: solution.question.knowledgePoints };
+    render(
+      <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
+        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        setReview={noop} onEvent={noop} />,
+    );
+    expect(screen.getByText("参考解析")).toBeTruthy();
+    expect(screen.queryByText("参考解答")).toBeNull();
+    expect(screen.queryByText("解题分析")).toBeNull();
+  });
+
   it("builds the title from displayQuestionNumber instead of the raw value", () => {
     expect(examMetadataView({
       examLabel: "2014年408考研真题", displayQuestionNumber: "1",

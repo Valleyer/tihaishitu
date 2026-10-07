@@ -271,6 +271,6 @@ Agent 最终报告必须明确说明：
 - 错题是永久资产，答对不自动移除，只有用户手动移出；
 - 业务日统一 `Asia/Shanghai`，不使用 UTC 自然日；
 - 生产数据库必须兼容 MySQL 5.7，不使用 MySQL 8 专属语法；
-- `V1–V18` migration 已冻结，新 schema 变更只能 `V19+` 或新的 Java Flyway migration；
+- `V1–V20` migration 已冻结，新 schema 变更只能 `V21+` 或新的 Java Flyway migration；
 - 正式分页列表统一每页 20 条，不提供 20/50/100 自选控件；
 - 选项随机在 attempt 级完成并冻结答案映射，禁止前端运行时 `Math.random()` shuffle。

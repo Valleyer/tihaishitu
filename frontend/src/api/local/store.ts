@@ -119,7 +119,7 @@ export function createLocalApi(
         ...data.banks.filter((bank) => overrides.has(bank.id)),
       ];
       data.banks = data.banks.map(hydrateBankKnowledge);
-      // 早期判断题由界面生成按钮，没有存 options；升级时补齐，保留题目与标准答案。
+      // 早期判断题由界面生成按钮，没有存 options；升级时补齐，保留题目与答案。
       for (const bank of data.banks)
         for (const question of bank.questions) {
           if (question.type === "true_false")
@@ -450,7 +450,7 @@ export function createLocalApi(
       const full = db.snapshots[id];
       if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
       if (full.gradingMode === "self_assessment")
-        throw new Error("这是一道自评题，请先查看参考解答。");
+        throw new Error("这是一道自评题，请先查看参考解析。");
       if (game.event) throw new Error("请先回应眼前的际遇。");
       let answer = input.answer;
       let correct: boolean | null;
@@ -513,11 +513,16 @@ export function createLocalApi(
         throw new Error("课卷已更新，请重新载入存档。");
       if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
       if (full.gradingMode !== "self_assessment")
-        throw new Error("自动判题无需单独查看参考解答。");
+        throw new Error("自动判题无需单独查看参考解析。");
       if (attempt.result || attempt.reveal) return structuredClone(game);
+      // 单机兼容题库仍把参考答案与解析分开存；正式 UI 只有一份“参考解析”，
+      // 因此这里按正式迁移的同一格式合并，避免丢掉旧答案。
+      const reference =
+        typeof full.answer === "string" ? full.answer.trim() : "";
       attempt.reveal = {
-        standard: full.answer,
-        explanation: full.explanation,
+        explanation: reference
+          ? `## 参考答案\n\n${reference}\n\n## 解析\n\n${full.explanation}`
+          : full.explanation,
         knowledgePoints: resolveKnowledgePoints(db.banks, full.knowledgePointIds),
       };
       return persist(db, game);
@@ -530,7 +535,7 @@ export function createLocalApi(
       if (!attempt || attempt.id !== attemptId || attempt.question.id !== questionId)
         throw new Error("课卷已更新，请重新载入存档。");
       if (!full) throw new Error("当前课卷快照缺失，请恢复备份。");
-      if (!attempt.reveal) throw new Error("请先查看参考解答。");
+      if (!attempt.reveal) throw new Error("请先查看参考解析。");
       if (attempt.result) return structuredClone(game);
       if (!["correct", "partial", "wrong"].includes(assessment))
         throw new Error("自评结果不合法。");

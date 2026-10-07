@@ -106,7 +106,8 @@ class SelfAssessmentIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"attemptId\":\"" + attemptId + "\",\"questionId\":\"" + questionId + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.attempt.reveal.standard").value("$\\frac12$"))
+                // 综合题只有一份完整解析，reveal 不再返回 separate standard。
+                .andExpect(jsonPath("$.attempt.reveal.standard").doesNotExist())
                 .andExpect(jsonPath("$.attempt.reveal.explanation").isNotEmpty());
 
         String assessment = "{\"attemptId\":\"" + attemptId + "\",\"questionId\":\"" + questionId

@@ -1,5 +1,6 @@
 package cn.tihaishitu;
 
+import cn.tihaishitu.catalog.QuestionAnswerDeriver;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.game.KnowledgeQuestionPoolStore;
 import cn.tihaishitu.learner.LearnerAuthService;
@@ -108,25 +109,31 @@ abstract class DiagnosticWorldTestSupport {
                 SELECT knowledge_point_id FROM question_resource_knowledge
                  WHERE question_id = ? ORDER BY sort_order, knowledge_point_id
                 """, String.class, questionId);
+        // 正式题答案事实是 option.correct_option；stub 也必须走同一套派生逻辑。
+        Map<String, String> options = new java.util.LinkedHashMap<>();
+        List<QuestionAnswerDeriver.Option> optionFacts = new ArrayList<>();
+        jdbc.query("""
+                SELECT option_key,option_text,correct_option,sort_order FROM question_resource_option
+                 WHERE question_id=? ORDER BY sort_order,option_key
+                """, (rs, rowNumber) -> new Object[]{
+                rs.getString(1), rs.getString(2), rs.getBoolean(3), rs.getInt(4)}, questionId)
+                .forEach(row -> {
+                    options.put((String) row[0], (String) row[1]);
+                    optionFacts.add(new QuestionAnswerDeriver.Option(
+                            (String) row[0], (Boolean) row[2], (Integer) row[3]));
+                });
         return jdbc.queryForObject("""
                 SELECT id,subject_name,source_type,source_name,question_type,presentation_type,
-                       grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty
+                       grading_mode,content_markdown,analysis_markdown,difficulty
                   FROM question_resource WHERE id=?
                 """, (rs, row) -> new QuestionDto(
                 rs.getString("id"), rs.getString("subject_name"), rs.getString("source_type"),
                 rs.getString("source_name"), rs.getString("question_type"), rs.getString("question_type"),
                 rs.getString("presentation_type"), rs.getString("grading_mode"),
-                rs.getString("content_markdown"), Map.of(), readJson(rs.getString("standard_answer_json")),
+                rs.getString("content_markdown"), options,
+                new QuestionAnswerDeriver(mapper).derive(rs.getString("question_type"), optionFacts),
                 rs.getString("analysis_markdown"), List.of(), List.of(), rs.getInt("difficulty"), 3,
                 List.of(), pointIds, true), questionId);
-    }
-
-    private JsonNode readJson(String value) {
-        try {
-            return mapper.readTree(value);
-        } catch (Exception error) {
-            throw new IllegalStateException("测试题目答案不是合法 JSON。", error);
-        }
     }
 
     void initialize(Cookie cookie) throws Exception {
@@ -142,7 +149,18 @@ abstract class DiagnosticWorldTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
 
-    JsonNode answer(Cookie cookie, JsonNode game, boolean value) throws Exception {
+    /**
+     * 按「答对 / 答错」意图作答。判断题选项会在 attempt 级重排并同步 remap boolean standard，
+     * 因此不能固定提交 true / false，必须对照本次 attempt 冻结的 standard。
+     */
+    JsonNode answer(Cookie cookie, JsonNode game, boolean correct) throws Exception {
+        String attempt = game.path("attempt").path("id").asText();
+        boolean standard = Boolean.parseBoolean(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?", String.class, attempt));
+        return submitAnswer(cookie, game, correct == standard);
+    }
+
+    private JsonNode submitAnswer(Cookie cookie, JsonNode game, boolean value) throws Exception {
         String attempt = game.path("attempt").path("id").asText();
         String question = game.path("attempt").path("question").path("id").asText();
         return json(mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
@@ -195,6 +213,7 @@ abstract class DiagnosticWorldTestSupport {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'诊断测试','custom','true_false','true_false','auto',?,'true','解析',?,'published',1)
                 """, id, "题目-" + id, difficulty);
+        trueFalseOptions(id);
         for (int index = 0; index < relations.size(); index++) {
             Relation relation = relations.get(index);
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,?,?)",
@@ -202,6 +221,8 @@ abstract class DiagnosticWorldTestSupport {
         }
         return id;
     }
+
+    private void trueFalseOptions(String questionId) { QuestionFixtures.trueFalseOptions(jdbc, questionId); }
 
     void membership(String book, String chapter, String point, int order) {
         jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,?)",

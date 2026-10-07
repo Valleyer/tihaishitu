@@ -28,6 +28,8 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 判断、单选、多选继续支持，选项每次发卷打乱。正式联机流程中每位 Learner 在每个 World 只有一份服务端权威状态；旧多存档只保留兼容数据。
 
+**正式题答案契约 V2**：正式父题不再保存独立的“标准答案 JSON”。客观题（单选 / 多选 / 判断）的唯一答案事实是 `question_resource_option.correct_option`，后端在发题时派生运行时答案并随选项排列一起 remap；综合题只有一份 `analysis_markdown`，包含答案、过程与解析，不再有独立参考答案。每次《综合题》作答只 reveal 这一份内容并自评。题库管理后台不再编辑标准答案 JSON，改为直接标记选项正确性并预览解析；批量导入的正式格式是 `global-question-batch/v4`（v3 仅作历史兼容输入）。代码内仍保留 `study_attempt.standard_answer_json`，它是每次 Attempt 创建后冻结的技术判题快照，与题库配置答案无关，历史 Attempt 永不回写。
+
 掌握度 V3 为 Learner × KnowledgePoint × 正式父题维护独立强化槽位，按 `Asia/Shanghai` 业务日结算（详见 [项目长期规则 §7.1](docs/PROJECT_RULES.md)）：每个业务日只有当天第一次正式 graded 作答有资格决定该题当天的熟练度奖励。当天首答正确时，历史第一次有效正确记 30，之后其他业务日首答正确 +7，最高 100；当天首答为 wrong / partial 时该题当天不增加熟练度，之后同日即使重新答对也不奖励。错误不直接扣熟练度，熟练度下降只来自自然衰减：每满 3 天无有效强化惰性衰减 1。KnowledgePoint 掌握度按当前与该知识点有关系的全部正式父题（core + auxiliary，按题目 ID 去重）聚合，例如 3 道相关题只做了 1 道且第一次正确就是 `30 / 3 = 10.0%`；全部达到 100 时进入“彻底掌握”并冻结自然衰减，新增正式题会自动扩大分母并退出 100%。子题只用于补救教学，不产生 Mastery、错题本或 Review Queue 数据。题目浏览、查看答案和 reveal 不产生正式学习证据。
 
 能不能练与能不能获得 Mastery 奖励已经分离：今天已经答对过的题仍然可以再练，只是同一业务日后续正确不再增加熟练度。KnowledgePoint 的 `relation_role`（core / auxiliary）只用于标签主次显示与诊断解释，既不影响题目能不能做，也不影响它是否进入 Mastery 分母。正式题发题条件只剩 `status=published`、`parent_question_id IS NULL`、正式题型与当前训练上下文范围，加上当前 Session / run 的 `seenQuestionIds` 排除。
@@ -100,7 +102,7 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 | 后端实施进度 | [后端开发记录](docs/后端开发记录.md) |
 | 生产部署、数据库迁移、发布与回滚 | [生产部署说明](docs/deployment.md) |
 | 本地背景与立绘 | [素材说明](docs/art-assets.md) |
-| 可直接导入的全局题目批次 | [V2 示例 JSON](frontend/public/examples/题库示例.json) |
+| 可直接导入的全局题目批次 | [V4 示例 JSON](frontend/public/examples/题库示例.json) |
 
 内容在 frontend/src/content，素材在 frontend/public/art，规则在 frontend/src/engine。
 关键代码配中文注释，JSON 字段说明见手册。

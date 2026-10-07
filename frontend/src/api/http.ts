@@ -118,7 +118,8 @@ async function hydrateGame(value: Game): Promise<Game> {
   if (attempt?.result) {
     const question: Question = {
       ...attempt.question,
-      answer: attempt.result.standard,
+      // 综合题不再返回独立 standard；它的唯一内容事实是 explanation 里的完整解析。
+      answer: attempt.result.standard ?? attempt.result.answer,
       aliases: attempt.result.aliases,
       keywords: [],
       explanation: attempt.result.explanation,

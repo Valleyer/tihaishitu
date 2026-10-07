@@ -145,7 +145,7 @@ FLUSH PRIVILEGES;
 本地与远程都是 MySQL 5.7，最稳妥的方式是完整 dump 本地库的 schema + data，
 导入服务器空库，再启动生产后端。**本轮不清理 legacy schema。**
 
-必须一起迁移 `flyway_schema_history`。否则远程库虽然已有 V1–V18 建出的表，
+必须一起迁移 `flyway_schema_history`。否则远程库虽然已有 V1–V20 建出的表，
 但 Flyway 认为一个 migration 都没执行过，启动时会出现 migration 冲突或重复执行。
 
 ### 5.2 迁移顺序（严格遵守）

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QuestionPage, SourcePage } from "./ManagementApp";
+import { QuestionPage, SourcePage, ImportPage } from "./ManagementApp";
 import { manageApi, type ManageUser, type PageResult, type QuestionSourceView, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
@@ -18,6 +18,7 @@ vi.mock("./api", () => ({
     sources: vi.fn(),
     createSource: vi.fn(),
     saveSource: vi.fn(),
+    importQuestionBatch: vi.fn(),
   },
 }));
 
@@ -35,6 +36,7 @@ const questionMock = vi.mocked(manageApi.question);
 const reviewMock = vi.mocked(manageApi.reviewQuestion);
 const sourcesMock = vi.mocked(manageApi.sources);
 const saveSourceMock = vi.mocked(manageApi.saveSource);
+const importBatchMock = vi.mocked(manageApi.importQuestionBatch);
 
 function question(index: number, status = "pending_review"): QuestionView {
   return {
@@ -49,7 +51,6 @@ function question(index: number, status = "pending_review"): QuestionView {
     presentationType: "single_choice",
     gradingMode: "auto",
     content: `第 ${index} 题`,
-    standardAnswer: "A",
     analysis: "解析",
     difficulty: 2,
     status,
@@ -74,6 +75,7 @@ beforeEach(() => {
   reviewMock.mockReset();
   sourcesMock.mockReset();
   saveSourceMock.mockReset();
+  importBatchMock.mockReset();
   questionsMock.mockResolvedValue(result(Array.from({ length: 20 }, (_, index) => question(index + 1)), 0, 22, 2));
 });
 
@@ -95,6 +97,55 @@ describe("SourcePage", () => {
 });
 
 afterEach(cleanup);
+
+function questionBatch(schemaVersion: string) {
+  return JSON.stringify({
+    schemaVersion,
+    publish: true,
+    batch: { subject: "数学一", sourceType: "real_exam", sourceName: "2026年数学一", examYear: 2026 },
+    questions: [],
+  });
+}
+
+describe("ImportPage question batch compatibility", () => {
+  const result = (schemaVersion: string) => ({
+    schemaVersion, importId: "import-id", published: true, subject: "数学一",
+    sourceType: "real_exam", sourceName: "2026年数学一", examYear: 2026,
+    questionCount: 1, optionCount: 2, relationCount: 1, createdQuestions: 1, updatedQuestions: 0,
+  });
+
+  it("submits the canonical v4 question batch", async () => {
+    importBatchMock.mockResolvedValue(result("global-question-batch/v4"));
+    render(<ImportPage fail={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("粘贴 JSON，或选择文件…"),
+      { target: { value: questionBatch("global-question-batch/v4") } });
+    const confirm = screen.getByRole("button", { name: "确认导入" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(importBatchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("actually submits a v3 historical compatibility batch instead of only saying it is supported", async () => {
+    importBatchMock.mockResolvedValue(result("global-question-batch/v3"));
+    render(<ImportPage fail={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("粘贴 JSON，或选择文件…"),
+      { target: { value: questionBatch("global-question-batch/v3") } });
+    expect(screen.getByText(/v3 历史兼容格式/)).toBeTruthy();
+    const confirm = screen.getByRole("button", { name: "确认导入" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(importBatchMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("2026年数学一 · global-question-batch/v3")).toBeTruthy();
+  });
+
+  it("keeps an unsupported older question batch disabled", () => {
+    render(<ImportPage fail={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("粘贴 JSON，或选择文件…"),
+      { target: { value: questionBatch("global-question-batch/v2") } });
+    expect((screen.getByRole("button", { name: "确认导入" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(importBatchMock).not.toHaveBeenCalled();
+  });
+});
 
 describe("QuestionPage pagination", () => {
   it("shows totals, pages through results, disables boundary buttons, and owns a scroll container", async () => {
@@ -132,6 +183,19 @@ describe("QuestionPage pagination", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "题目状态" }), { target: { value: "published" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ status: "published", page: 0 })));
+  });
+
+  it("edits correctness through options and previews the single complete analysis", async () => {
+    const item = question(1, "draft");
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    expect(await screen.findByText("预览解析")).toBeTruthy();
+    expect(screen.queryByText("标准答案（JSON）")).toBeNull();
+    expect(screen.getAllByText("正确").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText("预览解析"));
+    expect(screen.getByText("解析", { selector: ".markdown-preview p" })).toBeTruthy();
   });
 
   it("resets to page zero and always requests pending items when review mode changes", async () => {

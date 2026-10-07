@@ -2,11 +2,9 @@ package cn.tihaishitu.game;
 
 import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
+import cn.tihaishitu.catalog.QuestionAnswerDeriver;
 import cn.tihaishitu.learning.KnowledgeQuestionCoveragePolicy;
 import cn.tihaishitu.learning.TrainableKnowledge;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
@@ -25,11 +23,11 @@ import java.util.Set;
 @Repository
 public class KnowledgeQuestionPoolStore {
     private final JdbcTemplate jdbc;
-    private final ObjectMapper mapper;
+    private final QuestionAnswerDeriver answerDeriver;
 
-    public KnowledgeQuestionPoolStore(JdbcTemplate jdbc, ObjectMapper mapper) {
+    public KnowledgeQuestionPoolStore(JdbcTemplate jdbc, QuestionAnswerDeriver answerDeriver) {
         this.jdbc = jdbc;
-        this.mapper = mapper;
+        this.answerDeriver = answerDeriver;
     }
 
     public List<KnowledgePointDto> bookScope(Set<String> requestedBookIds) {
@@ -99,7 +97,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT DISTINCT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                       q.analysis_markdown, q.difficulty
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
@@ -127,7 +125,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                       q.analysis_markdown, q.difficulty
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                  WHERE q.id IN (%s)
@@ -216,7 +214,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                       q.analysis_markdown, q.difficulty
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
@@ -301,28 +299,38 @@ public class KnowledgeQuestionPoolStore {
         }, ids.toArray());
     }
 
-    private Map<String, Map<String, String>> loadOptions(List<String> questionIds) {
-        Map<String, Map<String, String>> options = new LinkedHashMap<>();
+    private record LoadedOptions(Map<String, Map<String, String>> texts,
+                                 Map<String, List<QuestionAnswerDeriver.Option>> facts) {}
+
+    private LoadedOptions loadOptions(List<String> questionIds) {
+        Map<String, Map<String, String>> texts = new LinkedHashMap<>();
+        Map<String, List<QuestionAnswerDeriver.Option>> facts = new LinkedHashMap<>();
         jdbc.query("""
-                SELECT question_id, option_key, option_text
+                SELECT question_id, option_key, option_text, correct_option, sort_order
                   FROM question_resource_option
                  WHERE question_id IN (%s)
                  ORDER BY question_id, sort_order, option_key
-                """.formatted(placeholders(questionIds.size())), (RowCallbackHandler) result -> options
-                .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
-                .put(result.getString("option_key"), result.getString("option_text")), questionIds.toArray());
-        return options;
+                """.formatted(placeholders(questionIds.size())), (RowCallbackHandler) result -> {
+            String questionId = result.getString("question_id");
+            texts.computeIfAbsent(questionId, ignored -> new LinkedHashMap<>())
+                    .put(result.getString("option_key"), result.getString("option_text"));
+            facts.computeIfAbsent(questionId, ignored -> new ArrayList<>())
+                    .add(new QuestionAnswerDeriver.Option(result.getString("option_key"),
+                            result.getBoolean("correct_option"), result.getInt("sort_order")));
+        }, questionIds.toArray());
+        return new LoadedOptions(texts, facts);
     }
 
     private List<QuestionDto> questions(List<QuestionRow> rows) {
         if (rows.isEmpty()) return List.of();
         List<String> questionIds = rows.stream().map(QuestionRow::id).toList();
-        Map<String, Map<String, String>> options = loadOptions(questionIds);
+        LoadedOptions options = loadOptions(questionIds);
         Map<String, List<QuestionKnowledge>> knowledge = questionKnowledge(questionIds);
         return rows.stream().map(row -> new QuestionDto(
                 row.id(), row.subject(), row.sourceType(), value(row.sourceName(), "全服题库"),
                 row.presentationType(), row.questionType(), row.presentationType(), row.gradingMode(),
-                row.content(), options.getOrDefault(row.id(), Map.of()), readTree(row.answer()), row.analysis(),
+                row.content(), options.texts().getOrDefault(row.id(), Map.of()),
+                answerDeriver.derive(row.questionType(), options.facts().getOrDefault(row.id(), List.of())), row.analysis(),
                 List.of(), List.of(), row.difficulty(), 3, List.of(),
                 knowledge.getOrDefault(row.id(), List.of()).stream().map(QuestionKnowledge::knowledgePointId).toList(),
                 true
@@ -343,16 +351,8 @@ public class KnowledgeQuestionPoolStore {
                 result.getString("source_name"), result.getObject("exam_year", Integer.class),
                 result.getString("question_number"), result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
-                result.getString("content_markdown"), result.getString("standard_answer_json"),
+                result.getString("content_markdown"),
                 result.getString("analysis_markdown"), result.getInt("difficulty"));
-    }
-
-    private JsonNode readTree(String value) {
-        try {
-            return mapper.readTree(value);
-        } catch (JsonProcessingException error) {
-            throw new IllegalStateException("数据库中的答案不是合法 JSON。", error);
-        }
     }
 
     private static String placeholders(int count) {
@@ -366,6 +366,6 @@ public class KnowledgeQuestionPoolStore {
     private record QuestionRow(
             String id, String subject, String sourceType, String sourceName, Integer examYear,
             String questionNumber, String questionType,
-            String presentationType, String gradingMode, String content, String answer,
+            String presentationType, String gradingMode, String content,
             String analysis, int difficulty) {}
 }

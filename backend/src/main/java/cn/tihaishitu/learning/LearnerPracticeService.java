@@ -10,6 +10,7 @@ import cn.tihaishitu.learner.LearnerContext;
 import cn.tihaishitu.learner.LearnerStore;
 import cn.tihaishitu.learner.StudyProfileService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,7 @@ public class LearnerPracticeService {
      * examLabel 由 exam_year + subject_name 动态生成，displayQuestionNumber 由
      * QuestionNumberFormatter 统一格式化（例如 2014-1 → 1）；原始 questionNumber 仍保留。
      */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record AttemptView(String id, String status, String targetKnowledgePointId, String targetKnowledgePointName,
                               String evidenceMode, String diagnosisRole, JsonNode question, JsonNode standard,
                               String explanation, String assessment, String gradingSource, boolean answerRevealed,
@@ -262,7 +264,7 @@ public class LearnerPracticeService {
             if (!snapshot.questionId().equals(questionId)) throw conflict("题目已经变化，请重新载入。");
             Instant occurredAt = Instant.now();
             if (!attempts.recordSelfAssessment(snapshot, assessment, occurredAt))
-                throw conflict("请先查看参考解答，或此题已经完成自评。");
+                throw conflict("请先查看参考解析，或此题已经完成自评。");
             grade(snapshot,assessment,"self",occurredAt,id);
         });
     }
@@ -444,7 +446,7 @@ public class LearnerPracticeService {
                 tag.path("id").asText(null), tag.path("name").asText(null), tag.path("role").asText(null))));
         return new AttemptView(snapshot.id(), snapshot.status(), snapshot.targetKnowledgePointId(), targetName,
                 snapshot.evidenceMode(), snapshot.diagnosisRole(), visible,
-                revealed ? snapshot.standard() : null,
+                revealed && !"self_assessment".equals(snapshot.gradingMode()) ? snapshot.standard() : null,
                 revealed ? snapshot.question().path("explanation").asText() : null,
                 snapshot.assessment(), snapshot.gradingSource(), revealed,
                 sourceName, examYear, questionNumber, displayQuestionNumber, examLabel, tags);

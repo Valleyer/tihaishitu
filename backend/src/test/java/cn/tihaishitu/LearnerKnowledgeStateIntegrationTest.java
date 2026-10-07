@@ -87,9 +87,15 @@ class LearnerKnowledgeStateIntegrationTest {
                 .andExpect(jsonPath("$.lastOutcome").value("correct"));
     }
 
-    private JsonNode answer(Cookie cookie, String attempt, String question, boolean value) throws Exception {
+    /**
+     * 按「答对 / 答错」意图作答。判断题选项会在 attempt 级重排并同步 remap boolean standard，
+     * 因此不能固定提交 true / false，必须对照本次 attempt 冻结的 standard。
+     */
+    private JsonNode answer(Cookie cookie, String attempt, String question, boolean correct) throws Exception {
+        boolean standard = Boolean.parseBoolean(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?", String.class, attempt));
         return json(mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}".formatted(attempt, question, value)))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}".formatted(attempt, question, correct == standard)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
     private JsonNode next(Cookie cookie, JsonNode game) throws Exception {
@@ -116,5 +122,7 @@ class LearnerKnowledgeStateIntegrationTest {
     private void insertQuestion(String id, int difficulty) { jdbc.update("""
             INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
             VALUES (?,'测试','custom','true_false','true_false','auto','判断题','true','解析',?,'published',1)
-            """, id, difficulty); }
+            """, id, difficulty);
+        // 正式题唯一答案事实是 option.correct_option，不再读取 standard_answer_json。
+        QuestionFixtures.trueFalseOptions(jdbc, id); }
 }

@@ -71,8 +71,8 @@ public class CatalogValidator {
         else if (answer != null && answer.isArray()) answer.forEach(value -> {
             if (value.isTextual()) correct.add(value.asText());
         });
-        QuestionContractValidator.validate(question.type(), question.presentationType(), question.gradingMode(),
-                answer, question.options().entrySet().stream().map(option ->
+        QuestionContractValidator.validateLegacy(question.type(), question.presentationType(), question.gradingMode(),
+                answer, question.explanation(), question.options().entrySet().stream().map(option ->
                         new QuestionContractValidator.Option(option.getKey(), option.getValue(),
                                 correct.contains(option.getKey()))).toList())
                 .ifPresent(message -> { throw bad(message + "：" + question.id()); });

@@ -1,6 +1,7 @@
 package cn.tihaishitu.manage;
 
 import cn.tihaishitu.catalog.QuestionContractValidator;
+import cn.tihaishitu.catalog.SolutionAnalysisComposer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -46,7 +47,8 @@ public class GlobalQuestionBankImportService {
             int updatedQuestions) {}
 
     private record ResolvedKnowledge(String id, String code, String role, int sortOrder) {}
-    private record ValidQuestion(QuestionInput input, List<OptionInput> options, List<ResolvedKnowledge> points) {}
+    private record ValidQuestion(QuestionInput input, String analysis,
+                                 List<OptionInput> options, List<ResolvedKnowledge> points) {}
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -74,7 +76,7 @@ public class GlobalQuestionBankImportService {
         for (int index = 0; index < valid.questions().size(); index++) {
             ValidQuestion question = valid.questions().get(index);
             boolean existed = count("SELECT COUNT(*) FROM question_resource WHERE id = ?", question.input().id()) > 0;
-            upsertQuestion(question.input(), publish, actorId);
+            upsertQuestion(question, publish, actorId);
             jdbc.update("DELETE FROM question_resource_option WHERE question_id = ?", question.input().id());
             for (OptionInput option : question.options()) {
                 jdbc.update("""
@@ -148,8 +150,8 @@ public class GlobalQuestionBankImportService {
             }
             List<OptionInput> options = q.options() == null ? List.of() : q.options();
             validateOptions(q, options, at);
-            QuestionContractValidator.validate(q.questionType(), q.presentationType(), q.gradingMode(),
-                    q.standardAnswer(), options.stream().map(option -> new QuestionContractValidator.Option(
+            QuestionContractValidator.validateLegacy(q.questionType(), q.presentationType(), q.gradingMode(),
+                    q.standardAnswer(), q.analysis(), options.stream().map(option -> new QuestionContractValidator.Option(
                             option.key(), option.text(), Boolean.TRUE.equals(option.correct()))).toList())
                     .ifPresent(message -> bad(at + "：" + message));
             List<KnowledgeInput> relations = q.knowledgePoints() == null ? List.of() : q.knowledgePoints();
@@ -170,7 +172,9 @@ public class GlobalQuestionBankImportService {
                         relation.sortOrder() == null ? relationIndex : relation.sortOrder()));
             }
             if (!hasCore) bad(at + "至少需要一个 core 知识点。");
-            validated.add(new ValidQuestion(q, normalizedOptions(options), resolved));
+            String analysis = "solution".equals(q.questionType())
+                    ? SolutionAnalysisComposer.merge(q.standardAnswer().asText(), q.analysis()) : value(q.analysis());
+            validated.add(new ValidQuestion(q, analysis, normalizedOptions(options), resolved));
         }
         return new ValidImport(new BankInput(bank.id(), bank.name(), value(bank.description()),
                 bank.enabled() == null || bank.enabled(), weight), validated);
@@ -247,9 +251,9 @@ public class GlobalQuestionBankImportService {
         }
     }
 
-    private void upsertQuestion(QuestionInput q, boolean publish, String actorId) {
+    private void upsertQuestion(ValidQuestion validQuestion, boolean publish, String actorId) {
+        QuestionInput q = validQuestion.input();
         String status = publish ? "published" : "pending_review";
-        String answer = json(q.standardAnswer());
         int changed = jdbc.update("""
                 UPDATE question_resource SET subject_name = ?, source_type = ?, source_name = ?, exam_year = ?,
                     question_number = ?, question_type = ?, presentation_type = ?, grading_mode = ?,
@@ -258,7 +262,7 @@ public class GlobalQuestionBankImportService {
                 WHERE id = ?
                 """, q.subject().trim(), q.sourceType(), nullable(q.sourceName()), q.examYear(),
                 nullable(q.questionNumber()), q.questionType(), q.presentationType(), q.gradingMode(),
-                q.content().trim(), answer, value(q.analysis()), q.difficulty(), status, actorId, q.id());
+                q.content().trim(), null, validQuestion.analysis(), q.difficulty(), status, actorId, q.id());
         if (changed == 0) {
             jdbc.update("""
                     INSERT INTO question_resource(
@@ -269,7 +273,7 @@ public class GlobalQuestionBankImportService {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                     """, q.id(), q.subject().trim(), q.sourceType(), nullable(q.sourceName()), q.examYear(),
                     nullable(q.questionNumber()), q.questionType(), q.presentationType(), q.gradingMode(),
-                    q.content().trim(), answer, value(q.analysis()), q.difficulty(), status, null, actorId);
+                    q.content().trim(), null, validQuestion.analysis(), q.difficulty(), status, null, actorId);
         }
     }
 

@@ -67,12 +67,18 @@ class HubPracticeDiagnosisIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_world_state",Integer.class)).isZero();
     }
 
-    private JsonNode answer(Cookie cookie,JsonNode session,boolean value)throws Exception{
+    /**
+     * 按「答对 / 答错」意图作答。判断题选项会在 attempt 级重排并同步 remap boolean standard，
+     * 因此不能固定提交 true / false，必须对照本次 attempt 冻结的 standard。
+     */
+    private JsonNode answer(Cookie cookie,JsonNode session,boolean correct)throws Exception{
         JsonNode a=session.path("currentAttempt");
+        boolean standard=Boolean.parseBoolean(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?",String.class,a.path("id").asText()));
         return json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/answers",session.path("id").asText())
                 .with(csrf()).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}".formatted(
-                        a.path("id").asText(),a.path("question").path("id").asText(),value)))
+                        a.path("id").asText(),a.path("question").path("id").asText(),correct==standard)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
     private JsonNode next(Cookie cookie,String id)throws Exception{return json(mvc.perform(
@@ -85,6 +91,7 @@ class HubPracticeDiagnosisIntegrationTest {
             "INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,?,?,'测试','节','章','core','active','','',0,1)",id,code,code);return id;}
     private void question(String core,String auxiliary,String text){String id=UUID.randomUUID().toString();jdbc.update(
             "INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision) VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)",id,text);
+        QuestionFixtures.trueFalseOptions(jdbc,id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",id,core);
         if(auxiliary!=null)jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)",id,auxiliary);}
     private JsonNode json(String value)throws Exception{return mapper.readTree(value);}

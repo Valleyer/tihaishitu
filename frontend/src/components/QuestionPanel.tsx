@@ -127,10 +127,10 @@ export function QuestionPanel({
             </small>
           </div>
           <div className="answer-summary">
-            <p>
+            {!isSelfAssessment && <p>
               <b>标准答案</b>
-              {displayAnswer(result!.standard, q.options)}
-            </p>
+              {displayAnswer(result!.standard!, q.options)}
+            </p>}
             {!isSelfAssessment && !result!.correct && (
               <p>
                 <b>你的回答</b>
@@ -139,6 +139,7 @@ export function QuestionPanel({
             )}
           </div>
           <div className="explanation-block">
+            {isSelfAssessment && <h3>完整解析</h3>}
             <RichText>{result!.explanation}</RichText>
           </div>
           <details className="knowledge-explanation">
@@ -197,9 +198,7 @@ export function QuestionPanel({
           {isSelfAssessment ? (
             attempt.reveal ? (
               <section className="self-assessment-reference" aria-live="polite">
-                <h3>参考解答</h3>
-                <RichText>{String(attempt.reveal.standard)}</RichText>
-                <h3>解题分析</h3>
+                <h3>参考解析</h3>
                 <RichText>{attempt.reveal.explanation}</RichText>
                 <details className="knowledge-explanation">
                   <summary>查看知识点解析</summary>
@@ -213,7 +212,7 @@ export function QuestionPanel({
               </section>
             ) : (
               <p className="choice-hint self-assessment-hint">
-                请先在纸上完成推导或作答，再查看参考解答并如实自评。
+                请先在纸上完成推导或作答，再查看参考解析并如实自评。
               </p>
             )
           ) : (
@@ -344,7 +343,7 @@ export function QuestionPanel({
             </div>
           ) : (
             <button className="ink-button" disabled={busy} onClick={reveal}>
-              我已完成，查看参考解答
+              我已完成，查看参考解析
             </button>
           )
         ) : (

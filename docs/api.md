@@ -56,7 +56,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
 | GET | /learning/knowledge-points/{id} | 无 | active KnowledgePoint |
 | GET | /learning/knowledge-points/{id}/questions | 无 | published Questions |
-| GET | /learning/questions/{id} | 无 | 只读题目、答案与解析 |
+| GET | /learning/questions/{id} | 无 | 只读题目浏览；客观题 `correctAnswer` 由 `option.correct_option` 派生，综合题只有 `analysisMarkdown` |
 | POST | /worlds/ancient-official/initialize | characterName, gender, origin | 唯一 WorldState |
 | GET | /worlds/ancient-official | 无 | 当前 Learner 的 WorldState |
 | POST | /worlds/ancient-official/* | 动作参数 | 保存后的 WorldState |
@@ -72,7 +72,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | DELETE | /games/{id} | 无 | 204 |
 | GET | /question-banks/{uuid} | 无 | Bank，带 revision 与缓存响应头 |
 | POST | /games/{id}/answers | {attemptId, questionId, answer} | Game |
-| POST | /games/{id}/answers/reveal | {attemptId, questionId} | 自评题参考答案与解析 |
+| POST | /games/{id}/answers/reveal | {attemptId, questionId} | 自评题参考解析（单一 `explanation`，不再返回 separate standard） |
 | POST | /games/{id}/answers/self-assess | {attemptId, questionId, assessment} | Game；assessment 为 correct/partial/wrong |
 | POST | /games/{id}/next | {attemptId, reviewOnly} | Game |
 | POST | /games/{id}/choices | {eventId, choiceId} | Game |
@@ -89,11 +89,35 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | 方法 | 路径 | 请求体 | 成功返回 |
 | --- | --- | --- | --- |
 | POST | /admin/question-banks/import | QuestionBankDto | 新增或修订后的 Bank |
-| POST | /admin/questions/import | global-question-batch/v3 | 幂等导入全局题目批次，不写入 Book |
+| POST | /admin/questions/import | global-question-batch/v4 | 幂等导入全局题目批次，不写入 Book；v3/v2 仅 compatibility |
 | POST | /admin/global-question-banks/import | global-question-bank/v1 | 已弃用；仅兼容未采用 KnowledgePoint 路径的旧文集 |
 | PUT | /admin/question-banks/{uuid}/metadata | {name?,description?,enabled?,weight?} | 改名后的 Bank |
 
-V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创建或修改任何 Book；V3 的 `batch.subject` 只作为稳定元数据，不限制 KnowledgePoint 的 legacy subject。旧 V2 继续兼容，旧 V1 仅供尚未采用 KnowledgePoint 路径的兼容文集使用。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
+V4 导入相同 Question UUID 会原子更新题目并递增 revision，不创建或修改任何 Book；V4 的 `batch.subject` 只作为稳定元数据，不限制 KnowledgePoint 的 legacy subject。旧 V3 / V2 继续兼容，旧 V1 仅供尚未采用 KnowledgePoint 路径的兼容文集使用。普通玩家接口永远不接收管理密钥，管理端也不得把密钥保存在 localStorage。
+
+### Question Contract V2 与导入边界
+
+正式父题（`parent_question_id IS NULL`）不再保存独立标准答案配置：
+
+```text
+客观题 single_choice / multiple_choice / true_false → 唯一答案事实 option.correct_option
+综合题 solution                                     → 唯一内容事实 analysis_markdown
+question_resource.standard_answer_json              → Formal Parent 一律为 NULL
+study_attempt.standard_answer_json                  → Attempt 创建时冻结的判题快照，必须保留
+```
+
+`/admin/questions/import` 与 `/manage/imports/questions` 的 canonical 格式都是
+`global-question-batch/v4`：
+
+```text
+v4 客观题：options[].correct 是唯一答案，禁止 standardAnswer
+v4 综合题：analysis 是唯一内容，禁止 standardAnswer
+v3 / v2 兼容：客观题 standardAnswer 只做一致性校验，不持久化；
+              综合题 standardAnswer + analysis 合并进 analysis_markdown
+```
+
+导入响应中的 `schemaVersion` 回显本次实际接受的批次版本。管理后台浏览器导入 UI
+允许 v4 与 v3，并把 v4 作为推荐格式。
 
 ## 全服管理后台 API
 
@@ -117,7 +141,7 @@ V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
 | POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
-| POST | /manage/imports/questions | ADMIN | 事务校验并导入 global-question-batch/v3 题目批次 |
+| POST | /manage/imports/questions | ADMIN | 事务校验并导入 `global-question-batch/v4` 题目批次；v3 为历史兼容 |
 | POST | /manage/imports/question-bank | ADMIN | 已弃用；仅兼容旧版 global-question-bank/v1 文集导入 |
 | GET/POST/PUT | /manage/users | ADMIN | 账号、状态、角色和密码重置 |
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
@@ -129,7 +153,7 @@ V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 并同步 `question_resource.source_type / source_name` 兼容快照。新绑定只接受 active 来源；
 已绑定 disabled 来源的历史题仍可读取和编辑其他字段。浏览器 Question create/update 必须绑定已有
 `sourceId`，不会再按客户端提交的 `sourceType / sourceName` 隐式创建来源；ADMIN 的
-`global-question-batch/v3` 导入仍可按兼容字段解析或创建来源。管理前端不提供自由输入来源名，
+`global-question-batch/v4` 导入仍可按兼容字段解析或创建来源。管理前端不提供自由输入来源名，
 来源统一在“来源管理”创建。已有题目绑定的来源禁止修改 `sourceType`，未绑定来源可以修改类型。
 
 实时 Question API 与新 attempt metadata 按 `question_source.display_name → legacy source_name → 全服题库`
@@ -270,8 +294,33 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 
 题干、选项、题目解析与知识点解析均使用 Markdown + LaTeX；服务端只保存和返回原文，不返回预渲染 HTML。前端通过安全的 Markdown 与 KaTeX 组件渲染。
 
-`Bank.knowledgePoints` 是文集内的知识点目录；`Question.knowledgePointIds` 必须引用其中 1–3 个知识点。PublicQuestion 不含 answer、aliases、keywords、explanation，但会附带本题对应的 `knowledgePoints`，用于题面提示与知识点解析；批卷后的 Result 再返回 standard、explanation、correct、story、changes。
+`Bank.knowledgePoints` 是文集内的知识点目录；`Question.knowledgePointIds` 必须引用其中 1–3 个知识点。PublicQuestion 不含 answer、aliases、keywords、explanation，但会附带本题对应的 `knowledgePoints`，用于题面提示与知识点解析；批卷后的 Result 再返回 standard（仅客观题）、explanation、correct、story、changes。正式题的 `Question.answer` 是后端 runtime-derived grading value，不是题库保存的配置答案（见上文 Question Contract V2）。
 当前协议以 options 对象的插入顺序表示显示顺序，键只用 A–F 或 true/false。Java 应使用保序映射（例如 LinkedHashMap）输出洗牌后的选项；不能随意按键排序。
+
+### Attempt Variant（正式客观题）
+
+正式 `single_choice` / `multiple_choice` / `true_false` 的选项排列在**创建 Attempt 时**完成一次，
+Hub Practice 与 Learner World / 副本共用同一套 `QuestionAttemptVariantService` 规则：
+
+```text
+correct_option → 后端 runtime derived answer → variant 排列 + remap
+→ 冻结 question_snapshot_json 与 study_attempt.standard_answer_json → 判题
+```
+
+边界：
+
+```text
+作答前 DTO 不得暴露 correct_option，也不得暴露 derived standard
+刷新同一 attempt：选项顺序与 standard 不变化
+再次做到同一 Question：可重新排列，并尽量避免与上次完全相同
+true_false 交换选项文字时 boolean standard 同步 remap
+作答后客观题 result 可返回 Attempt-specific standard 用于批卷
+solution reveal / self-assessment 不返回 separate standard
+Legacy /games/** 保持既有兼容行为
+```
+
+`study_attempt.standard_answer_json` 是服务器内部冻结的判题事实，不是客户端可提交的配置；
+题目浏览（`GET /learning/questions/{id}`）不创建 attempt，也不计入 Exposure。
 
 ## 后端实现应保持的行为
 
@@ -286,14 +335,14 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 题库修订只影响以后发卷，不影响已有快照和历史记录。
 - 导入先完整校验，再原子保存；备份创建新人生并重映射题库引用。
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
-- 正式题型仅允许 `single_choice`、`multiple_choice`、`true_false`、`solution`；其中 `solution` 展示为“综合题”，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。`blank` 不能新建、保存、导入或发布，历史 `blank` 也不会进入正式题池。原填空题须由题目生成 AI 保留 Question UUID 并改编为单选题或多选题。综合题参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
+- 正式题型仅允许 `single_choice`、`multiple_choice`、`true_false`、`solution`；其中 `solution` 展示为“综合题”，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。`blank` 不能新建、保存、导入或发布，历史 `blank` 也不会进入正式题池。原填空题须由题目生成 AI 保留 Question UUID 并改编为单选题或多选题。正式综合题只有一份 `analysis_markdown`（包含答案、过程与解析），不再有独立参考答案；显式 reveal 只返回这一份内容，self-assessment 也不再返回 separate standard。评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
 - 正式题数量、Mastery 分母、专项候选与 Chapter 可练数共用同一口径：与该 KnowledgePoint 有关系的全部 published Formal Parent Question，core 与 auxiliary 同等计入并按题目 ID 去重。`relation_role` 只表达知识标签主次，不决定题目能不能做，也不决定是否进入分母。
 - 正式做题页的题目 metadata 在发题时冻结进 `question_snapshot_json.examMetadata`：`subjectName`、`sourceName`、`examYear`、`questionNumber`（数据库原始题号）、`displayQuestionNumber`（UI 使用）、`examLabel`，以及 `knowledgePoints[{id,name,role}]`（core / auxiliary 都返回，role 只表达主次）。刷新或重新读取同一 attempt 结果稳定。
 - 该 metadata 由共享的 `QuestionExamMetadataBuilder` 统一生成：Learning Hub Practice（`LearnerPracticeService`）与 World / 副本（`GameActionService`）调用同一个 builder，不存在两套规则。World 的正式发题同样把 metadata 冻结进 `study_attempt` 快照，前端不重新查库拼接。
 - 题号格式化由 `QuestionNumberFormatter` 统一实现：只有 `questionNumber` 确实以 `examYear + "-"` 开头时才剥离年份（`2014-1` + year 2014 → `displayQuestionNumber = "1"`）；`3`、`2021-3`（年份不同）、`A-3`、`3(1)`、`21A` 一律原样保留。UI 只使用 `displayQuestionNumber` 生成“第 N 题”，原始 `questionNumber` 仅作为数据事实。
 - `examLabel` 由后端按 `question_resource.exam_year` 与 `subject_name` 动态生成，不新增 `question_tag` 冗余表：数学一 + 2021 → `2021年考研数学一真题`；408 + 2024 → `2024年408考研真题`。年份缺失或科目未知时不生成标签。
 
-本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
+本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，作答前不暴露 correct_option 或 derived standard，Attempt 判题标准在创建 attempt 时冻结进 `study_attempt.standard_answer_json`，只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
 
 
 ## V2—V5 新增探索接口
@@ -345,7 +394,7 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 | GET | /learner/practice-sessions/recent-chapter | 无 | Study 页最近章节入口：`status=active|last|none`、`activeSessionId?`、`lastSessionId`、`bookId`、`bookName`、`chapterId`、`chapterName`、`currentKnowledgePointId?`、`currentKnowledgePointIndex?`、`knowledgePointCount?`、`updatedAt` |
 | GET | /learner/practice-sessions/{id} | 无 | 恢复 Session 与 current attempt |
 | POST | /learner/practice-sessions/{id}/answers | attemptId, questionId, answer | 自动判题并进入共享学习流程 |
-| POST | /learner/practice-sessions/{id}/reveal | attemptId, questionId | 查看自评题参考答案 |
+| POST | /learner/practice-sessions/{id}/reveal | attemptId, questionId | 查看自评题参考解析（单一内容，无 separate standard） |
 | POST | /learner/practice-sessions/{id}/self-assess | attemptId, questionId, assessment | 提交自评 |
 | POST | /learner/practice-sessions/{id}/next | 无 | 继续 Diagnosis/Training，或同 K 再来一道 |
 | POST | /learner/practice-sessions/{id}/end | 无 | 结束 Practice Session |

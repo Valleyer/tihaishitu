@@ -142,7 +142,7 @@ public class QuestionAttemptStore {
 
     public boolean recordAnswer(Snapshot snapshot, JsonNode submitted, boolean correct, Instant occurredAt) {
         if (!"auto".equals(snapshot.gradingMode()))
-            throw new ApiException(HttpStatus.CONFLICT, "这是一道自评题，请先查看参考解答后自评。");
+            throw new ApiException(HttpStatus.CONFLICT, "这是一道自评题，请先查看参考解析后自评。");
         if (!"active".equals(snapshot.status())) return false;
         String assessment = correct ? "correct" : "wrong";
         int changed = jdbc.update("""
@@ -163,7 +163,7 @@ public class QuestionAttemptStore {
 
     public boolean reveal(Snapshot snapshot) {
         if (!"self_assessment".equals(snapshot.gradingMode()))
-            throw new ApiException(HttpStatus.CONFLICT, "自动判题无需单独查看参考解答。");
+            throw new ApiException(HttpStatus.CONFLICT, "自动判题无需单独查看参考解析。");
         if ("revealed".equals(snapshot.status()) || "graded".equals(snapshot.status())) return false;
         return jdbc.update("""
                 UPDATE study_attempt SET status = 'revealed', answer_revealed_at = ?

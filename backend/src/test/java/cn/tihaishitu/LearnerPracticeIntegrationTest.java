@@ -207,10 +207,13 @@ class LearnerPracticeIntegrationTest {
     }
 
     private JsonNode answer(Cookie learner, String session, String attempt, String question, boolean answer) throws Exception {
+        boolean frozenCorrect = mapper.readTree(jdbc.queryForObject(
+                "SELECT standard_answer_json FROM study_attempt WHERE id=?", String.class, attempt)).asBoolean();
+        boolean submitted = answer ? frozenCorrect : !frozenCorrect;
         return json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/answers", session)
                         .with(csrf()).cookie(learner).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
-                                .formatted(attempt, question, answer)))
+                                .formatted(attempt, question, submitted)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
 
@@ -288,6 +291,7 @@ class LearnerPracticeIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'测试','custom','true_false','true_false','auto','含未掌握依赖的题','true','解析',2,'published',1)
                 """, question);
+        trueFalseOptions(question);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
                 question, target);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)",
@@ -332,7 +336,14 @@ class LearnerPracticeIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',?,'published',1)
                 """, id, content, difficulty);
+        trueFalseOptions(id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", id, point);
+    }
+    private void trueFalseOptions(String questionId) {
+        jdbc.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), questionId, "true", "正确", true, 0);
+        jdbc.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), questionId, "false", "错误", false, 1);
     }
     private String chapterPoint(String book, String chapter, String name, int order) {
         String point = UUID.randomUUID().toString();

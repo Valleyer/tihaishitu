@@ -138,6 +138,8 @@ class AdaptiveQuestionSelectionIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',?,'published',1)
                 """, id, "D" + difficulty, difficulty);
+        // 正式题唯一答案事实是 option.correct_option，不再读取 standard_answer_json。
+        QuestionFixtures.trueFalseOptions(jdbc, id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", id, point);
         return id;
     }

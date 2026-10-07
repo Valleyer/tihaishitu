@@ -187,6 +187,8 @@ class CatalogSeedIntegrationTest {
                         grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                     VALUES (?,'测试','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)
                     """, question, "旧版题目" + index);
+            // 正式题唯一答案事实是 option.correct_option，不再读取 standard_answer_json。
+            QuestionFixtures.trueFalseOptions(jdbc, question);
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
                     question, point);
         }

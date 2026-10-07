@@ -1,6 +1,10 @@
 /**
  * 前后端共用的数据契约。Java 接口后续应按这里的字段返回 JSON。
- * Question 保留完整标准答案；PublicQuestion 只暴露作答前可见内容。
+ * Question.answer 是后端 runtime-derived grading value：正式题由
+ * question_resource_option.correct_option 在发题时派生并 remap，
+ * 不是 Question 持久化层保存的标准答案配置。
+ * 正式题唯一答案事实 = 客观题 option.correct；综合题 = analysis_markdown。
+ * PublicQuestion 只暴露作答前可见内容。
  * answer 使用题库原始选项键（或判断题布尔值），不要提交屏幕上随机后的字母编号。
  * aliases、keywords、selfAssessment 为早期数据兼容字段，新三题型不依赖自然语言自评。
  */
@@ -125,7 +129,11 @@ export interface Scene {
 export interface Result {
   correct: boolean | null;
   answer: Answer;
-  standard: Answer;
+  /**
+   * 只对客观题返回的 Attempt 级判题值（服务器内部冻结的 derived standard）。
+   * 综合题只有一份 analysis_markdown，不再返回独立 standard。
+   */
+  standard?: Answer;
   explanation: string;
   aliases: string[];
   story: string;
@@ -133,8 +141,8 @@ export interface Result {
   assessment?: Assessment;
   gradingSource?: "automatic" | "self";
 }
+/** 综合题 reveal 只返回一份完整解析，不再有独立参考答案。 */
 export interface RevealedAnswer {
-  standard: Answer;
   explanation: string;
   knowledgePoints: KnowledgePoint[];
 }

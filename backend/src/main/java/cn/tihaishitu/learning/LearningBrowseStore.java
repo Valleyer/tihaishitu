@@ -1,10 +1,8 @@
 package cn.tihaishitu.learning;
 
 import cn.tihaishitu.common.ApiException;
+import cn.tihaishitu.catalog.QuestionAnswerDeriver;
 import cn.tihaishitu.manage.PageResult;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -15,11 +13,11 @@ import java.util.*;
 @Repository
 public class LearningBrowseStore {
     private final JdbcTemplate jdbc;
-    private final ObjectMapper mapper;
     private final LearnerQuestionProgressStore questionProgress;
-    public LearningBrowseStore(JdbcTemplate jdbc, ObjectMapper mapper,
-                               LearnerQuestionProgressStore questionProgress) {
-        this.jdbc = jdbc; this.mapper = mapper; this.questionProgress = questionProgress;
+    private final QuestionAnswerDeriver answerDeriver;
+    public LearningBrowseStore(JdbcTemplate jdbc, LearnerQuestionProgressStore questionProgress,
+                               QuestionAnswerDeriver answerDeriver) {
+        this.jdbc = jdbc; this.questionProgress = questionProgress; this.answerDeriver = answerDeriver;
     }
 
     public List<Map<String, Object>> books(String learnerId) {
@@ -242,7 +240,7 @@ public class LearningBrowseStore {
                        COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year,
                        q.question_number, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
-                       q.standard_answer_json, q.difficulty, q.revision
+                       q.difficulty, q.revision
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
@@ -270,7 +268,7 @@ public class LearningBrowseStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type,
-                       q.grading_mode, q.content_markdown, q.analysis_markdown, q.standard_answer_json,
+                       q.grading_mode, q.content_markdown, q.analysis_markdown,
                        q.difficulty, q.revision
                   FROM question_resource q LEFT JOIN question_source s ON s.id=q.source_id
                  WHERE q.id = ? AND q.status = 'published'
@@ -285,10 +283,16 @@ public class LearningBrowseStore {
                    )
                 """, (result, row) -> question(result), id, learnerId).stream().findFirst()
                 .orElseThrow(() -> missing("题目不存在或尚未发布。"));
+        List<QuestionAnswerDeriver.Option> answerOptions = new ArrayList<>();
         value.put("options", jdbc.query("""
-                SELECT option_key, option_text FROM question_resource_option
+                SELECT option_key, option_text, correct_option, sort_order FROM question_resource_option
                  WHERE question_id = ? ORDER BY sort_order, option_key
-                """, (result, row) -> ordered("key", result.getString("option_key"), "text", result.getString("option_text")), id));
+                """, (result, row) -> {
+            answerOptions.add(new QuestionAnswerDeriver.Option(result.getString("option_key"),
+                    result.getBoolean("correct_option"), result.getInt("sort_order")));
+            return ordered("key", result.getString("option_key"), "text", result.getString("option_text"));
+        }, id));
+        value.put("correctAnswer", answerDeriver.derive((String) value.get("questionType"), answerOptions));
         value.put("knowledgePoints", questionKnowledge(id));
         return value;
     }
@@ -330,7 +334,6 @@ public class LearningBrowseStore {
                 "questionType", result.getString("question_type"), "presentationType", result.getString("presentation_type"),
                 "gradingMode", result.getString("grading_mode"), "contentMarkdown", result.getString("content_markdown"),
                 "analysisMarkdown", result.getString("analysis_markdown"),
-                "standardAnswer", json(result.getString("standard_answer_json")),
                 "difficulty", result.getInt("difficulty"), "revision", result.getLong("revision"));
     }
 
@@ -339,11 +342,6 @@ public class LearningBrowseStore {
                 "subject", result.getString("subject_name"), "section", result.getString("section_name"),
                 "chapter", result.getString("chapter_name"), "description", result.getString("description"),
                 "explanation", result.getString("explanation"));
-    }
-
-    private JsonNode json(String value) {
-        try { return mapper.readTree(value); }
-        catch (JsonProcessingException error) { throw new IllegalStateException("题目答案数据损坏。", error); }
     }
 
     private static LinkedHashMap<String, Object> ordered(Object... values) {

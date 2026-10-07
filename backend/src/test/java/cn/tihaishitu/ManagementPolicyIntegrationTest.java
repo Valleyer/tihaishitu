@@ -190,7 +190,6 @@ class ManagementPolicyIntegrationTest {
         question.put("presentationType", "single_choice");
         question.put("gradingMode", "auto");
         question.put("content", "若 $f(x)=x^2$，则 $f'(1)$ 等于多少？ " + UUID.randomUUID());
-        question.put("standardAnswer", "A");
         question.put("analysis", "由幂函数求导公式可得 $f'(1)=2$。");
         question.put("difficulty", 1);
         ArrayNode options = question.putArray("options");
@@ -206,17 +205,15 @@ class ManagementPolicyIntegrationTest {
         if ("multiple_choice".equals(questionType)) {
             question.put("presentationType", "multiple_choice");
             ((ObjectNode) question.withArray("options").get(1)).put("correct", true);
-            question.putArray("standardAnswer").add("A").add("B");
         } else if ("true_false".equals(questionType)) {
             question.put("presentationType", "true_false");
-            question.put("standardAnswer", true);
             ArrayNode options = question.putArray("options");
             options.add(option("true", "正确", true, 0));
             options.add(option("false", "错误", false, 1));
         } else if ("solution".equals(questionType)) {
             question.put("presentationType", "self_assessment");
             question.put("gradingMode", "self_assessment");
-            question.put("standardAnswer", "完整参考步骤");
+            question.put("analysis", "## 参考答案\n\n完整参考步骤\n\n## 解析\n\n完整解析");
             question.putArray("options");
         }
         return question;
