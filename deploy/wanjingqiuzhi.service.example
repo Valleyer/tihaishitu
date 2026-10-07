@@ -1,0 +1,52 @@
+# 万境求知 · Spring Boot systemd 单元模板
+#
+# 用法：
+#   1. 复制到服务器 /etc/systemd/system/wanjingqiuzhi.service；
+#   2. 按实际部署用户与路径调整 User / Group / WorkingDirectory / EnvironmentFile；
+#   3. systemctl daemon-reload && systemctl enable --now wanjingqiuzhi。
+#
+# 本模板只放占位用户与 EnvironmentFile 路径，不写任何数据库密码、
+# APP_ADMIN_KEY 或初始管理员密码；这些真实值只存在于服务器上的
+# /etc/wanjingqiuzhi/backend.env（chmod 600，属主为下面配置的运行用户）。
+
+[Unit]
+Description=Wanjingqiuzhi Spring Boot backend
+Documentation=file:/opt/wanjingqiuzhi/docs/deployment.md
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 建议使用专用非 root 用户运行，该用户只需读取 jar 与 env 文件。
+User=<APP_USER>
+Group=<APP_GROUP>
+WorkingDirectory=/opt/wanjingqiuzhi/backend
+
+# 生产环境变量：SERVER_ADDRESS=127.0.0.1、DB_*、APP_ADMIN_KEY 等全部在此文件中。
+EnvironmentFile=/etc/wanjingqiuzhi/backend.env
+
+# jar 名为 Maven 产物，按实际版本替换；例如 tihaishitu-backend-0.1.0-SNAPSHOT.jar
+ExecStart=/usr/bin/java -jar /opt/wanjingqiuzhi/backend/<BACKEND_JAR>
+
+# 优雅停机：application.yml 已开启 server.shutdown=graceful。
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+# 基础加固：禁止提权、只允许写临时目录，生产不需要写其他系统路径。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wanjingqiuzhi
+
+[Install]
+WantedBy=multi-user.target

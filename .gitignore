@@ -4,6 +4,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!backend/.env.production.example
 *.local
 *.log
 .DS_Store
