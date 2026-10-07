@@ -1,4 +1,4 @@
-/* 寒门仕途按视口分配空间；知境中枢继续使用正常的 document 滚动。 */
+/* 寒门仕途按视口分配空间；万境中枢继续使用正常的 document 滚动。 */
 .world-shell {
   height: 100dvh;
   min-height: 0;

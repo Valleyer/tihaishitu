@@ -492,7 +492,7 @@
 .auth-page .auth-card > a:last-child { color: var(--zj-brand); text-align: center; text-decoration: none; }
 .auth-page .auth-card > a:last-child:hover { text-decoration: underline; text-underline-offset: 3px; }
 .hub-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--zj-text-secondary); font-size: 15px; }
-.hub-loading::before { content: "知境"; display: block; margin-bottom: 8px; color: var(--zj-text); font-size: 24px; font-weight: 750; text-align: center; }
+.hub-loading::before { content: "万境求知"; display: block; margin-bottom: 8px; color: var(--zj-text); font-size: 24px; font-weight: 750; text-align: center; }
 
 /* Platform overlay shown inside the independently styled world. */
 .world-shell > .world-shell-home { position: fixed; z-index: 1000; top: 14px; left: 50%; transform: translateX(-50%); border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; background: rgba(17, 24, 39, .76); color: #fff; padding: 8px 15px; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; text-decoration: none; backdrop-filter: blur(10px); box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }

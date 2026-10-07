@@ -24,6 +24,11 @@ public class OfficialMath1BookBootstrap {
     private static final Logger log = LoggerFactory.getLogger(OfficialMath1BookBootstrap.class);
     private static final String BOOK_NAME = "数学一";
     private static final String LEGACY_BOOK_NAME = "2026年考研数学一真题";
+    private static final String BOOK_DESCRIPTION = "万境求知官方维护的一站式数学一学习书籍。";
+    /** 历史品牌占位说明；只有仍是这些占位值时才幂等升级，管理员自写说明永不覆盖。 */
+    private static final List<String> LEGACY_BOOK_DESCRIPTIONS = List.of(
+            "题海仕途官方维护的一站式数学一学习书籍。",
+            "知境官方维护的一站式数学一学习书籍。");
     private static final Pattern KNOWLEDGE_CODE = Pattern.compile("^(M1-[HLP]\\d{2})-\\d{3}$");
     private static final List<ChapterDefinition> CHAPTERS = List.of(
             chapter("M1-H", "高等数学", null, 0),
@@ -80,7 +85,7 @@ public class OfficialMath1BookBootstrap {
             jdbc.update("""
                     INSERT INTO question_bank(id, name, description, enabled, weight_value, revision)
                     VALUES (?, ?, ?, TRUE, 1, 1)
-                    """, BOOK_ID, BOOK_NAME, "知境官方维护的一站式数学一学习书籍。");
+                    """, BOOK_ID, BOOK_NAME, BOOK_DESCRIPTION);
             return;
         }
         if (LEGACY_BOOK_NAME.equals(names.get(0))) {
@@ -90,12 +95,13 @@ public class OfficialMath1BookBootstrap {
                      WHERE id = ? AND name = ?
                     """, BOOK_NAME, BOOK_ID, LEGACY_BOOK_NAME);
         }
-        jdbc.update("""
-                UPDATE question_bank
-                   SET description = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
-                 WHERE id = ? AND description = ?
-                """, "知境官方维护的一站式数学一学习书籍。", BOOK_ID,
-                "题海仕途官方维护的一站式数学一学习书籍。");
+        for (String legacyDescription : LEGACY_BOOK_DESCRIPTIONS) {
+            jdbc.update("""
+                    UPDATE question_bank
+                       SET description = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ? AND description = ?
+                    """, BOOK_DESCRIPTION, BOOK_ID, legacyDescription);
+        }
     }
 
     private Map<String, String> ensureChapters() {

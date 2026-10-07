@@ -72,7 +72,7 @@ function AuthPage({ register }: { register: boolean }) {
   };
   return <main className="auth-page">
     <form className="auth-card" onSubmit={submit}>
-      <HubLink className="auth-brand" href="/">知境</HubLink>
+      <HubLink className="auth-brand" href="/">万境求知</HubLink>
       <div><h1>{register ? "创建学习账号" : "欢迎回来"}</h1><p className="auth-subtitle">{register ? "建立属于你的统一学习身份" : "继续你的学习旅程"}</p></div>
       <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       {register && <label>显示名称<input value={displayName} onChange={e => setDisplayName(e.target.value)} /></label>}
@@ -92,7 +92,7 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
   return <div className="learning-hub">
-    <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><span aria-hidden="true" />知境</HubLink>
+    <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><span aria-hidden="true" />万境求知</HubLink>
       <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href}>{label}</HubLink>)}</nav>
       <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account">{data.learner.displayName}</HubLink></div></div>
     </header>
@@ -308,15 +308,15 @@ function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(question.standardAnswer, null, 2)}</pre><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></section>}</>}</main></Shell>;
 }
 
-function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回知境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
+function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
 
 function AuthenticatedPlatform() {
   const path = useCurrentLocation().split(/[?#]/)[0];
   const [data, setData] = useState<HubBootstrap>(); const [error, setError] = useState("");
   const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
   useEffect(() => { void load(); }, []);
-  if (!data) return <main className="hub-loading">{error || "正在载入知境中枢…"}</main>;
-  if (path === "/worlds/ancient-official") return <div className="world-shell"><HubLink className="world-shell-home" href="/">← 知境中枢</HubLink><App /></div>;
+  if (!data) return <main className="hub-loading">{error || "正在载入万境中枢…"}</main>;
+  if (path === "/worlds/ancient-official") return <div className="world-shell"><HubLink className="world-shell-home" href="/">← 万境中枢</HubLink><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
   if (path.startsWith("/progress/books/") && path.includes("/chapters/")) { const parts=path.split("/"); return <ProgressChapterPage data={data} bookId={parts[3]} chapterId={parts[5]} />; }
   if (path.startsWith("/progress/books/")) return <ProgressBookPage data={data} bookId={path.split("/")[3]} />;

@@ -1,6 +1,6 @@
-# Phase D：Learning Hub（知境中枢）与多世界基础
+# Phase D：Learning Hub（万境中枢）与多世界基础
 
-正式产品入口现在以联机学习者为中心：登录后先进入 Learning Hub（知境中枢），再从世界大厅进入 `ancient-official`。Learning Hub 管理学习范围、Study Focus 与全服只读学习资源；游戏世界只包装玩法，不拥有 Book、KnowledgePoint 或 Question。
+正式产品入口现在以联机学习者为中心：登录后先进入 Learning Hub（万境中枢），再从世界大厅进入 `ancient-official`。Learning Hub 管理学习范围、Study Focus 与全服只读学习资源；游戏世界只包装玩法，不拥有 Book、KnowledgePoint 或 Question。
 
 ## 数据边界
 
@@ -15,11 +15,11 @@
 ## 正式入口
 
 - `/login`、`/register`：联机学习身份。
-- `/`：Learning Hub（知境中枢）与世界大厅。
+- `/`：Learning Hub（万境中枢）与世界大厅。
 - `/study`：Selected Books、Study Focus、节奏与难度。
 - `/books`、`/books/:id`：文集与 Chapter Tree。
 - `/knowledge/:id`、`/questions/:id`：只读知识和题目浏览。
-- `/worlds/ancient-official`：寒门仕途，由固定 WorldShell 提供“返回知境中枢”。
+- `/worlds/ancient-official`：寒门仕途，由固定 WorldShell 提供“返回万境中枢”。
 
 浏览 API 不创建 attempt、answer record 或 WorldState 变更。世界 action 只接收动作参数，服务端从会话识别 Learner 并加载唯一 WorldState。
 

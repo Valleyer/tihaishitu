@@ -355,7 +355,7 @@ function App() {
                   window.location.assign("/");
                 }}
               >
-                知境中枢
+                万境中枢
               </button>
             </div>
           </header>
