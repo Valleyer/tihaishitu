@@ -1,5 +1,8 @@
 package cn.tihaishitu.manage;
 
+import cn.tihaishitu.learning.QuestionNumberFormatter;
+import cn.tihaishitu.learning.QuestionNumberSort;
+import cn.tihaishitu.learning.QuestionSearchQuery;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -23,7 +26,8 @@ public class QuestionManagementStore {
     public record QuestionView(
             String id, String subject, String sourceId, String sourceType, String sourceName,
             String sourceCanonicalName, Integer examYear,
-            String questionNumber, String questionType, String presentationType, String gradingMode,
+            String questionNumber, String displayQuestionNumber, String questionType,
+            String presentationType, String gradingMode,
             String content, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
             String reviewedBy, String reviewComment, long revision, Instant updatedAt,
@@ -55,11 +59,22 @@ public class QuestionManagementStore {
         List<Object> params = new ArrayList<>(filter.params());
         params.add(size); params.add(page * size);
         List<QuestionView> rows = jdbc.query(baseSelect() + filter.where()
-                        + " ORDER BY q.updated_at DESC, q.id LIMIT ? OFFSET ?",
+                        + " ORDER BY " + orderBy() + " LIMIT ? OFFSET ?",
                 (result, row) -> map(result), params.toArray());
         return PageResult.of(rows, page, size, total == null ? 0 : total);
     }
 
+    /**
+     * 管理端题目列表默认排序：来源 → 年份 → 题号自然排序 → 题目 ID。
+     *
+     * <p>与全平台题库 {@code LearningBrowseStore} 共用
+     * {@link QuestionNumberSort}，避免两处题号排序规则漂移；审核中心也使用同一默认排序，
+     * 不再以更新时间优先。排序键在 DB 级形成，因此分页结果稳定。</p>
+     */
+    private static String orderBy() {
+        return QuestionNumberSort.orderBy("COALESCE(s.display_name,q.source_name,'')",
+                "q.exam_year", "q.question_number", "q.id");
+    }
     public Optional<QuestionView> find(String id) {
         List<QuestionView> rows = jdbc.query(baseSelect() + " WHERE q.id = ?",
                 (result, row) -> map(result), id);
@@ -212,10 +227,16 @@ public class QuestionManagementStore {
 
     private QuestionView map(java.sql.ResultSet result) throws java.sql.SQLException {
         String id = result.getString("id");
+        Integer examYear = (Integer) result.getObject("exam_year");
+        String questionNumber = result.getString("question_number");
         return new QuestionView(id, result.getString("subject_name"), result.getString("source_id"),
                 result.getString("resolved_source_type"), result.getString("resolved_source_name"),
-                result.getString("source_canonical_name"), (Integer) result.getObject("exam_year"),
-                result.getString("question_number"), result.getString("question_type"),
+                result.getString("source_canonical_name"), examYear,
+                questionNumber,
+                // UI 一律使用 displayQuestionNumber；原始 questionNumber 只作为数据事实与编辑事实。
+                // 例如 examYear=2020 + raw "2020-7" 显示为 "7"，不会拼成 "2020-2020-7"。
+                QuestionNumberFormatter.display(questionNumber, examYear),
+                result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
                 result.getString("content_markdown"), result.getString("analysis_markdown"),
                 result.getInt("difficulty"), result.getString("status"),
@@ -273,9 +294,24 @@ public class QuestionManagementStore {
                                     String questionType, String gradingMode, String status,
                                     String creator, String knowledge) {
         List<String> clauses = new ArrayList<>(); List<Object> params = new ArrayList<>();
-        if (query != null && !query.isBlank()) {
-            clauses.add("(LOWER(q.content_markdown) LIKE ? OR LOWER(COALESCE(s.display_name,q.source_name)) LIKE ? OR q.question_number LIKE ?)");
-            String v = "%" + query.trim().toLowerCase() + "%"; params.add(v); params.add(v); params.add(v);
+        // 解析规则与全平台题库共用 QuestionSearchQuery，两个入口不能漂移；
+        // SQL 过滤片段各自维护，因为管理端查全状态、Learner 端只查 published。
+        QuestionSearchQuery search = QuestionSearchQuery.parse(query);
+        if (search.keyword() != null) {
+            String pattern = search.likePattern();
+            List<String> alternatives = new ArrayList<>();
+            alternatives.add("(LOWER(q.content_markdown) LIKE ? OR LOWER(COALESCE(s.display_name,q.source_name)) LIKE ?"
+                    + " OR LOWER(q.question_number) LIKE ?)");
+            params.add(pattern); params.add(pattern); params.add(pattern);
+            if (search.structured()) {
+                // “2020-7” 是对 broad search 的**并列**命中方式：命中 exam_year=2020 且题号为 7
+                // （含历史写法 "2020-7"）。不能与 broad search 做 AND，否则标准写法会被排除。
+                alternatives.add("(q.exam_year = ? AND LOWER(TRIM(q.question_number)) IN (?, ?))");
+                params.add(search.year());
+                params.add(search.number().toLowerCase());
+                params.add(search.yearNumberLiteral());
+            }
+            clauses.add("(" + String.join(" OR ", alternatives) + ")");
         }
         add(clauses, params, "q.subject_name", subject); add(clauses, params, "COALESCE(s.source_type,q.source_type)", sourceType);
         if (examYear != null) { clauses.add("q.exam_year = ?"); params.add(examYear); }

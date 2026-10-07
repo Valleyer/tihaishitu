@@ -15,6 +15,10 @@ describe("hub navigation", () => {
     expect(push).toHaveBeenCalled();
     expect(location.pathname).toBe("/statistics");
     expect(isHubPath("/knowledge/example")).toBe(true);
+    // PR4：知识目录仍是 /books，题库是新的 /questions，两者都在 Hub 内。
+    expect(isHubPath("/books")).toBe(true);
+    expect(isHubPath("/questions")).toBe(true);
+    expect(isHubPath("/questions/example")).toBe(true);
     expect(isHubPath("/worlds/ancient-official")).toBe(false);
     expect(isHubPath("/manage")).toBe(false);
   });

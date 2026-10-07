@@ -264,24 +264,14 @@ public class LearningBrowseStore {
     }
 
     public Map<String, Object> question(String id, String learnerId) {
+        // 全平台只读题目详情：只要是 published Formal Parent Question 就能看，
+        // 与 Learner 当前 selected Books 解耦——浏览题目不等于加入学习范围。
         Map<String, Object> value = jdbc.query("""
-                SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
-                       COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year, q.question_number,
-                       q.question_type, q.presentation_type,
-                       q.grading_mode, q.content_markdown, q.analysis_markdown,
-                       q.difficulty, q.revision
+                SELECT %s
                   FROM question_resource q LEFT JOIN question_source s ON s.id=q.source_id
-                 WHERE q.id = ? AND q.status = 'published'
-                   AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                   AND EXISTS (
-                       SELECT 1 FROM question_resource_knowledge qk
-                       JOIN question_bank_knowledge bk ON bk.knowledge_point_id=qk.knowledge_point_id
-                       JOIN learner_selected_book selected ON selected.bank_id=bk.bank_id
-                       JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
-                       WHERE qk.question_id=q.id AND selected.learner_id=?
-                   )
-                """, (result, row) -> question(result), id, learnerId).stream().findFirst()
+                 WHERE q.id = ? AND %s
+                """.formatted(QUESTION_SELECT, FormalQuestionPolicy.published("q")),
+                (result, row) -> question(result), id).stream().findFirst()
                 .orElseThrow(() -> missing("题目不存在或尚未发布。"));
         List<QuestionAnswerDeriver.Option> answerOptions = new ArrayList<>();
         value.put("options", jdbc.query("""
@@ -292,10 +282,189 @@ public class LearningBrowseStore {
                     result.getBoolean("correct_option"), result.getInt("sort_order")));
             return ordered("key", result.getString("option_key"), "text", result.getString("option_text"));
         }, id));
-        value.put("correctAnswer", answerDeriver.derive((String) value.get("questionType"), answerOptions));
+        // 客观题正确答案继续只由 option.correct_option 派生；Formal Parent 不读 standard_answer_json。
+        // 历史脏数据（例如缺少选项的题）不能让整个题库详情 500：派生失败时明确返回 null。
+        try {
+            value.put("correctAnswer", answerDeriver.derive((String) value.get("questionType"), answerOptions));
+        } catch (RuntimeException invalid) {
+            value.put("correctAnswer", null);
+        }
         value.put("knowledgePoints", questionKnowledge(id));
+        value.put("examLabel", KnowledgeQuestionExamLabel.generate((String) value.get("subject"),
+                (Integer) value.get("examYear")));
         return value;
     }
+
+    /**
+     * 全平台题库列表：所有 published Formal Parent Question 的只读浏览。
+     *
+     * <p>与 Learner 的 selected Books 解耦：没有选中某本文集也能浏览，但“浏览”不创建
+     * Attempt、不影响 Mastery / Wrong Book / RANDOM 每日额度。</p>
+     *
+     * <p>outer query 只做 {@code question_resource LEFT JOIN question_source}（一对一），
+     * Book / Chapter / Knowledge 全部通过 EXISTS 子查询参与，因此不会复制 Question 行：
+     * 分页 ID 查询直接用 {@code SELECT q.id ... ORDER BY ... LIMIT/OFFSET}，**不使用
+     * DISTINCT**。{@code DISTINCT} 与“ORDER BY 引用未出现在 SELECT list 的表达式”组合
+     * 在真实 MySQL 5.7 的 sql_mode 下有报错风险，而这里本来也不需要去重。
+     * {@code totalElements} 仍是 {@code COUNT(DISTINCT q.id)}，语义保持不变。</p>
+     */
+    public PageResult<Map<String, Object>> questions(String query, String sourceId, Integer examYear,
+                                                     String questionType, Integer difficulty, String bookId,
+                                                     String chapterId, String knowledge, int page, int size) {
+        QuestionFilter filter = questionFilter(query, sourceId, examYear, questionType, difficulty,
+                bookId, chapterId, knowledge);
+        Long total = jdbc.queryForObject("SELECT COUNT(DISTINCT q.id) FROM question_resource q "
+                + "LEFT JOIN question_source s ON s.id=q.source_id " + filter.where(),
+                Long.class, filter.params().toArray());
+        List<Object> params = new ArrayList<>(filter.params());
+        params.add(size);
+        params.add(page * size);
+        List<String> ids = jdbc.query("SELECT q.id FROM question_resource q "
+                        + "LEFT JOIN question_source s ON s.id=q.source_id " + filter.where()
+                        + " ORDER BY " + questionOrderBy() + " LIMIT ? OFFSET ?",
+                (result, row) -> result.getString(1), params.toArray());
+        return PageResult.of(questionsByIds(ids), page, size, total == null ? 0 : total);
+    }
+
+    /**
+     * 题库过滤 UI 需要的只读事实：有 published 正式题的来源、实际存在的年份、全平台 enabled Books。
+     *
+     * <p>{@code books} 不受 selected Books 限制，章节按 {@code sort_order}；
+     * 题型与难度由前端固定，不为此增加数据库查询，也不为 facets 新建表。</p>
+     */
+    public Map<String, Object> questionFacets() {
+        List<Map<String, Object>> sources = jdbc.query("""
+                SELECT s.id, s.display_name, s.source_type
+                  FROM question_source s
+                 WHERE EXISTS (SELECT 1 FROM question_resource q
+                                WHERE q.source_id = s.id AND %s)
+                 ORDER BY s.display_name, s.id
+                """.formatted(FormalQuestionPolicy.published("q")),
+                (result, row) -> ordered("id", result.getString("id"),
+                        "displayName", result.getString("display_name"),
+                        "sourceType", result.getString("source_type")));
+        List<Integer> examYears = jdbc.query("""
+                SELECT DISTINCT q.exam_year FROM question_resource q
+                 WHERE q.exam_year IS NOT NULL AND %s
+                 ORDER BY q.exam_year DESC
+                """.formatted(FormalQuestionPolicy.published("q")),
+                (result, row) -> result.getInt(1));
+        Map<String, Map<String, Object>> books = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT b.id book_id, b.name book_name, c.id chapter_id, c.name chapter_name
+                  FROM question_bank b
+                  JOIN question_bank_chapter c ON c.bank_id = b.id
+                 WHERE b.enabled = TRUE
+                 ORDER BY b.created_at, b.id, c.sort_order, c.id
+                """, (RowCallbackHandler) result -> {
+            if (!books.containsKey(result.getString("book_id"))) {
+                Map<String, Object> created = new LinkedHashMap<>();
+                created.put("id", result.getString("book_id"));
+                created.put("name", result.getString("book_name"));
+                created.put("chapters", new ArrayList<Map<String, Object>>());
+                books.put(result.getString("book_id"), created);
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> chapters =
+                    (List<Map<String, Object>>) books.get(result.getString("book_id")).get("chapters");
+            chapters.add(ordered("id", result.getString("chapter_id"), "name", result.getString("chapter_name")));
+        });
+        return ordered("sources", sources, "examYears", examYears, "books", new ArrayList<>(books.values()));
+    }
+
+    /** 按 ID 顺序回读完整题目卡片；空列表不查库。 */
+    private List<Map<String, Object>> questionsByIds(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
+        Map<String, Map<String, Object>> byId = new LinkedHashMap<>();
+        jdbc.query("SELECT " + QUESTION_SELECT + " FROM question_resource q "
+                        + "LEFT JOIN question_source s ON s.id=q.source_id WHERE q.id IN (" + placeholders + ")",
+                (RowCallbackHandler) result -> {
+                    Map<String, Object> value = question(result);
+                    byId.put((String) value.get("id"), value);
+                }, ids.toArray());
+        List<Map<String, Object>> ordered = new ArrayList<>(ids.size());
+        for (String id : ids) {
+            Map<String, Object> value = byId.get(id);
+            if (value == null) continue;
+            value.put("knowledgePoints", questionKnowledge(id));
+            value.put("examLabel", KnowledgeQuestionExamLabel.generate((String) value.get("subject"),
+                    (Integer) value.get("examYear")));
+            ordered.add(value);
+        }
+        return ordered;
+    }
+
+    /** 全平台题库与 Management 共用同一份“来源 → 年份 → 题号自然排序 → question_id”规则。 */
+    private static String questionOrderBy() {
+        return QuestionNumberSort.orderBy("COALESCE(s.display_name,q.source_name,'全服题库')",
+                "q.exam_year", "q.question_number", "q.id");
+    }
+
+    private static final String QUESTION_SELECT = """
+            q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+            COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year, q.question_number,
+            q.question_type, q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
+            q.difficulty, q.revision
+            """;
+
+    /**
+     * 全平台题库的过滤条件。所有条件都从 {@code question_resource q} 出发，
+     * 文集 / 章节 / 知识点只通过 EXISTS 子查询参与，避免多对多 JOIN 造成重复行。
+     */
+    private static QuestionFilter questionFilter(String query, String sourceId, Integer examYear,
+                                                 String questionType, Integer difficulty, String bookId,
+                                                 String chapterId, String knowledge) {
+        List<String> clauses = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        clauses.add(FormalQuestionPolicy.published("q"));
+        QuestionSearchQuery search = QuestionSearchQuery.parse(query);
+        if (search.keyword() != null) {
+            String pattern = search.likePattern();
+            List<String> alternatives = new ArrayList<>();
+            alternatives.add("(LOWER(q.content_markdown) LIKE ?"
+                    + " OR LOWER(COALESCE(s.display_name,q.source_name)) LIKE ?"
+                    + " OR LOWER(q.question_number) LIKE ?)");
+            params.add(pattern);
+            params.add(pattern);
+            params.add(pattern);
+            if (search.structured()) {
+                // “2020-7” 还必须能命中 exam_year=2020 且题号为 7 的题（含历史写法 "2020-7"）：
+                // 这是 broad search 的一个**并列**命中方式，不能与它做 AND，否则标准写法反而被排除。
+                alternatives.add("(q.exam_year = ? AND LOWER(TRIM(q.question_number)) IN (?, ?))");
+                params.add(search.year());
+                params.add(search.number().toLowerCase());
+                params.add(search.yearNumberLiteral());
+            }
+            clauses.add("(" + String.join(" OR ", alternatives) + ")");
+        }
+        if (sourceId != null && !sourceId.isBlank()) { clauses.add("q.source_id = ?"); params.add(sourceId.trim()); }
+        if (examYear != null) { clauses.add("q.exam_year = ?"); params.add(examYear); }
+        if (questionType != null && !questionType.isBlank()) { clauses.add("q.question_type = ?"); params.add(questionType.trim()); }
+        if (difficulty != null) { clauses.add("q.difficulty = ?"); params.add(difficulty); }
+        if (knowledge != null && !knowledge.isBlank()) {
+            clauses.add("EXISTS (SELECT 1 FROM question_resource_knowledge qk"
+                    + " JOIN global_knowledge_point k ON k.id=qk.knowledge_point_id"
+                    + " WHERE qk.question_id=q.id AND k.status='active'"
+                    + " AND (k.id=? OR k.code=? OR LOWER(k.name)=?))");
+            String value = knowledge.trim();
+            params.add(value);
+            params.add(value);
+            params.add(value.toLowerCase());
+        }
+        List<String> scope = new ArrayList<>();
+        if (bookId != null && !bookId.isBlank()) { scope.add("bk.bank_id = ?"); params.add(bookId.trim()); }
+        if (chapterId != null && !chapterId.isBlank()) { scope.add("bk.chapter_id = ?"); params.add(chapterId.trim()); }
+        if (!scope.isEmpty()) {
+            clauses.add("EXISTS (SELECT 1 FROM question_resource_knowledge qk"
+                    + " JOIN question_bank_knowledge bk ON bk.knowledge_point_id=qk.knowledge_point_id"
+                    + " JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE"
+                    + " WHERE qk.question_id=q.id AND " + String.join(" AND ", scope) + ")");
+        }
+        return new QuestionFilter(" WHERE " + String.join(" AND ", clauses), params);
+    }
+
+    private record QuestionFilter(String where, List<Object> params) {}
 
     private List<Map<String, Object>> questionKnowledge(String id) {
         return jdbc.query("""

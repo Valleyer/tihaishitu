@@ -86,6 +86,28 @@ public class LearningBrowseController {
             @PathVariable String id,@RequestParam String bookId,@RequestParam String chapterId) {
         return store.neighbors(id,bookId,chapterId,LearnerContext.learnerId());
     }
+    @GetMapping("/questions/facets") public Map<String, Object> questionFacets() {
+        return store.questionFacets();
+    }
+    @GetMapping("/questions")
+    public PageResult<Map<String, Object>> questions(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String sourceId,
+            @RequestParam(required = false) Integer examYear,
+            @RequestParam(required = false) String questionType,
+            @RequestParam(required = false) Integer difficulty,
+            @RequestParam(required = false) String bookId,
+            @RequestParam(required = false) String chapterId,
+            @RequestParam(required = false) String knowledge,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "分页参数不合法。");
+        }
+        return store.questions(query, sourceId, examYear, questionType, difficulty, bookId, chapterId,
+                knowledge, page, size);
+    }
     @GetMapping("/questions/{id}") public Map<String, Object> question(@PathVariable String id) {
         return store.question(id, LearnerContext.learnerId());
     }

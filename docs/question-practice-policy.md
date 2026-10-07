@@ -513,3 +513,29 @@ KNOWLEDGE 只限定建立 Session 时冻结的 target KP
 奖励档位、奖励卡与奖励数值改造
 寒门仕途视觉与题面布局调整
 ```
+
+---
+
+## 11. 与全平台题库浏览的边界
+
+Learning Hub 的**全平台题库**（`/questions`，见
+[`PROJECT_RULES.md`](./PROJECT_RULES.md) §9.1）是全局只读浏览，与学习范围解耦：
+
+```text
+可以浏览所有 published Formal Parent Question（含未 selected Book 的题）
+但浏览不创建 study_attempt，不计 Exposure
+不影响 Mastery / Wrong Book
+不消耗 RANDOM 每日额度
+```
+
+上表四套策略的候选范围一律**不因新增全平台题库而放宽**：
+
+```text
+RANDOM     仍限定当前 run 冻结的 selected Book scope
+CHAPTER    仍限定 Session 冻结的 Book + Chapter + KP scope
+KNOWLEDGE  仍限定建立 Session 时冻结的 target KP
+WRONG      仍限定当前 selected Books 覆盖范围内的 active 错题
+```
+
+“浏览到了某道题”不等于“该题进入了训练范围”。`/questions/{id}` 同样只是只读详情，
+不提供开始练习入口。

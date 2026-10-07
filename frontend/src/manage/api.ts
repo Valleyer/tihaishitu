@@ -63,7 +63,10 @@ export type QuestionView = {
   sourceName?: string;
   sourceCanonicalName?: string;
   examYear?: number;
+  /** 数据库原始题号，只作为数据事实与编辑器输入值。 */
   questionNumber?: string;
+  /** 后端按 questionNumber + examYear 统一格式化的展示题号；列表 / 审核列表只用它。 */
+  displayQuestionNumber?: string;
   questionType: string;
   presentationType: string;
   gradingMode: string;
