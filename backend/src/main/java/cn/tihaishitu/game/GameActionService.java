@@ -138,31 +138,39 @@ public class GameActionService {
         player.put("coins", player.path("coins").asInt() - entryCost);
         int rounds = activity.path("rounds").asInt(5);
         Set<String> bookScope = selectedBookIds(game);
-        // Book-level 正式题池：整本书（或整批 selected books）覆盖到的全部去重 Formal Question。
-        // 副本轮数不再要求“至少存在 rounds 个不同 KnowledgePoint”；题目总量少于 rounds 时，
-        // 本轮就只做这些题，做完自然结束。
-        int plannedRounds = Math.max(1, Math.min(rounds,
-                questionPool.candidatesForBooks(bookScope, Set.of()).size()));
         ObjectNode run = mapper.createObjectNode();
         run.put("id", UUID.randomUUID().toString());
         run.set("definition", activity.deepCopy());
         run.put("answered", 0);
         run.put("correct", 0);
-        // Learner World 不再预选 KnowledgePoint：正式题从 Book-level 题池直接随机。
-        // Legacy /games/** 兼容路径仍按启动时冻结的 KnowledgePoint 顺序出题，因此保留 plan。
+        run.put("plannedRounds", 0);
         if (!WorldActionContext.active()) {
+            // Legacy /games/** 兼容路径：仍按启动时冻结的 KnowledgePoint 顺序出题。
+            // 轮数只能由 Legacy 自己计划出的知识点数量决定，绝不能看 Book Question Pool：
+            // Legacy 文集可能经由 legacy_knowledge_map 取知识点，而 Book 题池主要走
+            // question_bank_knowledge，两者不一致时会把 5 轮错误压成 1 轮、第 1 题后提前结算。
             KnowledgeQuestionPoolService.StudyPlan legacyPlan =
                     questionPool.planKnowledgePoints(bookScope, rounds);
             run.set("knowledgePointIds", mapper.valueToTree(legacyPlan.knowledgePointIds()));
             run.set("allowedKnowledgePointIds", mapper.valueToTree(legacyPlan.allowedKnowledgePointIds()));
+            run.put("plannedRounds", legacyPlan.knowledgePointIds().size());
         } else {
+            // Learner World / 副本：Book-level 正式题池（selected Book(s) 覆盖的全部去重 Formal Question）。
+            // 轮数不再要求“至少存在 rounds 个不同 KnowledgePoint”；题目总量少于 rounds 时
+            // plannedRounds 收敛为题目数，做完自然结束。
+            List<QuestionDto> candidates = questionPool.candidatesForBooks(bookScope, Set.of());
+            // 明确 400（不是 409 状态冲突）：0 题时必须在开始活动阶段就失败，
+            // 不能把 plannedRounds 强行变成 1 再等到发题时晚一步报错。
+            if (candidates.isEmpty())
+                throw new cn.tihaishitu.common.ApiException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "当前学习范围内没有可用的正式题。");
             run.set("knowledgePointIds", mapper.createArrayNode());
             // Freeze the selected Book boundary; formal draws build the Book-level question pool from this scope.
             run.set("allowedKnowledgePointIds", mapper.valueToTree(questionPool.allowedKnowledgePointIds(bookScope)));
+            run.put("plannedRounds", Math.min(rounds, candidates.size()));
         }
         // Freeze the book scope itself for Book-level question pool draws.
         run.set("allowedBookIds", mapper.valueToTree(bookScope));
-        run.put("plannedRounds", plannedRounds);
         // 本轮已完成 / 已作答的正式题数（不再是知识目录下标）。
         run.put("knowledgePointIndex", 0);
         run.putNull("retryQuestionId");

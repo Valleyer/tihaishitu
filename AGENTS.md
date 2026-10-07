@@ -53,6 +53,67 @@ E:\题海仕途
 某个 Agent 记得上一轮聊天
 ```
 
+## Git 远程写入规则
+
+由于用户当前网络连接不稳定，所有编码 Agent 默认只负责**本地** Git 操作。
+远程写入一律由用户亲自执行。
+
+Agent **可以**执行：
+
+- 从最新 `main` 创建本地开发分支；
+- 在本地修改代码；
+- 在本地运行测试；
+- `git add`；
+- `git commit`；
+- 整理 commit message；
+- 输出本地 HEAD SHA；
+- 整理建议的 PR 标题与 PR 描述；
+- 检查本地分支与 `main` 的差异。
+
+Agent **不得执行**：
+
+```text
+git push
+git push --force
+git push --force-with-lease
+创建远程分支
+gh pr create
+创建 Pull Request
+修改远程 Pull Request
+merge / squash / rebase 远程 PR
+任何会写入 GitHub 远程仓库的操作
+```
+
+标准交付边界：
+
+```text
+本地创建分支
+→ 修改代码
+→ 本地测试
+→ git add
+→ git commit
+→ 报告本地 HEAD SHA
+→ 停止
+```
+
+之后由用户亲自执行：
+
+```text
+git push
+创建 / 更新 PR
+最终 merge
+```
+
+即使 Agent 已经拥有 GitHub 凭据、GitHub Connector、`gh` CLI 或其他远程写入能力，
+也不能因为“可以操作”就自动 push / 建 PR。
+
+除非用户在当前对话中**明确临时授权本次远程写入**，否则默认一律禁止。
+如果任务说明与本规则冲突：
+
+```text
+以“不自动 push / 不自动创建 PR”为准
+```
+
 ## 开始任何 PR 前必须阅读
 
 按顺序：

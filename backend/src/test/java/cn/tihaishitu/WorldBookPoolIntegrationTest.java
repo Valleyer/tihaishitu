@@ -6,6 +6,7 @@ import cn.tihaishitu.learner.LearnerAuthService;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.learning.LearnerQuestionMasteryStore;
 import cn.tihaishitu.game.QuestionAttemptStore;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
@@ -226,6 +227,72 @@ class WorldBookPoolIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // 做完最后一道自然完成本轮，而不是 500 / 无限重复。
         assertThat(mapper.readTree(answered).path("adventure").path("run").path("status").asText()).isEqualTo("settled");
+    }
+
+    @Test
+    void worldActivityFailsFastWhenTheBookHasNoFormalQuestion() throws Exception {
+        Cookie cookie = register("world-empty");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='world-empty'", String.class);
+        String book = book("空题池文集");
+        String point = point("EMPTY-K1", 0);
+        bookPoint(book, point, 0);
+        // 知识点 active 但没有任何 published 正式父题。
+        selectBook(learner, book);
+        assertThat(pool.candidatesForBooks(Set.of(book), Set.of())).isEmpty();
+
+        mvc.perform(post("/api/v1/worlds/ancient-official/initialize").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterName\":\"学子\",\"gender\":\"男\",\"origin\":\"寒门读书人\"}"))
+                .andExpect(status().isCreated());
+        // 必须在开始活动阶段就明确失败，而不是 plannedRounds=1 之后到发题时才晚一步报错。
+        mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"activityId\":\"read\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("当前学习范围内没有可用的正式题。"));
+    }
+
+    @Test
+    void worldPlannedRoundsShrinksToThreeWhenOnlyThreeQuestionsExist() throws Exception {
+        Cookie cookie = register("world-three");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='world-three'", String.class);
+        String book = book("三题文集");
+        String point = point("THREE-K1", 0);
+        bookPoint(book, point, 0);
+        for (int index = 0; index < 3; index++) question(point, "core", null);
+        selectBook(learner, book);
+
+        mvc.perform(post("/api/v1/worlds/ancient-official/initialize").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"characterName\":\"学子\",\"gender\":\"男\",\"origin\":\"寒门读书人\"}"))
+                .andExpect(status().isCreated());
+        String body = mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"activityId\":\"read\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(body).path("adventure").path("run").path("plannedRounds").asInt()).isEqualTo(3);
+
+        String current = body;
+        for (int round = 1; round <= 3; round++) {
+            JsonNode attempt = mapper.readTree(current).path("attempt");
+            current = mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":true}"
+                                    .formatted(attempt.path("id").asText(),
+                                            attempt.path("question").path("id").asText())))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            JsonNode run = mapper.readTree(current).path("adventure").path("run");
+            if (round < 3) {
+                assertThat(run.path("status").asText()).isEqualTo("active");
+                current = mvc.perform(post("/api/v1/worlds/ancient-official/next").with(csrf()).cookie(cookie)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"attemptId\":\"%s\"}".formatted(attempt.path("id").asText())))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            } else {
+                assertThat(run.path("status").asText()).isEqualTo("settled");
+                assertThat(run.path("score").asInt()).isEqualTo(100);
+            }
+        }
     }
 
     private List<String> ids(List<QuestionDto> questions) {

@@ -168,7 +168,9 @@ selected Book(s)
 
 难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有 TRAINING 模式（Remedial / 诊断补强流程）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
 
-Legacy `/games/**` 没有 Learner，仍按启动时冻结的 KnowledgePoint 顺序出题，不读取 Mastery，也不参与 Book-level 题池。
+Legacy `/games/**` 没有 Learner，仍按启动时冻结的 KnowledgePoint 顺序出题，不读取 Mastery，也不参与 Book-level 题池。它的 `plannedRounds` 等于 `planKnowledgePoints(...).knowledgePointIds().size()`，**不受** Book-level 题池题数影响；两条路径的轮数必须在各自分支内独立计算。
+
+Learner World 的 Book 题池为空（0 道 published 正式父题）时，开始活动阶段直接返回 400 `当前学习范围内没有可用的正式题。`，不会先给出 `plannedRounds=1` 再在发题时失败。
 
 ## Learner Question Rotation V1
 

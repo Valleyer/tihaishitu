@@ -594,6 +594,31 @@ Wrong Drill：active Wrong Book → 当前 selected Book scope → Session 内�
 三者都直接随机 Question，不先随机 KnowledgePoint。Chapter Practice 不在
 Book-level 改造范围内，不要顺手重写。
 
+### 10.3.1 Legacy `/games/**` 兼容路径
+
+Legacy `/games/**` 没有 Learner，**不参与** Book-level 题池，继续按启动时冻结的
+KnowledgePoint 顺序出题：
+
+```text
+planKnowledgePoints(legacyBookScope, rounds)
+→ knowledgePointIds
+→ 按 knowledgePointIds[knowledgePointIndex] 取当前 KP
+→ 只在当前 KP 的题里抽题
+```
+
+因此 Legacy 的 `plannedRounds` 只能由它自己计划出的知识点数量决定
+（`legacyPlan.knowledgePointIds().size()`），**绝不能**引用 Book-level 题池的题数：
+
+```text
+Legacy 文集可能只通过 legacy_knowledge_map 归属知识点
+Book 题池主要走 question_bank_knowledge
+两者不一致时（Legacy plan 有 N 个知识点、Book 题池为 0）
+把 plannedRounds 压成 1 会让旧游戏第 1 题答完就提前结算
+```
+
+Learner World / 副本与 Legacy 的轮数计算必须在各自的 if 分支内完成，不要共用同一个
+`plannedRounds` 表达式。
+
 ### 10.4 正式题发题条件
 
 正式题发题条件只剩：
