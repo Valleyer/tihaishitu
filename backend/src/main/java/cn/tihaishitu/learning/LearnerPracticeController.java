@@ -36,6 +36,15 @@ public class LearnerPracticeController {
         return session == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(session);
     }
 
+    /**
+     * Study 页顶部快捷入口：active 章节练习 / 最近一次章节练习 / 从未练过。
+     * 从未练过时 status=none，而不是 404，前端据此显示“开始章节学习”。
+     */
+    @GetMapping("/practice-sessions/recent-chapter")
+    LearnerPracticeService.RecentChapterView recentChapter() {
+        return practice.recentChapter();
+    }
+
     @GetMapping("/practice-sessions/{id}")
     LearnerPracticeService.SessionView get(@PathVariable String id) { return practice.get(id); }
 

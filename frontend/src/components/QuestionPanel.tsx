@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import type { Answer, Assessment, Attempt } from "../domain/types";
 import { typeNames } from "../engine/QuestionBankManager";
 import { displayAnswer } from "../engine/OptionShuffler";
+import { examMetadataView } from "../utils/examMetadata";
 import { Modal } from "./Modal";
 import { RichText } from "./RichText";
 export function QuestionPanel({
@@ -71,6 +72,15 @@ export function QuestionPanel({
         ? "此卷已明"
         : "留待复核";
   const knowledgePoints = attempt.reveal?.knowledgePoints || q.knowledgePoints;
+  /**
+   * 题面来源 metadata（后端在发题时冻结进 attempt snapshot，Hub 与 World 共用同一结构）。
+   * 来源 / 真题标签 / 显示题号作为明确 metadata 展示，不塞进剧情文字；
+   * role 只决定标签颜色（core 紫 / auxiliary 青），两种角色都显示。
+   */
+  const exam = examMetadataView(q.examMetadata);
+  const roleByPointId = new Map(
+    (exam?.knowledgePoints ?? []).map((tag) => [tag.id, tag.role]),
+  );
   return (
     <article className={"scroll-paper " + (resultView ? "show-result" : "")}>
       <div className="paper-heading">
@@ -82,6 +92,17 @@ export function QuestionPanel({
           {attempt.review && <span className="review-tag">旧案重审</span>}
         </div>
       </div>
+      {(exam?.examTitle || exam?.sourceName) && (
+        <div className="exam-source-row">
+          {exam.examLabel && <span className="exam-label">{exam.examLabel}</span>}
+          {exam.displayQuestionNumber && (
+            <span className="exam-question-number">
+              第{exam.displayQuestionNumber}题
+            </span>
+          )}
+          {exam.sourceName && <span className="exam-source">{exam.sourceName}</span>}
+        </div>
+      )}
       {resultView ? (
         <section
           className={
@@ -157,6 +178,9 @@ export function QuestionPanel({
               <button
                 type="button"
                 key={point.id}
+                className={
+                  "knowledge-tag " + (roleByPointId.get(point.id) ?? "core")
+                }
                 onClick={() =>
                   setExpanded(
                     `### ${point.name}\n\n${point.explanation || point.description}`,

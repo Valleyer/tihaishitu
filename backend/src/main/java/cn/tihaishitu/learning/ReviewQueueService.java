@@ -18,8 +18,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
-
 @Service
 public class ReviewQueueService {
     private final StudyProfileStore profiles;
@@ -49,11 +47,8 @@ public class ReviewQueueService {
         Set<String> allowed = new LinkedHashSet<>(pointById.keySet());
 
         Map<String, KnowledgeMasteryModel.State> stateByPoint = states.settledStates(learnerId, allowed, now);
-        Set<String> ready = new LinkedHashSet<>();
-        stateByPoint.forEach((id, state) -> {
-            if (model.effectiveMastery(state, now) >= READY_THRESHOLD) ready.add(id);
-        });
-        Set<String> playable = pool.adaptivePlayableKnowledgePointIds(allowed, ready);
+        // Playability 不再依赖 readiness / 今日答题情况：只要该知识点存在正式题就可安排复习。
+        Set<String> playable = pool.playableKnowledgePointIds(allowed);
 
         List<ReviewItem> items = new ArrayList<>();
         pointById.forEach((id, point) -> {

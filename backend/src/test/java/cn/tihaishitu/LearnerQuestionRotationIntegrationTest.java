@@ -1,6 +1,5 @@
 package cn.tihaishitu;
 
-import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.game.KnowledgeQuestionPoolService;
 import cn.tihaishitu.game.LearnerQuestionExposureStore;
 import org.junit.jupiter.api.Test;
@@ -18,6 +17,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 最新规则：正式题抽取不再按 Exposure 跨 run 软排序，也不再使用 difficulty / preferred difficulty 参与排名。
+ * 唯一保留的跨 run 事实是 {@code study_attempt} 作为 Exposure 记录本身；
+ * 普通 Formal Question 只在当前 Session 内用 seenQuestionIds 防止立刻重复，新 Session 重新进入随机池。
+ */
 @SpringBootTest
 @Transactional
 @TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:question-rotation;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
@@ -29,7 +33,7 @@ class LearnerQuestionRotationIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
-    void normalAndTrainingPreferNeverExposedAcrossWorldHistory() {
+    void exposureStillAggregatesAcrossWorldsAndStatuses() {
         String learner = learner();
         String point = knowledge();
         String seen = question(point, 2), freshA = question(point, 2), freshB = question(point, 2);
@@ -41,42 +45,45 @@ class LearnerQuestionRotationIntegrationTest {
                 .isEqualTo(new LearnerQuestionExposureStore.Exposure(
                         seen, 3, NOW.minus(1, ChronoUnit.DAYS)));
 
-        for (int index = 0; index < 20; index++) {
-            assertThat(select(learner, point, Set.of(), 2, KnowledgeQuestionPoolService.Mode.NORMAL).id())
-                    .isIn(freshA, freshB);
-            assertThat(select(learner, point, Set.of(), 4, KnowledgeQuestionPoolService.Mode.TRAINING).id())
-                    .isIn(freshA, freshB);
-        }
+        // 历史 Exposure 不再影响正式题抽取：新 Session 中三题都在随机池内。
+        Set<String> drawn = new java.util.HashSet<>();
+        for (int index = 0; index < 200; index++)
+            drawn.add(select(learner, point, Set.of(), 2, KnowledgeQuestionPoolService.Mode.NORMAL).id());
+        assertThat(drawn).containsExactlyInAnyOrder(seen, freshA, freshB);
     }
 
     @Test
-    void allExposedUsesOldestLastExposureBeforeLowerCount() {
+    void sessionSeenIsAHardExclusionButANewSessionReopensThePool() {
         String learner = learner();
         String point = knowledge();
-        String oldestLessUsed = question(point, 3);
-        String oldestMoreUsed = question(point, 3);
-        String recent = question(point, 3);
-        expose(learner, "ancient-official", oldestLessUsed, NOW.minus(10, ChronoUnit.DAYS));
-        expose(learner, "ancient-official", oldestMoreUsed, NOW.minus(11, ChronoUnit.DAYS));
-        expose(learner, "future-world", oldestMoreUsed, NOW.minus(10, ChronoUnit.DAYS));
-        expose(learner, "future-world", recent, NOW.minus(5, ChronoUnit.DAYS));
+        String first = question(point, 3);
+        String second = question(point, 3);
+        expose(learner, "ancient-official", first, NOW.minus(10, ChronoUnit.DAYS));
 
-        assertThat(select(learner, point, Set.of(), 3, KnowledgeQuestionPoolService.Mode.NORMAL).id())
-                .isEqualTo(oldestLessUsed);
+        // Session 内 seen 是硬排除：只剩第二题时必须抽到它，而不是回退到已见题。
+        assertThat(select(learner, point, Set.of(first), 3, KnowledgeQuestionPoolService.Mode.NORMAL).id())
+                .isEqualTo(second);
+
+        // 新 Session 重新进入随机池：两题都可能被抽到。
+        Set<String> drawn = new java.util.HashSet<>();
+        for (int index = 0; index < 100; index++)
+            drawn.add(select(learner, point, Set.of(), 3, KnowledgeQuestionPoolService.Mode.NORMAL).id());
+        assertThat(drawn).containsExactlyInAnyOrder(first, second);
     }
 
     @Test
-    void unseenWinsBeforeDifficultyWhileHistoricalExposureNeverHardLocksRetry() {
+    void historicalExposureNeverHardLocksRetryAndSingleQuestionPoolStaysUsable() {
         String learner = learner();
         String point = knowledge();
         String seenDifficultyTwo = question(point, 2);
         String freshDifficultyThree = question(point, 3);
         expose(learner, "ancient-official", seenDifficultyTwo, NOW.minus(1, ChronoUnit.HOURS));
 
-        assertThat(select(learner, point, Set.of(), 2, KnowledgeQuestionPoolService.Mode.NORMAL).id())
-                .isEqualTo(freshDifficultyThree);
-        assertThat(select(learner, point, Set.of(seenDifficultyTwo), 2,
-                KnowledgeQuestionPoolService.Mode.NORMAL).id()).isEqualTo(freshDifficultyThree);
+        // 全部题都见过以后仍然允许旧题再次出现，不会阻断任务重试。
+        Set<String> drawn = new java.util.HashSet<>();
+        for (int index = 0; index < 100; index++)
+            drawn.add(select(learner, point, Set.of(), 2, KnowledgeQuestionPoolService.Mode.NORMAL).id());
+        assertThat(drawn).containsExactlyInAnyOrder(seenDifficultyTwo, freshDifficultyThree);
 
         String singlePoint = knowledge();
         String onlyQuestion = question(singlePoint, 2);
@@ -85,11 +92,11 @@ class LearnerQuestionRotationIntegrationTest {
                 .isEqualTo(onlyQuestion);
     }
 
-    private QuestionDto select(String learner, String point, Set<String> seen, int preferred,
-                               KnowledgeQuestionPoolService.Mode mode) {
+    private cn.tihaishitu.catalog.QuestionDto select(String learner, String point, Set<String> seen, int preferred,
+                                                     KnowledgeQuestionPoolService.Mode mode) {
         return pool.selectQuestionForLearner(learner,
                 new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
-                        point, Set.of(point), Set.of(), seen, preferred, mode));
+                        point, Set.of(point), seen, preferred, mode));
     }
 
     private String learner() {

@@ -59,7 +59,8 @@ public class LearnerStatisticsService {
             activeDates.add(date); points.add(activity.pointId());
             byDate.computeIfAbsent(date, ignored -> new ArrayList<>()).add(activity);
             if ("knowledge_drill".equals(activity.intent())) knowledgeDrill++;
-            if ("wrong_review".equals(activity.intent())) wrongReview++;
+            // 错题单题重做与错题快练统一计入错题练习作答统计。
+            if ("wrong_review".equals(activity.intent()) || "wrong_drill".equals(activity.intent())) wrongReview++;
             if (activity.world()) worldAttempts++;
             if ("correct".equals(activity.assessment())) correct++;
             else if ("partial".equals(activity.assessment())) partial++;

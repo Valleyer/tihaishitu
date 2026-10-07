@@ -156,5 +156,94 @@ describe("practice interaction closure", () => {
     window.history.replaceState(null, "", "/practice/session?returnTo=https%3A%2F%2Fevil.example");
     expect(safePracticeReturnTo("knowledge_drill")).toBe("/study");
     expect(safePracticeReturnTo("wrong_review")).toBe("/wrong-questions");
+    // 错题快练与单题重做一样返回错题列表。
+    expect(safePracticeReturnTo("wrong_drill")).toBe("/wrong-questions");
+  });
+
+  it("shows exam label and every knowledge point tag on the formal practice page", async () => {
+    vi.spyOn(platformApi, "practice").mockResolvedValue({ ...session("correct"), currentAttempt: {
+      ...session("correct").currentAttempt,
+      sourceName: "2022年全国硕士研究生招生考试数学一", examYear: 2022,
+      questionNumber: "2022-3", displayQuestionNumber: "3",
+      examLabel: "2022年考研数学一真题",
+      knowledgePoints: [
+        { id: "k1", name: "数列极限计算", role: "core" },
+        { id: "k2", name: "函数奇偶性、周期性与单调性", role: "auxiliary" },
+      ],
+    } });
+    const view = render(<PracticePage data={data} id="session" />);
+    expect(await screen.findByText("2022年考研数学一真题")).toBeTruthy();
+    expect(screen.getByText("第3题")).toBeTruthy();
+    // core / auxiliary 都显示，并用不同角色类区分。
+    expect(screen.getByText("数列极限计算").classList.contains("core")).toBe(true);
+    expect(screen.getByText("函数奇偶性、周期性与单调性").classList.contains("auxiliary")).toBe(true);
+    expect(view.container.querySelectorAll(".practice-exam-meta .practice-exam-label")).toHaveLength(1);
+  });
+
+  it("keeps the two wrong-question buttons spaced and readable", async () => {
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{ questionId: "q", targetKnowledgePointId: "k",
+      knowledgePointName: "函数", contentMarkdown: "错题", lastGradedAt: "2026-10-06T00:00:00Z", available: true,
+      examLabel: "2022年考研数学一真题", questionNumber: "2022-3", displayQuestionNumber: "3",
+      knowledgePoints: [{ id: "k", code: "K", name: "数列极限计算", subject: "数学一", section: "",
+        chapter: "", description: "", explanation: "", role: "core" }] }]);
+    const view = render(<WrongQuestionsPage data={data} />);
+    await screen.findByRole("button", { name: "重做这道题" });
+    const actions = view.container.querySelector(".wrong-actions")!;
+    expect(actions).toBeTruthy();
+    expect(actions.children).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "重做这道题" }).classList.contains("hub-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: "移出错题本" }).classList.contains("secondary")).toBe(true);
+    expect(screen.getByText("2022年考研数学一真题")).toBeTruthy();
+  });
+
+  it("offers quick wrong-question practice and the recent chapter entry on Study", async () => {
+    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [] });
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([
+      { questionId: "q1", targetKnowledgePointId: "k", knowledgePointName: "函数",
+        contentMarkdown: "错题", lastGradedAt: "2026-10-06T00:00:00Z", available: true },
+    ]);
+    vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
+    vi.spyOn(platformApi, "recentChapter").mockResolvedValue({
+      status: "last", lastSessionId: "old", bookId: "math", bookName: "考研数学一",
+      chapterId: "chapter", chapterName: "函数章", updatedAt: "2026-10-06T08:00:00Z",
+    });
+    const startWrong = vi.spyOn(platformApi, "startWrongDrill")
+      .mockResolvedValue({ ...session(), intent: "wrong_drill" });
+    const startChapter = vi.spyOn(platformApi, "startChapterPractice")
+      .mockResolvedValue({ ...session(), intent: "chapter_drill" });
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
+    render(<StudyPage data={data} reload={vi.fn()} />);
+
+    // 没有 active Session 但有最近一次章节练习：显示“最近练习章节”与“再次练习”。
+    expect(await screen.findByText("最近练习章节")).toBeTruthy();
+    expect(screen.getByText("函数章")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "再次练习 →" }));
+    await waitFor(() => expect(startChapter).toHaveBeenCalledWith("math", "chapter"));
+
+    // 错题区域：primary 快速练习错题 + secondary 进入错题本。
+    expect(await screen.findByText("已保留 1 道错题")).toBeTruthy();
+    const quick = screen.getByRole("button", { name: "快速练习错题" });
+    expect(quick.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(quick);
+    await waitFor(() => expect(startWrong).toHaveBeenCalled());
+  });
+
+  it("shows the continue entry only for an active chapter session", async () => {
+    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [] });
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
+    vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
+    vi.spyOn(platformApi, "recentChapter").mockResolvedValue({
+      status: "active", activeSessionId: "active-session", bookId: "math", bookName: "考研数学一",
+      chapterId: "chapter", chapterName: "函数章", currentKnowledgePointIndex: 2, knowledgePointCount: 7,
+      updatedAt: "2026-10-06T08:00:00Z",
+    });
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
+    render(<StudyPage data={data} reload={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "继续章节练习 →" })).toBeTruthy();
+    expect(screen.getByText("当前进度：2 / 7")).toBeTruthy();
+    // 0 道错题时快练按钮禁用，避免点击后才报错。
+    const quick = screen.getByRole("button", { name: "快速练习错题" });
+    expect(quick.hasAttribute("disabled")).toBe(true);
   });
 });

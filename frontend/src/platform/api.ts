@@ -20,7 +20,10 @@ export interface Chapter {
 }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
-  id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string; questionType: string;
+  id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string;
+  /** UI 只使用 displayQuestionNumber；questionNumber 是数据库原始题号。 */
+  displayQuestionNumber?: string;
+  questionType: string;
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
   standardAnswer: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
@@ -79,7 +82,14 @@ export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
   contentMarkdown: string; lastGradedAt: string; available: boolean;
   unavailableReason?: "out_of_scope" | "question_unavailable" | "knowledge_unavailable" | null;
+  /** 动态生成的真题展示标签，例如 2022年考研数学一真题；后端按 exam_year + subject_name 生成。 */
+  examLabel?: string | null; sourceName?: string | null; examYear?: number | null;
+  /** questionNumber 是数据库原始题号；displayQuestionNumber 是 UI 用的已格式化题号。 */
+  questionNumber?: string | null; displayQuestionNumber?: string | null; subjectName?: string | null;
+  /** 全部知识点标签（core / auxiliary 都返回，role 只表达主次）。 */
+  knowledgePoints?: KnowledgePoint[];
 }
+export interface PracticeKnowledgePointTag { id: string; name: string; role: string }
 export interface PracticeAttempt {
   id: string; status: "active" | "revealed" | "graded"; targetKnowledgePointId: string;
   targetKnowledgePointName: string; evidenceMode: "normal" | "training" | "remedial"; diagnosisRole?: string;
@@ -89,12 +99,28 @@ export interface PracticeAttempt {
   };
   standard?: unknown; explanation?: string; assessment?: "correct" | "partial" | "wrong";
   gradingSource?: string; answerRevealed: boolean;
+  /** 题面来源信息：来源名 + 真题标签 + 题号，发题时冻结进 question_snapshot_json。 */
+  sourceName?: string | null; examYear?: number | null;
+  /** questionNumber 是数据库原始题号；displayQuestionNumber 才是 UI 使用的题号。 */
+  questionNumber?: string | null; displayQuestionNumber?: string | null;
+  examLabel?: string | null; knowledgePoints?: PracticeKnowledgePointTag[];
 }
+export type PracticeIntent = "knowledge_drill" | "wrong_review" | "wrong_drill" | "chapter_drill";
 export interface PracticeSession {
-  id: string; intent: "knowledge_drill" | "wrong_review" | "chapter_drill"; targetKnowledgePointId?: string;
+  id: string; intent: PracticeIntent; targetKnowledgePointId?: string;
   targetBookId?: string; targetChapterId?: string; currentKnowledgePointId?: string;
   sourceQuestionId?: string; status: "active" | "ended"; revision: number;
   currentAttempt: PracticeAttempt; flowComplete: boolean; canRepeat: boolean;
+}
+/**
+ * Study 页“最近章节”快捷入口。
+ * status=active 恢复 activeSessionId；status=last 用相同 Book + Chapter 新建 Session；status=none 表示从未练过。
+ */
+export interface RecentChapter {
+  status: "active" | "last" | "none"; activeSessionId?: string | null; lastSessionId?: string | null;
+  bookId?: string | null; bookName?: string | null; chapterId?: string | null; chapterName?: string | null;
+  currentKnowledgePointId?: string | null; currentKnowledgePointIndex?: number | null;
+  knowledgePointCount?: number | null; updatedAt?: string | null;
 }
 export interface KnowledgeDirectoryItem extends KnowledgePoint {
   bookId: string; bookName: string; chapterId: string; catalogChapter: string;
@@ -163,11 +189,15 @@ export const platformApi = {
     request<PracticeSession>("/learner/practice-sessions", "POST", {
       intent: "wrong_review", sourceQuestionId,
     }),
+  /** 快速练习错题：随机连续刷 active 错题，Session 内不重复。 */
+  startWrongDrill: () =>
+    request<PracticeSession>("/learner/practice-sessions", "POST", { intent: "wrong_drill" }),
   startChapterPractice: (targetBookId: string, targetChapterId: string) =>
     request<PracticeSession>("/learner/practice-sessions", "POST", {
       intent: "chapter_drill", targetBookId, targetChapterId,
     }),
   activeChapterPractice: () => request<PracticeSession | undefined>("/learner/practice-sessions/active-chapter"),
+  recentChapter: () => request<RecentChapter>("/learner/practice-sessions/recent-chapter"),
   practice: (id: string) => request<PracticeSession>("/learner/practice-sessions/" + encodeURIComponent(id)),
   answerPractice: (session: PracticeSession, answer: unknown) =>
     request<PracticeSession>(`/learner/practice-sessions/${encodeURIComponent(session.id)}/answers`, "POST", {

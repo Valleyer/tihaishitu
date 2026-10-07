@@ -1,14 +1,17 @@
 package cn.tihaishitu.learning;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -19,8 +22,28 @@ public class LearnerPracticeStore {
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
-                                String contentMarkdown, Instant lastGradedAt, boolean available,
-                                String unavailableReason) {}
+                                String contentMarkdown, String subjectName, Integer examYear,
+                                String questionNumber, Instant lastGradedAt, boolean available,
+                                String unavailableReason, List<KnowledgePointTag> knowledgePoints) {
+        public WrongQuestion {
+            knowledgePoints = knowledgePoints == null ? List.of() : List.copyOf(knowledgePoints);
+        }
+
+        public WrongQuestion withKnowledgePoints(List<KnowledgePointTag> tags) {
+            return new WrongQuestion(questionId, targetKnowledgePointId, knowledgePointName, contentMarkdown,
+                    subjectName, examYear, questionNumber, lastGradedAt, available, unavailableReason, tags);
+        }
+
+        /** 动态生成的真题展示标签，例如 2022年考研数学一真题。 */
+        public String examLabel() {
+            return KnowledgeQuestionExamLabel.generate(subjectName, examYear);
+        }
+
+        /** UI 显示题号（已剥离同年份前缀）；原始 questionNumber 仍作为数据事实保留。 */
+        public String displayQuestionNumber() {
+            return QuestionNumberFormatter.display(questionNumber, examYear);
+        }
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -77,120 +100,38 @@ public class LearnerPracticeStore {
     }
 
     /**
-     * 章节内仍可能出题的候选知识点及其复习排期数据。是否真正“可练”由
-     * LearnerPracticeService 用同一条 ReviewSchedulingPolicy 判定，避免在 SQL 里
-     * 使用 MySQL 5.7 不支持的日期函数。
-     * 语义与 chapter_drill 入口校验一致：已发布父真题、依赖满足、且该题对 Learner
-     * 而言仍是未见 / 最近一次答错或部分正确 / 上一个业务日答对 / 知识点复习到期。
+     * 整本文集一次批量取回每个 Chapter 下“至少存在一道正式父题”的知识点。
+     *
+     * <p>长期规则：Chapter 可练性只取决于该章节是否有正式题，不再看依赖 readiness、
+     * 今日是否已经答对或 Review 是否到期。这里只返回 chapter × knowledgePoint 归属，
+     * 由 Service 按 chapterId 统计去重后的知识点数量。</p>
      */
-    public record ChapterCandidate(String chapterId, String knowledgePointId, Double masteryScore,
-                                   Double stabilityDays, Instant lastEvidenceAt, boolean readyQuestion) {}
+    public record ChapterCandidate(String chapterId, String knowledgePointId) {}
 
-    /**
-     * 整本文集一次批量取回所有 Chapter 的候选知识点与复习排期数据。
-     * 语义与原先的单章节 chapterCandidates 完全一致（scope / core 正式父题 / 允许题型 /
-     * 依赖满足 / 未见或上一业务日答对、非满分已掌握），只是把 chapter 维度合并为一次查询，
-     * 由 Service 在 Java 内按 chapterId 分组，从而消除 /learning/books/{id} 的逐章查询放大。
-     */
-    public List<ChapterCandidate> bookChapterCandidates(String learnerId, Collection<String> chapterIds,
-                                                        java.sql.Date businessDate) {
+    public List<ChapterCandidate> bookChapterCandidates(String learnerId, Collection<String> chapterIds) {
         if (chapterIds == null || chapterIds.isEmpty()) return List.of();
         String marks = String.join(",", java.util.Collections.nCopies(chapterIds.size(), "?"));
-        // JdbcTemplate 按 '?' 在 SQL 文本中的出现顺序绑定参数，必须与文本顺序一致。
         List<Object> args = new ArrayList<>();
-        args.add(learnerId);                                // ready_question: exposure
-        args.add(learnerId);                                // ready_question: latest graded
-        args.add(businessDate);                             // ready_question: 上一业务日答对
-        args.add(learnerId);                                // state: 掌握度
-        args.addAll(chapterIds);                            // membership: 章节范围
-        args.add(learnerId);                                // dependency: 学习范围
+        args.add(learnerId);                                // 文集归属
+        args.addAll(chapterIds);                            // 章节范围
         return jdbc.query("""
-                SELECT membership.chapter_id,candidate.knowledge_point_id,
-                       MAX(CASE
-                           WHEN NOT EXISTS (
-                               SELECT 1 FROM study_attempt exposure
-                                WHERE exposure.learner_id = ? AND exposure.question_id = q.id
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM learner_diagnosis_session diagnosis
-                                       WHERE diagnosis.root_attempt_id = exposure.id
-                                         AND NOT EXISTS (
-                                             SELECT 1 FROM learner_knowledge_evidence evidence
-                                              WHERE evidence.attempt_id = exposure.id
-                                         )
-                                  )
-                           ) THEN TRUE
-                           WHEN EXISTS (
-                               SELECT 1 FROM study_attempt latest
-                                WHERE latest.learner_id = ? AND latest.question_id = q.id
-                                  AND latest.target_knowledge_point_id = candidate.knowledge_point_id
-                                  AND latest.status = 'graded'
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM learner_diagnosis_session diagnosis
-                                       WHERE diagnosis.root_attempt_id = latest.id
-                                         AND NOT EXISTS (
-                                             SELECT 1 FROM learner_knowledge_evidence evidence
-                                              WHERE evidence.attempt_id = latest.id
-                                         )
-                                  )
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM study_attempt newer
-                                       WHERE newer.learner_id = latest.learner_id
-                                         AND newer.target_knowledge_point_id = latest.target_knowledge_point_id
-                                         AND newer.question_id = latest.question_id
-                                         AND newer.status = 'graded'
-                                         AND NOT EXISTS (
-                                             SELECT 1 FROM learner_diagnosis_session diagnosis
-                                              WHERE diagnosis.root_attempt_id = newer.id
-                                                AND NOT EXISTS (
-                                                    SELECT 1 FROM learner_knowledge_evidence evidence
-                                                     WHERE evidence.attempt_id = newer.id
-                                                )
-                                         )
-                                         AND (newer.answered_at > latest.answered_at
-                                              OR (newer.answered_at = latest.answered_at AND newer.id > latest.id))
-                                  )
-                                  AND (latest.assessment IN ('wrong','partial')
-                                       OR CAST(latest.answered_at AS DATE) < ?)
-                           ) THEN TRUE
-                           ELSE FALSE
-                       END) ready_question,
-                       state.mastery_score, state.stability_days, state.last_evidence_at
-                  FROM question_resource_knowledge candidate
-                  JOIN question_resource q ON q.id = candidate.question_id
-                  JOIN global_knowledge_point current_k ON current_k.id = candidate.knowledge_point_id
-                  JOIN question_bank_knowledge membership ON membership.knowledge_point_id = candidate.knowledge_point_id
-                  LEFT JOIN learner_knowledge_state state ON state.learner_id = ?
-                                                        AND state.knowledge_point_id = candidate.knowledge_point_id
-                 WHERE candidate.relation_role = 'core'
-                   AND q.status = 'published'
-                   AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                SELECT DISTINCT bk.chapter_id, current_rel.knowledge_point_id
+                  FROM question_bank_knowledge bk
+                  JOIN learner_selected_book selected ON selected.bank_id = bk.bank_id
+                                                     AND selected.learner_id = ?
+                  JOIN question_resource_knowledge current_rel
+                    ON current_rel.knowledge_point_id = bk.knowledge_point_id
+                  JOIN question_resource q ON q.id = current_rel.question_id
+                  JOIN global_knowledge_point current_k ON current_k.id = bk.knowledge_point_id
+                 WHERE bk.chapter_id IN (%s)
                    AND current_k.status = 'active'
-                   AND membership.chapter_id IN (%s)
-                   AND NOT EXISTS (
-                       SELECT 1 FROM question_resource_knowledge dependency
-                         LEFT JOIN global_knowledge_point dependency_k ON dependency_k.id = dependency.knowledge_point_id
-                        WHERE dependency.question_id = q.id
-                          AND (dependency_k.id IS NULL OR dependency_k.status <> 'active'
-                               OR NOT EXISTS (
-                                   SELECT 1 FROM question_bank_knowledge allowed
-                                    JOIN learner_selected_book selected ON selected.bank_id = allowed.bank_id
-                                   WHERE selected.learner_id = ?
-                                     AND allowed.knowledge_point_id = dependency.knowledge_point_id
-                               ))
-                   )
-                 GROUP BY membership.chapter_id, candidate.knowledge_point_id, state.mastery_score,
-                          state.stability_days, state.last_evidence_at
-                """.formatted(marks), (rs, row) -> new ChapterCandidate(rs.getString("chapter_id"),
-                rs.getString("knowledge_point_id"),
-                number(rs.getObject("mastery_score")), number(rs.getObject("stability_days")),
-                rs.getTimestamp("last_evidence_at") == null ? null : rs.getTimestamp("last_evidence_at").toInstant(),
-                rs.getBoolean("ready_question")), args.toArray());
-    }
-
-    /** DECIMAL 列在 H2/MySQL 上可能返回 BigDecimal、Double 或 Float，统一按 Number 取值。 */
-    private static Double number(Object value) {
-        return value instanceof Number number ? number.doubleValue() : null;
+                   AND %s
+                   AND %s
+                 ORDER BY bk.chapter_id, current_rel.knowledge_point_id
+                """.formatted(marks, KnowledgeQuestionCoveragePolicy.anyRelationRole("current_rel"),
+                        FormalQuestionPolicy.published("q")),
+                (rs, row) -> new ChapterCandidate(rs.getString("chapter_id"),
+                        rs.getString("knowledge_point_id")), args.toArray());
     }
 
     public void setCurrentKnowledgePoint(String id,String learnerId,String pointId){
@@ -199,6 +140,72 @@ public class LearnerPracticeStore {
 
     public Optional<Session> latestActiveChapter(String learnerId){
         return sessions("WHERE learner_id=? AND intent='chapter_drill' AND status='active' ORDER BY updated_at DESC LIMIT 1",learnerId).stream().findFirst();
+    }
+
+    /** 最近一次章节练习（不论 active 还是 ended），供 Study 页“再次练习”快捷入口使用。 */
+    public Optional<Session> latestChapterSession(String learnerId){
+        return sessions("WHERE learner_id=? AND intent='chapter_drill' ORDER BY updated_at DESC LIMIT 1",learnerId).stream().findFirst();
+    }
+
+    /** 文集与章节的用户可见名称；已下架或已删除时返回空，由 Service 决定降级文案。 */
+    public Optional<ChapterNames> chapterNames(String bookId, String chapterId){
+        return jdbc.query("""
+                SELECT b.name book_name, c.name chapter_name
+                  FROM question_bank b JOIN question_bank_chapter c ON c.bank_id = b.id
+                 WHERE b.id = ? AND c.id = ?
+                """, (rs, row) -> new ChapterNames(rs.getString("book_name"), rs.getString("chapter_name")),
+                bookId, chapterId).stream().findFirst();
+    }
+
+    public record ChapterNames(String bookName, String chapterName) {}
+
+    /**
+     * 当前 Session 实际练到哪道题（用于“最近章节”进度展示）。
+     * 只读最近一次 attempt 的题目，不创建新的状态。
+     */
+    public Optional<String> currentQuestionId(String sessionId){
+        return jdbc.query("""
+                SELECT question_id FROM study_attempt WHERE practice_session_id=?
+                 ORDER BY created_at DESC, id DESC LIMIT 1
+                """, (rs, row) -> rs.getString(1), sessionId).stream().findFirst();
+    }
+
+    /**
+     * wrong_drill 的候选：当前 Learner 的 active 错题，限定在 selected Books 覆盖范围内，
+     * 且题目仍然是可练的 published 正式父题。随机由 Service 负责。
+     */
+    public List<String> wrongDrillQuestionIds(String learnerId, Collection<String> excludedQuestionIds) {
+        List<Object> args = new ArrayList<>();
+        args.add(learnerId);
+        StringBuilder exclusion = new StringBuilder();
+        if (excludedQuestionIds != null && !excludedQuestionIds.isEmpty()) {
+            exclusion.append(" AND wrong.question_id NOT IN (")
+                    .append(String.join(",", java.util.Collections.nCopies(excludedQuestionIds.size(), "?")))
+                    .append(")");
+            args.addAll(excludedQuestionIds);
+        }
+        return jdbc.query("""
+                SELECT wrong.question_id
+                  FROM learner_wrong_question wrong
+                  JOIN question_resource q ON q.id = wrong.question_id
+                  JOIN global_knowledge_point k ON k.id = wrong.target_knowledge_point_id
+                 WHERE wrong.learner_id = ? AND wrong.status = 'active'
+                   AND %s
+                   AND q.status = 'published' AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                   AND k.status = 'active' AND %s
+                   %s
+                 ORDER BY wrong.question_id
+                """.formatted(inWrongQuestionScope(), TrainableKnowledge.exists("k"), exclusion),
+                (rs, row) -> rs.getString(1), args.toArray());
+    }
+
+    /** active 错题总数（不要求当前可练），用于 Study 页按钮禁用与友好提示。 */
+    public int activeWrongQuestionCount(String learnerId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM learner_wrong_question WHERE learner_id=? AND status='active'",
+                Integer.class, learnerId);
+        return count == null ? 0 : count;
     }
 
     public Optional<Session> find(String id, String learnerId) {
@@ -217,11 +224,21 @@ public class LearnerPracticeStore {
                 """, (rs, row) -> rs.getString(1), id));
     }
 
+    /**
+     * 本 Session 已经见过的题：既包括直接发卷的 attempt，也包括同一 Session 诊断流程
+     * （dependency probe / remediation、target recheck / remediation）发出的题，
+     * 否则诊断题会被当成“没见过”而在同一轮里重复出现。
+     */
     public Set<String> seenQuestions(String id) {
         return new LinkedHashSet<>(jdbc.query("""
-                SELECT DISTINCT question_id FROM study_attempt
-                 WHERE practice_session_id=? ORDER BY question_id
-                """, (rs, row) -> rs.getString(1), id));
+                SELECT DISTINCT a.question_id FROM study_attempt a
+                 WHERE a.practice_session_id = ?
+                    OR a.diagnosis_session_id IN (
+                        SELECT diagnosis.id FROM learner_diagnosis_session diagnosis
+                         WHERE diagnosis.practice_session_id = ?
+                    )
+                 ORDER BY a.question_id
+                """, (rs, row) -> rs.getString(1), id, id));
     }
 
     public int attemptCount(String sessionId,String questionId){
@@ -248,9 +265,10 @@ public class LearnerPracticeStore {
     }
 
     public List<WrongQuestion> wrongQuestions(String learnerId) {
-        return jdbc.query("""
+        List<WrongQuestion> questions = jdbc.query("""
                 SELECT wrong.question_id,wrong.target_knowledge_point_id,k.name knowledge_name,
-                       q.content_markdown,wrong.last_wrong_at,
+                       q.content_markdown,q.subject_name,q.exam_year,q.question_number,
+                       wrong.last_wrong_at,
                        CASE
                            WHEN NOT (%s) THEN 'out_of_scope'
                            WHEN NOT (q.status='published' AND q.parent_question_id IS NULL
@@ -267,8 +285,27 @@ public class LearnerPracticeStore {
                 """.formatted(inWrongQuestionScope(), TrainableKnowledge.exists("k")),
                 (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
-                rs.getString("content_markdown"), rs.getTimestamp("last_wrong_at").toInstant(),
-                rs.getString("unavailable_reason") == null, rs.getString("unavailable_reason")), learnerId);
+                rs.getString("content_markdown"), rs.getString("subject_name"),
+                rs.getObject("exam_year", Integer.class), rs.getString("question_number"),
+                rs.getTimestamp("last_wrong_at").toInstant(),
+                rs.getString("unavailable_reason") == null, rs.getString("unavailable_reason"),
+                List.of()), learnerId);
+        if (questions.isEmpty()) return questions;
+        List<String> questionIds = questions.stream().map(WrongQuestion::questionId).toList();
+        Map<String, List<KnowledgePointTag>> tags = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT qk.question_id, k.id knowledge_point_id, k.name, qk.relation_role
+                  FROM question_resource_knowledge qk
+                  JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
+                 WHERE qk.question_id IN (%s) AND k.status = 'active'
+                 ORDER BY qk.question_id, qk.sort_order, k.id
+                """.formatted(String.join(",", java.util.Collections.nCopies(questionIds.size(), "?"))),
+                (RowCallbackHandler) rs -> tags
+                        .computeIfAbsent(rs.getString("question_id"), ignored -> new ArrayList<>())
+                        .add(new KnowledgePointTag(rs.getString("knowledge_point_id"), rs.getString("name"),
+                                rs.getString("relation_role"))), questionIds.toArray());
+        return questions.stream().map(question -> question.withKnowledgePoints(
+                tags.getOrDefault(question.questionId(), List.of()))).toList();
     }
 
     /**

@@ -33,7 +33,7 @@ public class LearningBrowseStore {
                           FROM question_bank_knowledge bk
                           JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
                           JOIN question_resource q ON q.id=qk.question_id
-                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                         WHERE bk.bank_id=b.id AND qk.relation_role IN ('core','auxiliary') AND q.status='published'
                            AND q.parent_question_id IS NULL
                            AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
                   FROM question_bank b
@@ -60,7 +60,7 @@ public class LearningBrowseStore {
                           FROM question_bank_knowledge bk
                           JOIN question_resource_knowledge qk ON qk.knowledge_point_id=bk.knowledge_point_id
                           JOIN question_resource q ON q.id=qk.question_id
-                         WHERE bk.bank_id=b.id AND qk.relation_role='core' AND q.status='published'
+                         WHERE bk.bank_id=b.id AND qk.relation_role IN ('core','auxiliary') AND q.status='published'
                            AND q.parent_question_id IS NULL
                            AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) question_count
                   FROM question_bank b
@@ -97,7 +97,8 @@ public class LearningBrowseStore {
                   FROM question_bank_chapter c
                   LEFT JOIN question_bank_knowledge bk ON bk.chapter_id=c.id AND bk.bank_id=c.bank_id
                   LEFT JOIN global_knowledge_point k ON k.id=bk.knowledge_point_id
-                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                  LEFT JOIN question_resource_knowledge qk ON qk.knowledge_point_id=k.id
+                            AND qk.relation_role IN ('core','auxiliary')
                   LEFT JOIN question_resource q ON q.id=qk.question_id
                  WHERE c.bank_id=?
                  GROUP BY c.id
@@ -203,7 +204,7 @@ public class LearningBrowseStore {
                        MIN(b.id) book_id,MIN(b.name) book_name,MIN(c.id) chapter_id,MIN(c.name) catalog_chapter,
                        (SELECT COUNT(DISTINCT q.id) FROM question_resource_knowledge qk
                          JOIN question_resource q ON q.id=qk.question_id
-                        WHERE qk.knowledge_point_id=k.id AND qk.relation_role='core'
+                        WHERE qk.knowledge_point_id=k.id AND qk.relation_role IN ('core','auxiliary')
                           AND q.status='published'
                           AND q.parent_question_id IS NULL
                           AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')) published_count
@@ -313,10 +314,14 @@ public class LearningBrowseStore {
     }
 
     private Map<String, Object> question(java.sql.ResultSet result) throws java.sql.SQLException {
+        Integer examYear = result.getObject("exam_year", Integer.class);
+        String questionNumber = result.getString("question_number");
         return ordered("id", result.getString("id"), "subject", result.getString("subject_name"),
                 "sourceType", result.getString("source_type"), "sourceName", result.getString("source_name"),
-                "examYear", result.getObject("exam_year", Integer.class),
-                "questionNumber", result.getString("question_number"),
+                "examYear", examYear,
+                "questionNumber", questionNumber,
+                // UI 只使用 displayQuestionNumber；原始 questionNumber 保留为数据事实。
+                "displayQuestionNumber", QuestionNumberFormatter.display(questionNumber, examYear),
                 "questionType", result.getString("question_type"), "presentationType", result.getString("presentation_type"),
                 "gradingMode", result.getString("grading_mode"), "contentMarkdown", result.getString("content_markdown"),
                 "analysisMarkdown", result.getString("analysis_markdown"),
