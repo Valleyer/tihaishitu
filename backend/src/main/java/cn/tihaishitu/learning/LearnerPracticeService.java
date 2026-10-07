@@ -23,9 +23,21 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Hub Practice：KNOWLEDGE / CHAPTER / WRONG 三套正式选题策略的入口。
+ *
+ * <p>PR3 之后普通正式训练彻底单层化：一道 Formal Parent Question →
+ * 一次作答 / 自评 → 一次 grading → 写 Wrong Book / Mastery / Evidence →
+ * 直接进入下一道普通 Formal Question 或结束当前流程。
+ * 不再自动进入 Diagnosis / Remedial 嵌套，也不再在答错后 retry 同一道父题。</p>
+ *
+ * <p>RANDOM 策略只属于 Learner World（{@code GameActionService} + {@link RandomPracticeSelector}），
+ * 本类不提供 RANDOM intent。</p>
+ */
 @Service
 public class LearnerPracticeService {
     public record StartRequest(String intent, String targetKnowledgePointId, String sourceQuestionId,
@@ -54,6 +66,9 @@ public class LearnerPracticeService {
     /**
      * Study 页顶部“最近章节”快捷入口的只读视图。
      * 有 active session 时给出 activeSessionId 供“继续章节练习”；只有历史时给出 ended sessionId 供“再次练习”。
+     *
+     * <p>进度字段沿用既有 JSON 名称，但 PR3 后含义是“当前题在章节确定性题序中的位置 / 题序长度”，
+     * 因为 Chapter 的推进粒度已经是 Question 而不是 KnowledgePoint。</p>
      */
     public record RecentChapterView(String status, String activeSessionId, String lastSessionId,
                                     String bookId, String bookName, String chapterId, String chapterName,
@@ -71,7 +86,6 @@ public class LearnerPracticeService {
     private final QuestionAttemptStore attempts;
     private final StudyProfileService profiles;
     private final KnowledgeQuestionPoolService pool;
-    private final AdaptiveStudyPlanner planner;
     private final LearnerKnowledgeStateService knowledgeStates;
     private final DiagnosticLearningService diagnostics;
     private final DiagnosticLearningStore diagnosisStore;
@@ -79,23 +93,25 @@ public class LearnerPracticeService {
     private final ObjectMapper mapper;
     private final QuestionAttemptVariantService variants;
     private final LearnerQuestionProgressStore questionProgress;
-    private final RemedialQuestionStore remedial;
     private final QuestionExamMetadataBuilder examMetadataBuilder;
+    private final KnowledgePracticeSelector knowledge;
+    private final ChapterPracticeSelector chapters;
+    private final WrongPracticeSelector wrongs;
 
     public LearnerPracticeService(LearnerPracticeStore store, QuestionAttemptStore attempts,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService pool,
-                                  AdaptiveStudyPlanner planner, LearnerKnowledgeStateService knowledgeStates,
+                                  LearnerKnowledgeStateService knowledgeStates,
                                   DiagnosticLearningService diagnostics, DiagnosticLearningStore diagnosisStore,
                                   LearnerStore learners, ObjectMapper mapper,
                                   QuestionAttemptVariantService variants,
                                   LearnerQuestionProgressStore questionProgress,
-                                  RemedialQuestionStore remedial,
-                                  QuestionExamMetadataBuilder examMetadataBuilder) {
+                                  QuestionExamMetadataBuilder examMetadataBuilder,
+                                  KnowledgePracticeSelector knowledge, ChapterPracticeSelector chapters,
+                                  WrongPracticeSelector wrongs) {
         this.store = store;
         this.attempts = attempts;
         this.profiles = profiles;
         this.pool = pool;
-        this.planner = planner;
         this.knowledgeStates = knowledgeStates;
         this.diagnostics = diagnostics;
         this.diagnosisStore = diagnosisStore;
@@ -103,8 +119,10 @@ public class LearnerPracticeService {
         this.mapper = mapper;
         this.variants = variants;
         this.questionProgress = questionProgress;
-        this.remedial = remedial;
         this.examMetadataBuilder = examMetadataBuilder;
+        this.knowledge = knowledge;
+        this.chapters = chapters;
+        this.wrongs = wrongs;
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
@@ -160,67 +178,101 @@ public class LearnerPracticeService {
         String intent = request.intent();
         if (!Set.of("knowledge_drill", "wrong_review", "wrong_drill", "chapter_drill").contains(intent))
             throw bad("练习类型不合法。");
-        var profile = profiles.rawCurrent();
-        Set<String> allowed = pool.allowedKnowledgePointIds(new LinkedHashSet<>(profile.selectedBookIds()));
-        if ("chapter_drill".equals(intent)) return startChapter(request,learnerId,allowed,profile.difficulty());
-        if ("wrong_drill".equals(intent)) return startWrongDrill(request, learnerId, allowed, profile.difficulty());
-        QuestionDto wrongQuestion = null;
-        String targetId = request.targetKnowledgePointId();
-        if ("wrong_review".equals(intent)) {
-            if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
-            var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
-                    .orElseThrow(() -> bad("这道题已不在错题本中。"));
-            if (!wrong.available()) throw bad(wrongQuestionUnavailableMessage(wrong.unavailableReason()));
-            targetId = wrong.targetKnowledgePointId();
-            wrongQuestion = pool.questionForLearner(targetId, allowed, request.sourceQuestionId())
-                    .orElseThrow(() -> bad("该题当前不可练习。你仍可将它移出错题本。"));
-        } else {
-            requirePlayable(targetId, allowed);
-        }
-        return startWithQuestion(learnerId, intent, targetId,
-                "wrong_review".equals(intent) ? request.sourceQuestionId() : null,
-                allowed, profile.difficulty(), wrongQuestion);
+        Set<String> allowed = pool.allowedKnowledgePointIds(
+                new LinkedHashSet<>(profiles.rawCurrent().selectedBookIds()));
+        return switch (intent) {
+            case "chapter_drill" -> startChapter(request, learnerId, allowed);
+            case "wrong_drill" -> startWrongDrill(learnerId, allowed);
+            case "wrong_review" -> startWrongReview(request, learnerId, allowed);
+            default -> startKnowledge(learnerId, request.targetKnowledgePointId(), allowed);
+        };
     }
 
     /**
-     * wrong_drill：从 active 错题中随机连续练习。
-     * 只排除下架 / 非 Formal 题，并限制在当前 selected Books 覆盖范围；Session 内不重复。
+     * 知识点专项：Session 内随机不重复；候选耗尽后本轮完成，新 Session 重新对完整池洗牌。
+     * 不再校验依赖 readiness，也不再因“今天已经答对 / Review 未到期”拒绝发题。
      */
-    private SessionView startWrongDrill(StartRequest request, String learnerId, Set<String> allowed,
-                                        String difficulty) {
-        List<String> candidates = store.wrongDrillQuestionIds(learnerId, Set.of());
-        if (candidates.isEmpty()) {
-            throw bad(store.activeWrongQuestionCount(learnerId) == 0
-                    ? "错题本还是空的，先去做几道正式题吧。"
-                    : "当前学习范围内没有可以练习的错题。可以在错题本中切换学习范围，或稍后再试。");
-        }
-        String questionId = randomOf(candidates);
-        var wrong = store.activeWrongQuestion(learnerId, questionId)
-                .orElseThrow(() -> bad("这道题已不在错题本中。"));
-        QuestionDto question = pool.questionForLearner(wrong.targetKnowledgePointId(), allowed, questionId)
-                .orElseThrow(() -> bad("当前学习范围内没有可以练习的错题。"));
-        return startWithQuestion(learnerId, "wrong_drill", wrong.targetKnowledgePointId(), null,
-                allowed, difficulty, question);
-    }
-
-    private SessionView startWithQuestion(String learnerId, String intent, String targetId, String sourceQuestionId,
-                                          Set<String> allowed, String difficulty, QuestionDto question) {
+    private SessionView startKnowledge(String learnerId, String targetId, Set<String> allowed) {
+        if (targetId == null || !allowed.contains(targetId)) throw bad("知识点不在当前所选文集范围内。");
+        if (knowledge.candidateQuestionIds(targetId, allowed, Set.of()).isEmpty())
+            throw bad("当前知识点暂无可用于专项练习的正式题。");
         String id = UUID.randomUUID().toString();
-        store.create(id, learnerId, intent, targetId, sourceQuestionId, allowed);
-        QuestionDto frozen = question;
-        String frozenTargetId = targetId;
+        store.create(id, learnerId, "knowledge_drill", targetId, null, allowed);
         PracticeActionContext.within(learnerId, id, () -> {
-            String attemptId = frozen == null
-                    ? draw(id, learnerId, frozenTargetId, allowed, difficulty, null)
-                    : createAttempt(learnerId, frozenTargetId, frozen, "normal", null);
-            store.setCurrentAttempt(id, learnerId, attemptId);
+            String questionId = knowledge.select(targetId, allowed, Set.of())
+                    .orElseThrow(() -> bad("当前知识点暂无可用于专项练习的正式题。"));
+            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, targetId, questionId,
+                    PracticeDrawMode.KNOWLEDGE));
             return null;
         });
         return get(id);
     }
 
-    private static String randomOf(List<String> values) {
-        return values.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(values.size()));
+    /**
+     * 章节练习：固定确定性题序 + 跨 Session 持久 cursor + 末尾 wrap。
+     * 不再“KP 顺序 + KP 内随机”，也不再因为当前 KP 无题而返回“没有待练的新题”。
+     *
+     * <p>入口先用 {@code chapterKnowledgePoints}（实时学习范围）确认该章节确实属于 Learner
+     * 当前可练范围；之后题序与 next 一律只按 Session 冻结的 scope 计算，因此 active Session
+     * 不会因为 Learner 在别处改了 selected Books 而换题池。</p>
+     */
+    private SessionView startChapter(StartRequest request, String learnerId, Set<String> allowed) {
+        if (request.targetBookId() == null || request.targetChapterId() == null) throw bad("请选择文集和章节。");
+        if (store.chapterKnowledgePoints(learnerId, request.targetBookId(), request.targetChapterId()).isEmpty())
+            throw bad("这个章节当前没有可练的正式题。");
+        ChapterPracticeSelector.Step step = chapters
+                .next(learnerId, request.targetBookId(), request.targetChapterId(), allowed)
+                .orElseThrow(() -> bad("这个章节当前没有可练的正式题。"));
+        String id = UUID.randomUUID().toString();
+        store.createChapter(id, learnerId, request.targetBookId(), request.targetChapterId(),
+                step.targetKnowledgePointId(), allowed);
+        PracticeActionContext.within(learnerId, id, () -> {
+            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, step.targetKnowledgePointId(),
+                    step.questionId(), PracticeDrawMode.CHAPTER));
+            return null;
+        });
+        return get(id);
+    }
+
+    /**
+     * wrong_review：用户从错题本点选某一题，只重做这一题；graded 后流程完成。
+     * 不插诊断、不插补救子题。
+     */
+    private SessionView startWrongReview(StartRequest request, String learnerId, Set<String> allowed) {
+        if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
+        var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
+                .orElseThrow(() -> bad("这道题已不在错题本中。"));
+        if (!wrong.available()) throw bad(wrongQuestionUnavailableMessage(wrong.unavailableReason()));
+        QuestionDto question = pool.questionForLearner(wrong.targetKnowledgePointId(), allowed,
+                        request.sourceQuestionId())
+                .orElseThrow(() -> bad("该题当前不可练习。你仍可将它移出错题本。"));
+        String id = UUID.randomUUID().toString();
+        store.create(id, learnerId, "wrong_review", wrong.targetKnowledgePointId(), request.sourceQuestionId(), allowed);
+        PracticeActionContext.within(learnerId, id, () -> {
+            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, wrong.targetKnowledgePointId(),
+                    question.id(), PracticeDrawMode.WRONG));
+            return null;
+        });
+        return get(id);
+    }
+
+    /**
+     * wrong_drill：从 active 永久错题中 Session 内随机不重复地连续练习。
+     * 全部耗尽后本轮完成；新 Session 重新对完整池洗牌。
+     */
+    private SessionView startWrongDrill(String learnerId, Set<String> allowed) {
+        WrongPracticeSelector.Selection selection = wrongs.select(learnerId, allowed, Set.of())
+                .orElseThrow(() -> bad(store.activeWrongQuestionCount(learnerId) == 0
+                        ? "错题本还是空的，先去做几道正式题吧。"
+                        : "当前学习范围内没有可以练习的错题。可以在错题本中切换学习范围，或稍后再试。"));
+        String id = UUID.randomUUID().toString();
+        store.create(id, learnerId, "wrong_drill", selection.targetKnowledgePointId(), null, allowed);
+        PracticeActionContext.within(learnerId, id, () -> {
+            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, selection.targetKnowledgePointId(),
+                    selection.questionId(), PracticeDrawMode.WRONG));
+            return null;
+        });
+        return get(id);
     }
 
     public SessionView get(String id) {
@@ -246,7 +298,7 @@ public class LearnerPracticeService {
             Instant occurredAt = Instant.now();
             if (!attempts.recordAnswer(snapshot, answer, correct, occurredAt))
                 throw conflict("这道题已经完成评分。");
-            grade(snapshot,correct ? "correct" : "wrong","automatic",occurredAt,id);
+            grade(snapshot,correct ? "correct" : "wrong","automatic",occurredAt);
         });
     }
 
@@ -265,10 +317,11 @@ public class LearnerPracticeService {
             Instant occurredAt = Instant.now();
             if (!attempts.recordSelfAssessment(snapshot, assessment, occurredAt))
                 throw conflict("请先查看参考解析，或此题已经完成自评。");
-            grade(snapshot,assessment,"self",occurredAt,id);
+            grade(snapshot,assessment,"self",occurredAt);
         });
     }
 
+    /** 完成当前题后进入下一道普通正式题；四模式各自的推进规则完全独立。 */
     @Transactional
     public SessionView next(String id) {
         String learnerId = LearnerContext.learnerId();
@@ -278,42 +331,59 @@ public class LearnerPracticeService {
                 session.currentAttemptId(), learnerId, id);
         if (!"graded".equals(current.status())) throw conflict("请先完成当前题目。");
         Set<String> allowed = store.scope(id);
-        String difficulty = profiles.rawCurrent().difficulty();
+        Set<String> seen = store.seenQuestions(id);
         PracticeActionContext.within(learnerId, id, () -> {
-            DiagnosticLearningStore.Session diagnosis = diagnosisForCurrent(id, current);
-            String nextId;
-            RemedialQuestionStore.ParentInfo parent = remedial.parentInfo(current.questionId());
-            if(parent!=null){
-                List<RemedialQuestionStore.Step> steps=remedial.steps(parent.parentQuestionId());
-                RemedialQuestionStore.Step nextStep=steps.stream().filter(step->step.order()>parent.order()).findFirst().orElse(null);
-                nextId=nextStep==null?createStoredAttempt(learnerId,session.currentKnowledgePointId()!=null?session.currentKnowledgePointId():session.targetKnowledgePointId(),remedial.parent(parent.parentQuestionId()),"normal",null):createStoredAttempt(learnerId,current.targetKnowledgePointId(),nextStep,"remedial",null);
-            } else if(isFirstFailedParent(id,current)){
-                RemedialQuestionStore.Step first=remedial.steps(current.questionId()).get(0);
-                nextId=createStoredAttempt(learnerId,current.targetKnowledgePointId(),first,"remedial",null);
-            // 错题快练是连续刷错题，不参与综合题诊断状态机；即使历史上留下了诊断会话，
-            // 也继续按“下一道未见错题”推进，而不是卡在诊断里。
-            } else if (diagnosis != null && !Set.of("resolved", "abandoned").contains(diagnosis.status())
-                    && !"wrong_drill".equals(session.intent())) {
-                DiagnosticLearningService.Directive directive = diagnostics.nextDirective(diagnosis.id());
-                nextId = draw(id, learnerId, directive.targetKnowledgePointId(), allowed, difficulty, directive);
-            } else {
-                if ("wrong_review".equals(session.intent()))
-                    throw conflict("本轮错题流程已经完成，可以结束练习。");
-                if ("wrong_drill".equals(session.intent())) {
-                    nextId = drawWrongDrill(session, learnerId, allowed, difficulty);
-                } else if("chapter_drill".equals(session.intent())){
-                    String point=nextChapterPoint(session,allowed,difficulty);
-                    if(point==null)throw conflict("本轮章节可练题目已完成，可以结束练习。");
-                    store.setCurrentKnowledgePoint(id,learnerId,point);
-                    nextId=draw(id,learnerId,point,allowed,difficulty,null);
-                }else nextId = draw(id, learnerId, session.targetKnowledgePointId(), allowed, difficulty, null);
-            }
-            store.setCurrentAttempt(id, learnerId, nextId);
+            store.setCurrentAttempt(id, learnerId, drawNext(session, learnerId, allowed, seen));
             return null;
         });
         return get(id);
     }
 
+    private String drawNext(LearnerPracticeStore.Session session, String learnerId,
+                            Set<String> allowed, Set<String> seen) {
+        return switch (session.intent()) {
+            case "chapter_drill" -> drawChapterNext(session, learnerId, allowed);
+            case "wrong_drill" -> drawWrongDrillNext(session, learnerId, allowed, seen);
+            // 单题错题重做：当前指定题 graded 即 complete，不再续题。
+            case "wrong_review" -> throw conflict("本轮错题流程已经完成，可以结束练习。");
+            case "knowledge_drill" -> drawKnowledgeNext(session, learnerId, allowed, seen);
+            default -> throw bad("练习类型不合法。");
+        };
+    }
+
+    /** Chapter：固定题序 + 持久 cursor 的 successor（末尾 wrap）。 */
+    private String drawChapterNext(LearnerPracticeStore.Session session, String learnerId, Set<String> allowed) {
+        ChapterPracticeSelector.Step step = chapters
+                .next(learnerId, session.targetBookId(), session.targetChapterId(), allowed)
+                .orElseThrow(() -> conflict("这个章节当前没有可练的正式题。"));
+        store.setCurrentKnowledgePoint(session.id(), learnerId, step.targetKnowledgePointId());
+        return createAttempt(learnerId, step.targetKnowledgePointId(), step.questionId(),
+                PracticeDrawMode.CHAPTER);
+    }
+
+    /** Knowledge：本 Session 随机池耗尽即结束，不再有任何诊断 / 补救续题。 */
+    private String drawKnowledgeNext(LearnerPracticeStore.Session session, String learnerId,
+                                     Set<String> allowed, Set<String> seen) {
+        String questionId = knowledge.select(session.targetKnowledgePointId(), allowed, seen)
+                .orElseThrow(() -> conflict("本 Session 的专项题已经全部做过，本轮完成。"));
+        return createAttempt(learnerId, session.targetKnowledgePointId(), questionId,
+                PracticeDrawMode.KNOWLEDGE);
+    }
+
+    /** Wrong drill：本 Session active 错题池耗尽即结束。 */
+    private String drawWrongDrillNext(LearnerPracticeStore.Session session, String learnerId,
+                                      Set<String> allowed, Set<String> seen) {
+        WrongPracticeSelector.Selection selection = wrongs.select(learnerId, allowed, seen)
+                .orElseThrow(() -> conflict("本轮错题快练已经完成，可以结束练习。"));
+        store.setCurrentKnowledgePoint(session.id(), learnerId, selection.targetKnowledgePointId());
+        return createAttempt(learnerId, selection.targetKnowledgePointId(), selection.questionId(),
+                PracticeDrawMode.WRONG);
+    }
+
+    /**
+     * 结束 Session。部署前可能残留未完成 diagnosis，一并标记 abandoned，
+     * 保证旧 active session 可继续、不死锁。
+     */
     @Transactional
     public SessionView end(String id) {
         String learnerId = LearnerContext.learnerId();
@@ -322,7 +392,7 @@ public class LearnerPracticeService {
         diagnosisStore.latestForPractice(id).ifPresent(diagnosis -> {
             if (!Set.of("resolved", "abandoned").contains(diagnosis.status())) {
                 PracticeActionContext.within(learnerId, id, () -> {
-                    diagnostics.abandon(diagnosis.id());
+                    diagnostics.abandonIfPresent(diagnosis.id());
                     return null;
                 });
             }
@@ -344,58 +414,24 @@ public class LearnerPracticeService {
         return get(id);
     }
 
-    private String draw(String sessionId, String learnerId, String targetId, Set<String> allowed,
-                        String profileDifficulty, DiagnosticLearningService.Directive directive) {
-        AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
-                learnerId, allowed, targetId, profileDifficulty);
-        boolean training = directive != null && "training".equals(directive.evidenceMode());
-        int preferred = directive != null && DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
-                ? Math.min(3, context.preferredDifficulty()) : context.preferredDifficulty();
-        var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(targetId, allowed,
-                store.seenQuestions(sessionId), preferred,
-                training ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL);
-        if (directive != null && DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
-                && pool.eligibleQuestionsForLearner(request).isEmpty()) {
-            diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), targetId);
-            DiagnosticLearningService.Directive next = diagnostics.nextDirective(directive.diagnosisSessionId());
-            return draw(sessionId, learnerId, next.targetKnowledgePointId(), allowed, profileDifficulty, next);
-        }
-        QuestionDto question = directive == null
-                ? pool.selectKnowledgeDrillQuestion(learnerId, request)
-                : pool.selectQuestionForLearner(learnerId, request);
-        return createAttempt(learnerId, targetId, question, training ? "training" : "normal", directive);
+    /**
+     * 普通正式训练单层化：一次 grading 只做一件事——
+     * 对本次 Attempt 冻结的唯一 target KnowledgePoint 记 Mastery / Evidence。
+     * 错题 / partial 的 Wrong Book 写入已经由 {@code QuestionAttemptStore} 在判题时完成。
+     * 不再调用 DiagnosticLearningService，也不再发 Remedial 子题或 retry 父题。
+     */
+    private void grade(QuestionAttemptStore.Snapshot snapshot, String assessment, String source, Instant at) {
+        knowledgeStates.apply(snapshot, assessment, source, at);
     }
 
     /**
-     * wrong_drill 的下一题：从本 Session 尚未见过的 active 错题中随机。
-     * 全部做完时给出“本轮完成”的明确冲突响应，而不是 500。
+     * 正式 Attempt 创建的统一入口。
+     * 复用 QuestionExamMetadataBuilder + QuestionAttemptVariantService + QuestionAttemptStore，
+     * 不复制第二套发题快照逻辑；draw_mode 由本策略在服务端决定，前端不提交。
      */
-    private String drawWrongDrill(LearnerPracticeStore.Session session, String learnerId,
-                                  Set<String> allowed, String difficulty) {
-        List<String> candidates = store.wrongDrillQuestionIds(learnerId, store.seenQuestions(session.id()));
-        while (!candidates.isEmpty()) {
-            String questionId = randomOf(candidates);
-            var wrong = store.activeWrongQuestion(learnerId, questionId).orElse(null);
-            if (wrong == null || !wrong.available()) {
-                candidates.remove(questionId);
-                continue;
-            }
-            QuestionDto question = pool.questionForLearner(wrong.targetKnowledgePointId(), allowed, questionId)
-                    .orElse(null);
-            if (question == null) {
-                candidates.remove(questionId);
-                continue;
-            }
-            store.setCurrentKnowledgePoint(session.id(), learnerId, wrong.targetKnowledgePointId());
-            // 错题快练是“连续刷错题”，证据模式仍是 normal（Mastery 规则不变），
-            // 但 grade() 会跳过综合题诊断，避免快练被诊断状态机打断。
-            return createAttempt(learnerId, wrong.targetKnowledgePointId(), question, "normal", null);
-        }
-        throw conflict("本轮错题快练已经完成，可以结束练习。");
-    }
-
-    private String createAttempt(String learnerId, String targetId, QuestionDto question, String evidenceMode,
-                                  DiagnosticLearningService.Directive directive) {
+    private String createAttempt(String learnerId, String targetId, String questionId, PracticeDrawMode drawMode) {
+        QuestionDto question = pool.questionForLearner(questionId)
+                .orElseThrow(() -> bad("这道题当前不可练习。"));
         String id = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
         // 题面 metadata 由共享 builder 统一生成（Hub 与 World 共用同一套规则），
@@ -406,9 +442,8 @@ public class LearnerPracticeService {
                 previous == null ? full : previous.questionSnapshot(),
                 previous == null ? question.answer() : previous.standardAnswer());
         attempts.create(id, null, question.id(), variant.question(), variant.standard(),
-                full.path("gradingMode").asText("auto"), targetId, evidenceMode, question.difficulty(),
-                directive == null ? null : directive.diagnosisSessionId(),
-                directive == null ? null : directive.role());
+                full.path("gradingMode").asText("auto"), targetId, "normal", question.difficulty(),
+                null, null, drawMode.wireValue(), null);
         return id;
     }
 
@@ -416,9 +451,9 @@ public class LearnerPracticeService {
         QuestionAttemptStore.Snapshot snapshot = session.currentAttemptId() == null ? null
                 : attempts.findForPractice(session.currentAttemptId(), session.learnerId(), session.id());
         AttemptView attempt = snapshot == null ? null : attemptView(snapshot);
-        boolean complete = snapshot != null && flowComplete(session, snapshot);
-        boolean canRepeat = complete && Set.of("knowledge_drill","chapter_drill","wrong_drill").contains(session.intent())
-                && hasNext(session);
+        // 当前题 graded 就代表“这一题流程完成”；canRepeat 表示还有没有下一道普通正式题。
+        boolean complete = snapshot != null && "graded".equals(snapshot.status());
+        boolean canRepeat = complete && hasNext(session);
         return new SessionView(session.id(), session.intent(), session.targetKnowledgePointId(),
                 session.sourceQuestionId(),session.targetBookId(),session.targetChapterId(),session.currentKnowledgePointId(),
                 session.status(), session.revision(), attempt, complete,
@@ -452,52 +487,27 @@ public class LearnerPracticeService {
                 sourceName, examYear, questionNumber, displayQuestionNumber, examLabel, tags);
     }
 
-    private boolean flowComplete(LearnerPracticeStore.Session session, QuestionAttemptStore.Snapshot snapshot) {
-        if (!"graded".equals(snapshot.status())) return false;
-        RemedialQuestionStore.ParentInfo parent=remedial.parentInfo(snapshot.questionId());
-        if(parent!=null)return false;
-        if(isFirstFailedParent(session.id(),snapshot))return false;
-        DiagnosticLearningStore.Session diagnosis = diagnosisForCurrent(session.id(), snapshot);
-        if (diagnosis != null) return "resolved".equals(diagnosis.status());
-        if ("training".equals(snapshot.evidenceMode())) return "correct".equals(snapshot.assessment());
-        return true;
-    }
-
-    private DiagnosticLearningStore.Session diagnosisForCurrent(
-            String practiceSessionId, QuestionAttemptStore.Snapshot snapshot) {
-        DiagnosticLearningStore.Session diagnosis = diagnosisStore.latestForPractice(practiceSessionId).orElse(null);
-        if (diagnosis == null) return null;
-        boolean rootAttempt = snapshot.id().equals(diagnosis.rootAttemptId());
-        boolean diagnosisAttempt = diagnosis.id().equals(snapshot.diagnosisSessionId());
-        return rootAttempt || diagnosisAttempt ? diagnosis : null;
-    }
-
     /**
-     * 知识点专项的发题条件：知识点在当前所选文集范围内，且存在至少一道正式题。
-     * 不再校验依赖 readiness，也不再因“今天已经答对 / Review 未到期”拒绝发题。
+     * 下一道普通正式题是否存在（决定 canRepeat）：
+     * <pre>
+     * knowledge   本 Session 随机池还没耗尽
+     * chapter     连续 next，末尾 wrap，永远不为永久 complete
+     * wrong_drill 本 Session active 错题池还没耗尽
+     * wrong_review 当前指定题 graded 即 complete
+     * </pre>
      */
-    private void requirePlayable(String targetId, Set<String> allowed) {
-        if (targetId == null || !allowed.contains(targetId)) throw bad("知识点不在当前所选文集范围内。");
-        var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
-                targetId, allowed, Set.of(), 3, KnowledgeQuestionPoolService.Mode.NORMAL);
-        if (pool.eligibleQuestionsForLearner(request).isEmpty())
-            throw bad("当前知识点暂无可用于专项练习的正式题。");
-    }
-
     private boolean hasNext(LearnerPracticeStore.Session session) {
         if (!"active".equals(session.status())) return false;
         Set<String> allowed = store.scope(session.id());
-        var profile = profiles.rawCurrent();
-        if("chapter_drill".equals(session.intent()))return nextChapterPoint(session,allowed,profile.difficulty())!=null;
-        if("wrong_drill".equals(session.intent()))
-            return !store.wrongDrillQuestionIds(session.learnerId(), store.seenQuestions(session.id())).isEmpty();
-        AdaptiveStudyPlanner.QuestionContext context = planner.questionContext(
-                session.learnerId(), allowed, session.targetKnowledgePointId(), profile.difficulty());
-        var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(
-                session.targetKnowledgePointId(), allowed,
-                store.seenQuestions(session.id()), context.preferredDifficulty(),
-                KnowledgeQuestionPoolService.Mode.NORMAL);
-        return !pool.eligibleKnowledgeDrillQuestions(session.learnerId(), request).isEmpty();
+        Set<String> seen = store.seenQuestions(session.id());
+        return switch (session.intent()) {
+            case "chapter_drill" -> !chapters.sequence(session.targetBookId(),
+                    session.targetChapterId(), allowed).isEmpty();
+            case "wrong_drill" -> wrongs.hasRemaining(session.learnerId(), allowed, seen);
+            case "wrong_review" -> false;
+            case "knowledge_drill" -> knowledge.hasRemaining(session.targetKnowledgePointId(), allowed, seen);
+            default -> false;
+        };
     }
 
     public SessionView latestChapter(){
@@ -513,7 +523,7 @@ public class LearnerPracticeService {
      *   <li>从未练过：返回 status=none。</li>
      * </ul>
      *
-     * 不让前端从大量 attempt 自己推导。
+     * 位置与总数来自章节确定性题序（Question 粒度），不从大量 attempt 里让前端自己推导。
      */
     public RecentChapterView recentChapter() {
         String learnerId = LearnerContext.learnerId();
@@ -530,11 +540,15 @@ public class LearnerPracticeService {
         Integer index = null;
         Integer count = null;
         if (latest.targetBookId() != null && latest.targetChapterId() != null) {
-            List<String> points = store.chapterKnowledgePoints(learnerId, latest.targetBookId(),
-                    latest.targetChapterId());
-            count = points.size();
-            int position = points.indexOf(currentPointId);
-            index = position < 0 ? null : position + 1;
+            ChapterPracticeSelector.Sequence sequence = chapters.sequence(latest.targetBookId(),
+                    latest.targetChapterId(), store.scope(latest.id()));
+            count = sequence.size();
+            Optional<String> currentQuestionId = store.currentQuestionId(latest.id());
+            if (currentQuestionId.isPresent()) {
+                int position = sequence.indexOf(currentQuestionId.get());
+                index = position < 0 ? null : position + 1;
+                if (position >= 0) currentPointId = sequence.steps().get(position).targetKnowledgePointId();
+            }
         }
         return new RecentChapterView(active != null ? RECENT_CHAPTER_ACTIVE : RECENT_CHAPTER_LAST,
                 active == null ? null : active.id(), latest.id(),
@@ -543,63 +557,6 @@ public class LearnerPracticeService {
                 currentPointId, index, count, latest.updatedAt());
     }
 
-    private SessionView startChapter(StartRequest request,String learnerId,Set<String> allowed,String difficulty){
-        if(request.targetBookId()==null||request.targetChapterId()==null)throw bad("请选择文集和章节。");
-        List<String> points=store.chapterKnowledgePoints(learnerId,request.targetBookId(),request.targetChapterId());
-        String point=points.stream().filter(id->available(learnerId,id,allowed,difficulty,Set.of())).findFirst().orElseThrow(()->bad("这个章节当前没有待练的新题。"));
-        String id=UUID.randomUUID().toString();store.createChapter(id,learnerId,request.targetBookId(),request.targetChapterId(),point,allowed);
-        PracticeActionContext.within(learnerId,id,()->{String attempt=draw(id,learnerId,point,allowed,difficulty,null);store.setCurrentAttempt(id,learnerId,attempt);return null;});
-        return get(id);
-    }
-
-    private void grade(QuestionAttemptStore.Snapshot snapshot,String assessment,String source,Instant at,String practiceId){
-        if (remedial.parentInfo(snapshot.questionId()) != null) return;
-        boolean parentFailure=Set.of("wrong","partial").contains(assessment)&&!remedial.steps(snapshot.questionId()).isEmpty();
-        // 错题快练是连续刷错题，不进入综合题诊断状态机：直接按目标知识点记账。
-        if(parentFailure||isQuickDrill(practiceId))knowledgeStates.apply(snapshot,assessment,source,at);
-        else diagnostics.handleGradedAttempt(snapshot,assessment,source,at,store.scope(practiceId));
-    }
-
-    /** 当前是否处于“快速练习错题”Session。 */
-    private boolean isQuickDrill(String practiceId){
-        if(practiceId==null)return false;
-        return store.find(practiceId,LearnerContext.learnerId())
-                .map(session->"wrong_drill".equals(session.intent())).orElse(false);
-    }
-
-    private boolean isFirstFailedParent(String sessionId,QuestionAttemptStore.Snapshot snapshot){
-        return Set.of("wrong","partial").contains(snapshot.assessment())
-                && !remedial.steps(snapshot.questionId()).isEmpty()&&store.attemptCount(sessionId,snapshot.questionId())==1;
-    }
-
-    private String createStoredAttempt(String learnerId,String targetId,RemedialQuestionStore.Step step,String evidenceMode,String role){
-        String id=UUID.randomUUID().toString();var previous=questionProgress.latestAttemptForQuestion(learnerId,step.id()).orElse(null);
-        var variant=variants.create(step.question(),step.standard(),previous==null?step.question():previous.questionSnapshot(),previous==null?step.standard():previous.standardAnswer());
-        attempts.create(id,null,step.id(),variant.question(),variant.standard(),step.gradingMode(),targetId,evidenceMode,step.difficulty(),null,role);return id;
-    }
-
-    private String nextChapterPoint(LearnerPracticeStore.Session session,Set<String> allowed,String difficulty){
-        List<String> points=store.chapterKnowledgePoints(session.learnerId(),session.targetBookId(),session.targetChapterId());
-        if(points.isEmpty())return null;int current=Math.max(0,points.indexOf(session.currentKnowledgePointId()));
-        Set<String> seen=store.seenQuestions(session.id());
-        for(int offset=1;offset<=points.size();offset++){String point=points.get((current+offset)%points.size());if(available(session.learnerId(),point,allowed,difficulty,seen))return point;}return null;
-    }
-
-    private boolean available(String learnerId,String point,Set<String> allowed,String difficulty,Set<String> seen){
-        var request=new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(point,allowed,seen,
-                preferredDifficulty(learnerId,allowed,point,difficulty),KnowledgeQuestionPoolService.Mode.NORMAL);
-        return !pool.eligibleKnowledgeDrillQuestions(learnerId,request).isEmpty();
-    }
-
-    /** 难度只作为出题软提示，不阻止任何正式题被抽中。 */
-    private int preferredDifficulty(String learnerId,Set<String> allowed,String point,String difficulty){
-        return planner.questionContext(learnerId,allowed,point,difficulty).preferredDifficulty();
-    }
-
-    private static boolean needsTraining(QuestionAttemptStore.Snapshot snapshot) {
-        return Set.of("wrong", "partial").contains(snapshot.assessment())
-                && (snapshot.diagnosisRole() == null || "training".equals(snapshot.evidenceMode()));
-    }
     private static LearnerPracticeStore.Session requireActive(LearnerPracticeStore.Session session) {
         if (!"active".equals(session.status())) throw conflict("专项练习已经结束。");
         return session;

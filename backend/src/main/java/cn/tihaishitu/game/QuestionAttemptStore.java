@@ -26,7 +26,8 @@ public class QuestionAttemptStore {
                            String questionId, JsonNode question, JsonNode standard,
                            String status, String gradingMode, String gradingSource, String assessment,
                            String targetKnowledgePointId, String evidenceMode, Integer questionDifficulty,
-                           Instant answeredAt, String diagnosisSessionId, String diagnosisRole) {}
+                           Instant answeredAt, String diagnosisSessionId, String diagnosisRole,
+                           String drawMode, String drawReason) {}
     public record HistorySnapshot(String id, String questionId, String status, JsonNode question) {}
 
     private final JdbcTemplate jdbc;
@@ -56,19 +57,35 @@ public class QuestionAttemptStore {
     public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
                        String gradingMode, String targetKnowledgePointId, String evidenceMode,
                        Integer questionDifficulty, String diagnosisSessionId, String diagnosisRole) {
+        create(id, gameId, questionId, question, standard, gradingMode, targetKnowledgePointId, evidenceMode,
+                questionDifficulty, diagnosisSessionId, diagnosisRole, null, null);
+    }
+
+    /**
+     * 正式 Attempt 创建的唯一入口。
+     *
+     * <p>{@code drawMode / drawReason} 由服务端 selection strategy 决定（PR3 Practice Selection V2），
+     * 前端不得提交；历史 diagnosis / remedial 兼容路径可以写 NULL。
+     * Legacy /games/** 写 {@code legacy}。</p>
+     */
+    public void create(String id, String gameId, String questionId, JsonNode question, JsonNode standard,
+                       String gradingMode, String targetKnowledgePointId, String evidenceMode,
+                       Integer questionDifficulty, String diagnosisSessionId, String diagnosisRole,
+                       String drawMode, String drawReason) {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         PracticeActionContext.Scope practice = PracticeActionContext.currentOrNull();
         jdbc.update("""
                 INSERT INTO study_attempt(id, game_id, learner_id, world_id, practice_session_id, question_id,
                                           question_snapshot_json, standard_answer_json, status, grading_mode,
                                           target_knowledge_point_id, evidence_mode, question_difficulty,
-                                          diagnosis_session_id, diagnosis_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+                                          diagnosis_session_id, diagnosis_role, draw_mode, draw_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
                 """, id, world == null && practice == null ? gameId : null,
                 world != null ? world.learnerId() : practice == null ? null : practice.learnerId(),
                 world == null ? null : world.worldId(), practice == null ? null : practice.practiceSessionId(),
                 questionId, json(question), json(standard), gradingMode,
-                targetKnowledgePointId, evidenceMode, questionDifficulty, diagnosisSessionId, diagnosisRole);
+                targetKnowledgePointId, evidenceMode, questionDifficulty, diagnosisSessionId, diagnosisRole,
+                drawMode, drawReason);
     }
 
     public Snapshot find(String id, String gameId) {
@@ -84,7 +101,7 @@ public class QuestionAttemptStore {
                 SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
                        target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
-                       diagnosis_session_id, diagnosis_role
+                       diagnosis_session_id, diagnosis_role, draw_mode, draw_reason
                   FROM study_attempt WHERE %s
                 """.formatted(predicate), (result, row) -> new Snapshot(result.getString("id"), result.getString("game_id"),
                 result.getString("learner_id"), result.getString("world_id"), result.getString("practice_session_id"), result.getString("question_id"),
@@ -93,7 +110,8 @@ public class QuestionAttemptStore {
                 result.getString("assessment"), result.getString("target_knowledge_point_id"),
                 result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class),
                 instant(result.getTimestamp("answered_at")), result.getString("diagnosis_session_id"),
-                result.getString("diagnosis_role")), args);
+                result.getString("diagnosis_role"), result.getString("draw_mode"),
+                result.getString("draw_reason")), args);
         if (values.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "这道题已经失效，请重新载入当前进度。");
         return values.get(0);
     }
@@ -267,7 +285,7 @@ public class QuestionAttemptStore {
                 SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
                        target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
-                       diagnosis_session_id, diagnosis_role
+                       diagnosis_session_id, diagnosis_role, draw_mode, draw_reason
                   FROM study_attempt
                  WHERE learner_id=? AND question_id=? AND status='graded'
                    AND EXISTS (SELECT 1 FROM question_resource q WHERE q.id=study_attempt.question_id
@@ -282,7 +300,8 @@ public class QuestionAttemptStore {
                 result.getString("grading_mode"), result.getString("grading_source"), result.getString("assessment"),
                 result.getString("target_knowledge_point_id"), result.getString("evidence_mode"),
                 result.getObject("question_difficulty", Integer.class), instant(result.getTimestamp("answered_at")),
-                result.getString("diagnosis_session_id"), result.getString("diagnosis_role")),
+                result.getString("diagnosis_session_id"), result.getString("diagnosis_role"),
+                result.getString("draw_mode"), result.getString("draw_reason")),
                 learnerId, questionId).stream()
                 .filter(value -> java.util.Set.of("wrong", "partial").contains(value.assessment()))
                 .findFirst();
@@ -293,7 +312,7 @@ public class QuestionAttemptStore {
                 SELECT id, game_id, learner_id, world_id, practice_session_id, question_id, question_snapshot_json,
                        standard_answer_json, status, grading_mode, grading_source, assessment,
                        target_knowledge_point_id, evidence_mode, question_difficulty, answered_at,
-                       diagnosis_session_id, diagnosis_role
+                       diagnosis_session_id, diagnosis_role, draw_mode, draw_reason
                   FROM study_attempt WHERE id=? AND learner_id=?
                    AND ((? IS NULL AND world_id IS NULL) OR world_id=?)
                    AND ((? IS NULL AND practice_session_id IS NULL) OR practice_session_id=?)
@@ -304,7 +323,8 @@ public class QuestionAttemptStore {
                 result.getString("assessment"), result.getString("target_knowledge_point_id"),
                 result.getString("evidence_mode"), result.getObject("question_difficulty", Integer.class),
                 instant(result.getTimestamp("answered_at")), result.getString("diagnosis_session_id"),
-                result.getString("diagnosis_role")), id, learnerId, worldId, worldId,
+                result.getString("diagnosis_role"), result.getString("draw_mode"),
+                result.getString("draw_reason")), id, learnerId, worldId, worldId,
                 practiceSessionId, practiceSessionId);
         if (values.isEmpty()) throw new IllegalStateException("诊断根答题记录不存在。 ");
         return values.get(0);

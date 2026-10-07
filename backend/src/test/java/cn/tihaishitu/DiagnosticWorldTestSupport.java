@@ -1,35 +1,38 @@
 package cn.tihaishitu;
 
-import cn.tihaishitu.catalog.QuestionAnswerDeriver;
-import cn.tihaishitu.catalog.QuestionDto;
-import cn.tihaishitu.game.KnowledgeQuestionPoolStore;
+import cn.tihaishitu.game.QuestionAttemptStore;
 import cn.tihaishitu.learner.LearnerAuthService;
+import cn.tihaishitu.learning.DiagnosticLearningService;
+import cn.tihaishitu.world.WorldActionContext;
+import cn.tihaishitu.world.WorldRegistry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.Cookie;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.doAnswer;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 abstract class DiagnosticWorldTestSupport {
+    /** 直接驱动保留诊断状态机时使用的执行上下文世界（与正式 Learner World 一致）。 */
+    static final String DIAGNOSIS_WORLD = WorldRegistry.ANCIENT_OFFICIAL;
+
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
-    /** 只用于把 Book-level 题池固定成 root 一道题，其余方法仍然走真实实现。 */
-    @MockitoSpyBean KnowledgeQuestionPoolStore poolStore;
+    @Autowired QuestionAttemptStore attempts;
+    @Autowired DiagnosticLearningService diagnostics;
 
     record Scenario(String book, String target, List<String> dependencies, List<String> fillers,
                     String rootQuestion) {}
@@ -94,46 +97,85 @@ abstract class DiagnosticWorldTestSupport {
         return learner;
     }
 
-    void forceScenarioPlan(Scenario scenario) {
-        // World 正式发题改为"整书题池直接随机"后，不再伪造 KnowledgePoint plan。
-        // 但诊断测试需要"第一题一定是 root"才能断言 probe / remediation 顺序，
-        // 所以这里固定 Book-level 题池返回 root 一道题（依赖诊断题仍由真实 store 提供）。
-        QuestionDto root = questionDto(scenario.rootQuestion());
-        doAnswer(invocation -> List.of(root))
-                .when(poolStore).candidatesForBooks(anySet(), anySet());
+    /**
+     * 诊断根题关联的知识点顺序：target 在前，依赖在后，与 root 题目的
+     * question_resource_knowledge.sort_order 一致；诊断会话据此展开依赖。
+     */
+    List<String> rootKnowledgePointIds(Scenario scenario) {
+        List<String> ids = new ArrayList<>();
+        ids.add(scenario.target());
+        ids.addAll(scenario.dependencies());
+        return List.copyOf(ids);
     }
 
-    /** 从测试数据还原一道 QuestionDto，供 Book-level 题池 stub 使用。 */
-    private QuestionDto questionDto(String questionId) {
-        List<String> pointIds = jdbc.queryForList("""
-                SELECT knowledge_point_id FROM question_resource_knowledge
-                 WHERE question_id = ? ORDER BY sort_order, knowledge_point_id
-                """, String.class, questionId);
-        // 正式题答案事实是 option.correct_option；stub 也必须走同一套派生逻辑。
-        Map<String, String> options = new java.util.LinkedHashMap<>();
-        List<QuestionAnswerDeriver.Option> optionFacts = new ArrayList<>();
-        jdbc.query("""
-                SELECT option_key,option_text,correct_option,sort_order FROM question_resource_option
-                 WHERE question_id=? ORDER BY sort_order,option_key
-                """, (rs, rowNumber) -> new Object[]{
-                rs.getString(1), rs.getString(2), rs.getBoolean(3), rs.getInt(4)}, questionId)
-                .forEach(row -> {
-                    options.put((String) row[0], (String) row[1]);
-                    optionFacts.add(new QuestionAnswerDeriver.Option(
-                            (String) row[0], (Boolean) row[2], (Integer) row[3]));
-                });
-        return jdbc.queryForObject("""
-                SELECT id,subject_name,source_type,source_name,question_type,presentation_type,
-                       grading_mode,content_markdown,analysis_markdown,difficulty
-                  FROM question_resource WHERE id=?
-                """, (rs, row) -> new QuestionDto(
-                rs.getString("id"), rs.getString("subject_name"), rs.getString("source_type"),
-                rs.getString("source_name"), rs.getString("question_type"), rs.getString("question_type"),
-                rs.getString("presentation_type"), rs.getString("grading_mode"),
-                rs.getString("content_markdown"), options,
-                new QuestionAnswerDeriver(mapper).derive(rs.getString("question_type"), optionFacts),
-                rs.getString("analysis_markdown"), List.of(), List.of(), rs.getInt("difficulty"), 3,
-                List.of(), pointIds, true), questionId);
+    /**
+     * 直接驱动保留诊断状态机：在 Learner World 执行上下文里创建一道正式 attempt。
+     * 根题必须带上真实 knowledgePointIds，probe / remediation / recheck 只需沿用正式题。
+     */
+    String createDiagnosisAttempt(String learner, String questionId, List<String> knowledgePointIds,
+                                  String targetKnowledgePointId, String evidenceMode,
+                                  String diagnosisSessionId, String diagnosisRole) {
+        String attemptId = UUID.randomUUID().toString();
+        WorldActionContext.run(learner, DIAGNOSIS_WORLD, () -> {
+            attempts.create(attemptId, DIAGNOSIS_WORLD, questionId, diagnosisQuestion(questionId, knowledgePointIds),
+                    mapper.getNodeFactory().booleanNode(true), "auto", targetKnowledgePointId, evidenceMode, 2,
+                    diagnosisSessionId, diagnosisRole);
+            return null;
+        });
+        return attemptId;
+    }
+
+    /**
+     * 判分并推进诊断。allowed 对应正式出题冻结的可练知识点集合：
+     * 在集合内的依赖为 pending，否则为 unavailable。
+     */
+    DiagnosticLearningService.GradingResult gradeDiagnosisAttempt(String learner, String attemptId, boolean correct,
+                                                                  Set<String> allowed, Instant at) {
+        return WorldActionContext.run(learner, DIAGNOSIS_WORLD, () -> {
+            QuestionAttemptStore.Snapshot snapshot = attempts.find(attemptId, DIAGNOSIS_WORLD);
+            attempts.recordAnswer(snapshot, mapper.getNodeFactory().booleanNode(correct), correct, at);
+            return diagnostics.handleGradedAttempt(snapshot, correct ? "correct" : "wrong", "automatic", at, allowed);
+        });
+    }
+
+    DiagnosticLearningService.Directive nextDiagnosisDirective(String learner, String diagnosisId) {
+        return WorldActionContext.run(learner, DIAGNOSIS_WORLD, () -> diagnostics.nextDirective(diagnosisId));
+    }
+
+    /** 依赖没有可发的正式题时，由调用方标记探针不可用。 */
+    void markProbeUnavailable(String learner, String diagnosisId, String pointId) {
+        WorldActionContext.run(learner, DIAGNOSIS_WORLD, () -> {
+            diagnostics.markProbeUnavailable(diagnosisId, pointId);
+            return null;
+        });
+    }
+
+    void abandonDiagnosis(String learner, String diagnosisId) {
+        WorldActionContext.run(learner, DIAGNOSIS_WORLD, () -> {
+            diagnostics.abandon(diagnosisId);
+            return null;
+        });
+    }
+
+    /** 知识点下的一道正式题；没有就补一道，与 ready(...) 的兜底口径一致。 */
+    String formalQuestion(String point) {
+        List<String> questions = jdbc.queryForList("""
+                SELECT q.id FROM question_resource q
+                JOIN question_resource_knowledge qk ON qk.question_id=q.id
+                WHERE qk.knowledge_point_id=? AND qk.relation_role='core' AND q.status='published'
+                  AND q.parent_question_id IS NULL
+                ORDER BY q.id
+                """, String.class, point);
+        return questions.isEmpty() ? question(2, List.of(relation(point, "core"))) : questions.get(0);
+    }
+
+    /** attempt 冻结的题目快照：诊断只读取 knowledgePointIds，其余字段不影响推进。 */
+    private ObjectNode diagnosisQuestion(String questionId, List<String> knowledgePointIds) {
+        ObjectNode question = mapper.createObjectNode();
+        question.put("id", questionId);
+        question.put("gradingMode", "auto");
+        question.set("knowledgePointIds", mapper.valueToTree(knowledgePointIds));
+        return question;
     }
 
     void initialize(Cookie cookie) throws Exception {

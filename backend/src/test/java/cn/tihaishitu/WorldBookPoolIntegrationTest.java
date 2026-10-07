@@ -32,7 +32,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * V7.2：World / 副本使用 Book-level 正式题池。
+ * Book-level 正式题池与 World 活动轮次的保留能力测试。
+ *
+ * <p>PR3 之后现代 Learner World 的 RANDOM 正式题不再直接对 Book 题池做 uniform random，
+ * 而是先按 {@code RandomPracticeSelector} 选 target KnowledgePoint、再在该 KP 内按
+ * oldest / wrong lane 选题；因此本类前三个测试覆盖的是**仍然保留的 store / service 能力**
+ * （Book 题池口径、稳定 target 解析），不再是 World 的发题路径。</p>
  *
  * <pre>
  * selected Book(s)
@@ -40,10 +45,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   → 与之有关系的 published Formal Parent Question（core + auxiliary 都算）
  *   → 按 question_id DISTINCT 去重
  *   → 排除本 run seenQuestionIds
- *   → 直接等概率随机 Question
  * </pre>
  *
- * 不再先随机 KnowledgePoint，也不会因为“知识点数量少于 rounds”阻止副本开始。
+ * 仍然不会因为“知识点数量少于 rounds”阻止副本开始。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -183,9 +187,13 @@ class WorldBookPoolIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var attempt = mapper.readTree(body).path("attempt");
         assertThat(attempt.path("question").path("id").asText()).isEqualTo(question);
-        assertThat(attempt.path("targetKnowledgePointId").asText()).isEqualTo(core);
+        // RANDOM 是 KP-first：一题同时关联 core 与 auxiliary 时，两个 KP 都是合法 target，
+        // 关键长期规则是“一次 attempt 只给冻结的那一个 target 记账”，不会同时加两个 KP 的分。
+        String target = attempt.path("targetKnowledgePointId").asText();
+        assertThat(target).isIn(core, auxiliary);
+        String untouched = core.equals(target) ? auxiliary : core;
 
-        // 一次作答只强化 target：auxiliary 不因为同一次 attempt 自动加分。
+        // 一次作答只强化 target：另一个关联知识点不因为同一次 attempt 自动加分。
         String attemptId = attempt.path("id").asText();
         String frozen = answerJson(attemptId);
         assertThat(attempt.path("question").path("options").path(Boolean.parseBoolean(frozen) ? "true" : "false").asText())
@@ -196,8 +204,8 @@ class WorldBookPoolIntegrationTest {
                                 .formatted(attemptId, question, answerJson(attemptId))))
                 .andExpect(status().isOk());
 
-        assertThat(mastery.projection(learnerId, core, Instant.now()).masteryScore()).isGreaterThan(0);
-        assertThat(mastery.projection(learnerId, auxiliary, Instant.now()).masteryScore()).isZero();
+        assertThat(mastery.projection(learnerId, target, Instant.now()).masteryScore()).isGreaterThan(0);
+        assertThat(mastery.projection(learnerId, untouched, Instant.now()).masteryScore()).isZero();
     }
 
     @Test

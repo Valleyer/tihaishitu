@@ -201,7 +201,7 @@ class QuestionCoverageMasteryIntegrationTest {
         String attempt = insertGraded(learner, point, question, outcome, at);
         var snapshot = new QuestionAttemptStore.Snapshot(attempt, null, learner, null, null, question,
                 mapper.readTree("{}"), mapper.readTree("true"), "graded", "auto", "automatic", outcome,
-                point, "normal", 2, at, null, null);
+                point, "normal", 2, at, null, null, null, null);
         states.apply(snapshot, outcome, "automatic", at);
     }
 

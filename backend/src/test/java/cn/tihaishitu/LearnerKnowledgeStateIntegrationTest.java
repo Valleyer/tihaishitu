@@ -28,7 +28,7 @@ class LearnerKnowledgeStateIntegrationTest {
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper;
 
     @Test
-    void officialWorldAttributesOnlyTargetAndKeepsWrongThenTrainingAsTwoEvidenceEvents() throws Exception {
+    void officialWorldAttributesOnlyTargetAndKeepsWrongThenNextFormalAsTwoEvidenceEvents() throws Exception {
         String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
         String k1 = UUID.randomUUID().toString(), k2 = UUID.randomUUID().toString();
         String q1 = UUID.randomUUID().toString(), q2 = UUID.randomUUID().toString();
@@ -39,8 +39,8 @@ class LearnerKnowledgeStateIntegrationTest {
         for (String q : new String[]{q1, q2}) {
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", q, k1);
         }
-        // World 现在直接从整书正式题池随机，所以这里只保留 k1 的两道题：
-        // 第一题必然是 k1，答错后的补救训练仍然是同一道题。
+        // World 现在按 RANDOM KP-first 发题，所以这里只保留 k1 的两道题：
+        // 第一次必然落在 k1，而当天第二道题只能是 k1 里另一道还没出过的正式题。
         Cookie learner = register();
         String learnerId = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='state-user'", String.class);
         jdbc.update("""
@@ -71,10 +71,15 @@ class LearnerKnowledgeStateIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?", Integer.class, firstAttempt)).isEqualTo(1);
 
         game = next(learner, game);
-        String trainingAttempt = game.path("attempt").path("id").asText();
-        String trainingQuestion = game.path("attempt").path("question").path("id").asText();
-        assertThat(jdbc.queryForObject("SELECT evidence_mode FROM study_attempt WHERE id=?", String.class, trainingAttempt)).isEqualTo("training");
-        answer(learner, trainingAttempt, trainingQuestion, true);
+        String secondAttempt = game.path("attempt").path("id").asText();
+        String secondQuestion = game.path("attempt").path("question").path("id").asText();
+        // 普通正式训练单层化：答错后不再 retry 同一道父题，也不再发 training / remedial 子题，
+        // 下一题就是当天还没出过的另一道普通正式题，evidence_mode 仍是 normal。
+        assertThat(secondQuestion).isNotEqualTo(firstQuestion);
+        assertThat(jdbc.queryForObject("SELECT evidence_mode FROM study_attempt WHERE id=?", String.class, secondAttempt)).isEqualTo("normal");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM study_attempt WHERE evidence_mode IN ('training','remedial')", Integer.class)).isZero();
+        answer(learner, secondAttempt, secondQuestion, true);
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(1);

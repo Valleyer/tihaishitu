@@ -159,6 +159,63 @@ class LearnerWrongDrillIntegrationTest {
         assertThat(last.path("updatedAt").asText()).isNotBlank();
     }
 
+    /**
+     * active wrong_drill Session 只认自己冻结的 scope：
+     * Learner 在别处改了 selected Books，正在进行的 Session 不会换题池、也不会错误显示 canRepeat；
+     * 新开 Session 才按实时学习范围校验。
+     */
+    @Test
+    void activeWrongDrillSessionKeepsItsFrozenScopeWhenSelectedBooksChange() throws Exception {
+        DrillFixture drill = fixture();
+        Cookie cookie = register("wrong-drill-frozen");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='wrong-drill-frozen'", String.class);
+        for (int index = 0; index < 2; index++)
+            graded(learner, question(drill.point(), "冻结错题" + index, index + 1, drill.auxiliary()), drill.point());
+
+        JsonNode session = start(cookie, "{\"intent\":\"wrong_drill\"}");
+        String sessionId = session.path("id").asText();
+        String firstQuestion = session.path("currentAttempt").path("question").path("id").asText();
+        session = answer(cookie, sessionId, session.path("currentAttempt").path("id").asText(), firstQuestion,
+                session.path("currentAttempt").path("question").path("options"));
+        // 冻结 scope 内还有一道没练过的 active 错题。
+        assertThat(session.path("canRepeat").asBoolean()).isTrue();
+
+        // 中途把学习范围切到另一个可练文集。
+        String otherBook = otherBookWithPractice();
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
+                learner, otherBook);
+
+        // 正在进行的 Session 仍然按冻结 scope 发下一道错题。
+        JsonNode continued = next(cookie, sessionId);
+        String secondQuestion = continued.path("currentAttempt").path("question").path("id").asText();
+        assertThat(secondQuestion).isNotEqualTo(firstQuestion);
+        continued = answer(cookie, sessionId, continued.path("currentAttempt").path("id").asText(), secondQuestion,
+                continued.path("currentAttempt").path("question").path("options"));
+        // 冻结 scope 内的错题都做完了：明确结束，不因为学习范围变化而乱报。
+        assertThat(continued.path("canRepeat").asBoolean()).isFalse();
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/next", sessionId).with(csrf()).cookie(cookie))
+                .andExpect(status().isConflict());
+
+        // 新开 Session 必须按实时学习范围校验：原文集的错题已经不在当前范围内。
+        mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"intent\":\"wrong_drill\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 另一个可练文集：用于把 Learner 的学习范围切走。 */
+    private String otherBookWithPractice() {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        String point = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'另一个文集','',TRUE,1,1)", book);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C','另一章','',0,1)", chapter, book);
+        insertPoint(point, "OTHER", "另一个知识点", "core");
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", book, point, chapter);
+        question(point, "另一个文集题");
+        return book;
+    }
+
     private JsonNode start(Cookie cookie, String body) throws Exception {
         return json(mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -269,7 +326,7 @@ class LearnerWrongDrillIntegrationTest {
                 """, attemptId, learner, question, snapshot, point, "normal");
         var attempt = new QuestionAttemptStore.Snapshot(attemptId, null, learner, null, null, question,
                 mapper.readTree(snapshot), mapper.readTree("\"B\""), "active", "auto", null, null,
-                point, "normal", 2, null, null, null);
+                point, "normal", 2, null, null, null, null, null);
         attempts.recordAnswer(attempt, mapper.getNodeFactory().textNode("A"), false, Instant.now());
     }
 

@@ -138,8 +138,9 @@ class LearnerPracticeIntegrationTest {
         assertThat(secondOptions.path(secondStandard).asText()).isEqualTo("正确项");
     }
 
-    @Test void failedParentRunsRemedialStepsOnceThenRetriesParentWithoutChildEvidence() throws Exception {
-        // 最新规则下正式题抽取是随机的，因此用只含一道正式题的 fixture 保证父题唯一。
+    @Test void failedParentDoesNotNestRemedialChildrenOrRetryTheParent() throws Exception {
+        // 普通正式训练单层化：即使该 KP 下已经存在 remedial 子题，也不再自动进入补救流程，
+        // 更不会 retry 父题。答错同样只完成这一道正式题，然后结束本 Session 随机池。
         SingleQuestionFixture fixture = singleQuestionFixture("practice-remedial");
         String parent = fixture.question();
         for (int order = 1; order <= 3; order++) {
@@ -158,26 +159,18 @@ class LearnerPracticeIntegrationTest {
 
         session = answer(learner, session.path("id").asText(), session.path("currentAttempt").path("id").asText(),
                 parent, false);
-        assertThat(session.path("flowComplete").asBoolean()).isFalse();
-        for (int order = 1; order <= 3; order++) {
-            session = next(learner, session.path("id").asText());
-            assertThat(session.path("currentAttempt").path("evidenceMode").asText()).isEqualTo("remedial");
-            assertThat(jdbc.queryForObject("SELECT derivation_order FROM question_resource WHERE id=?", Integer.class,
-                    session.path("currentAttempt").path("question").path("id").asText())).isEqualTo(order);
-            session = answer(learner, session.path("id").asText(), session.path("currentAttempt").path("id").asText(),
-                    session.path("currentAttempt").path("question").path("id").asText(), true);
-        }
-        session = next(learner, session.path("id").asText());
-        assertThat(session.path("currentAttempt").path("question").path("id").asText()).isEqualTo(parent);
+        assertThat(session.path("flowComplete").asBoolean()).isTrue();
+        assertThat(session.path("canRepeat").asBoolean()).isFalse();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE learner_id=(SELECT id FROM learner_account WHERE username='practice-remedial')",
                 Integer.class)).isOne();
-        session = answer(learner, session.path("id").asText(), session.path("currentAttempt").path("id").asText(),
-                parent, true);
-        assertThat(session.path("flowComplete").asBoolean()).isTrue();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE learner_id=(SELECT id FROM learner_account WHERE username='practice-remedial')",
-                Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM study_attempt WHERE evidence_mode IN ('remedial','training')",
+                Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_question_mastery m JOIN question_resource q ON q.id=m.question_id WHERE q.parent_question_id IS NOT NULL",
                 Integer.class)).isZero();
+        // 本 Session 随机池已经耗尽：必须是明确的 409，而不是发补救子题。
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/next", session.path("id").asText())
+                        .with(csrf()).cookie(learner))
+                .andExpect(status().isConflict());
     }
 
     @Test void chapterPracticeAdvancesKnowledgePointsInChapterOrder() throws Exception {

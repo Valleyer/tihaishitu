@@ -447,16 +447,12 @@ function App() {
                       <div className="challenge-toolbar">
                         <span>
                           {activityRun.definition.name} ·{" "}
-                          知识点 {Math.min(
+                          正式题 {Math.min(
                             activityRun.knowledgePointIndex + 1,
-                            activityRun.definition.rounds,
+                            activityRun.plannedRounds ?? activityRun.definition.rounds,
                           )}
-                          /{activityRun.definition.rounds}
-                          {attempt.learningPurpose
-                            ? " · " + attempt.learningPurpose
-                            : activityRun.training
-                              ? " · 诊断训练中"
-                              : " · 首次考核"}
+                          /{activityRun.plannedRounds ?? activityRun.definition.rounds}
+                          {attempt.learningPurpose ? " · " + attempt.learningPurpose : ""}
                           <b className="current-study">
                             当前修习：
                             {attempt.targetKnowledgePointName ||

@@ -98,7 +98,7 @@ class LearnerWrongQuestionIntegrationTest {
                 mapper.readTree(snapshot), mapper.readTree("\"B\""),
                 "partial".equals(assessment) ? "revealed" : "active",
                 "partial".equals(assessment) ? "self_assessment" : "auto", null, null,
-                point, mode, 2, null, null, null);
+                point, mode, 2, null, null, null, null, null);
         if ("partial".equals(assessment)) attempts.recordSelfAssessment(attempt, "partial", Instant.now());
         else attempts.recordAnswer(attempt, mapper.getNodeFactory().textNode("correct".equals(assessment) ? "B" : "A"),
                 "correct".equals(assessment), Instant.now());

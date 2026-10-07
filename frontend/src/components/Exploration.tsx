@@ -111,11 +111,11 @@ export function WorldHub({
               <p>
                 {state.run.status === "settled"
                   ? "此行战果已记下，来看看所得。"
-                  : "已掌握 " +
+                  : "已完成 " +
                     state.run.knowledgePointIndex +
                     "/" +
-                    state.run.definition.rounds +
-                    " 个知识点，随时可接着走。"}
+                    (state.run.plannedRounds ?? state.run.definition.rounds) +
+                    " 道正式题，随时可接着走。"}
               </p>
             </div>
             <button className="gold-button" onClick={resume}>

@@ -4,11 +4,12 @@ import cn.tihaishitu.catalog.KnowledgePointDto;
 import cn.tihaishitu.catalog.QuestionDto;
 import cn.tihaishitu.common.ApiException;
 import cn.tihaishitu.learner.StudyProfileService;
-import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import cn.tihaishitu.learning.DiagnosticLearningService;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
 import cn.tihaishitu.learning.LearnerQuestionProgressStore;
+import cn.tihaishitu.learning.PracticeDrawMode;
 import cn.tihaishitu.learning.QuestionAttemptVariantService;
+import cn.tihaishitu.learning.RandomPracticeSelector;
 import cn.tihaishitu.world.WorldActionContext;
 import cn.tihaishitu.world.WorldStateStore;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,22 +39,22 @@ public class GameActionService {
     private final WorldStateStore worldStates;
     private final StudyProfileService studyProfiles;
     private final LearnerKnowledgeStateService knowledgeStates;
-    private final AdaptiveStudyPlanner adaptivePlanner;
     private final DiagnosticLearningService diagnostics;
     private final cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder;
     private final QuestionAttemptVariantService variants;
     private final LearnerQuestionProgressStore questionProgress;
+    private final RandomPracticeSelector randomSelector;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
                              GameContent content, GameFactory factory, ObjectMapper mapper,
                              WorldStateStore worldStates, StudyProfileService studyProfiles,
                              LearnerKnowledgeStateService knowledgeStates,
-                             AdaptiveStudyPlanner adaptivePlanner,
                              DiagnosticLearningService diagnostics,
                              cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder,
                              QuestionAttemptVariantService variants,
-                             LearnerQuestionProgressStore questionProgress) {
+                             LearnerQuestionProgressStore questionProgress,
+                             RandomPracticeSelector randomSelector) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -63,11 +64,11 @@ public class GameActionService {
         this.worldStates = worldStates;
         this.studyProfiles = studyProfiles;
         this.knowledgeStates = knowledgeStates;
-        this.adaptivePlanner = adaptivePlanner;
         this.diagnostics = diagnostics;
         this.examMetadataBuilder = examMetadataBuilder;
         this.variants = variants;
         this.questionProgress = questionProgress;
+        this.randomSelector = randomSelector;
     }
 
     @Transactional
@@ -163,21 +164,26 @@ public class GameActionService {
             run.set("allowedKnowledgePointIds", mapper.valueToTree(legacyPlan.allowedKnowledgePointIds()));
             run.put("plannedRounds", legacyPlan.knowledgePointIds().size());
         } else {
-            // Learner World / 副本：Book-level 正式题池（selected Book(s) 覆盖的全部去重 Formal Question）。
-            // 轮数不再要求“至少存在 rounds 个不同 KnowledgePoint”；题目总量少于 rounds 时
-            // plannedRounds 收敛为题目数，做完自然结束。
-            List<QuestionDto> candidates = questionPool.candidatesForBooks(bookScope, Set.of());
-            // 明确 400（不是 409 状态冲突）：0 题时必须在开始活动阶段就失败，
-            // 不能把 plannedRounds 强行变成 1 再等到发题时晚一步报错。
-            if (candidates.isEmpty())
+            // Learner World / 副本：RANDOM KP-first 正式题。
+            // 轮数不再要求“至少存在 rounds 个不同 KnowledgePoint”，而是按
+            // “当前 Book scope 今天还没 RANDOM 出过的正式题数”收敛：
+            // plannedRounds = min(activity rounds, remainingToday)，避免 run 中途为了凑轮数重复出题。
+            // remainingToday = 0 时必须在开始活动阶段就返回清晰业务提示，不能先启动 run 再 500。
+            Set<String> allowedPointIds = questionPool.allowedKnowledgePointIds(bookScope);
+            int remainingToday = randomSelector.remainingToday(
+                    WorldActionContext.currentOrNull().learnerId(), allowedPointIds, Set.of());
+            if (remainingToday == 0)
                 throw new cn.tihaishitu.common.ApiException(
-                        org.springframework.http.HttpStatus.BAD_REQUEST, "当前学习范围内没有可用的正式题。");
+                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                        randomSelector.hasAnyCandidate(allowedPointIds, Set.of())
+                                ? "今天学习范围内的随机题已经全部出过了，明天再来吧。"
+                                : "当前学习范围内没有可用的正式题。");
             run.set("knowledgePointIds", mapper.createArrayNode());
-            // Freeze the selected Book boundary; formal draws build the Book-level question pool from this scope.
-            run.set("allowedKnowledgePointIds", mapper.valueToTree(questionPool.allowedKnowledgePointIds(bookScope)));
-            run.put("plannedRounds", Math.min(rounds, candidates.size()));
+            // 冻结 KnowledgePoint scope：后续 RANDOM 选题只在这个范围内先选 KP 再选题。
+            run.set("allowedKnowledgePointIds", mapper.valueToTree(allowedPointIds));
+            run.put("plannedRounds", Math.min(rounds, remainingToday));
         }
-        // Freeze the book scope itself for Book-level question pool draws.
+        // 冻结本轮 selected Book 范围，供旧存档回退与 Book scope 校验使用。
         run.set("allowedBookIds", mapper.valueToTree(bookScope));
         // 本轮已完成 / 已作答的正式题数（不再是知识目录下标）。
         run.put("knowledgePointIndex", 0);
@@ -214,9 +220,9 @@ public class GameActionService {
         boolean correct = QuestionGradingPolicy.matches(snapshot.standard(), request.answer());
         Instant occurredAt = Instant.now();
         if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
-        DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
-                correct ? "correct" : "wrong", "automatic", occurredAt,
-                frozenAllowedKnowledgePointIds(activeRun(game)));
+        // 普通正式训练单层化：一次 grading 只记 Mastery / Evidence，
+        // 不再创建 learner_diagnosis_session，也不再发 Remedial 子题或 retry 父题。
+        knowledgeStates.apply(snapshot, correct ? "correct" : "wrong", "automatic", occurredAt);
 
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -224,7 +230,7 @@ public class GameActionService {
         result.set("standard", snapshot.standard().deepCopy());
         result.put("explanation", snapshot.question().path("explanation").asText());
         result.set("aliases", snapshot.question().path("aliases").deepCopy());
-        result.put("story", story(correct, diagnosis));
+        result.put("story", story(correct));
         result.set("changes", mapper.createArrayNode());
         current.set("result", result);
 
@@ -237,7 +243,7 @@ public class GameActionService {
         record.put("review", current.path("review").asBoolean());
         game.withArray("records").add(record);
         updateLearning(game, request.questionId(), request.answer(), correct);
-        settleRunAnswer(game, correct, request.questionId(), diagnosis);
+        settleRunAnswer(game, correct, request.questionId());
         persist(game);
         return game;
     }
@@ -275,8 +281,8 @@ public class GameActionService {
         if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
             throw bad("请先查看参考解析，或此题已经完成自评。");
         }
-        DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
-                request.assessment(), "self", occurredAt, frozenAllowedKnowledgePointIds(activeRun(game)));
+        // 综合题自评同样单层化：graded 后只记 Mastery / Evidence，不进入诊断或补救。
+        knowledgeStates.apply(snapshot, request.assessment(), "self", occurredAt);
         boolean correct = "correct".equals(request.assessment());
         ObjectNode result = mapper.createObjectNode();
         result.put("correct", correct);
@@ -285,12 +291,10 @@ public class GameActionService {
         result.put("answer", request.assessment());
         result.put("explanation", snapshot.question().path("explanation").asText());
         result.set("aliases", snapshot.question().path("aliases").deepCopy());
-        result.put("story", diagnosis.diagnosisStarted()
-                ? "此题牵涉前置知识，先查根问底，再决定错处归因。"
-                : switch (request.assessment()) {
+        result.put("story", switch (request.assessment()) {
             case "correct" -> "自校无误，此题已经完整掌握。";
             case "partial" -> "思路已有根基，尚有步骤需要补全。";
-            default -> "错处已经记下，接下来会从同一知识点查漏补缺。";
+            default -> "错处已经记下，继续下一道正式题。";
         });
         result.set("changes", mapper.createArrayNode());
         current.set("result", result);
@@ -309,7 +313,7 @@ public class GameActionService {
         ObjectNode learning = (ObjectNode) game.with("learning").path(request.questionId());
         if ("partial".equals(request.assessment()))
             learning.put("partial", learning.path("partial").asInt() + 1);
-        settleRunAnswer(game, correct, request.questionId(), diagnosis);
+        settleRunAnswer(game, correct, request.questionId());
         persist(game);
         return game;
     }
@@ -346,7 +350,7 @@ public class GameActionService {
         JsonNode run = adventure(game).path("run");
         if (run.isMissingNode() || run.isNull() || !runId.equals(run.path("id").asText())) throw bad("行程已变化。");
         if (WorldActionContext.active() && run.hasNonNull("diagnosisSessionId"))
-            diagnostics.abandon(run.path("diagnosisSessionId").asText());
+            diagnostics.abandonIfPresent(run.path("diagnosisSessionId").asText());
         refundEscrow(game, (ObjectNode) run);
         adventure(game).putNull("run");
         game.putNull("attempt");
@@ -456,59 +460,35 @@ public class GameActionService {
         run.path("seenQuestionIds").forEach(id -> seen.add(id.asText()));
         Set<String> allowed = allowedKnowledgePointIds(game, run);
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
-        DiagnosticLearningService.Directive directive = null;
         String pointId;
         QuestionDto question;
-        if (world != null && run.hasNonNull("diagnosisSessionId")) {
-            while (true) {
-                directive = diagnostics.nextDirective(run.path("diagnosisSessionId").asText());
-                pointId = directive.targetKnowledgePointId();
-                KnowledgeQuestionPoolService.Mode mode = "training".equals(directive.evidenceMode())
-                        ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL;
-                var profile = studyProfiles.rawCurrent();
-                AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
-                        world.learnerId(), allowed, pointId, profile.difficulty());
-                int preferred = DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
-                        ? Math.min(3, context.preferredDifficulty()) : context.preferredDifficulty();
-                var request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                        seen, preferred, mode);
-                if (DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
-                        && questionPool.eligibleQuestionsForLearner(request).isEmpty()) {
-                    diagnostics.markProbeUnavailable(directive.diagnosisSessionId(), pointId);
-                    continue;
-                }
-                if (!DiagnosticLearningService.DEPENDENCY_PROBE.equals(directive.role())
-                        && questionPool.eligibleQuestionsForLearner(request).isEmpty()) {
-                    // 知识点的正式题可能只有 root 一道。核验 / 补救必须针对该题重新发卷，
-                    // 因此这一种诊断题允许复用本轮已见题，而不是让整轮诊断失效。
-                    request = new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                            Set.of(), preferred, mode);
-                }
-                question = questionPool.selectQuestionForLearner(world.learnerId(), request);
-                break;
-            }
-        } else if (world == null) {
+        String drawMode;
+        String drawReason = null;
+        if (world == null) {
             // Legacy /games/** 兼容路径：仍按启动时冻结的 KnowledgePoint 顺序出题，
-            // 不参与 Learner 的 Book-level 整书题池。
+            // 不参与 Learner 的 RANDOM KP-first 选题。
             pointId = run.path("knowledgePointIds").path(run.path("knowledgePointIndex").asInt()).asText();
             question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
                     pointId, allowed, seen, null,
                     run.path("training").asBoolean()
                             ? KnowledgeQuestionPoolService.Mode.TRAINING
                             : KnowledgeQuestionPoolService.Mode.NORMAL));
+            drawMode = PracticeDrawMode.LEGACY.wireValue();
         } else {
-            // Book-level 正式题：直接从 selected Book(s) 覆盖的全部去重 Formal Question 中随机，
-            // 不先选 KnowledgePoint，也不受 readiness / Mastery / Review / difficulty 限制。
-            // 答错后的补救训练继续练同一道题（retryQuestionId），不换知识点。
-            if (run.path("training").asBoolean() && run.hasNonNull("retryQuestionId")) {
-                question = questionPool.questionForLearner(run.path("retryQuestionId").asText())
-                        .orElseGet(() -> questionPool.selectBookQuestion(frozenBookIds(game, run), Set.of()));
-            } else {
-                question = questionPool.selectBookQuestion(frozenBookIds(game, run), seen);
-            }
-            pointId = questionPool.targetKnowledgePointFor(question.id(), allowed)
-                    .orElseGet(() -> questionPool.targetKnowledgePointFor(question.id(), Set.of())
-                            .orElseThrow(() -> bad("这道题当前没有可用的知识点。")));
+            // 现代 Learner World：只走 RANDOM KP-first selector。
+            // 旧的 training / retryQuestionId 不再影响选题；部署前遗留的旧诊断会话
+            // 不会继续推进诊断链，而是标记 abandoned 后回到普通 selector。
+            abandonRunDiagnosis(run);
+            RandomPracticeSelector.Selection selection = randomSelector
+                    .select(world.learnerId(), allowed, seen)
+                    .orElseThrow(() -> new cn.tihaishitu.common.ApiException(
+                            org.springframework.http.HttpStatus.CONFLICT,
+                            "今天学习范围内的随机题已经全部出过了，明天再来吧。"));
+            question = questionPool.questionForLearner(selection.questionId())
+                    .orElseThrow(() -> bad("这道题当前不可练习。"));
+            pointId = selection.targetKnowledgePointId();
+            drawMode = PracticeDrawMode.RANDOM.wireValue();
+            drawReason = selection.drawReason();
         }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
@@ -540,29 +520,36 @@ public class GameActionService {
         visible.set("knowledgePoints", knowledge);
         ObjectNode attempt = mapper.createObjectNode();
         attempt.put("id", attemptId);
-        // Book-level 抽题时 target 已经由"该题在 scope 内稳定的 core → auxiliary"解析出来；
-        // 显式传入，避免同一次发题再解析成另一个知识点。
+        // 选题策略已经冻结了 target KP，显式传入，避免同一次发题再解析成另一个知识点。
         final String selectedPointId = pointId;
         KnowledgePointDto target = details.stream().filter(point -> selectedPointId.equals(point.id())).findFirst()
                 .orElseThrow(() -> bad("当前修习知识点已经停用或不存在。"));
         attempt.put("targetKnowledgePointId", target.id());
         attempt.put("targetKnowledgePointName", target.name());
-        if (directive == null) attempt.putNull("learningPurpose");
-        else attempt.put("learningPurpose", learningPurpose(directive.role()));
+        attempt.putNull("learningPurpose");
         attempt.set("question", visible);
         attempt.set("scene", scene(question, run.path("definition")));
         attempt.putNull("result");
         attempt.putNull("reveal");
-        boolean remediation = directive == null ? run.path("training").asBoolean()
-                : "training".equals(directive.evidenceMode());
+        // Legacy 兼容路径保留原来的“答错继续练同一题”；现代 Learner World 一律 normal。
+        boolean remediation = world == null && run.path("training").asBoolean();
         run.put("training", remediation);
         attempt.put("review", remediation);
         game.set("attempt", attempt);
         attempts.create(attemptId, game.path("id").asText(), question.id(), variant.question(), variant.standard(),
                 full.path("gradingMode").asText("auto"), target.id(),
                 remediation ? "training" : "normal", question.difficulty(),
-                directive == null ? null : directive.diagnosisSessionId(),
-                directive == null ? null : directive.role());
+                null, null, drawMode, drawReason);
+    }
+
+    /**
+     * 部署前遗留状态兼容：现代普通训练不再继续旧诊断链。
+     * 把 run 上残留的 diagnosisSessionId 标记 abandoned 后清空，下一题回到普通 RANDOM selector。
+     */
+    private void abandonRunDiagnosis(ObjectNode run) {
+        if (!run.hasNonNull("diagnosisSessionId")) return;
+        diagnostics.abandonIfPresent(run.path("diagnosisSessionId").asText());
+        run.putNull("diagnosisSessionId");
     }
 
     private ArrayNode knowledgeDetails(JsonNode question) {
@@ -605,25 +592,6 @@ public class GameActionService {
         return allowed;
     }
 
-    private static Set<String> frozenAllowedKnowledgePointIds(ObjectNode run) {
-        Set<String> allowed = new LinkedHashSet<>();
-        run.path("allowedKnowledgePointIds").forEach(id -> allowed.add(id.asText()));
-        return allowed;
-    }
-
-    /**
-     * Book-level 题池使用的冻结 book 范围。
-     * 新 run 在开始时写入 `allowedBookIds`；旧存档没有该字段时回退到当前 selected books。
-     */
-    private Set<String> frozenBookIds(ObjectNode game, ObjectNode run) {
-        Set<String> books = new LinkedHashSet<>();
-        run.path("allowedBookIds").forEach(id -> books.add(id.asText()));
-        if (!books.isEmpty()) return books;
-        books.addAll(selectedBookIds(game));
-        run.set("allowedBookIds", mapper.valueToTree(books));
-        return books;
-    }
-
     /** 本轮计划完成的正式题数；旧存档没有该字段时回退到活动配置的 rounds。 */
     private static int plannedRounds(ObjectNode run) {
         int planned = run.path("plannedRounds").asInt(0);
@@ -631,33 +599,23 @@ public class GameActionService {
         return Math.max(1, run.path("definition").path("rounds").asInt(5));
     }
 
-    private void settleRunAnswer(ObjectNode game, boolean correct, String questionId,
-                                 DiagnosticLearningService.GradingResult diagnosis) {
+    private void settleRunAnswer(ObjectNode game, boolean correct, String questionId) {
         ObjectNode run = activeRun(game);
         run.put("answered", run.path("answered").asInt() + 1);
         addUnique(run.withArray("seenQuestionIds"), questionId);
-        if (diagnosis.diagnosisStarted()) {
-            run.put("diagnosisSessionId", diagnosis.diagnosisSessionId());
+        if (WorldActionContext.active()) {
+            // 现代 Learner World：correct / wrong / partial 都推进一个正式题 slot。
+            // 不再 training、不再 retry parent、不再有诊断题与补救子题。
             run.put("training", false);
+            run.putNull("retryQuestionId");
+            run.putNull("diagnosisSessionId");
+            if (correct) run.put("correct", run.path("correct").asInt() + 1);
+            advanceRunRound(run);
+            settleRunIfComplete(game, run);
             return;
         }
-        if (diagnosis.diagnosisRole() != null) {
-            // 诊断流程（probe / remediation / recheck）不推进 Book-level 轮次；
-            // 只有诊断真正收束时，才把“本轮这一道正式题”算作完成。
-            if (Set.of(DiagnosticLearningService.DEPENDENCY_PROBE,
-                    DiagnosticLearningService.TARGET_RECHECK).contains(diagnosis.diagnosisRole()))
-                run.put("diagnosticAnswered", run.path("diagnosticAnswered").asInt() + 1);
-            else run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
-            if (diagnosis.targetCompleted()) {
-                run.putNull("diagnosisSessionId");
-                run.put("training", false);
-                advanceRunRound(run);
-                settleRunIfComplete(game, run);
-            }
-            return;
-        }
+        // Legacy /games/** 兼容分支：保留原来的“答错后继续练同一题，答对再推进”。
         if (run.path("training").asBoolean()) {
-            // 正式题答错后的补救训练继续练同一道题，不换题、不换知识点。
             run.put("retryQuestionId", questionId);
             run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
             if (correct) {
@@ -743,19 +701,8 @@ public class GameActionService {
         run.put("costRefunded", true);
     }
 
-    private static String story(boolean correct, DiagnosticLearningService.GradingResult diagnosis) {
-        if (diagnosis.diagnosisStarted()) return "此题牵涉前置知识，先查根问底，再决定错处归因。";
-        return correct ? "此题已解，卷上添了一笔笃定。" : "错处已经记下，接下来会从同一知识点查漏补缺。";
-    }
-
-    private static String learningPurpose(String role) {
-        return switch (role) {
-            case DiagnosticLearningService.DEPENDENCY_PROBE -> "查根问底";
-            case DiagnosticLearningService.DEPENDENCY_REMEDIATION -> "补基础";
-            case DiagnosticLearningService.TARGET_RECHECK -> "回卷再试";
-            case DiagnosticLearningService.TARGET_REMEDIATION -> "温故补缺";
-            default -> "";
-        };
+    private static String story(boolean correct) {
+        return correct ? "此题已解，卷上添了一笔笃定。" : "错处已经记下，继续下一道正式题。";
     }
 
     private void updateLearning(ObjectNode game, String questionId, JsonNode answer, boolean correct) {
