@@ -1,4 +1,4 @@
-# 知境后端
+# 万境求知后端
 
 后端采用 Java 17、Spring Boot 3.5、Maven 和 MySQL 5.7，使用经典的注解式 MVC 分层：`Controller -> Service -> Store`。当前接口统一挂在 `/api/v1` 下，服务端口为 `12345`。
 

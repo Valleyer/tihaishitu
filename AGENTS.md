@@ -1,4 +1,4 @@
-# 知境项目 Agent 开发规则
+# 万境求知项目 Agent 开发规则
 
 本仓库采用：
 
@@ -9,17 +9,30 @@
 PR 合并后即结束该对话；下一个 PR 新开一个独立对话。Agent 不应依赖以前聊天、
 PR 评论或某个已结束对话里的上下文作为长期事实来源。
 
+## Language
+
+- 与用户交流时始终使用简体中文。
+- 最终总结、阶段性进度、错误说明、测试结果均使用简体中文。
+- 工具调用前后的自然语言说明使用简体中文。
+- Git commit message、代码标识符、命令、日志原文可以保留英文。
+- 不要为了翻译而改写命令、文件路径、类名、方法名或错误日志。
+
 ## 项目位置
 
 ```text
-项目名称：知境
+产品名称：万境求知
 本地项目目录：E:\题海仕途
 远程仓库：https://github.com/Valleyer/tihaishitu
 GitHub Repository：Valleyer/tihaishitu
 ```
 
-上面的“知境 / 题海仕途 / tihaishitu”指向同一个项目，不是三个项目：
-知境是产品名，题海仕途是本地目录名，`tihaishitu` 是 GitHub 仓库名。
+上面的“万境求知 / 题海仕途 / tihaishitu”指向同一个项目，不是三个项目：
+万境求知是产品名，题海仕途是本地目录名，`tihaishitu` 是 GitHub 仓库名。
+
+品牌名与技术身份分离：产品改名不重命名仓库、目录、Java package、
+数据库 schema、World ID、API 路由、数据库表名、Flyway migration 文件名、
+UUID 或兼容 localStorage key。旧的展示名“知境 / 知境中枢”已统一改为
+“万境求知 / 万境中枢”；`docs/archive/**` 与历史记录保留旧品牌作为历史事实。
 
 具备本地文件系统访问能力的 Agent，默认以：
 
@@ -114,6 +127,47 @@ git push
 以“不自动 push / 不自动创建 PR”为准
 ```
 
+## Agent 测试边界
+
+Agent 默认执行“最小必要测试”，不要在每个任务末尾机械运行整套前后端全量测试。
+本规则与上面的“Git 远程写入规则”并列，都是 Agent 的默认交付边界。
+
+- 纯文档 / 文案：不跑测试；
+- 单个前端组件 / 工具函数：跑直接相关 targeted test；
+- TypeScript 类型或构建配置变化：运行必要的 `npm run build`；
+- 单个后端 Store / Service / Controller：运行直接相关 Maven test class；
+- SQL / migration：运行直接相关的数据库验证或 targeted integration test；
+- 只有跨多个核心领域的高风险算法修改，才扩大测试范围。
+
+默认不要机械执行：
+
+```text
+全量 backend test
+全量 frontend test
+多轮重复 full test
+长时间随机压力测试
+```
+
+完整回归主要由：
+
+```text
+用户本地人工验收
++
+用户决定执行的完整测试
++
+用户 push 后 GitHub Actions
+```
+
+承担。
+
+Agent 最终报告必须写清：
+
+1. 实际运行哪些最小测试；
+2. 哪些 full tests 没运行；
+3. 为什么本次最小验证足以覆盖修改范围。
+
+除非用户明确要求 full test，否则默认采用最小验证。
+
 ## 开始任何 PR 前必须阅读
 
 按顺序：
@@ -122,7 +176,7 @@ git push
 2. `/docs/PROJECT_RULES.md`（跨 PR 长期规则的唯一主入口）
 3. `/README.md`（项目现状与上手方式）
 4. `/docs/api.md`（接口契约）
-5. 与当前任务直接相关的专题文档（如 `docs/development.md`、`docs/configuration-guide.md`、`docs/adventure-guide.md`）
+5. 与当前任务直接相关的专题文档（如 `docs/development.md`、`docs/configuration-guide.md`、`docs/adventure-guide.md`、`docs/deployment.md`）
 6. 当前代码实现
 
 `/docs/HANDOFF.md` 已不再是规则来源，只是指向归档材料的短说明。

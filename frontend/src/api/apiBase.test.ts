@@ -11,6 +11,6 @@ describe("resolveApiBaseUrl", () => {
 
   it("rejects an absolute cross-origin API URL", () => {
     expect(() => resolveApiBaseUrl("http://localhost:12345/api/v1", origin))
-      .toThrow("知境 Learner Session 要求浏览器 API 与前端同源");
+      .toThrow("万境求知 Learner Session 要求浏览器 API 与前端同源");
   });
 });

@@ -1,4 +1,4 @@
-# 知境项目长期规则
+# 万境求知项目长期规则
 
 > 本文件是整个项目**跨 PR 长期规则的唯一主入口**。
 >
@@ -23,22 +23,41 @@
 项目中文名：
 
 ```text
-知境
+万境求知
 ```
+
+主学习中枢：
+
+```text
+万境中枢
+```
+
+品牌名与技术身份分离：改名只调整展示名，不重命名下列稳定技术标识。
 
 历史技术名称继续保留，不为了品牌统一做大规模重命名：
 
 ```text
 仓库名        tihaishitu
+本地目录      E:\题海仕途
+Spring 技术名 tihaishitu-backend
+数据库 schema tihaishitu
 Java package  cn.tihaishitu
 World ID      ancient-official（寒门仕途）
+API 路由      不变
+数据库表名     不变
+Flyway migration 文件名  不变
+UUID          不变
+兼容 localStorage key  不变
 ```
+
+旧展示名“知境 / 知境中枢”已废弃；`docs/archive/**` 与明确的
+历史记录保留旧品牌作为历史事实，不做机械替换。
 
 产品结构：
 
 ```text
 Learner
-├─ 知境 Learning Hub
+├─ 万境中枢 Learning Hub
 │  ├─ Study
 │  ├─ Progress
 │  ├─ Statistics
@@ -966,8 +985,20 @@ frontend/src/components/Library.tsx
 
 ## 22. 验证要求
 
-改动的验证范围与改动范围匹配，不要求每轮都跑全量：
+Agent 默认执行**最小必要测试**（完整规则见 [`/AGENTS.md`](../AGENTS.md) 的
+“Agent 测试边界”），验证范围与改动范围匹配，不要求每轮都跑全量：
 
-- 后端行为改动：至少跑受影响测试，合并前跑 `.\mvnw.cmd test` 全量；
-- 前端行为改动：`npm run test` 与 `npm run build`（含内容校验与 `tsc -b`）；
-- 纯文档改动：不要求重跑测试，但最终报告必须注明“本轮仅文档治理，无业务代码变化”。
+- 纯文档 / 文案改动：不跑测试；
+- 前端单个组件 / 工具函数：跑直接相关 targeted test；
+- TypeScript 类型或构建配置变化：运行必要的 `npm run build`（含内容校验与 `tsc -b`）；
+- 后端单个 Store / Service / Controller：运行直接相关 Maven test class；
+- SQL / migration：运行直接相关的数据库验证或 targeted integration test
+  （本仓库后端测试使用 H2 的 MySQL 兼容模式，不会改动本机 MySQL）；
+- 只有跨多个核心领域的高风险算法修改，才扩大测试范围。
+
+完整回归主要由用户本地人工验收、用户决定执行的完整测试，以及用户 push 后的
+GitHub Actions 承担；除非用户明确要求 full test，否则默认采用最小验证。
+Agent 最终报告必须写明实际跑了哪些最小测试、哪些 full tests 未运行，以及
+为什么本次最小验证足以覆盖改动范围。
+
+生产部署、数据库迁移与发布 / 回滚流程见 [`docs/deployment.md`](./deployment.md)。

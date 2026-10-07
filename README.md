@@ -1,16 +1,16 @@
-# 知境
+# 万境求知
 
 以统一学习进度为核心，在不同世界中学习、练习与成长。
 
-React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Learning Hub（知境中枢）与多世界底座。登录后先选择学习范围与 Study Focus，再进入共享学习身份下的游戏世界。当前开放世界为“寒门仕途”。
+React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Learning Hub（万境中枢）与多世界底座。登录后先选择学习范围与 Study Focus，再进入共享学习身份下的游戏世界。当前开放世界为“寒门仕途”。
 
-本次改名仅调整产品展示名。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、World ID `ancient-official`、既有数据库结构与路由继续保持稳定，不参与展示名迁移。
+本次改名仅调整产品展示名（旧展示名“知境 / 知境中枢”统一改为“万境求知 / 万境中枢”）。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、Spring 技术名 `tihaishitu-backend`、数据库 schema `tihaishitu`、World ID `ancient-official`、API 路由、数据库表名、Flyway migration 文件名、UUID 与兼容 localStorage key 都继续保持稳定，不参与展示名迁移。
 
 > **开始开发前先读**：[`AGENTS.md`](AGENTS.md)（Agent 开发流程与文档纪律）与 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md)（跨 PR 长期规则的唯一主入口）。本仓库采用“一个 PR = 一个独立 Agent 对话”，长期规则不依赖聊天记录。
 
 ## 现在怎么玩
 
-默认进入知境中枢，题面不会自动出现。`寒门仕途` 是知境当前开放的第一个游戏世界：
+默认进入万境中枢，题面不会自动出现。`寒门仕途` 是万境求知当前开放的第一个游戏世界：
 
 - **读书**：三页一卷，提升学识、悟性、辞采、筹算并赚银两。
 - **访友**：与六位人物交谈、共读；按整轮成绩增加好感，解锁话题与关系信物。
@@ -98,6 +98,7 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 | 代码分工、状态流 | [开发说明](docs/development.md) |
 | Java 接口与低流量缓存 | [接口契约](docs/api.md) |
 | 后端实施进度 | [后端开发记录](docs/后端开发记录.md) |
+| 生产部署、数据库迁移、发布与回滚 | [生产部署说明](docs/deployment.md) |
 | 本地背景与立绘 | [素材说明](docs/art-assets.md) |
 | 可直接导入的全局题目批次 | [V2 示例 JSON](frontend/public/examples/题库示例.json) |
 
@@ -114,6 +115,8 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 
 ## 最小验证
 
+Agent 默认只跑最小必要测试（完整规则见 [`AGENTS.md`](AGENTS.md) 的“Agent 测试边界”）：
+
 ~~~powershell
 cd E:\题海仕途\frontend
 npm run build
@@ -121,7 +124,8 @@ npm test
 ~~~
 
 build 包含配置引用、图片路径、题目知识点数量检查与类型编译，产物位于 frontend/dist。
-只改配置时可单独 npm run validate:content，不重复运行全套检查。
+只改配置时可单独 `npm run validate:content`，不重复运行全套检查。
+完整回归由用户本地人工验收与 push 后的 GitHub Actions 承担。
 
 前端默认使用 HTTP 联机模式；旧本地兼容模式需显式设置 `VITE_API_MODE=local`，详见接口契约。
 

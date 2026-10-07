@@ -123,6 +123,29 @@ class OfficialMath1BookBootstrapIntegrationTest {
     }
 
     @Test
+    void upgradesLegacyBrandBookDescriptionIdempotently() {
+        for (String legacyDescription : List.of(
+                "题海仕途官方维护的一站式数学一学习书籍。",
+                "知境官方维护的一站式数学一学习书籍。")) {
+            jdbc.update("DELETE FROM question_bank WHERE id = ?", OfficialMath1BookBootstrap.BOOK_ID);
+            jdbc.update("""
+                    INSERT INTO question_bank(id, name, description, enabled, weight_value, revision)
+                    VALUES (?, '数学一', ?, TRUE, 1, 3)
+                    """, OfficialMath1BookBootstrap.BOOK_ID, legacyDescription);
+
+            bootstrap.bootstrapAfterCatalogMigration();
+
+            assertThat(description()).isEqualTo("万境求知官方维护的一站式数学一学习书籍。");
+            assertThat(revision()).isEqualTo(4);
+
+            bootstrap.bootstrapAfterCatalogMigration();
+
+            assertThat(description()).isEqualTo("万境求知官方维护的一站式数学一学习书籍。");
+            assertThat(revision()).isEqualTo(4);
+        }
+    }
+
+    @Test
     void knowledgeCanBeSharedByAnotherBookWithoutCopyingGlobalResources() {
         String secondBook = UUID.randomUUID().toString();
         String secondRoot = UUID.randomUUID().toString();
@@ -165,6 +188,15 @@ class OfficialMath1BookBootstrapIntegrationTest {
                 VALUES (?, '数学一', 'real_exam', '2026年全国硕士研究生招生考试数学一', 2026, '1',
                         'single_choice', 'single_choice', 'auto', ?, '"A"', '', 2, ?, 1)
                 """, id, content, status);
+    }
+
+    private String description() {
+        return jdbc.queryForObject("SELECT description FROM question_bank WHERE id = ?", String.class,
+                OfficialMath1BookBootstrap.BOOK_ID);
+    }
+
+    private int revision() {
+        return count("SELECT revision FROM question_bank WHERE id = ?", OfficialMath1BookBootstrap.BOOK_ID);
     }
 
     private int count(String sql, Object... args) {
