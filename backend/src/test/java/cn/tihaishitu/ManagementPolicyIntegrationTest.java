@@ -183,6 +183,7 @@ class ManagementPolicyIntegrationTest {
     private ObjectNode choiceQuestion(String pointId, String questionType) {
         ObjectNode question = mapper.createObjectNode();
         question.put("subject", "数学一");
+        question.put("sourceId", sourceId());
         question.put("sourceType", "custom");
         question.put("sourceName", "权限策略回归测试");
         question.put("questionType", questionType);
@@ -229,6 +230,15 @@ class ManagementPolicyIntegrationTest {
     private String activeKnowledgeId() {
         return jdbc.queryForObject("SELECT id FROM global_knowledge_point WHERE status = 'active' ORDER BY sort_order LIMIT 1",
                 String.class);
+    }
+
+    private String sourceId() {
+        String id = jdbc.query("SELECT id FROM question_source WHERE source_type='custom' AND canonical_name='权限策略回归测试'",
+                result -> result.next() ? result.getString(1) : null);
+        if (id != null) return id;
+        id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'custom','权限策略回归测试','权限策略回归测试','active',1)", id);
+        return id;
     }
 
     private Cookie login(String username) throws Exception {

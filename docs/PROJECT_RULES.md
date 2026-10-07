@@ -676,12 +676,34 @@ Remedial 子题内部若仍需要低难度策略可以保留，因为它不是�
 
 ### 10.5 真题来源与展示标签
 
-真题的事实来源是结构化字段：
+Question Source 是全局独立资源。正式题优先通过：
+
+```text
+question_resource.source_id → question_source
+```
+
+绑定来源时，`canonical_name` 是不会随展示文案调整而改变的来源事实名称，
+`display_name` 是当前用户界面使用的展示名称。实时 Question 页面统一按：
+
+```text
+question_source.display_name
+→ question_resource.source_name（Legacy compatibility fallback）
+→ 全服题库
+```
+
+读取来源；不得由 Hub、World 或前端各自拼接。`question_resource.source_type / source_name`
+暂时保留，绑定来源时同步写入来源类型与 `canonical_name` 兼容快照。`disabled` 来源不能用于
+新的题目绑定，但既有绑定仍然可读。来源展示名变更只影响后续实时读取和新 attempt；
+已经写入 `study_attempt.question_snapshot_json` 的历史来源 metadata 永不回写。
+浏览器题目创建与编辑必须提交已存在的 `source_id`，不得通过兼容的类型与名称隐式创建来源；
+只有 ADMIN 来源管理与 ADMIN 批量导入兼容路径可以创建来源。已有题目绑定的来源不得修改
+`source_type`，但仍可修改 `canonical_name`、`display_name` 与 `status`；尚未绑定题目的来源可以改类型。
+
+真题年份、科目和题号继续来自结构化字段：
 
 ```text
 question_resource.exam_year
 question_resource.subject_name
-question_resource.source_name
 question_resource.question_number
 ```
 

@@ -68,15 +68,19 @@ public class GlobalQuestionBatchImportService {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final QuestionSourceManagementService sources;
 
-    public GlobalQuestionBatchImportService(JdbcTemplate jdbc, ObjectMapper mapper) {
+    public GlobalQuestionBatchImportService(JdbcTemplate jdbc, ObjectMapper mapper,
+                                            QuestionSourceManagementService sources) {
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.sources = sources;
     }
 
     @Transactional
     public ImportResult importBatch(JsonNode document, String actorId) {
         ValidImport valid = validate(parse(document));
+        var source = sources.resolveOrCreate(valid.batch().sourceType(), valid.batch().sourceName(), actorId);
         String importId = UUID.randomUUID().toString();
         int created = 0;
         int updated = 0;
@@ -86,7 +90,7 @@ public class GlobalQuestionBatchImportService {
         for (ValidQuestion question : valid.questions()) {
             boolean existed = count("SELECT COUNT(*) FROM question_resource WHERE id = ?",
                     question.input().id()) > 0;
-            upsertQuestion(valid.batch(), question.input(), valid.publish(), actorId);
+            upsertQuestion(valid.batch(), source.id(), question.input(), valid.publish(), actorId);
 
             jdbc.update("DELETE FROM question_resource_option WHERE question_id = ?", question.input().id());
             for (OptionInput option : question.options()) {
@@ -381,30 +385,30 @@ public class GlobalQuestionBatchImportService {
         return points.isEmpty() ? null : points.get(0);
     }
 
-    private void upsertQuestion(ValidBatch batch, QuestionInput question, boolean publish, String actorId) {
+    private void upsertQuestion(ValidBatch batch, String sourceId, QuestionInput question, boolean publish, String actorId) {
         String status = publish ? "published" : "pending_review";
         String answer = json(question.standardAnswer());
         int changed = jdbc.update("""
                 UPDATE question_resource
-                   SET subject_name = ?, source_type = ?, source_name = ?, exam_year = ?,
+                   SET subject_name = ?, source_id = ?, source_type = ?, source_name = ?, exam_year = ?,
                        question_number = ?, question_type = ?, presentation_type = ?, grading_mode = ?,
                        content_markdown = ?, standard_answer_json = ?, analysis_markdown = ?, difficulty = ?,
                        status = ?, updated_by = ?, reviewed_by = NULL, reviewed_at = NULL,
                        review_comment = NULL, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
                  WHERE id = ?
-                """, batch.subject(), batch.sourceType(), batch.sourceName(), batch.examYear(),
+                """, batch.subject(), sourceId, batch.sourceType(), batch.sourceName(), batch.examYear(),
                 nullable(question.questionNumber()), question.questionType(), question.presentationType(),
                 question.gradingMode(), question.content().trim(), answer, question.analysis().trim(),
                 question.difficulty(), status, actorId, question.id());
         if (changed == 0) {
             jdbc.update("""
                     INSERT INTO question_resource(
-                        id, subject_name, source_type, source_name, exam_year, question_number,
+                        id, subject_name, source_id, source_type, source_name, exam_year, question_number,
                         question_type, presentation_type, grading_mode, content_markdown,
                         standard_answer_json, analysis_markdown, difficulty, status,
                         created_by, updated_by, revision
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                    """, question.id(), batch.subject(), batch.sourceType(), batch.sourceName(), batch.examYear(),
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    """, question.id(), batch.subject(), sourceId, batch.sourceType(), batch.sourceName(), batch.examYear(),
                     nullable(question.questionNumber()), question.questionType(), question.presentationType(),
                     question.gradingMode(), question.content().trim(), answer, question.analysis().trim(),
                     question.difficulty(), status, actorId, actorId);

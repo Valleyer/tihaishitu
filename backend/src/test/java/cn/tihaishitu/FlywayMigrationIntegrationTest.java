@@ -111,6 +111,37 @@ class FlywayMigrationIntegrationTest {
                 String.class, learner, question)).isEqualTo(wrongAttempt);
     }
 
+    @Test
+    void v19BackfillsDistinctSourceIdentitiesAndKeepsBlankLegacyRows() {
+        String url = "jdbc:h2:mem:v18-source-backfill-" + UUID.randomUUID()
+                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        Flyway.configure().dataSource(url, "sa", "").target(MigrationVersion.fromVersion("18")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        String realOne = insertLegacyQuestion(old, "real_exam", "同名来源");
+        String realTwo = insertLegacyQuestion(old, "real_exam", "同名来源");
+        String mock = insertLegacyQuestion(old, "mock", "同名来源");
+        String blank = insertLegacyQuestion(old, "custom", null);
+
+        Flyway.configure().dataSource(url, "sa", "").load().migrate();
+
+        assertThat(old.queryForObject("SELECT COUNT(*) FROM question_source", Integer.class)).isEqualTo(2);
+        assertThat(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, realOne))
+                .isEqualTo(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, realTwo));
+        assertThat(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, mock))
+                .isNotEqualTo(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, realOne));
+        assertThat(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, blank)).isNull();
+    }
+
+    private String insertLegacyQuestion(JdbcTemplate template, String type, String name) {
+        String id = UUID.randomUUID().toString();
+        template.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,source_name,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试',?,?,'true_false','true_false','auto','题','true','解析',2,'published',1)
+                """, id, type, name);
+        return id;
+    }
+
     private boolean tableExists(String name) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = ?",

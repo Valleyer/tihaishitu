@@ -59,7 +59,9 @@ export type QuestionView = {
   id: string;
   subject: string;
   sourceType: string;
+  sourceId?: string;
   sourceName?: string;
+  sourceCanonicalName?: string;
   examYear?: number;
   questionNumber?: string;
   questionType: string;
@@ -77,6 +79,12 @@ export type QuestionView = {
   updatedAt?: string;
   options: QuestionOption[];
   knowledgePoints: QuestionRelation[];
+};
+
+export type QuestionSourceView = {
+  id: string; sourceType: "real_exam" | "mock" | "custom"; canonicalName: string;
+  displayName: string; status: "active" | "disabled"; revision: number;
+  questionCount: number; updatedAt: string;
 };
 
 export type QuestionBatchImportResult = {
@@ -223,6 +231,14 @@ export const manageApi = {
     }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
+  sources: (filters: Record<string, string | number | undefined>) =>
+    request<PageResult<QuestionSourceView>>(`/sources?${params(filters)}`),
+  createSource: (source: Omit<QuestionSourceView, "id" | "revision" | "questionCount" | "updatedAt">) =>
+    request<QuestionSourceView>("/sources", { method: "POST", body: JSON.stringify(source) }),
+  saveSource: (source: QuestionSourceView) => request<QuestionSourceView>(`/sources/${source.id}`, {
+    method: "PUT", body: JSON.stringify({ sourceType: source.sourceType, canonicalName: source.canonicalName,
+      displayName: source.displayName, status: source.status, expectedRevision: source.revision }),
+  }),
   books: () => request<ManagedBook[]>("/books"),
   book: (id: string) => request<ManagedBookDetail>(`/books/${id}`),
   createBook: (input: { name: string; description: string; enabled: boolean }) =>
@@ -328,8 +344,7 @@ export const manageApi = {
 function questionPayload(question: Partial<QuestionView>) {
   return {
     subject: question.subject || "数学一",
-    sourceType: question.sourceType || "custom",
-    sourceName: question.sourceName || "",
+    sourceId: question.sourceId,
     examYear: question.examYear,
     questionNumber: question.questionNumber || "",
     questionType: question.questionType || "single_choice",

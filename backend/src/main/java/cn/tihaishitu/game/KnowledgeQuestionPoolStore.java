@@ -96,10 +96,12 @@ public class KnowledgeQuestionPoolStore {
             args.addAll(excluded);
         }
         List<QuestionRow> rows = jdbc.query("""
-                SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year, q.question_number,
+                SELECT DISTINCT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
                        q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
                   JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
                   JOIN question_bank_knowledge bk ON bk.knowledge_point_id = k.id
@@ -122,10 +124,12 @@ public class KnowledgeQuestionPoolStore {
     public List<QuestionDto> candidatesForQuestions(Set<String> questionIds) {
         if (questionIds == null || questionIds.isEmpty()) return List.of();
         List<QuestionRow> rows = jdbc.query("""
-                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year, q.question_number,
+                SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
                        q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                  WHERE q.id IN (%s)
                    AND q.status = 'published'
                    AND q.parent_question_id IS NULL
@@ -209,10 +213,12 @@ public class KnowledgeQuestionPoolStore {
         args.add(currentKnowledgePointId);
         args.addAll(allowed);
         List<QuestionRow> rows = jdbc.query("""
-                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year, q.question_number,
+                SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
                        q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
                   JOIN global_knowledge_point current_k ON current_k.id = current_rel.knowledge_point_id
                  WHERE q.status = 'published'
@@ -254,8 +260,9 @@ public class KnowledgeQuestionPoolStore {
 
     public Optional<QuestionSource> questionSource(String questionId) {
         return jdbc.query("""
-                SELECT subject_name, source_name, exam_year, question_number
-                  FROM question_resource WHERE id = ?
+                SELECT q.subject_name, COALESCE(s.display_name,q.source_name) source_name,
+                       q.exam_year, q.question_number
+                  FROM question_resource q LEFT JOIN question_source s ON s.id=q.source_id WHERE q.id = ?
                 """, (result, row) -> new QuestionSource(result.getString("subject_name"),
                 result.getString("source_name"), result.getObject("exam_year", Integer.class),
                 result.getString("question_number")), questionId).stream().findFirst();

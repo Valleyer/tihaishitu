@@ -31,14 +31,15 @@ class QuestionReviewWorkflowIntegrationTest {
         Cookie creator = account("review-creator", "CONTRIBUTOR", "REVIEWER");
         Cookie reviewer = account("review-other", "REVIEWER");
         Cookie admin = account("review-admin", "ADMIN");
+        String source = source();
         String body = """
-                {"subject":"测试","sourceType":"custom","sourceName":"审核题","questionType":"true_false",
+                {"subject":"测试","sourceId":"%s","sourceType":"custom","sourceName":"审核题","questionType":"true_false",
                  "presentationType":"true_false","gradingMode":"auto","content":"待审核题","standardAnswer":true,
                  "analysis":"解析","difficulty":2,"options":[
                    {"key":"true","text":"正确","correct":true,"sortOrder":0},
                    {"key":"false","text":"错误","correct":false,"sortOrder":1}],
                  "knowledgePoints":[{"knowledgePointId":"%s","role":"core","sortOrder":0}]}
-                """.formatted(point);
+                """.formatted(source, point);
         JsonNode created = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(creator)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
@@ -91,6 +92,11 @@ class QuestionReviewWorkflowIntegrationTest {
     private String knowledge() {
         String id=UUID.randomUUID().toString();
         jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,'REVIEW-K','审核知识','测试','节','章','core','active','','',0,1)",id);
+        return id;
+    }
+    private String source() {
+        String id=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'custom','审核题','审核题','active',1)",id);
         return id;
     }
     private JsonNode json(String value)throws Exception{return mapper.readTree(value);}

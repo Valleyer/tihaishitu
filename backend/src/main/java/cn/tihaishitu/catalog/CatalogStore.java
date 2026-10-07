@@ -198,11 +198,13 @@ public class CatalogStore {
         );
         return jdbc.query(
                 """
-                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.question_type,
+                SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name) source_name, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown,
                        q.standard_answer_json, q.analysis_markdown, q.difficulty
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
+                  LEFT JOIN question_source s ON s.id=q.source_id
                  WHERE bi.bank_id = ? AND q.status = 'published' AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY bi.sort_order, q.id

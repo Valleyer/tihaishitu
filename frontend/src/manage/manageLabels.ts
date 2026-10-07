@@ -20,7 +20,7 @@ const maps = {
   entity: {
     knowledge_point: "知识点", question: "题目", learner_account: "用户",
     app_user: "历史管理用户", question_bank: "文集", question_bank_chapter: "章节",
-    question_batch: "题目批次",
+    question_batch: "题目批次", question_source: "题目来源",
   },
 } as const;
 
