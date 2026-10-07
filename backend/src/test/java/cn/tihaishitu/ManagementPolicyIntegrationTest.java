@@ -215,32 +215,32 @@ class ManagementPolicyIntegrationTest {
         // 默认排序：来源 → 年份 → 题号自然排序 → question_id。
         // 本来源题号的 canonical 值是：first=1, second=2, solution=3, draft=4,
         // standard=7, legacy("2020-7")=7, tenth=10, twentySecond=22, otherYear=1（2021 年）。
-        // 因此期望顺序是 年份 2020 的 1,2,3,4,7,7,10,22 之后才轮到 2021 年的题。
+        // standard 与 legacy 的 canonical 题号都是 7，二者之间没有约定顺序，
+        // 由随机 question_id 稳定兜底——因此**不能**断言谁先谁后。
         // 同一个 JVM 共享内存库，因此只在“本来源的 9 道题”范围内断言，
         // 不用 containsExactly 绑定整个库的规模。
         java.util.List<String> ids = searchIds(contributor, "sourceType", "custom", "sourceId", sourceId, "size", "50");
         java.util.List<String> mine = java.util.List.of(first, second, solution, draft, standard, tenth,
                 twentySecond, legacy, otherYear);
-        assertThat(ids).containsAll(mine);
-        java.util.List<String> siblingOrder = java.util.List.of(first, second, solution, draft, standard,
-                legacy, tenth, twentySecond);
         java.util.List<String> ourOrder = ids.stream().filter(mine::contains).toList();
-        assertThat(ourOrder).containsExactlyElementsOf(
-                java.util.stream.Stream.concat(siblingOrder.stream(), java.util.stream.Stream.of(otherYear)).toList());
-        // standard("7") 与 legacy("2020-7") canonical 相同，由 question_id 稳定兜底。
-        assertThat(ids.indexOf(standard)).isGreaterThan(ids.indexOf(draft));
-        assertThat(ids.indexOf(standard)).isLessThan(ids.indexOf(tenth));
+        assertThat(ourOrder).containsExactlyInAnyOrder(first, second, solution, draft, standard,
+                legacy, tenth, twentySecond, otherYear);
+        // 双保险：每个字段都必须真的出现在结果里，否则下面的 indexOf 会拿到 -1。
+        assertThat(ids).containsAll(mine);
+        // 纯数字题号按 1 < 2 < 3 < 4 的自然顺序。
+        assertThat(ids.indexOf(first)).isLessThan(ids.indexOf(second));
+        assertThat(ids.indexOf(second)).isLessThan(ids.indexOf(solution));
+        assertThat(ids.indexOf(solution)).isLessThan(ids.indexOf(draft));
+        // "7" 与 "2020-7" canonical 相同，都排在 4 之后、10 之前，且二者相邻。
+        // 谁在前由 question_id 决定，两种顺序都合法。
+        assertThat(ids.indexOf(standard)).isBetween(ids.indexOf(draft) + 1, ids.indexOf(tenth) - 1);
+        assertThat(ids.indexOf(legacy)).isBetween(ids.indexOf(draft) + 1, ids.indexOf(tenth) - 1);
+        assertThat(Math.abs(ids.indexOf(standard) - ids.indexOf(legacy))).isEqualTo(1);
         // 字符串排序会得到 1, 10, 2, 20 这种顺序，这里必须证明不是字符串排序。
         assertThat(ids.indexOf(second)).isLessThan(ids.indexOf(tenth));
         assertThat(ids.indexOf(tenth)).isLessThan(ids.indexOf(twentySecond));
-        // 核心回归：exam_year=2020 + 历史写法 "2020-7" 的 canonical 题号是 7，
-        // 必须落在 2 与 10 之间，而不是被排到 22 之后。
-        assertThat(ids.indexOf(legacy)).isGreaterThan(ids.indexOf(second));
-        assertThat(ids.indexOf(legacy)).isLessThan(ids.indexOf(tenth));
-        // "7"（standard）与 "2020-7"（legacy）canonical 相同，由 question_id 稳定兜底，二者相邻。
-        assertThat(Math.abs(ids.indexOf(standard) - ids.indexOf(legacy))).isEqualTo(1);
         // 2021 年的 otherYear 排在所有 2020 年题之后。
-        assertThat(ids.indexOf(otherYear)).isGreaterThan(ids.indexOf(twentySecond));
+        assertThat(ids.indexOf(twentySecond)).isLessThan(ids.indexOf(otherYear));
     }
 
     /**
