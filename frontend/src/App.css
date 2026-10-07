@@ -800,6 +800,9 @@
   padding: 1rem 1.1rem;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--paper) 82%, var(--jade) 18%);
+  max-height: min(42vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .self-assessment-reference > h3 {
   margin: 0.75rem 0 0.4rem;
@@ -810,6 +813,8 @@
 .self-assessment-hint { padding: 1rem; border: 1px dashed var(--line); }
 .self-assessment-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; }
 .self-assessment-actions button { min-width: 7rem; }
+.answer-actions { display: flex; align-items: center; justify-content: flex-end; gap: .7rem; flex-wrap: wrap; }
+.rich-answer { display: inline-flex; flex-wrap: wrap; gap: .2rem; margin-left: .5rem; }
 .result-stage.partial { border-color: var(--gold); }
 .answers {
   display: grid;
@@ -1247,6 +1252,8 @@
   max-height: 88vh;
   box-shadow: 0 30px 100px #0008;
   color-scheme: light;
+  overflow: hidden;
+  z-index: 3000;
 }
 .modal.wide {
   width: 1060px;
@@ -1292,7 +1299,12 @@
 }
 .modal-body {
   padding: 27px 30px 32px;
+  max-height: calc(88vh - 92px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+.question-report-form { display: grid; gap: 16px; }
+.question-report-form textarea { min-height: 120px; resize: vertical; }
 .modal label {
   font-size: 11px;
   line-height: 1.8;

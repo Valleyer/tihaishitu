@@ -24,7 +24,7 @@ public class OfficialMath1BookBootstrap {
     private static final Logger log = LoggerFactory.getLogger(OfficialMath1BookBootstrap.class);
     private static final String BOOK_NAME = "数学一";
     private static final String LEGACY_BOOK_NAME = "2026年考研数学一真题";
-    private static final String BOOK_DESCRIPTION = "万境求知官方维护的一站式数学一学习书籍。";
+    private static final String BOOK_DESCRIPTION = "万境书院官方维护的一站式数学一学习书籍。";
     /** 历史品牌占位说明；只有仍是这些占位值时才幂等升级，管理员自写说明永不覆盖。 */
     private static final List<String> LEGACY_BOOK_DESCRIPTIONS = List.of(
             "题海仕途官方维护的一站式数学一学习书籍。",

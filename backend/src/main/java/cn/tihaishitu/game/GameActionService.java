@@ -218,7 +218,7 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         boolean correct = QuestionGradingPolicy.matches(snapshot.standard(), request.answer());
-        Instant occurredAt = Instant.now();
+        Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
         if (!attempts.recordAnswer(snapshot, request.answer(), correct, occurredAt)) return game;
         // 普通正式训练单层化：一次 grading 只记 Mastery / Evidence，
         // 不再创建 learner_diagnosis_session，也不再发 Remedial 子题或 retry 父题。
@@ -239,11 +239,51 @@ public class GameActionService {
         record.put("questionId", request.questionId());
         record.set("answer", request.answer().deepCopy());
         record.put("correct", correct);
-        record.put("at", Instant.now().toString());
+        record.put("at", occurredAt.toString());
         record.put("review", current.path("review").asBoolean());
         game.withArray("records").add(record);
-        updateLearning(game, request.questionId(), request.answer(), correct);
+        updateLearning(game, request.questionId(), request.answer(), correct, occurredAt);
         settleRunAnswer(game, correct, request.questionId());
+        persist(game);
+        return game;
+    }
+
+    @Transactional
+    public ObjectNode noIdea(String gameId, String attemptId, String questionId) {
+        knowledgeStates.lockCurrentLearnerForGrading();
+        ObjectNode game = game(gameId);
+        ObjectNode current = requireCurrentAttempt(game, attemptId);
+        if (!questionId.equals(current.path("question").path("id").asText()))
+            throw bad("题目已经变化，请重新载入。");
+        QuestionAttemptStore.Snapshot snapshot = attempts.find(attemptId, gameId);
+        if (!snapshot.questionId().equals(questionId)) throw bad("题目与课卷不匹配。");
+        if (!current.path("result").isNull()) return game;
+        Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
+        if (!attempts.recordNoIdea(snapshot, occurredAt)) throw bad("这道题已经完成评分。");
+        knowledgeStates.apply(snapshot, "wrong", "automatic", occurredAt);
+
+        ObjectNode result = mapper.createObjectNode();
+        result.put("correct", false);
+        result.put("noIdea", true);
+        result.putNull("answer");
+        if ("auto".equals(snapshot.gradingMode())) result.set("standard", snapshot.standard().deepCopy());
+        result.put("explanation", snapshot.question().path("explanation").asText());
+        result.set("aliases", snapshot.question().path("aliases").deepCopy());
+        result.put("story", "一时未得思路，错处已经正式记下。");
+        result.set("changes", mapper.createArrayNode());
+        current.set("result", result);
+
+        ObjectNode record = mapper.createObjectNode();
+        record.put("attemptId", attemptId);
+        record.put("questionId", questionId);
+        record.putNull("answer");
+        record.put("correct", false);
+        record.put("noIdea", true);
+        record.put("at", occurredAt.toString());
+        record.put("review", current.path("review").asBoolean());
+        game.withArray("records").add(record);
+        updateLearning(game, questionId, mapper.nullNode(), false, occurredAt);
+        settleRunAnswer(game, false, questionId);
         persist(game);
         return game;
     }
@@ -277,7 +317,7 @@ public class GameActionService {
         QuestionAttemptStore.Snapshot snapshot = attempts.find(request.attemptId(), gameId);
         if (!snapshot.questionId().equals(request.questionId())) throw bad("题目与课卷不匹配。");
         if (!current.path("result").isNull()) return game;
-        Instant occurredAt = Instant.now();
+        Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
         if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
             throw bad("请先查看参考解析，或此题已经完成自评。");
         }
@@ -306,10 +346,10 @@ public class GameActionService {
         record.put("correct", correct);
         record.put("assessment", request.assessment());
         record.put("gradingSource", "self");
-        record.put("at", Instant.now().toString());
+        record.put("at", occurredAt.toString());
         record.put("review", current.path("review").asBoolean());
         game.withArray("records").add(record);
-        updateLearning(game, request.questionId(), mapper.getNodeFactory().textNode(request.assessment()), correct);
+        updateLearning(game, request.questionId(), mapper.getNodeFactory().textNode(request.assessment()), correct, occurredAt);
         ObjectNode learning = (ObjectNode) game.with("learning").path(request.questionId());
         if ("partial".equals(request.assessment()))
             learning.put("partial", learning.path("partial").asInt() + 1);
@@ -705,7 +745,7 @@ public class GameActionService {
         return correct ? "此题已解，卷上添了一笔笃定。" : "错处已经记下，继续下一道正式题。";
     }
 
-    private void updateLearning(ObjectNode game, String questionId, JsonNode answer, boolean correct) {
+    private void updateLearning(ObjectNode game, String questionId, JsonNode answer, boolean correct, Instant occurredAt) {
         ObjectNode learning = game.with("learning");
         ObjectNode item = learning.has(questionId) ? (ObjectNode) learning.path(questionId) : mapper.createObjectNode();
         int total = item.path("attempts").asInt() + 1;
@@ -716,7 +756,7 @@ public class GameActionService {
         item.put("streak", correct ? item.path("streak").asInt() + 1 : 0);
         item.put("lastIndex", game.path("records").size() - 1);
         item.put("dueAt", game.path("records").size() + (correct ? 20 : 5));
-        item.put("lastAt", Instant.now().toString());
+        item.put("lastAt", occurredAt.toString());
         ArrayNode wrongAnswers = item.has("wrongAnswers") ? (ArrayNode) item.path("wrongAnswers") : mapper.createArrayNode();
         if (!correct) wrongAnswers.add(answer.deepCopy());
         item.set("wrongAnswers", wrongAnswers); item.put("reviewCount", item.path("reviewCount").asInt());
@@ -729,20 +769,36 @@ public class GameActionService {
         ObjectNode player = (ObjectNode) game.path("player");
         for (String key : List.of("knowledge", "coins", "reputation")) if (reward.path(key).asInt() != 0) {
             player.put(key, Math.max(0, player.path(key).asInt() + reward.path(key).asInt()));
-            if (lines != null) lines.add(key + " +" + reward.path(key).asInt());
+            if (lines != null) lines.add(switch (key) {
+                case "knowledge" -> "学识"; case "coins" -> "银两"; default -> "声望";
+            } + " +" + reward.path(key).asInt());
         }
         ObjectNode attrs = adventure(game).with("attributes");
-        reward.path("attributes").fields().forEachRemaining(entry -> attrs.put(entry.getKey(), attrs.path(entry.getKey()).asInt() + entry.getValue().asInt()));
+        reward.path("attributes").fields().forEachRemaining(entry -> {
+            attrs.put(entry.getKey(), attrs.path(entry.getKey()).asInt() + entry.getValue().asInt());
+            if (lines != null) lines.add(switch (entry.getKey()) {
+                case "insight" -> "悟性"; case "eloquence" -> "辞采"; case "craft" -> "筹算";
+                default -> "本领";
+            } + " +" + entry.getValue().asInt());
+        });
         ObjectNode inventory = adventure(game).with("inventory");
-        reward.path("items").fields().forEachRemaining(entry -> inventory.put(entry.getKey(), inventory.path(entry.getKey()).asInt() + entry.getValue().asInt()));
+        reward.path("items").fields().forEachRemaining(entry -> {
+            inventory.put(entry.getKey(), inventory.path(entry.getKey()).asInt() + entry.getValue().asInt());
+            if (lines != null) lines.add(content.item(entry.getKey()).map(item -> item.path("name").asText("物品"))
+                    .orElse("物品") + " +" + entry.getValue().asInt());
+        });
         reward.path("favorability").fields().forEachRemaining(entry -> {
             ObjectNode npc = npc(game, entry.getKey());
             npc.put("met", true);
             npc.put("favorability", Math.max(0, Math.min(100,
                     npc.path("favorability").asInt() + entry.getValue().asInt())));
+            if (lines != null) lines.add(npc.path("name").asText("故人") + "好感 +" + entry.getValue().asInt());
         });
         reward.path("flags").forEach(flag -> addUnique(game.withArray("flags"), flag.asText()));
-        if (reward.hasNonNull("title")) player.put("title", reward.path("title").asText());
+        if (reward.hasNonNull("title")) {
+            player.put("title", reward.path("title").asText());
+            if (lines != null) lines.add("称号 · " + reward.path("title").asText());
+        }
     }
 
     private void assertRequirements(ObjectNode game, JsonNode requirements) {

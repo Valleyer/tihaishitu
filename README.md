@@ -1,16 +1,16 @@
-# 万境求知
+# 万境书院
 
 以统一学习进度为核心，在不同世界中学习、练习与成长。
 
 React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Learning Hub（万境中枢）与多世界底座。登录后先选择学习范围与 Study Focus，再进入共享学习身份下的游戏世界。当前开放世界为“寒门仕途”。
 
-本次改名仅调整产品展示名（旧展示名“知境 / 知境中枢”统一改为“万境求知 / 万境中枢”）。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、Spring 技术名 `tihaishitu-backend`、数据库 schema `tihaishitu`、World ID `ancient-official`、API 路由、数据库表名、Flyway migration 文件名、UUID 与兼容 localStorage key 都继续保持稳定，不参与展示名迁移。
+本次改名仅调整产品展示名（平台品牌为“万境书院”，首页继续叫“万境中枢”）。仓库名 `tihaishitu`、Java package `cn.tihaishitu`、Spring 技术名 `tihaishitu-backend`、数据库 schema `tihaishitu`、World ID `ancient-official`、API 路由、数据库表名、Flyway migration 文件名、UUID 与兼容 localStorage key 都继续保持稳定，不参与展示名迁移。
 
 > **开始开发前先读**：[`AGENTS.md`](AGENTS.md)（Agent 开发流程与文档纪律）与 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md)（跨 PR 长期规则的唯一主入口）。本仓库采用“一个 PR = 一个独立 Agent 对话”，长期规则不依赖聊天记录。
 
 ## 现在怎么玩
 
-默认进入万境中枢，题面不会自动出现。`寒门仕途` 是万境求知当前开放的第一个游戏世界：
+默认进入万境中枢，题面不会自动出现。`寒门仕途` 是万境书院当前开放的第一个游戏世界：
 
 - **读书**：三页一卷，提升学识、悟性、辞采、筹算并赚银两。
 - **访友**：与六位人物交谈、共读；按整轮成绩增加好感，解锁话题与关系信物。
@@ -23,6 +23,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
 - **正式训练选题 V2**：正式训练固定为四套**互相独立**的选题策略。RANDOM（寒门仕途普通随机正式题）改为 KP-first：先随机选目标知识点，再在该知识点内按 oldest / wrong 交替 lane 选题；同一学习者同一 `Asia/Shanghai` 业务日内同一道题最多随机出现一次，题目一经发出就占用当天额度。CHAPTER（章节练习）改成一条确定的题序并跨 Session 记住进度。KNOWLEDGE（知识点专项）与 WRONG（错题快练）都是 Session 内随机且不重复。章节 / 知识点 / 错题练过的题不消耗 RANDOM 额度。详见 [正式训练选题策略](docs/question-practice-policy.md)。
 - **普通训练单层化**：RANDOM / CHAPTER / KNOWLEDGE / WRONG 做完一题就直接判题、记录掌握度与错题本，然后进入下一道普通正式题或结束流程；不再自动进入诊断 / 补救嵌套，也不再答错后原地重做同一道父题。诊断与补救相关表、服务与管理端能力仍然保留，供未来重新设计。
+- **我没思路与题目反馈**：Hub 和寒门仕途都提供正式“我没思路”动作，直接判错并正常写入错题本、掌握度和证据；当前正式 Attempt 还可提交题目反馈，由 REVIEWER / ADMIN 在管理后台处理。
 - **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
 - **正向挑战记录**：同一轮补救不追回首题失分，新一轮仍可重新拿满分；正式 World 只保留最高分、已通关和首次奖励等正向成就，不累计失败或应试次数。
 

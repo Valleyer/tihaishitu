@@ -6,7 +6,6 @@
 import { useState, useEffect } from "react";
 import type { Answer, Assessment, Attempt } from "../domain/types";
 import { typeNames } from "../engine/QuestionBankManager";
-import { displayAnswer } from "../engine/OptionShuffler";
 import { examMetadataView } from "../utils/examMetadata";
 import { Modal } from "./Modal";
 import { RichText } from "./RichText";
@@ -18,6 +17,8 @@ export function QuestionPanel({
   submit,
   reveal,
   assess,
+  noIdea = () => {},
+  report = async () => {},
   next,
   note,
   showNote,
@@ -33,6 +34,8 @@ export function QuestionPanel({
   submit: (answer: Answer) => void;
   reveal: () => void;
   assess: (assessment: Assessment) => void;
+  noIdea?: () => void;
+  report?: (reason: string, comment: string) => Promise<void>;
   next: () => void;
   note: string;
   showNote: () => void;
@@ -44,6 +47,10 @@ export function QuestionPanel({
   const [answer, setAnswer] = useState<Answer>(""),
     [recheck, setRecheck] = useState(false),
     [expanded, setExpanded] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false),
+    [reportReason, setReportReason] = useState("content_error"),
+    [reportComment, setReportComment] = useState(""),
+    [reportStatus, setReportStatus] = useState("");
   const [optionPage, setOptionPage] = useState(0);
   const [small, setSmall] = useState(
     window.innerWidth < 720 || window.innerHeight < 600,
@@ -92,17 +99,6 @@ export function QuestionPanel({
           {attempt.review && <span className="review-tag">旧案重审</span>}
         </div>
       </div>
-      {(exam?.examTitle || exam?.sourceName) && (
-        <div className="exam-source-row">
-          {exam.examLabel && <span className="exam-label">{exam.examLabel}</span>}
-          {exam.displayQuestionNumber && (
-            <span className="exam-question-number">
-              第{exam.displayQuestionNumber}题
-            </span>
-          )}
-          {exam.sourceName && <span className="exam-source">{exam.sourceName}</span>}
-        </div>
-      )}
       {resultView ? (
         <section
           className={
@@ -129,12 +125,12 @@ export function QuestionPanel({
           <div className="answer-summary">
             {!isSelfAssessment && <p>
               <b>标准答案</b>
-              {displayAnswer(result!.standard!, q.options)}
+              <RichAnswer answer={result!.standard!} options={q.options} trueFalse={q.type === "true_false"} />
             </p>}
-            {!isSelfAssessment && !result!.correct && (
+            {!isSelfAssessment && !result!.correct && !result!.noIdea && (
               <p>
                 <b>你的回答</b>
-                {displayAnswer(result!.answer, q.options)}
+                <RichAnswer answer={result!.answer} options={q.options} trueFalse={q.type === "true_false"} />
               </p>
             )}
           </div>
@@ -167,12 +163,6 @@ export function QuestionPanel({
         </section>
       ) : (
         <div className="question-body">
-          <p className="question-chapter">
-            {q.chapter}
-            <span>
-              {"◆".repeat(q.frequency)} {q.tags.join(" · ")}
-            </span>
-          </p>
           <div className="knowledge-ribbon">
             <span>本题考查</span>
             {q.knowledgePoints.map((point) => (
@@ -191,6 +181,9 @@ export function QuestionPanel({
                 {point.name}
               </button>
             ))}
+            {exam?.examLabel && <span className="exam-label">{exam.examLabel}</span>}
+            {exam?.displayQuestionNumber && <span className="exam-question-number">第{exam.displayQuestionNumber}题</span>}
+            {exam?.sourceName && <span className="exam-source">{exam.sourceName}</span>}
           </div>
           <div className="question-prompt-area">
             <RichText className="question-text">{q.question}</RichText>
@@ -317,6 +310,9 @@ export function QuestionPanel({
               只重审旧案
             </label>
           )}
+          <button className="text-button question-report-trigger" onClick={() => setReportOpen(true)}>
+            题目有误？
+          </button>
         </div>
         {result ? (
           <button
@@ -331,6 +327,7 @@ export function QuestionPanel({
         ) : isSelfAssessment ? (
           attempt.reveal ? (
             <div className="self-assessment-actions" aria-label="自评结果">
+              <button disabled={busy} onClick={noIdea}>我没思路</button>
               <button disabled={busy} onClick={() => assess("correct")}>
                 完整答对
               </button>
@@ -342,18 +339,12 @@ export function QuestionPanel({
               </button>
             </div>
           ) : (
-            <button className="ink-button" disabled={busy} onClick={reveal}>
-              我已完成，查看参考解析
-            </button>
+            <div className="answer-actions"><button disabled={busy} onClick={noIdea}>我没思路</button>
+              <button className="ink-button" disabled={busy} onClick={reveal}>我已完成，查看参考解析</button></div>
           )
         ) : (
-          <button
-            className="ink-button"
-            disabled={busy || !ready}
-            onClick={() => submit(answer)}
-          >
-            落笔呈卷 →
-          </button>
+          <div className="answer-actions"><button disabled={busy} onClick={noIdea}>我没思路</button>
+            <button className="ink-button" disabled={busy || !ready} onClick={() => submit(answer)}>落笔呈卷 →</button></div>
         )}
       </div>
       {expanded && (
@@ -361,6 +352,34 @@ export function QuestionPanel({
           <RichText className="expanded-text">{expanded}</RichText>
         </Modal>
       )}
+      {reportOpen && (
+        <Modal title="题目有误？" subtitle="反馈不会影响本次作答" close={() => setReportOpen(false)}>
+          <form className="question-report-form" onSubmit={(event) => {
+            event.preventDefault(); setReportStatus("提交中…");
+            void report(reportReason, reportComment).then(() => setReportStatus("已收到反馈"))
+              .catch((error: Error) => setReportStatus(error.message));
+          }}>
+            <label>问题类型<select value={reportReason} onChange={(event) => setReportReason(event.target.value)}>
+              <option value="content_error">题干有误</option><option value="answer_error">答案有误</option>
+              <option value="analysis_error">解析有误</option><option value="format_error">排版有误</option>
+              <option value="other">其他</option>
+            </select></label>
+            <label>补充说明（可空）<textarea maxLength={1000} value={reportComment}
+              onChange={(event) => setReportComment(event.target.value)} /></label>
+            <button className="ink-button" disabled={reportStatus === "提交中…" || reportStatus === "已收到反馈"}>提交</button>
+            {reportStatus && <p role="status">{reportStatus}</p>}
+          </form>
+        </Modal>
+      )}
     </article>
   );
+}
+
+function RichAnswer({ answer, options, trueFalse }: { answer: Answer; options: Record<string,string>; trueFalse: boolean }) {
+  const keys = Array.isArray(answer) ? answer : [String(answer)];
+  return <span className="rich-answer">{keys.map((key, index) => {
+    const position = Object.keys(options).indexOf(key);
+    const label = trueFalse ? "" : position < 0 ? key : String.fromCharCode(65 + position) + ". ";
+    return <span key={key}>{index > 0 && "；"}{label}<RichText inline>{options[key] ?? key}</RichText></span>;
+  })}</span>;
 }

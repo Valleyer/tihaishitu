@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QuestionPage, SourcePage, ImportPage } from "./ManagementApp";
+import { QuestionPage, QuestionReportsPage, SourcePage, ImportPage } from "./ManagementApp";
 import { manageApi, type ManageUser, type PageResult, type QuestionSourceView, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
@@ -19,6 +19,8 @@ vi.mock("./api", () => ({
     createSource: vi.fn(),
     saveSource: vi.fn(),
     importQuestionBatch: vi.fn(),
+    questionReports: vi.fn(),
+    updateQuestionReport: vi.fn(),
   },
 }));
 const reviewer: ManageUser = {
@@ -36,6 +38,8 @@ const reviewMock = vi.mocked(manageApi.reviewQuestion);
 const sourcesMock = vi.mocked(manageApi.sources);
 const saveSourceMock = vi.mocked(manageApi.saveSource);
 const importBatchMock = vi.mocked(manageApi.importQuestionBatch);
+const reportsMock = vi.mocked(manageApi.questionReports);
+const updateReportMock = vi.mocked(manageApi.updateQuestionReport);
 
 function question(index: number, status = "pending_review"): QuestionView {
   return {
@@ -77,10 +81,31 @@ beforeEach(() => {
   sourcesMock.mockReset();
   saveSourceMock.mockReset();
   importBatchMock.mockReset();
+  reportsMock.mockReset();
+  updateReportMock.mockReset();
   vi.mocked(manageApi.saveQuestion).mockReset();
   vi.mocked(manageApi.createQuestion).mockReset();
   vi.mocked(manageApi.knowledge).mockReset();
   questionsMock.mockResolvedValue(result(Array.from({ length: 20 }, (_, index) => question(index + 1)), 0, 22, 2));
+});
+
+describe("QuestionReportsPage", () => {
+  it("lists reports with an edit entry and resolves an open report", async () => {
+    const report = {
+      id: "report-id", questionId: "question-id", attemptId: "attempt-id",
+      reason: "analysis_error", comment: "第二步推导有误", status: "open" as const,
+      learnerName: "学习者", sourceName: "2026年数学一", examYear: 2026,
+      questionNumber: "5", createdAt: "2026-10-08T10:00:00Z", updatedAt: "2026-10-08T10:00:00Z",
+    };
+    reportsMock.mockResolvedValue({ content: [report], page: 0, size: 20, totalElements: 1, totalPages: 1 });
+    updateReportMock.mockResolvedValue({ ...report, status: "resolved" });
+
+    render(<QuestionReportsPage fail={vi.fn()} />);
+    expect(await screen.findByText("解析有误")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "编辑题目" }).getAttribute("href")).toBe("/manage?questionId=question-id");
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+    await waitFor(() => expect(updateReportMock).toHaveBeenCalledWith("report-id", "resolved"));
+  });
 });
 
 describe("SourcePage", () => {

@@ -1,4 +1,4 @@
-# 万境求知 · Spring Boot systemd 单元模板
+# 万境书院 · Spring Boot systemd 单元模板
 #
 # 用法：
 #   1. 复制到服务器 /etc/systemd/system/wanjingqiuzhi.service；

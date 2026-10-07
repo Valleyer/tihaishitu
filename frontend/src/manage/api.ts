@@ -129,6 +129,10 @@ export type AuditLogView = {
   metadata: Record<string, unknown>;
   createdAt: string;
 };
+export type QuestionReportView = {
+  id:string; questionId:string; attemptId:string; reason:string; comment?:string; status:"open"|"resolved"|"dismissed";
+  learnerName:string; sourceName:string; examYear?:number; questionNumber?:string; createdAt:string; updatedAt:string;
+};
 
 export type ManagedBook = {
   id: string; name: string; description: string; enabled: boolean; revision: number;
@@ -233,6 +237,10 @@ export const manageApi = {
     }),
   auditLogs: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<AuditLogView>>(`/audit-logs?${params(filters)}`),
+  questionReports: (filters: Record<string, string | number | undefined>) =>
+    request<PageResult<QuestionReportView>>(`/question-reports?${params(filters)}`),
+  updateQuestionReport: (id:string,status:"resolved"|"dismissed") =>
+    request<QuestionReportView>(`/question-reports/${id}/status`, {method:"PATCH",body:JSON.stringify({status})}),
   sources: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<QuestionSourceView>>(`/sources?${params(filters)}`),
   createSource: (source: Omit<QuestionSourceView, "id" | "revision" | "questionCount" | "updatedAt">) =>

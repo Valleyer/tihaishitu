@@ -69,7 +69,8 @@ it("默认探索，读书完成后结算属性银两；结束重试不重复领�
   await expect(api.travel(game.id, "east-hall")).rejects.toThrow("行程");
   game = await play(api, game, 5);
   expect(game.adventure!.run!.score).toBe(100);
-  expect(game.adventure!.attributes.insight).toBe(4);
+  // repeatable 满分仍只发原最低通过档，不再叠加第二档奖励。
+  expect(game.adventure!.attributes.insight).toBe(2);
   const coins = game.player.coins,
     runId = game.adventure!.run!.id;
   const duplicate = await api.answer(game.id, {

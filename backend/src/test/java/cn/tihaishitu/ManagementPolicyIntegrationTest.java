@@ -121,7 +121,7 @@ class ManagementPolicyIntegrationTest {
                         .contentType("application/json").content(choiceQuestion(pointId, "blank").toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "万境求知不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
+                        "万境书院不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
 
         for (String type : java.util.List.of("single_choice", "multiple_choice", "true_false", "solution")) {
             mvc.perform(post("/api/v1/manage/questions").cookie(contributor).with(csrf())
@@ -145,7 +145,7 @@ class ManagementPolicyIntegrationTest {
                         .content("{\"expectedRevision\":1,\"approve\":true}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "万境求知不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
+                        "万境书院不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
     }
 
     @Test

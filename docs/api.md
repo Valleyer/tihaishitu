@@ -456,8 +456,18 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 | POST | /learner/practice-sessions/{id}/answers | attemptId, questionId, answer | 自动判题，写 Wrong Book / Mastery / Evidence；不再触发 Diagnosis |
 | POST | /learner/practice-sessions/{id}/reveal | attemptId, questionId | 查看自评题参考解析（单一内容，无 separate standard） |
 | POST | /learner/practice-sessions/{id}/self-assess | attemptId, questionId, assessment | 提交自评，同样只写 Wrong Book / Mastery / Evidence |
+| POST | /learner/practice-sessions/{id}/no-idea | attemptId, questionId | 正式“我没思路”：不伪造答案，直接 graded wrong，写 Wrong Book / Mastery / Evidence |
 | POST | /learner/practice-sessions/{id}/next | 无 | 进入该模式的下一道普通正式题：`knowledge_drill` 本 Session 随机池耗尽返回 409；`chapter_drill` 走确定性题序 successor（末尾 wrap，不永久 complete）；`wrong_drill` active 错题池耗尽返回 409；`wrong_review` graded 后返回 409 |
 | POST | /learner/practice-sessions/{id}/end | 无 | 结束 Practice Session；顺带把遗留未完成 diagnosis 标记为 abandoned |
+
+`POST /learner/question-reports` 接收 `attemptId`、固定枚举 `reason` 与最多 1000 字的可选
+`comment`。learner / question 均从当前 Learner 自己的 Formal Parent Attempt 派生；同一
+Learner + Attempt 重复提交返回 409。`GET /manage/question-reports` 与
+`PATCH /manage/question-reports/{id}/status` 仅 REVIEWER / ADMIN 可用，固定每页 20 条，
+状态只能从待处理收口为 `resolved` 或 `dismissed`。
+
+World 对应动作是 `POST /worlds/ancient-official/answers/no-idea`，请求只含
+`attemptId` / `questionId`，语义与 Hub 完全一致。
 
 V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。V21 为 `study_attempt` 增加 `draw_mode` / `draw_reason` 与索引 `(learner_id, draw_mode, created_at, question_id)`。
 

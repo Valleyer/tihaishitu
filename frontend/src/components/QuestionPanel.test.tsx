@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { QuestionPanel } from "./QuestionPanel";
 import { examMetadataView } from "../utils/examMetadata";
 import type { Attempt } from "../domain/types";
@@ -59,9 +59,23 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("第3题")).toBeTruthy();
     // displayQuestionNumber 已剥离年份前缀，不能再出现 `第2022-3题`。
     expect(screen.queryByText(/第2022-3题/)).toBeNull();
-    expect(view.container.querySelector(".exam-source-row .exam-source")?.textContent)
+    expect(view.container.querySelector(".knowledge-ribbon .exam-source")?.textContent)
       .toBe("2022年全国硕士研究生招生考试数学一");
-    expect(view.container.querySelectorAll(".exam-source-row .exam-label")).toHaveLength(1);
+    expect(view.container.querySelectorAll(".knowledge-ribbon .exam-label")).toHaveLength(1);
+    expect(screen.getAllByText("2022年全国硕士研究生招生考试数学一")).toHaveLength(1);
+  });
+
+  it("deduplicates a source name equal to the exam label after trimming", () => {
+    const duplicate = attempt();
+    duplicate.question.examMetadata!.sourceName = " 2022年考研数学一真题 ";
+    const view = render(
+      <QuestionPanel attempt={duplicate} busy={false} submit={noop} reveal={noop} assess={noop}
+        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        setReview={noop} onEvent={noop} />,
+    );
+    expect(screen.getAllByText("2022年考研数学一真题")).toHaveLength(1);
+    expect(view.container.querySelector(".knowledge-ribbon .exam-source")).toBeNull();
+    expect(screen.getByText("第3题")).toBeTruthy();
   });
 
   it("renders every knowledge point tag with its role", () => {
@@ -107,6 +121,30 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("参考解析")).toBeTruthy();
     expect(screen.queryByText("参考解答")).toBeNull();
     expect(screen.queryByText("解题分析")).toBeNull();
+  });
+
+  it("offers no-idea and submits a question report", async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    HTMLDialogElement.prototype.close = function () { this.open = false; };
+    const noIdea = vi.fn(); const report = vi.fn().mockResolvedValue(undefined);
+    render(<QuestionPanel attempt={attempt()} busy={false} submit={noop} reveal={noop} assess={noop}
+      noIdea={noIdea} report={report} next={noop} note="" showNote={noop} eventPending={false}
+      reviewOnly={false} setReview={noop} onEvent={noop} />);
+    fireEvent.click(screen.getByText("我没思路")); expect(noIdea).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("题目有误？"));
+    fireEvent.change(screen.getByLabelText("问题类型"), { target: { value: "analysis_error" } });
+    fireEvent.change(screen.getByLabelText("补充说明（可空）"), { target: { value: "第二步" } });
+    fireEvent.click(screen.getByText("提交"));
+    await waitFor(() => expect(report).toHaveBeenCalledWith("analysis_error", "第二步"));
+    expect(await screen.findByText("已收到反馈")).toBeTruthy();
+  });
+
+  it("renders a markdown and latex standard answer through RichText", () => {
+    const graded=attempt(); graded.question.type="single_choice"; graded.question.presentationType="single_choice";
+    graded.question.options={A:"$\\frac{1}{2}$",B:"1"}; graded.result={correct:false,answer:"B",standard:"A",explanation:"解析",aliases:[],story:"",changes:[]};
+    const view=render(<QuestionPanel attempt={graded} busy={false} submit={noop} reveal={noop} assess={noop}
+      next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop}/>);
+    expect(view.container.querySelector(".answer-summary .katex")).toBeTruthy();
   });
 
   it("builds the title from displayQuestionNumber instead of the raw value", () => {

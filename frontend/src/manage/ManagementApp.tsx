@@ -16,17 +16,19 @@ import {
   type QuestionRelation,
   type QuestionView,
   type QuestionSourceView,
+  type QuestionReportView,
 } from "./api";
 import { manageLabel, manageOptions, questionTypeContract } from "./manageLabels";
 import "./manage.css";
 
-type Page = "dashboard" | "questions" | "sources" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
+type Page = "dashboard" | "questions" | "reports" | "sources" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
 const downloadJson=(name:string,value:unknown)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)};
 
 export default function ManagementApp() {
+  const initialQuestionId = new URLSearchParams(window.location.search).get("questionId") || undefined;
   const [user, setUser] = useState<ManageUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] = useState<Page>(initialQuestionId ? "questions" : "dashboard");
   const [error, setError] = useState("");
   const [accessError, setAccessError] = useState("");
 
@@ -43,13 +45,15 @@ export default function ManagementApp() {
   if (loading) return <div className="manage-loading">正在核验管理会话…</div>;
   if (!user) return <div className="manage-loading"><div className="manage-access-denied"><h1>无法进入管理后台</h1><p>{accessError || "当前账号没有管理后台权限。"}</p><a href="/">返回万境中枢</a></div></div>;
   const admin = user.roles.includes("ADMIN");
+  const reviewer = user.roles.some(role=>role==="REVIEWER"||role==="ADMIN");
   return (
     <div className="manage-shell">
       <aside className="manage-sidebar">
-        <header><b>万境求知</b><span>全服内容中台</span></header>
+        <header><img src="/brand-logo.png" alt="" /><b>万境书院</b><span>全服内容中台</span></header>
         <nav>
           <Nav active={page === "dashboard"} onClick={() => setPage("dashboard")}>管理首页</Nav>
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>
+          {reviewer&&<Nav active={page === "reports"} onClick={() => setPage("reports")}>题目反馈</Nav>}
           {admin && <Nav active={page === "sources"} onClick={() => setPage("sources")}>来源管理</Nav>}
           <Nav active={page === "knowledge"} onClick={() => setPage("knowledge")}>知识管理</Nav>
           {admin && <Nav active={page === "books"} onClick={() => setPage("books")}>文集管理</Nav>}
@@ -69,7 +73,8 @@ export default function ManagementApp() {
         {page === "dashboard" && <Dashboard user={user} />}
         {page === "knowledge" && <KnowledgePage user={user} fail={setError} />}
         {page === "books" && admin && <BooksManagementPage fail={setError} />}
-        {page === "questions" && <QuestionPage user={user} fail={setError} />}
+        {page === "questions" && <QuestionPage user={user} fail={setError} initialQuestionId={initialQuestionId} />}
+        {page === "reports" && reviewer && <QuestionReportsPage fail={setError} />}
         {page === "sources" && admin && <SourcePage fail={setError} />}
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
         {page === "imports" && admin && <ImportPage fail={setError} />}
@@ -92,6 +97,19 @@ function Dashboard({ user }: { user: ManageUser }) {
       <Metric label="待审核题目" value={pending} note="贡献者提交的全服资源" />
       <Metric label="当前权限" value={user.roles.length} note={user.roles.map(role => manageLabel("role", role)).join(" / ")} /></div>
     <div className="manage-card"><h2>资源边界</h2><p>这里维护全服正式知识点与题目。玩家自己的藏书阁仍是私人学习空间，不会修改这里的官方资源。</p></div>
+  </section>;
+}
+
+export function QuestionReportsPage({fail}:{fail:(value:string)=>void}) {
+  const [items,setItems]=useState<QuestionReportView[]>([]); const [status,setStatus]=useState("open"); const [reason,setReason]=useState("");
+  const [page,setPage]=useState(0); const [total,setTotal]=useState(0); const [totalPages,setTotalPages]=useState(0);
+  const load=useCallback(()=>manageApi.questionReports({status,reason,page,size:PAGE_SIZE}).then(result=>{setItems(result.content);setTotal(result.totalElements);setTotalPages(result.totalPages)}).catch(error=>fail((error as Error).message)),[status,reason,page,fail]);
+  useEffect(()=>{void load()},[load]);
+  const update=(id:string,next:"resolved"|"dismissed")=>manageApi.updateQuestionReport(id,next).then(load).catch(error=>fail((error as Error).message));
+  const reasonName=(value:string)=>({content_error:"题干有误",answer_error:"答案有误",analysis_error:"解析有误",format_error:"排版有误",other:"其他"}[value]||value);
+  return <section><PageTitle title="题目反馈" detail={`共 ${total} 条`} /><div className="manage-toolbar"><select value={status} onChange={event=>{setStatus(event.target.value);setPage(0)}}><option value="">全部状态</option><option value="open">待处理</option><option value="resolved">已处理</option><option value="dismissed">已忽略</option></select><select value={reason} onChange={event=>{setReason(event.target.value);setPage(0)}}><option value="">全部类型</option><option value="content_error">题干有误</option><option value="answer_error">答案有误</option><option value="analysis_error">解析有误</option><option value="format_error">排版有误</option><option value="other">其他</option></select></div>
+    <div className="data-table"><div className="table-head report-cols"><span>题目</span><span>类型 / 备注</span><span>学习者</span><span>提交时间</span><span>处理</span></div>{items.map(item=><div className="table-row report-cols" key={item.id}><span><b>{item.sourceName}</b><small>{item.examYear?`${item.examYear}年 `:""}{item.questionNumber?`第${item.questionNumber}题`:""}</small><a href={`/manage?questionId=${encodeURIComponent(item.questionId)}`}>编辑题目</a></span><span><b>{reasonName(item.reason)}</b><small>{item.comment||"未填写补充说明"}</small></span><span>{item.learnerName}</span><time>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><span>{item.status==="open"?<><button onClick={()=>void update(item.id,"resolved")}>标记已处理</button><button onClick={()=>void update(item.id,"dismissed")}>忽略</button></>:item.status==="resolved"?"已处理":"已忽略"}</span></div>)}</div>
+    <div className="manage-pagination"><span>第 {totalPages?page+1:0} / {totalPages} 页</span><div><button disabled={page===0} onClick={()=>setPage(page-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(page+1)}>下一页</button></div></div>
   </section>;
 }
 
@@ -242,7 +260,7 @@ export function SourcePage({ fail }: { fail: (value: string) => void }) {
   </section>;
 }
 
-export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
+export function QuestionPage({ user, fail, reviewOnly = false, initialQuestionId }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean; initialQuestionId?: string }) {
   const [query,setQuery]=useState(""); const [questionType,setQuestionType]=useState(""); const [items,setItems]=useState<QuestionView[]>([]); const [selected,setSelected]=useState<QuestionView|null>(null); const [creating,setCreating]=useState(false); const [checked,setChecked]=useState<string[]>([]); const [page,setPage]=useState(0); const [totalPages,setTotalPages]=useState(0); const [totalElements,setTotalElements]=useState(0);
   // 保存成功提示由 QuestionPage 持有：新建成功后 QuestionEditor 的 key 会从 "new" 变成题目 ID
   // 并重新挂载，放在子组件 state 里的提示会瞬间丢失。
@@ -252,6 +270,7 @@ export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageU
   const load=useCallback(()=>manageApi.questions({query,questionType,status:reviewOnly?"pending_review":undefined,page,size:PAGE_SIZE}).then(result=>{setItems(result.content);setTotalPages(result.totalPages);setTotalElements(result.totalElements);setChecked([]);if(page>0&&!result.content.length)setPage(page-1)}).catch(e=>fail(e.message)),[query,questionType,reviewOnly,page,fail]);
   useEffect(()=>{setPage(0)},[reviewOnly]);
   useEffect(()=>{void load()},[load]);
+  useEffect(()=>{if(initialQuestionId&&!reviewOnly)manageApi.question(initialQuestionId).then(setSelected).catch(e=>fail(e.message))},[initialQuestionId,reviewOnly,fail]);
   const startEdit=(item:QuestionView)=>{setNotice("");manageApi.question(item.id).then(setSelected).catch(e=>fail(e.message))};
   const startCreate=()=>{setNotice("");setSelected(null);setCreating(true)};
   const closeEditor=()=>{setNotice("");setSelected(null);setCreating(false)};

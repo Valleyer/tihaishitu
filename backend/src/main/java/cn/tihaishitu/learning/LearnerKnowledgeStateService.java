@@ -41,6 +41,15 @@ public class LearnerKnowledgeStateService {
         if (world != null) learners.lockForUpdate(world.learnerId());
     }
 
+    /** 在 Learner grading lock 内把墙钟候选值归一为不早于已持久化 Evidence 的时间。 */
+    public Instant normalizeGradingOccurredAt(QuestionAttemptStore.Snapshot attempt, Instant candidate) {
+        if (attempt.learnerId() == null || attempt.targetKnowledgePointId() == null) return candidate;
+        learners.lockForUpdate(attempt.learnerId());
+        Instant persisted = store.find(attempt.learnerId(), attempt.targetKnowledgePointId())
+                .map(KnowledgeMasteryModel.State::lastEvidenceAt).orElse(null);
+        return persisted != null && candidate.isBefore(persisted) ? persisted : candidate;
+    }
+
     public void apply(QuestionAttemptStore.Snapshot attempt, String outcome, String gradingSource, Instant occurredAt) {
         if (attempt.learnerId() == null) return;
         if (attempt.targetKnowledgePointId() == null || attempt.evidenceMode() == null

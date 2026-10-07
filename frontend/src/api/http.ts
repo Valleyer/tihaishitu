@@ -243,6 +243,8 @@ export const httpApi: GameApi = {
   getGame: (id) => gameRequest(gamePath(id)),
   deleteGame: async () => { throw new Error("联机世界不支持删除人生进度。"); },
   answer: (id, input) => gameRequest(gamePath(id) + "/answers", "POST", input),
+  noIdea: (id, attemptId, questionId) =>
+    gameRequest(gamePath(id) + "/answers/no-idea", "POST", { attemptId, questionId }),
   reveal: (id, attemptId, questionId) =>
     gameRequest(gamePath(id) + "/answers/reveal", "POST", {
       attemptId,
@@ -254,6 +256,9 @@ export const httpApi: GameApi = {
       questionId,
       assessment,
     }),
+  reportQuestion: async (attemptId, reason, comment) => {
+    await request("/learner/question-reports", "POST", { attemptId, reason, comment });
+  },
   next: (id, attemptId, reviewOnly) =>
     gameRequest(gamePath(id) + "/next", "POST", { attemptId, reviewOnly }),
   choose: (id, eventId, choiceId) =>

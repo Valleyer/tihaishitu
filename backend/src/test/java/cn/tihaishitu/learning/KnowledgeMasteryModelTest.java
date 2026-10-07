@@ -8,6 +8,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class KnowledgeMasteryModelTest {
     private final KnowledgeMasteryModel model = new KnowledgeMasteryModel();
+
+    @Test void chronologicalGuardStillRejectsTrulyOlderEvidence() {
+        Instant now = Instant.parse("2026-10-08T00:00:00Z");
+        var state = new KnowledgeMasteryModel.State(30, 2, 2, 1, 1, 0, "correct", now, now,
+                KnowledgeModelPolicy.MODEL_VERSION, 1);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.apply(state,
+                evidence("wrong", "automatic", "normal", 2, now.minusMillis(1))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Evidence must be applied in chronological order");
+    }
     private final Instant day0 = Instant.parse("2026-01-01T00:00:00Z");
 
     @Test

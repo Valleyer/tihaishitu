@@ -54,4 +54,21 @@ class RewardNormalizationTest {
         assertThat(reward.has("affinity")).isFalse();
         assertThat(reward.has("trust")).isFalse();
     }
+
+    @Test
+    void repeatableKeepsOnlyZeroAndLowestPassingReward() throws Exception {
+        ObjectNode legacy = (ObjectNode) mapper.readTree("""
+                {"id":"repeatable","kind":"study","repeatable":true,"tiers":[
+                  {"minScore":0,"label":"未过","rewards":{},"dialogue":"再来"},
+                  {"minScore":60,"label":"基础","rewards":{"coins":10},"firstRewards":{"items":{"base":1}},"dialogue":"通过"},
+                  {"minScore":100,"label":"圆满","rewards":{"coins":99},"firstRewards":{"items":{"perfect":1}},"dialogue":"满分"}
+                ]}
+                """);
+        ObjectNode repeatable = content.normalizeActivityForCompatibility(legacy);
+        assertThat(repeatable.path("tiers").size()).isEqualTo(2);
+        assertThat(repeatable.path("tiers").get(1).path("minScore").asInt()).isEqualTo(60);
+        assertThat(repeatable.path("tiers").get(1).path("rewards").path("coins").asInt()).isEqualTo(10);
+        assertThat(repeatable.path("tiers").get(1).path("firstRewards").path("items").path("base").asInt()).isOne();
+        assertThat(repeatable.toString()).doesNotContain("perfect").doesNotContain("99");
+    }
 }

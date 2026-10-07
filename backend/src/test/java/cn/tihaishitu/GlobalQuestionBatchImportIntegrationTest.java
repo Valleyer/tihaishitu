@@ -55,7 +55,7 @@ class GlobalQuestionBatchImportIntegrationTest {
                         .content(batch(2040, false, List.of(blank))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "万境求知不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
+                        "万境书院不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。"));
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?", id)).isZero();
     }
 

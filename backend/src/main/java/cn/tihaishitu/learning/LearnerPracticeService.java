@@ -295,7 +295,7 @@ public class LearnerPracticeService {
         return mutate(id, attemptId, snapshot -> {
             if (!snapshot.questionId().equals(questionId)) throw conflict("题目已经变化，请重新载入。");
             boolean correct = QuestionGradingPolicy.matches(snapshot.standard(), answer);
-            Instant occurredAt = Instant.now();
+            Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
             if (!attempts.recordAnswer(snapshot, answer, correct, occurredAt))
                 throw conflict("这道题已经完成评分。");
             grade(snapshot,correct ? "correct" : "wrong","automatic",occurredAt);
@@ -314,10 +314,20 @@ public class LearnerPracticeService {
     public SessionView selfAssess(String id, String attemptId, String questionId, String assessment) {
         return mutate(id, attemptId, snapshot -> {
             if (!snapshot.questionId().equals(questionId)) throw conflict("题目已经变化，请重新载入。");
-            Instant occurredAt = Instant.now();
+            Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
             if (!attempts.recordSelfAssessment(snapshot, assessment, occurredAt))
                 throw conflict("请先查看参考解析，或此题已经完成自评。");
             grade(snapshot,assessment,"self",occurredAt);
+        });
+    }
+
+    @Transactional
+    public SessionView noIdea(String id, String attemptId, String questionId) {
+        return mutate(id, attemptId, snapshot -> {
+            if (!snapshot.questionId().equals(questionId)) throw conflict("题目已经变化，请重新载入。");
+            Instant occurredAt = knowledgeStates.normalizeGradingOccurredAt(snapshot, Instant.now());
+            if (!attempts.recordNoIdea(snapshot, occurredAt)) throw conflict("这道题已经完成评分。");
+            grade(snapshot, "wrong", "automatic", occurredAt);
         });
     }
 

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 万境求知 · 上线前数据库只读审计（pre-deploy DB audit）
+-- 万境书院 · 上线前数据库只读审计（pre-deploy DB audit）
 --
 -- 用途：在 mysqldump 之前，对本地库做一次完整、可人工比对的只读体检，
 --       并把结果与导入生产后的 scripts/verify-prod-db.sql 逐项对比。
@@ -180,7 +180,7 @@ SELECT id, name, description, enabled, weight_value, revision
   FROM question_bank
  WHERE id = '628a3d64-c820-4d1f-b482-8e2715bb7cf2';
 
--- 品牌文案核对：期望描述为“万境求知官方维护的一站式数学一学习书籍。”。
+-- 品牌文案核对：期望描述为“万境书院官方维护的一站式数学一学习书籍。”。
 -- 若仍是“题海仕途…”或“知境…”，应用启动时 OfficialMath1BookBootstrap 会幂等升级并 revision + 1。
 SELECT id, name, description, revision
   FROM question_bank

@@ -33,7 +33,10 @@ export function examMetadataView(metadata?: ExamMetadata | null): ExamMetadataVi
   if (!metadata) return undefined;
   const examLabel = trimmed(metadata.examLabel);
   const displayQuestionNumber = trimmed(metadata.displayQuestionNumber);
-  const sourceName = trimmed(metadata.sourceName);
+  const normalizedSourceName = trimmed(metadata.sourceName);
+  // presentation 层去重：Attempt snapshot 继续保留完整事实，只有与真题标签
+  // trim 后完全相同的来源名不再重复展示。
+  const sourceName = normalizedSourceName === examLabel ? undefined : normalizedSourceName;
   const examYear = typeof metadata.examYear === "number" ? metadata.examYear : undefined;
   const title = examLabel && displayQuestionNumber
     ? `${examLabel} · 第${displayQuestionNumber}题`

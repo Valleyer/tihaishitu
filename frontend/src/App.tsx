@@ -460,32 +460,6 @@ function App() {
                               "当前知识点"}
                           </b>
                         </span>
-                        <div>
-                          <button onClick={() => setActivityOpen(false)}>
-                            暂回世界
-                          </button>
-                          <button
-                            disabled={busy}
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  "放下本轮？已答课业保留，未完成时不发整轮奖励。",
-                                )
-                              )
-                                void run(async () => {
-                                  setGame(
-                                    await api.abandonActivity(
-                                      game.id,
-                                      activityRun.id,
-                                    ),
-                                  );
-                                  setActivityOpen(false);
-                                });
-                            }}
-                          >
-                            放下本轮
-                          </button>
-                        </div>
                       </div>
                       <QuestionPanel
                         key={attempt.id}
@@ -525,6 +499,10 @@ function App() {
                             );
                           })
                         }
+                        noIdea={() => void run(async () => {
+                          setGame(await api.noIdea(game.id, attempt.id, attempt.question.id));
+                        })}
+                        report={(reason, comment) => api.reportQuestion(attempt.id, reason, comment)}
                         next={() => {
                           if (activityRun.status === "settled")
                             setSettlement(true);
