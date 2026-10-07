@@ -138,12 +138,35 @@ export interface RevealedAnswer {
   explanation: string;
   knowledgePoints: KnowledgePoint[];
 }
+/**
+ * 题面上的知识点标签。role 只表达主次：core 为主标签，auxiliary 为辅助标签；
+ * 两种角色都会展示，也都不再决定题目能不能做。
+ */
+export interface ExamKnowledgePointTag {
+  id: string;
+  name: string;
+  role: string;
+}
+/**
+ * 正式题面的来源 metadata，由后端在发题时冻结进 attempt snapshot，
+ * 刷新同一个 attempt 不会变化。Hub Practice 与 World / 副本共用同一结构。
+ * UI 只使用 displayQuestionNumber 生成“第 N 题”，questionNumber 是数据库原始值。
+ */
+export interface ExamMetadata {
+  subjectName?: string | null;
+  sourceName?: string | null;
+  examYear?: number | null;
+  questionNumber?: string | null;
+  displayQuestionNumber?: string | null;
+  examLabel?: string | null;
+  knowledgePoints?: ExamKnowledgePointTag[];
+}
 export interface Attempt {
   id: string;
   targetKnowledgePointId?: string;
   targetKnowledgePointName?: string;
   learningPurpose?: "查根问底" | "补基础" | "回卷再试" | "温故补缺" | null;
-  question: PublicQuestion & { knowledgePoints: KnowledgePoint[] };
+  question: PublicQuestion & { knowledgePoints: KnowledgePoint[]; examMetadata?: ExamMetadata };
   scene: Scene;
   result: Result | null;
   reveal?: RevealedAnswer | null;

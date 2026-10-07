@@ -163,7 +163,8 @@ describe("practice interaction closure", () => {
   it("shows exam label and every knowledge point tag on the formal practice page", async () => {
     vi.spyOn(platformApi, "practice").mockResolvedValue({ ...session("correct"), currentAttempt: {
       ...session("correct").currentAttempt,
-      sourceName: "2022年全国硕士研究生招生考试数学一", examYear: 2022, questionNumber: "3",
+      sourceName: "2022年全国硕士研究生招生考试数学一", examYear: 2022,
+      questionNumber: "2022-3", displayQuestionNumber: "3",
       examLabel: "2022年考研数学一真题",
       knowledgePoints: [
         { id: "k1", name: "数列极限计算", role: "core" },
@@ -182,7 +183,7 @@ describe("practice interaction closure", () => {
   it("keeps the two wrong-question buttons spaced and readable", async () => {
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{ questionId: "q", targetKnowledgePointId: "k",
       knowledgePointName: "函数", contentMarkdown: "错题", lastGradedAt: "2026-10-06T00:00:00Z", available: true,
-      examLabel: "2022年考研数学一真题", questionNumber: "3",
+      examLabel: "2022年考研数学一真题", questionNumber: "2022-3", displayQuestionNumber: "3",
       knowledgePoints: [{ id: "k", code: "K", name: "数列极限计算", subject: "数学一", section: "",
         chapter: "", description: "", explanation: "", role: "core" }] }]);
     const view = render(<WrongQuestionsPage data={data} />);

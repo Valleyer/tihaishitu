@@ -9,6 +9,34 @@
 PR 合并后即结束该对话；下一个 PR 新开一个独立对话。Agent 不应依赖以前聊天、
 PR 评论或某个已结束对话里的上下文作为长期事实来源。
 
+## 项目位置
+
+```text
+项目名称：知境
+本地项目目录：E:\题海仕途
+远程仓库：https://github.com/Valleyer/tihaishitu
+GitHub Repository：Valleyer/tihaishitu
+```
+
+上面的“知境 / 题海仕途 / tihaishitu”指向同一个项目，不是三个项目：
+知境是产品名，题海仕途是本地目录名，`tihaishitu` 是 GitHub 仓库名。
+
+具备本地文件系统访问能力的 Agent，默认以：
+
+```text
+E:\题海仕途
+```
+
+为项目根目录。**不要在陈旧副本（例如其他盘的旧克隆、临时解包目录）上继续开发。**
+
+每次开始新 PR 前先确认：
+
+```text
+本地仓库已同步最新 main
+当前分支正确
+当前 remote 是 Valleyer/tihaishitu
+```
+
 项目事实来源是：
 
 ```text

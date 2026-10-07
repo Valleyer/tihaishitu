@@ -257,7 +257,9 @@ Game 包含身份、配置、NPC 关系、当前章节、历史作答、复习�
 - 晋章、复习记录、奖励、历史与下一事件一起保存，避免半套状态。
 - 正式题型仅允许 `single_choice`、`multiple_choice`、`true_false`、`solution`；其中 `solution` 展示为“综合题”，使用 `presentationType=self_assessment` 与 `gradingMode=self_assessment`。`blank` 不能新建、保存、导入或发布，历史 `blank` 也不会进入正式题池。原填空题须由题目生成 AI 保留 Question UUID 并改编为单选题或多选题。综合题参考答案只在显式 reveal 后返回；评定仅接受 correct/partial/wrong，同一 attemptId 只能形成一条作答记录。
 - 正式题数量、Mastery 分母、专项候选与 Chapter 可练数共用同一口径：与该 KnowledgePoint 有关系的全部 published Formal Parent Question，core 与 auxiliary 同等计入并按题目 ID 去重。`relation_role` 只表达知识标签主次，不决定题目能不能做，也不决定是否进入分母。
-- 正式做题页的题目 metadata 在发题时冻结进 `question_snapshot_json.examMetadata`：`sourceName`、`examYear`、`questionNumber`、`examLabel`，以及 `knowledgePoints[{id,name,role}]`（core / auxiliary 都返回，role 只表达主次）。刷新或重新读取同一 attempt 结果稳定。
+- 正式做题页的题目 metadata 在发题时冻结进 `question_snapshot_json.examMetadata`：`subjectName`、`sourceName`、`examYear`、`questionNumber`（数据库原始题号）、`displayQuestionNumber`（UI 使用）、`examLabel`，以及 `knowledgePoints[{id,name,role}]`（core / auxiliary 都返回，role 只表达主次）。刷新或重新读取同一 attempt 结果稳定。
+- 该 metadata 由共享的 `QuestionExamMetadataBuilder` 统一生成：Learning Hub Practice（`LearnerPracticeService`）与 World / 副本（`GameActionService`）调用同一个 builder，不存在两套规则。World 的正式发题同样把 metadata 冻结进 `study_attempt` 快照，前端不重新查库拼接。
+- 题号格式化由 `QuestionNumberFormatter` 统一实现：只有 `questionNumber` 确实以 `examYear + "-"` 开头时才剥离年份（`2014-1` + year 2014 → `displayQuestionNumber = "1"`）；`3`、`2021-3`（年份不同）、`A-3`、`3(1)`、`21A` 一律原样保留。UI 只使用 `displayQuestionNumber` 生成“第 N 题”，原始 `questionNumber` 仅作为数据事实。
 - `examLabel` 由后端按 `question_resource.exam_year` 与 `subject_name` 动态生成，不新增 `question_tag` 冗余表：数学一 + 2021 → `2021年考研数学一真题`；408 + 2024 → `2024年408考研真题`。年份缺失或科目未知时不生成标签。
 
 本地模式完整题库在浏览器可见，是单机体验。生产环境应由数据库统一维护 Bank、KnowledgePoint 与 Question；发题接口只返回 PublicQuestion，标准答案只在服务端判题后随 Result 返回。若加入考试排名，还需实现身份认证、事务、防重复提交与题库管理权限。
@@ -305,7 +307,7 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 
 | Method | Path | Request | Response / 语义 |
 |---|---|---|---|
-| GET | /learner/wrong-questions | 无 | 永久错题本列表：每项 `questionId`、`targetKnowledgePointId`、`knowledgePointName`、`contentMarkdown`、`subjectName`、`examYear`、`questionNumber`、`examLabel`、`knowledgePoints[{id,name,role}]`、`lastGradedAt`、`available`、`unavailableReason` |
+| GET | /learner/wrong-questions | 无 | 永久错题本列表：每项 `questionId`、`targetKnowledgePointId`、`knowledgePointName`、`contentMarkdown`、`subjectName`、`examYear`、`questionNumber`（原始）、`displayQuestionNumber`（UI）、`examLabel`、`knowledgePoints[{id,name,role}]`、`lastGradedAt`、`available`、`unavailableReason` |
 | DELETE | /learner/wrong-questions/{questionId} | 无 | 204；Learner 手动移出错题本 |
 | POST | /learner/practice-sessions | intent, targetKnowledgePointId/sourceQuestionId/targetBookId/targetChapterId | 开始练习；intent 允许 `knowledge_drill` / `chapter_drill` / `wrong_review` / `wrong_drill` |
 | GET | /learner/practice-sessions/active-chapter | 无 | 当前 active 章节 Session；没有时 204 |

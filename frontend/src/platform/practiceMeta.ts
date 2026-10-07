@@ -2,12 +2,13 @@ import type { PracticeAttempt, PracticeIntent, PracticeKnowledgePointTag, Recent
 
 /**
  * 题面来源标题：`2022年考研数学一真题 · 第3题`。
- * examLabel 由后端按 exam_year + subject_name 动态生成，前端不通过字符串猜来源。
- * 缺少年份或题号时降级为能确定的部分。
+ * examLabel 与 displayQuestionNumber 都由后端按 exam_year + subject_name / 原始题号生成，
+ * 前端只负责拼接显示，不通过字符串猜来源，也不自己解析原始题号。
  */
 export function examTitle(attempt: PracticeAttempt): string | undefined {
   const label = attempt.examLabel?.trim();
-  const number = attempt.questionNumber?.toString().trim();
+  // UI 只使用 displayQuestionNumber；原始 questionNumber 只作为数据事实。
+  const number = attempt.displayQuestionNumber?.trim();
   if (label && number) return `${label} · 第${number}题`;
   if (label) return label;
   if (number) return `第${number}题`;

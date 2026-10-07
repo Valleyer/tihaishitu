@@ -81,7 +81,8 @@ export interface WrongQuestion {
   unavailableReason?: "out_of_scope" | "question_unavailable" | "knowledge_unavailable" | null;
   /** 动态生成的真题展示标签，例如 2022年考研数学一真题；后端按 exam_year + subject_name 生成。 */
   examLabel?: string | null; sourceName?: string | null; examYear?: number | null;
-  questionNumber?: string | null; subjectName?: string | null;
+  /** questionNumber 是数据库原始题号；displayQuestionNumber 是 UI 用的已格式化题号。 */
+  questionNumber?: string | null; displayQuestionNumber?: string | null; subjectName?: string | null;
   /** 全部知识点标签（core / auxiliary 都返回，role 只表达主次）。 */
   knowledgePoints?: KnowledgePoint[];
 }
@@ -96,7 +97,9 @@ export interface PracticeAttempt {
   standard?: unknown; explanation?: string; assessment?: "correct" | "partial" | "wrong";
   gradingSource?: string; answerRevealed: boolean;
   /** 题面来源信息：来源名 + 真题标签 + 题号，发题时冻结进 question_snapshot_json。 */
-  sourceName?: string | null; examYear?: number | null; questionNumber?: string | null;
+  sourceName?: string | null; examYear?: number | null;
+  /** questionNumber 是数据库原始题号；displayQuestionNumber 才是 UI 使用的题号。 */
+  questionNumber?: string | null; displayQuestionNumber?: string | null;
   examLabel?: string | null; knowledgePoints?: PracticeKnowledgePointTag[];
 }
 export type PracticeIntent = "knowledge_drill" | "wrong_review" | "wrong_drill" | "chapter_drill";

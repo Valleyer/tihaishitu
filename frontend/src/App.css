@@ -631,6 +631,36 @@
   border-color: #b29365;
   color: #8f6940;
 }
+/* 正式题面来源 metadata：真题标签 / 显示题号 / 来源名，与 Learning Hub 保持同一套信息。 */
+.exam-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font:
+    11px "Microsoft YaHei",
+    sans-serif;
+  letter-spacing: 0;
+}
+.exam-source-row .exam-label {
+  border: 1px solid #8f7fc4;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: #5b4a94;
+  background: #f2effc;
+  font-weight: 700;
+}
+.exam-source-row .exam-question-number {
+  border: 1px solid #c3c7b2;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: #63704f;
+  background: #f6f7ef;
+}
+.exam-source-row .exam-source {
+  color: #8b8a70;
+}
 .question-chapter {
   display: flex;
   justify-content: space-between;
@@ -734,6 +764,17 @@
   background: #f2ecd9;
   color: #735e35;
   font-size: 10px;
+}
+/* 与 Learning Hub 一致：core 主标签偏紫，auxiliary 辅助标签偏青。 */
+.knowledge-ribbon button.knowledge-tag.core {
+  border-color: #9b8ac9;
+  background: #efe9fb;
+  color: #5b4a94;
+}
+.knowledge-ribbon button.knowledge-tag.auxiliary {
+  border-color: #7fa8b4;
+  background: #e6f4f7;
+  color: #155e75;
 }
 .knowledge-explanation {
   margin-top: 13px;

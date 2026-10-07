@@ -38,6 +38,11 @@ public class LearnerPracticeStore {
         public String examLabel() {
             return KnowledgeQuestionExamLabel.generate(subjectName, examYear);
         }
+
+        /** UI 显示题号（已剥离同年份前缀）；原始 questionNumber 仍作为数据事实保留。 */
+        public String displayQuestionNumber() {
+            return QuestionNumberFormatter.display(questionNumber, examYear);
+        }
     }
 
     private final JdbcTemplate jdbc;

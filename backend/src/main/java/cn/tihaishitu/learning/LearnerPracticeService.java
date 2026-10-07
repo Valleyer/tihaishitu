@@ -36,13 +36,14 @@ public class LearnerPracticeService {
 
     /**
      * 正式做题页顶部信息：来源 + 真题标签 + 全部知识点标签。
-     * examLabel 由 exam_year + subject_name 动态生成，前端不通过字符串猜来源。
+     * examLabel 由 exam_year + subject_name 动态生成，displayQuestionNumber 由
+     * QuestionNumberFormatter 统一格式化（例如 2014-1 → 1）；原始 questionNumber 仍保留。
      */
     public record AttemptView(String id, String status, String targetKnowledgePointId, String targetKnowledgePointName,
                               String evidenceMode, String diagnosisRole, JsonNode question, JsonNode standard,
                               String explanation, String assessment, String gradingSource, boolean answerRevealed,
-                              String sourceName, Integer examYear, String questionNumber, String examLabel,
-                              List<KnowledgePointTag> knowledgePoints) {
+                              String sourceName, Integer examYear, String questionNumber, String displayQuestionNumber,
+                              String examLabel, List<KnowledgePointTag> knowledgePoints) {
         public AttemptView {
             knowledgePoints = knowledgePoints == null ? List.of() : List.copyOf(knowledgePoints);
         }
@@ -77,6 +78,7 @@ public class LearnerPracticeService {
     private final QuestionAttemptVariantService variants;
     private final LearnerQuestionProgressStore questionProgress;
     private final RemedialQuestionStore remedial;
+    private final QuestionExamMetadataBuilder examMetadataBuilder;
 
     public LearnerPracticeService(LearnerPracticeStore store, QuestionAttemptStore attempts,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService pool,
@@ -85,7 +87,8 @@ public class LearnerPracticeService {
                                   LearnerStore learners, ObjectMapper mapper,
                                   QuestionAttemptVariantService variants,
                                   LearnerQuestionProgressStore questionProgress,
-                                  RemedialQuestionStore remedial) {
+                                  RemedialQuestionStore remedial,
+                                  QuestionExamMetadataBuilder examMetadataBuilder) {
         this.store = store;
         this.attempts = attempts;
         this.profiles = profiles;
@@ -99,6 +102,7 @@ public class LearnerPracticeService {
         this.variants = variants;
         this.questionProgress = questionProgress;
         this.remedial = remedial;
+        this.examMetadataBuilder = examMetadataBuilder;
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
@@ -392,8 +396,9 @@ public class LearnerPracticeService {
                                   DiagnosticLearningService.Directive directive) {
         String id = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
-        // 做题页顶部信息在发题时冻结进快照：刷新同一 attempt 结果稳定，前端不需要猜来源。
-        full.set("examMetadata", examMetadata(question));
+        // 题面 metadata 由共享 builder 统一生成（Hub 与 World 共用同一套规则），
+        // 发题时冻结进快照：刷新同一 attempt 结果稳定，前端不需要猜来源。
+        full.set("examMetadata", examMetadataBuilder.build(question.id(), question.chapter()));
         var previous = questionProgress.latestAttemptForQuestion(learnerId, question.id()).orElse(null);
         QuestionAttemptVariantService.AttemptVariant variant = variants.create(full, question.answer(),
                 previous == null ? full : previous.questionSnapshot(),
@@ -403,32 +408,6 @@ public class LearnerPracticeService {
                 directive == null ? null : directive.diagnosisSessionId(),
                 directive == null ? null : directive.role());
         return id;
-    }
-
-    /**
-     * 冻结题面元数据。真题标签动态生成，不为显示文字新增 tag 表。
-     */
-    private ObjectNode examMetadata(QuestionDto question) {
-        ObjectNode metadata = mapper.createObjectNode();
-        var source = pool.questionSource(question.id()).orElse(null);
-        String subjectName = source == null ? null : source.subjectName();
-        if (subjectName != null) metadata.put("subjectName", subjectName);
-        metadata.put("sourceName", source == null || source.sourceName() == null
-                ? question.chapter() : source.sourceName());
-        Integer examYear = source == null ? null : source.examYear();
-        if (examYear != null) metadata.put("examYear", examYear);
-        String questionNumber = source == null ? null : source.questionNumber();
-        if (questionNumber != null) metadata.put("questionNumber", questionNumber);
-        if (examYear != null) metadata.put("examLabel", KnowledgeQuestionExamLabel.generate(subjectName, examYear));
-        var tags = mapper.createArrayNode();
-        pool.questionKnowledgeTags(question.id()).forEach(tag -> {
-            ObjectNode node = tags.addObject();
-            node.put("id", tag.id());
-            node.put("name", tag.name());
-            node.put("role", tag.role());
-        });
-        metadata.set("knowledgePoints", tags);
-        return metadata;
     }
 
     private SessionView view(LearnerPracticeStore.Session session) {
@@ -458,6 +437,7 @@ public class LearnerPracticeService {
         String sourceName = metadata.path("sourceName").asText(null);
         Integer examYear = metadata.path("examYear").isNumber() ? metadata.path("examYear").asInt() : null;
         String questionNumber = metadata.path("questionNumber").asText(null);
+        String displayQuestionNumber = metadata.path("displayQuestionNumber").asText(null);
         String examLabel = metadata.path("examLabel").asText(null);
         List<KnowledgePointTag> tags = new java.util.ArrayList<>();
         metadata.path("knowledgePoints").forEach(tag -> tags.add(new KnowledgePointTag(
@@ -467,7 +447,7 @@ public class LearnerPracticeService {
                 revealed ? snapshot.standard() : null,
                 revealed ? snapshot.question().path("explanation").asText() : null,
                 snapshot.assessment(), snapshot.gradingSource(), revealed,
-                sourceName, examYear, questionNumber, examLabel, tags);
+                sourceName, examYear, questionNumber, displayQuestionNumber, examLabel, tags);
     }
 
     private boolean flowComplete(LearnerPracticeStore.Session session, QuestionAttemptStore.Snapshot snapshot) {

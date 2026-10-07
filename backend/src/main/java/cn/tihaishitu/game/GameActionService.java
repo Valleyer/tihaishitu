@@ -38,6 +38,7 @@ public class GameActionService {
     private final LearnerKnowledgeStateService knowledgeStates;
     private final AdaptiveStudyPlanner adaptivePlanner;
     private final DiagnosticLearningService diagnostics;
+    private final cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
@@ -45,7 +46,8 @@ public class GameActionService {
                              WorldStateStore worldStates, StudyProfileService studyProfiles,
                              LearnerKnowledgeStateService knowledgeStates,
                              AdaptiveStudyPlanner adaptivePlanner,
-                             DiagnosticLearningService diagnostics) {
+                             DiagnosticLearningService diagnostics,
+                             cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -57,6 +59,7 @@ public class GameActionService {
         this.knowledgeStates = knowledgeStates;
         this.adaptivePlanner = adaptivePlanner;
         this.diagnostics = diagnostics;
+        this.examMetadataBuilder = examMetadataBuilder;
     }
 
     @Transactional
@@ -473,6 +476,10 @@ public class GameActionService {
         }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
+        // 与 Learning Hub Practice 共用同一个 metadata builder：来源 / 年份 / 原始题号 /
+        // displayQuestionNumber / examLabel / 全部 core+auxiliary KP 标签，
+        // 一并冻结进 attempt snapshot，World 题面刷新后不会变化。
+        full.set("examMetadata", examMetadataBuilder.build(question.id(), question.chapter()));
         ObjectNode visible = full.deepCopy();
         visible.remove(List.of("answer", "aliases", "keywords", "explanation"));
         ArrayNode knowledge = mapper.createArrayNode();

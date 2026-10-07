@@ -22,6 +22,14 @@
 -- -----------------------------------------------------------------------------
 -- 1. 审计：正式父题总数 / 分科目题数 / 年份覆盖情况
 -- -----------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
+-- 1. 审计：正式父题总数 / 分科目题数 / 年份覆盖情况
+--
+-- 注意：MySQL 中 `NULL NOT REGEXP '...'` 的结果是 NULL，不会进入 CASE 的 TRUE 分支。
+-- 因此凡是“题号没有年份前缀”的判断，都必须显式写成：
+--     question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-'
+-- 审计、UPDATE、verification 三处必须使用同一逻辑。
+-- -----------------------------------------------------------------------------
 SELECT
     COUNT(*)                                                        AS 正式父题总数,
     SUM(CASE WHEN subject_name = '数学一' THEN 1 ELSE 0 END)          AS 数学一题数,
@@ -30,10 +38,12 @@ SELECT
     SUM(CASE WHEN exam_year IS NULL THEN 1 ELSE 0 END)                AS 缺少年份,
     SUM(CASE WHEN exam_year IS NULL AND question_number REGEXP '^[0-9]{4}-' THEN 1 ELSE 0 END)
                                                                     AS 可由题号推断,
-    SUM(CASE WHEN exam_year IS NULL AND (question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
-             AND source_name REGEXP '^[0-9]{4}' THEN 1 ELSE 0 END)     AS 可由来源推断,
-    SUM(CASE WHEN exam_year IS NULL AND (question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
-             AND (source_name IS NULL OR source_name NOT REGEXP '^[0-9]{4}') THEN 1 ELSE 0 END)
+    SUM(CASE WHEN exam_year IS NULL
+              AND (question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
+              AND source_name REGEXP '^[0-9]{4}' THEN 1 ELSE 0 END)     AS 可由来源推断,
+    SUM(CASE WHEN exam_year IS NULL
+              AND (question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
+              AND (source_name IS NULL OR source_name NOT REGEXP '^[0-9]{4}') THEN 1 ELSE 0 END)
                                                                     AS 无法推断
   FROM question_resource
  WHERE parent_question_id IS NULL;
@@ -54,7 +64,7 @@ SELECT subject_name,
 -- -----------------------------------------------------------------------------
 -- 3. UPDATE A：exam_year 回填
 --    规则 A：question_number 形如 2014-1 / 2022-3 时取四位年份；
---    规则 B：source_name 以四位年份开头时取该四位年份。
+--    规则 B：question_number 没有年份前缀（含 NULL）且 source_name 以四位年份开头时取该年份。
 --    只更新 exam_year IS NULL 的行；已有年份一律不覆盖。
 -- -----------------------------------------------------------------------------
 UPDATE question_resource
@@ -69,14 +79,15 @@ UPDATE question_resource
        updated_at = CURRENT_TIMESTAMP
  WHERE parent_question_id IS NULL
    AND exam_year IS NULL
-   AND question_number NOT REGEXP '^[0-9]{4}-'
+   AND (question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
    AND source_name REGEXP '^[0-9]{4}';
 
 -- -----------------------------------------------------------------------------
 -- 4. UPDATE B：408 来源名补年份前缀
---    幂等条件：
---      * 来源名去掉首尾空白后，不以该 exam_year 的四位数字开头；
---      * 并且来源名全文不含该四位年份，避免出现 “2014年2014年...”；
+--    幂等条件（只看“开头是不是这一年”，不看全文）：
+--      * 来源名去掉首尾空白后，不以该 exam_year 的四位数字开头。
+--    如果来源名中间偶然出现同一个四位数字（页码、正文年份等），也不能被当成
+--    “已经加过前缀”，否则会漏补；因此不再使用全文 LIKE '%year%' 判断。
 --    只处理 408 科目。数学一来源名不在本轮批量改写范围（做题页用 examLabel 展示）。
 -- -----------------------------------------------------------------------------
 UPDATE question_resource
@@ -87,8 +98,7 @@ UPDATE question_resource
    AND exam_year IS NOT NULL
    AND source_name IS NOT NULL
    AND TRIM(source_name) <> ''
-   AND TRIM(source_name) NOT REGEXP CONCAT('^', exam_year)
-   AND TRIM(source_name) NOT LIKE CONCAT('%', exam_year, '%');
+   AND TRIM(source_name) NOT REGEXP CONCAT('^', exam_year);
 
 -- -----------------------------------------------------------------------------
 -- 5. 验证：是否还存在可确定性回填的 exam_year
@@ -98,7 +108,9 @@ SELECT COUNT(*) AS 仍可回填年份行数
   FROM question_resource
  WHERE parent_question_id IS NULL
    AND exam_year IS NULL
-   AND (question_number REGEXP '^[0-9]{4}-' OR source_name REGEXP '^[0-9]{4}');
+   AND (question_number REGEXP '^[0-9]{4}-'
+        OR ((question_number IS NULL OR question_number NOT REGEXP '^[0-9]{4}-')
+            AND source_name REGEXP '^[0-9]{4}'));
 
 -- -----------------------------------------------------------------------------
 -- 6. 验证：408 是否仍存在缺年份前缀的来源名
@@ -109,9 +121,7 @@ SELECT COUNT(*) AS cs408缺年份前缀行数
  WHERE parent_question_id IS NULL
    AND subject_name LIKE '%408%'
    AND exam_year IS NOT NULL
-   AND source_name IS NOT NULL
-   AND TRIM(source_name) NOT REGEXP CONCAT('^', exam_year)
-   AND TRIM(source_name) NOT LIKE CONCAT('%', exam_year, '%');
+   AND TRIM(source_name) NOT REGEXP CONCAT('^', exam_year);
 
 -- -----------------------------------------------------------------------------
 -- 7. 验证：是否出现重复年份前缀（例如 “2014年2014年…”）

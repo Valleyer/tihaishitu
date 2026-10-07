@@ -11,3 +11,7 @@ coverage/
 *.iml
 backend/target/
 
+# 历史 Codex 交接文档：已被 AGENTS.md + docs/PROJECT_RULES.md 取代，
+# 只保留在本地磁盘，不再进入仓库，避免误导后续 Agent。
+题海仕途_Codex工作交接文档.md
+

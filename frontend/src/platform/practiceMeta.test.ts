@@ -11,16 +11,24 @@ const attempt = (overrides: Partial<PracticeAttempt> = {}): PracticeAttempt => (
 });
 
 describe("practice metadata", () => {
-  it("composes the exam title from the backend label and question number", () => {
-    expect(examTitle(attempt({ examLabel: "2022年考研数学一真题", questionNumber: "3" })))
+  it("composes the exam title from the backend label and display question number", () => {
+    expect(examTitle(attempt({ examLabel: "2022年考研数学一真题", displayQuestionNumber: "3" })))
       .toBe("2022年考研数学一真题 · 第3题");
-    expect(examTitle(attempt({ examLabel: "2024年408考研真题", questionNumber: "16" })))
+    expect(examTitle(attempt({ examLabel: "2024年408考研真题", displayQuestionNumber: "16" })))
       .toBe("2024年408考研真题 · 第16题");
+  });
+
+  it("never builds 第 N 题 from the raw questionNumber", () => {
+    // 原始题号里带年份前缀：UI 只能用 displayQuestionNumber，否则会显示“第2014-1题”。
+    expect(examTitle(attempt({
+      examLabel: "2014年408考研真题", questionNumber: "2014-1", displayQuestionNumber: "1",
+    }))).toBe("2014年408考研真题 · 第1题");
+    expect(examTitle(attempt({ questionNumber: "2014-1" }))).toBeUndefined();
   });
 
   it("degrades to the parts that are actually known", () => {
     expect(examTitle(attempt({ examLabel: "2022年考研数学一真题" }))).toBe("2022年考研数学一真题");
-    expect(examTitle(attempt({ questionNumber: "3" }))).toBe("第3题");
+    expect(examTitle(attempt({ displayQuestionNumber: "3" }))).toBe("第3题");
     expect(examTitle(attempt({ sourceName: "全服题库" }))).toBe("全服题库");
     expect(examTitle(attempt())).toBeUndefined();
   });
