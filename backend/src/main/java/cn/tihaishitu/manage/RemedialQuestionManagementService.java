@@ -38,9 +38,10 @@ public class RemedialQuestionManagementService {
         if(request!=null&&value(request.chapterId())!=null){where.add("bk.chapter_id=?");args.add(request.chapterId());}
         if(request!=null&&request.examYear()!=null){where.add("q.exam_year=?");args.add(request.examYear());}
         List<Map<String,Object>> questions=jdbc.query("""
-                SELECT DISTINCT q.id,q.source_name,q.exam_year,q.question_number,q.content_markdown,
+                SELECT DISTINCT q.id,COALESCE(s.display_name,q.source_name) source_name,q.exam_year,q.question_number,q.content_markdown,
                        q.standard_answer_json,q.analysis_markdown
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                   LEFT JOIN question_resource_knowledge qk ON qk.question_id=q.id
                   LEFT JOIN question_bank_knowledge bk ON bk.knowledge_point_id=qk.knowledge_point_id
                  WHERE %s ORDER BY q.exam_year,q.question_number,q.id

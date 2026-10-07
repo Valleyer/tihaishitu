@@ -28,24 +28,30 @@ public class QuestionManagementService {
 
     private final QuestionManagementStore store;
     private final KnowledgeManagementStore knowledgeStore;
+    private final QuestionSourceManagementService sources;
 
-    public QuestionManagementService(QuestionManagementStore store, KnowledgeManagementStore knowledgeStore) {
+    public QuestionManagementService(QuestionManagementStore store, KnowledgeManagementStore knowledgeStore,
+                                     QuestionSourceManagementService sources) {
         this.store = store;
         this.knowledgeStore = knowledgeStore;
+        this.sources = sources;
     }
 
     public QuestionManagementStore.QuestionView create(
             QuestionManagementStore.QuestionInput input, Authentication auth) {
-        validate(input);
-        return store.create(input, actorId(auth));
+        String actor = actorId(auth);
+        QuestionManagementStore.QuestionInput bound = bind(input, null, actor);
+        validate(bound);
+        return store.create(bound, actor);
     }
 
     public QuestionManagementStore.QuestionView update(
             String id, QuestionManagementStore.QuestionInput input, long expectedRevision, Authentication auth) {
-        validate(input);
         var current = require(id);
         String actor = actorId(auth);
-        return store.update(id, input, expectedRevision, actor);
+        QuestionManagementStore.QuestionInput bound = bind(input, current.sourceId(), actor);
+        validate(bound);
+        return store.update(id, bound, expectedRevision, actor);
     }
 
     public int bulkDelete(List<String> ids, Authentication auth) {
@@ -164,6 +170,19 @@ public class QuestionManagementService {
             if (!"active".equals(knowledge.status())) bad("题目不能绑定已停用或已合并的知识点。");
         }
         if (!hasCore) bad("题目至少需要一个核心知识点。");
+    }
+
+    private QuestionManagementStore.QuestionInput bind(QuestionManagementStore.QuestionInput input, String existingSourceId,
+                                                         String actorId) {
+        String sourceId = input.sourceId();
+        if ((sourceId == null || sourceId.isBlank()) && input.sourceType() != null && input.sourceName() != null) {
+            sourceId = sources.resolveOrCreate(input.sourceType(), input.sourceName(), actorId).id();
+        }
+        var source = sources.requireForBinding(sourceId, existingSourceId);
+        return new QuestionManagementStore.QuestionInput(input.subject(), source.id(), source.sourceType(),
+                source.canonicalName(), input.examYear(), input.questionNumber(), input.questionType(),
+                input.presentationType(), input.gradingMode(), input.content(), input.standardAnswer(), input.analysis(),
+                input.difficulty(), input.parentQuestionId(), input.derivationType(), input.options(), input.knowledgePoints());
     }
 
     private void validateStored(QuestionManagementStore.QuestionView question) {

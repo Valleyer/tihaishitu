@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QuestionPage } from "./ManagementApp";
-import { manageApi, type ManageUser, type PageResult, type QuestionView } from "./api";
+import { QuestionPage, SourcePage } from "./ManagementApp";
+import { manageApi, type ManageUser, type PageResult, type QuestionSourceView, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
   ManageHttpError: class ManageHttpError extends Error {},
@@ -15,6 +15,9 @@ vi.mock("./api", () => ({
     createQuestion: vi.fn(),
     submitQuestion: vi.fn(),
     knowledge: vi.fn(),
+    sources: vi.fn(),
+    createSource: vi.fn(),
+    saveSource: vi.fn(),
   },
 }));
 
@@ -30,12 +33,15 @@ const reviewer: ManageUser = {
 const questionsMock = vi.mocked(manageApi.questions);
 const questionMock = vi.mocked(manageApi.question);
 const reviewMock = vi.mocked(manageApi.reviewQuestion);
+const sourcesMock = vi.mocked(manageApi.sources);
+const saveSourceMock = vi.mocked(manageApi.saveSource);
 
 function question(index: number, status = "pending_review"): QuestionView {
   return {
     id: `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
     subject: "数学一",
     sourceType: "real_exam",
+    sourceId: "source-id",
     sourceName: "2026年数学一",
     examYear: 2026,
     questionNumber: String(index),
@@ -66,7 +72,26 @@ beforeEach(() => {
   questionsMock.mockReset();
   questionMock.mockReset();
   reviewMock.mockReset();
+  sourcesMock.mockReset();
+  saveSourceMock.mockReset();
   questionsMock.mockResolvedValue(result(Array.from({ length: 20 }, (_, index) => question(index + 1)), 0, 22, 2));
+});
+
+describe("SourcePage", () => {
+  it("lists, filters and edits global sources with fixed pagination", async () => {
+    const source: QuestionSourceView = { id:"source-1",sourceType:"real_exam",canonicalName:"正式名",
+      displayName:"展示名",status:"active",revision:1,questionCount:3,updatedAt:"2026-10-07T00:00:00Z" };
+    sourcesMock.mockResolvedValue({content:[source],page:0,size:20,totalElements:1,totalPages:1});
+    saveSourceMock.mockResolvedValue({...source,displayName:"新展示名",revision:2});
+    render(<SourcePage fail={vi.fn()}/>);
+    expect(await screen.findByText("共 1 个全局题目来源")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("搜索展示名称 / 正式名称"),{target:{value:"展示"}});
+    await waitFor(()=>expect(sourcesMock).toHaveBeenLastCalledWith(expect.objectContaining({query:"展示",size:20})));
+    fireEvent.click(screen.getByRole("button",{name:/展示名/}));
+    fireEvent.change(screen.getByLabelText("展示名称"),{target:{value:"新展示名"}});
+    fireEvent.click(screen.getByRole("button",{name:"保存来源"}));
+    await waitFor(()=>expect(saveSourceMock).toHaveBeenCalledWith(expect.objectContaining({displayName:"新展示名",revision:1})));
+  });
 });
 
 afterEach(cleanup);

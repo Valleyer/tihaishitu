@@ -109,7 +109,7 @@ public class QuestionManagementController {
     }
 
     private static QuestionManagementStore.QuestionInput input(QuestionRequest r) {
-        return new QuestionManagementStore.QuestionInput(r.subject(), r.sourceType(), r.sourceName(), r.examYear(),
+        return new QuestionManagementStore.QuestionInput(r.subject(), r.sourceId(), r.sourceType(), r.sourceName(), r.examYear(),
                 r.questionNumber(), r.questionType(), r.presentationType(), r.gradingMode(), r.content(),
                 r.standardAnswer(), r.analysis() == null ? "" : r.analysis(), r.difficulty(), r.parentQuestionId(),
                 r.derivationType(), r.options() == null ? List.of() : r.options().stream()
@@ -121,7 +121,7 @@ public class QuestionManagementController {
     public record OptionRequest(@NotBlank String key, @NotBlank String text, boolean correct, int sortOrder) {}
     public record RelationRequest(@NotBlank String knowledgePointId, @NotBlank String role, int sortOrder) {}
     public record QuestionRequest(
-            @NotBlank String subject, @NotBlank String sourceType, String sourceName, Integer examYear,
+            @NotBlank String subject, String sourceId, String sourceType, String sourceName, Integer examYear,
             String questionNumber, @NotBlank String questionType, @NotBlank String presentationType,
             @NotBlank String gradingMode, @NotBlank String content, @NotNull JsonNode standardAnswer,
             String analysis, @Min(1) int difficulty, String parentQuestionId, String derivationType,

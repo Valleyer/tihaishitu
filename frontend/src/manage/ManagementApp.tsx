@@ -15,11 +15,12 @@ import {
   type QuestionOption,
   type QuestionRelation,
   type QuestionView,
+  type QuestionSourceView,
 } from "./api";
 import { manageLabel, manageOptions, questionTypeContract } from "./manageLabels";
 import "./manage.css";
 
-type Page = "dashboard" | "questions" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
+type Page = "dashboard" | "questions" | "sources" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
 const downloadJson=(name:string,value:unknown)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)};
 
 export default function ManagementApp() {
@@ -49,6 +50,7 @@ export default function ManagementApp() {
         <nav>
           <Nav active={page === "dashboard"} onClick={() => setPage("dashboard")}>管理首页</Nav>
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>
+          {admin && <Nav active={page === "sources"} onClick={() => setPage("sources")}>来源管理</Nav>}
           <Nav active={page === "knowledge"} onClick={() => setPage("knowledge")}>知识管理</Nav>
           {admin && <Nav active={page === "books"} onClick={() => setPage("books")}>文集管理</Nav>}
           <Nav active={page === "reviews"} onClick={() => setPage("reviews")}>审核中心</Nav>
@@ -68,6 +70,7 @@ export default function ManagementApp() {
         {page === "knowledge" && <KnowledgePage user={user} fail={setError} />}
         {page === "books" && admin && <BooksManagementPage fail={setError} />}
         {page === "questions" && <QuestionPage user={user} fail={setError} />}
+        {page === "sources" && admin && <SourcePage fail={setError} />}
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
         {page === "imports" && admin && <ImportPage fail={setError} />}
         {page === "users" && admin && <UsersPage currentUser={user} fail={setError} />}
@@ -219,6 +222,22 @@ function ChapterEditor({chapter,changed,save,moveUp,moveDown,canUp,canDown,remov
   return <div className="chapter-editor"><div><b>{chapter.name}</b><details><summary>技术信息</summary><code>{chapter.id}</code><code>{chapter.code}</code><small>revision {chapter.revision}</small></details></div><label>章节名称<input value={chapter.name} onChange={event=>changed({...chapter,name:event.target.value})}/></label><label>章节描述<input value={chapter.description} onChange={event=>changed({...chapter,description:event.target.value})}/></label><div className="chapter-actions"><button disabled={!canUp} onClick={moveUp}>↑</button><button disabled={!canDown} onClick={moveDown}>↓</button><button onClick={save}>保存</button><button className="danger" onClick={remove}>删除</button></div></div>;
 }
 
+export function SourcePage({ fail }: { fail: (value: string) => void }) {
+  const empty = { sourceType: "custom", canonicalName: "", displayName: "", status: "active" } as const;
+  const [query,setQuery]=useState(""); const [sourceType,setSourceType]=useState(""); const [status,setStatus]=useState("");
+  const [items,setItems]=useState<QuestionSourceView[]>([]); const [selected,setSelected]=useState<QuestionSourceView|null>(null);
+  const [draft,setDraft]=useState<Omit<QuestionSourceView,"id"|"revision"|"questionCount"|"updatedAt">>(empty);
+  const [page,setPage]=useState(0); const [totalPages,setTotalPages]=useState(0); const [total,setTotal]=useState(0);
+  const load=useCallback(()=>manageApi.sources({query,sourceType,status,page,size:PAGE_SIZE}).then(result=>{setItems(result.content);setTotal(result.totalElements);setTotalPages(result.totalPages);if(page>0&&!result.content.length)setPage(page-1)}).catch(error=>fail(error.message)),[query,sourceType,status,page,fail]);
+  useEffect(()=>{void load()},[load]);
+  const edit=selected||draft; const changed=(next:typeof edit)=>selected?setSelected(next as QuestionSourceView):setDraft(next);
+  const save=async()=>{try{const value=selected?await manageApi.saveSource(selected):await manageApi.createSource(draft);setSelected(value);setDraft(empty);await load()}catch(error){fail((error as Error).message)}};
+  return <section><PageTitle title="来源管理" detail={`共 ${total} 个全局题目来源`} /><div className="manage-toolbar source-filters"><input placeholder="搜索展示名称 / 正式名称" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/><select value={sourceType} onChange={e=>{setSourceType(e.target.value);setPage(0)}}><option value="">全部类型</option>{manageOptions("source").map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select><select value={status} onChange={e=>{setStatus(e.target.value);setPage(0)}}><option value="">全部状态</option><option value="active">启用</option><option value="disabled">停用</option></select><button onClick={()=>{setSelected(null);setDraft(empty)}}>新建来源</button></div>
+    <div className="split-workspace"><div className="data-table"><div className="table-head source-cols"><span>展示名称</span><span>正式名称</span><span>类型</span><span>状态</span><span>题目数</span><span>更新时间</span></div>{items.map(item=><button className="table-row source-cols" key={item.id} onClick={()=>setSelected(item)}><b>{item.displayName}</b><span>{item.canonicalName}</span><span>{manageLabel("source",item.sourceType)}</span><i>{item.status==="active"?"启用":"停用"}</i><span>{item.questionCount}</span><time>{new Date(item.updatedAt).toLocaleDateString("zh-CN")}</time></button>)}<div className="manage-pagination"><span>第 {totalPages?page+1:0} / {totalPages} 页</span><div><button disabled={page===0} onClick={()=>setPage(page-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(page+1)}>下一页</button></div></div></div>
+      <aside className="detail-panel"><div className="editor"><header><b>{selected?"编辑来源":"新建来源"}</b>{selected&&<span>修订版本 {selected.revision}</span>}</header><label>展示名称<input value={edit.displayName} onChange={e=>changed({...edit,displayName:e.target.value})}/></label><label>正式名称<input value={edit.canonicalName} onChange={e=>changed({...edit,canonicalName:e.target.value})}/></label><label>来源类型<select value={edit.sourceType} onChange={e=>changed({...edit,sourceType:e.target.value as QuestionSourceView["sourceType"]})}>{manageOptions("source").map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>状态<select value={edit.status} onChange={e=>changed({...edit,status:e.target.value as QuestionSourceView["status"]})}><option value="active">启用</option><option value="disabled">停用</option></select></label><button className="primary" disabled={!edit.canonicalName.trim()||!edit.displayName.trim()} onClick={save}>保存来源</button></div></aside></div>
+  </section>;
+}
+
 export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageUser; fail: (v: string) => void; reviewOnly?: boolean }) {
   const [query,setQuery]=useState(""); const [status,setStatus]=useState(reviewOnly?"pending_review":""); const [items,setItems]=useState<QuestionView[]>([]); const [selected,setSelected]=useState<QuestionView|null>(null); const [creating,setCreating]=useState(false); const [checked,setChecked]=useState<string[]>([]); const [page,setPage]=useState(0); const [totalPages,setTotalPages]=useState(0); const [totalElements,setTotalElements]=useState(0);
   const [bulkRejecting,setBulkRejecting]=useState(false); const [bulkComment,setBulkComment]=useState(""); const [bulkBusy,setBulkBusy]=useState(false);
@@ -241,9 +260,10 @@ export function QuestionPage({ user, fail, reviewOnly = false }: { user: ManageU
 }
 
 function QuestionEditor({ initial, user, fail, saved, reviewMode = false }: { initial: QuestionView | null; user: ManageUser; fail: (v: string) => void; saved: (v: QuestionView) => void; reviewMode?: boolean }) {
-  const [question, setQuestion] = useState<Partial<QuestionView>>(initial || { subject: "数学一", sourceType: "custom", questionType: "single_choice", presentationType: "single_choice", gradingMode: "auto", difficulty: 2, standardAnswer: "A", options: [], knowledgePoints: [] });
+  const [question, setQuestion] = useState<Partial<QuestionView>>(initial || { subject: "数学一", questionType: "single_choice", presentationType: "single_choice", gradingMode: "auto", difficulty: 2, standardAnswer: "A", options: [], knowledgePoints: [] });
   const [answerText, setAnswerText] = useState(JSON.stringify(question.standardAnswer ?? "", null, 2));
   const [knowledgeQuery, setKnowledgeQuery] = useState(""); const [matches, setMatches] = useState<KnowledgeView[]>([]); const [busy, setBusy] = useState(false);
+  const [sourceQuery,setSourceQuery]=useState(""); const [sourceMatches,setSourceMatches]=useState<QuestionSourceView[]>([]);
   const [rejecting, setRejecting] = useState(false); const [rejectComment, setRejectComment] = useState("");
   const isAdmin = user.roles.includes("ADMIN");
   const isReviewer = user.roles.includes("REVIEWER");
@@ -258,8 +278,8 @@ function QuestionEditor({ initial, user, fail, saved, reviewMode = false }: { in
   };
   const save = async () => { try { setBusy(true); const payload = { ...question, standardAnswer: JSON.parse(answerText) }; const result = initial ? await manageApi.saveQuestion(payload as QuestionView) : await manageApi.createQuestion(payload); saved(result); } catch (e) { fail(e instanceof Error ? e.message : "保存失败"); } finally { setBusy(false); } };
   const editorFields = <><header><b>{initial ? `题目 ${initial.id.slice(0, 8)}` : "新建全服题目草稿"}</b><span>{manageLabel("questionStatus", question.status || "draft")} {question.revision ? `· 修订版本 ${question.revision}` : ""}</span></header>
-    <div className="form-grid"><label>科目<input value={question.subject || ""} onChange={(e) => setQuestion({ ...question, subject: e.target.value })} /></label><label>来源类型<select value={question.sourceType} onChange={(e) => setQuestion({ ...question, sourceType: e.target.value })}>{manageOptions("source").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      <label>来源名称<input value={question.sourceName || ""} onChange={(e) => setQuestion({ ...question, sourceName: e.target.value })} /></label><label>年份<input type="number" value={question.examYear || ""} onChange={(e) => setQuestion({ ...question, examYear: Number(e.target.value) || undefined })} /></label><label>题号<input value={question.questionNumber || ""} onChange={(e) => setQuestion({ ...question, questionNumber: e.target.value })} /></label><label>难度<select value={question.difficulty} onChange={(e) => setQuestion({ ...question, difficulty: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n}>{n}</option>)}</select></label>
+    <fieldset className="editor-group"><legend>来源</legend><div className="selected-source"><b>{question.sourceName||"尚未选择来源"}</b><span>{question.sourceType?manageLabel("source",question.sourceType):"—"}</span></div><div className="inline-search"><input placeholder="搜索已有来源" value={sourceQuery} onChange={e=>setSourceQuery(e.target.value)}/><button onClick={()=>manageApi.sources({query:sourceQuery,status:"active",size:10}).then(result=>setSourceMatches(result.content)).catch(error=>fail(error.message))}>搜索</button></div>{sourceMatches.length>0&&<div className="search-results">{sourceMatches.map(source=><button key={source.id} onClick={()=>setQuestion({...question,sourceId:source.id,sourceType:source.sourceType,sourceName:source.displayName,sourceCanonicalName:source.canonicalName})}>{source.displayName} · {manageLabel("source",source.sourceType)}</button>)}</div>}<small>新来源请先到“来源管理”创建；来源类型由所选来源决定。</small></fieldset>
+    <div className="form-grid"><label>科目<input value={question.subject || ""} onChange={(e) => setQuestion({ ...question, subject: e.target.value })} /></label><label>年份<input type="number" value={question.examYear || ""} onChange={(e) => setQuestion({ ...question, examYear: Number(e.target.value) || undefined })} /></label><label>题号<input value={question.questionNumber || ""} onChange={(e) => setQuestion({ ...question, questionNumber: e.target.value })} /></label><label>难度<select value={question.difficulty} onChange={(e) => setQuestion({ ...question, difficulty: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n}>{n}</option>)}</select></label>
       <label>题型<select value={question.questionType} onChange={(e) => { const questionType=e.target.value; setQuestion({ ...question, questionType, ...questionTypeContract(questionType) }); }}>{question.questionType==="blank"&&<option value="blank" disabled>历史填空题（必须改选）</option>}{manageOptions("questionType").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>作答方式<select value={question.presentationType} disabled>{manageOptions("presentation").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>判题模式<select value={question.gradingMode} disabled>{manageOptions("grading").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>
     <label>题干（Markdown + LaTeX）<textarea rows={8} value={question.content || ""} onChange={(e) => setQuestion({ ...question, content: e.target.value })} /></label><details><summary>预览题干</summary><div className="markdown-preview"><RichText>{question.content || "暂无题干"}</RichText></div></details>
     <label>标准答案（JSON）<textarea rows={3} value={answerText} onChange={(e) => setAnswerText(e.target.value)} /></label><label>完整解析<textarea rows={7} value={question.analysis || ""} onChange={(e) => setQuestion({ ...question, analysis: e.target.value })} /></label>
@@ -292,8 +312,8 @@ function AuditPage({ fail }: { fail: (value: string) => void }) {
   useEffect(() => { void load(); }, [load]);
   return <section><PageTitle title="审计记录" detail={`共 ${total} 条；只读展示全服内容与权限变更`} />
     <div className="manage-toolbar audit-filters"><input placeholder="操作者账号 / 名称 / UUID" value={actor} onChange={(event) => {setActor(event.target.value);setPage(0)}} />
-      <select value={action} onChange={(event) => {setAction(event.target.value);setPage(0)}}><option value="">全部动作</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="BOOK_UPDATED">文集修改</option><option value="BOOK_CHAPTER_UPDATED">章节修改</option><option value="BOOK_DELETED">文集删除</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option><option value="USER_DELETED">用户删除</option></select>
-      <select value={entityType} onChange={(event) => {setEntityType(event.target.value);setPage(0)}}><option value="">全部实体</option><option value="knowledge_point">知识点</option><option value="question">题目</option><option value="learner_account">用户</option><option value="question_bank">文集</option></select>
+      <select value={action} onChange={(event) => {setAction(event.target.value);setPage(0)}}><option value="">全部动作</option><option value="SOURCE_CREATED">来源创建</option><option value="SOURCE_UPDATED">来源修改</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="BOOK_UPDATED">文集修改</option><option value="BOOK_CHAPTER_UPDATED">章节修改</option><option value="BOOK_DELETED">文集删除</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option><option value="USER_DELETED">用户删除</option></select>
+      <select value={entityType} onChange={(event) => {setEntityType(event.target.value);setPage(0)}}><option value="">全部实体</option><option value="question_source">题目来源</option><option value="knowledge_point">知识点</option><option value="question">题目</option><option value="learner_account">用户</option><option value="question_bank">文集</option></select>
       <button onClick={load}>查询</button></div>
     <div className="audit-list">{items.map((item) => <article key={item.id} className="audit-row"><header><b>{auditAction(item.action)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time></header>
       <p><span>{item.actorDisplayName || "系统"}</span>{item.actorUsername && <code>{item.actorUsername}</code>} · {manageLabel("entity", item.entityType)} · <code>{item.entityId}</code></p>
@@ -304,6 +324,7 @@ function AuditPage({ fail }: { fail: (value: string) => void }) {
 
 function auditAction(action: string) {
   const labels: Record<string, string> = {
+    SOURCE_CREATED: "来源创建", SOURCE_UPDATED: "来源修改",
     KNOWLEDGE_UPDATED: "知识点修改", KNOWLEDGE_ALIASES_UPDATED: "知识点别名修改", KNOWLEDGE_MERGED: "知识点合并",
     BOOK_UPDATED: "文集修改", BOOK_CHAPTER_UPDATED: "章节修改", BOOK_DELETED: "文集删除",
     QUESTION_CREATED: "题目创建", QUESTION_UPDATED: "题目修改", QUESTION_SUBMITTED: "题目提交审核",

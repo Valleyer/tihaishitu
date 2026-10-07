@@ -24,7 +24,8 @@ public class QuestionManagementStore {
     public record OptionView(String id, String key, String text, boolean correct, int sortOrder) {}
     public record KnowledgeRelationView(String id, String code, String name, String role, int sortOrder) {}
     public record QuestionView(
-            String id, String subject, String sourceType, String sourceName, Integer examYear,
+            String id, String subject, String sourceId, String sourceType, String sourceName,
+            String sourceCanonicalName, Integer examYear,
             String questionNumber, String questionType, String presentationType, String gradingMode,
             String content, JsonNode standardAnswer, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
@@ -33,7 +34,7 @@ public class QuestionManagementStore {
     public record OptionInput(String key, String text, boolean correct, int sortOrder) {}
     public record RelationInput(String knowledgePointId, String role, int sortOrder) {}
     public record QuestionInput(
-            String subject, String sourceType, String sourceName, Integer examYear, String questionNumber,
+            String subject, String sourceId, String sourceType, String sourceName, Integer examYear, String questionNumber,
             String questionType, String presentationType, String gradingMode, String content,
             JsonNode standardAnswer, String analysis, int difficulty, String parentQuestionId,
             String derivationType, List<OptionInput> options, List<RelationInput> knowledgePoints) {}
@@ -74,12 +75,12 @@ public class QuestionManagementStore {
         String id = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO question_resource(
-                    id, subject_name, source_type, source_name, exam_year, question_number,
+                    id, subject_name, source_id, source_type, source_name, exam_year, question_number,
                     question_type, presentation_type, grading_mode, content_markdown,
                     standard_answer_json, analysis_markdown, difficulty, status,
                     parent_question_id, derivation_type, created_by, updated_by, revision
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, 1)
-                """, id, input.subject(), input.sourceType(), blank(input.sourceName()), input.examYear(),
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, 1)
+                """, id, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
                 input.content(), json(input.standardAnswer()), input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, actorId);
@@ -92,13 +93,13 @@ public class QuestionManagementStore {
     public QuestionView update(String id, QuestionInput input, long expectedRevision, String actorId) {
         int changed = jdbc.update("""
                 UPDATE question_resource
-                   SET subject_name = ?, source_type = ?, source_name = ?, exam_year = ?, question_number = ?,
+                   SET subject_name = ?, source_id = ?, source_type = ?, source_name = ?, exam_year = ?, question_number = ?,
                        question_type = ?, presentation_type = ?, grading_mode = ?, content_markdown = ?,
                        standard_answer_json = ?, analysis_markdown = ?, difficulty = ?, parent_question_id = ?,
                        derivation_type = ?, updated_by = ?, revision = revision + 1,
                        updated_at = CURRENT_TIMESTAMP
                  WHERE id = ? AND revision = ?
-                """, input.subject(), input.sourceType(), blank(input.sourceName()), input.examYear(),
+                """, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
                 input.content(), json(input.standardAnswer()), input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, id, expectedRevision);
@@ -215,8 +216,9 @@ public class QuestionManagementStore {
 
     private QuestionView map(java.sql.ResultSet result) throws java.sql.SQLException {
         String id = result.getString("id");
-        return new QuestionView(id, result.getString("subject_name"), result.getString("source_type"),
-                result.getString("source_name"), (Integer) result.getObject("exam_year"),
+        return new QuestionView(id, result.getString("subject_name"), result.getString("source_id"),
+                result.getString("resolved_source_type"), result.getString("resolved_source_name"),
+                result.getString("source_canonical_name"), (Integer) result.getObject("exam_year"),
                 result.getString("question_number"), result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
                 result.getString("content_markdown"), tree(result.getString("standard_answer_json")),
@@ -270,8 +272,12 @@ public class QuestionManagementStore {
     }
     private static String baseSelect() {
         return """
-                SELECT q.*, COALESCE(l.display_name, u.display_name) creator_name
+                SELECT q.*, COALESCE(s.source_type,q.source_type) resolved_source_type,
+                       COALESCE(s.display_name,q.source_name,'全服题库') resolved_source_name,
+                       COALESCE(s.canonical_name,q.source_name) source_canonical_name,
+                       COALESCE(l.display_name, u.display_name) creator_name
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                   LEFT JOIN learner_account l ON l.id = q.created_by
                   LEFT JOIN app_user u ON u.id = q.created_by
                 """;
@@ -282,10 +288,10 @@ public class QuestionManagementStore {
                                     String creator, String knowledge) {
         List<String> clauses = new ArrayList<>(); List<Object> params = new ArrayList<>();
         if (query != null && !query.isBlank()) {
-            clauses.add("(LOWER(q.content_markdown) LIKE ? OR LOWER(q.source_name) LIKE ? OR q.question_number LIKE ?)");
+            clauses.add("(LOWER(q.content_markdown) LIKE ? OR LOWER(COALESCE(s.display_name,q.source_name)) LIKE ? OR q.question_number LIKE ?)");
             String v = "%" + query.trim().toLowerCase() + "%"; params.add(v); params.add(v); params.add(v);
         }
-        add(clauses, params, "q.subject_name", subject); add(clauses, params, "q.source_type", sourceType);
+        add(clauses, params, "q.subject_name", subject); add(clauses, params, "COALESCE(s.source_type,q.source_type)", sourceType);
         if (examYear != null) { clauses.add("q.exam_year = ?"); params.add(examYear); }
         add(clauses, params, "q.question_type", questionType); add(clauses, params, "q.grading_mode", gradingMode);
         add(clauses, params, "q.status", status); add(clauses, params, "q.created_by", creator);

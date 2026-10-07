@@ -238,11 +238,13 @@ public class LearningBrowseStore {
     public List<Map<String, Object>> questionsForKnowledge(String id, String learnerId) {
         ensureTrainable(id, learnerId);
         List<Map<String, Object>> questions = jdbc.query("""
-                SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year,
+                SELECT DISTINCT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year,
                        q.question_number, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
                        q.standard_answer_json, q.difficulty, q.revision
                   FROM question_resource q
+                  LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
                  WHERE qk.knowledge_point_id = ? AND q.status = 'published'
                    AND q.parent_question_id IS NULL
@@ -265,18 +267,21 @@ public class LearningBrowseStore {
 
     public Map<String, Object> question(String id, String learnerId) {
         Map<String, Object> value = jdbc.query("""
-                SELECT id, subject_name, source_type, source_name, exam_year, question_number,
-                       question_type, presentation_type,
-                       grading_mode, content_markdown, analysis_markdown, standard_answer_json, difficulty, revision
-                  FROM question_resource WHERE id = ? AND status = 'published'
-                   AND parent_question_id IS NULL
-                   AND question_type IN ('single_choice','multiple_choice','true_false','solution')
+                SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
+                       COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year, q.question_number,
+                       q.question_type, q.presentation_type,
+                       q.grading_mode, q.content_markdown, q.analysis_markdown, q.standard_answer_json,
+                       q.difficulty, q.revision
+                  FROM question_resource q LEFT JOIN question_source s ON s.id=q.source_id
+                 WHERE q.id = ? AND q.status = 'published'
+                   AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND EXISTS (
                        SELECT 1 FROM question_resource_knowledge qk
                        JOIN question_bank_knowledge bk ON bk.knowledge_point_id=qk.knowledge_point_id
                        JOIN learner_selected_book selected ON selected.bank_id=bk.bank_id
                        JOIN question_bank b ON b.id=bk.bank_id AND b.enabled=TRUE
-                       WHERE qk.question_id=question_resource.id AND selected.learner_id=?
+                       WHERE qk.question_id=q.id AND selected.learner_id=?
                    )
                 """, (result, row) -> question(result), id, learnerId).stream().findFirst()
                 .orElseThrow(() -> missing("题目不存在或尚未发布。"));

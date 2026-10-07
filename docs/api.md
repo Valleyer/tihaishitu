@@ -110,6 +110,10 @@ V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 | POST | /manage/knowledge-points/{id}/merge | ADMIN | 按 expectedRevision 把源知识点事务合并到 active 目标并保留历史 |
 | GET/POST | /manage/questions | CONTRIBUTOR+ | 查询题目或创建自己的 draft |
 | GET/PUT | /manage/questions/{id} | 按资源权限 | 详情与带 expectedRevision 的编辑 |
+| GET | /manage/sources | CONTRIBUTOR+ | 按 query、sourceType、status 分页查询全局题目来源；来源管理页仍仅 ADMIN 可见 |
+| GET | /manage/sources/{id} | CONTRIBUTOR+ | 读取来源详情、revision 与绑定题目数 |
+| POST | /manage/sources | ADMIN | 新建全局来源；`(sourceType, canonicalName)` 唯一 |
+| PUT | /manage/sources/{id} | ADMIN | 按 expectedRevision 修改正式名、展示名、类型和状态 |
 | POST | /manage/questions/{id}/submit | 作者 | draft/rejected 提交审核 |
 | POST | /manage/questions/{id}/review | REVIEWER/ADMIN | 审核他人题目并 approve/reject |
 | POST | /manage/questions/{id}/archive | REVIEWER/ADMIN | 归档题目 |
@@ -119,6 +123,14 @@ V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 
 知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。知识点合并会把源记录标为 deprecated 并写入 `merged_into_id`，逐题迁移关系；目标关系已存在时折叠为一条，任一原关系为 core 则保留 core。源记录、合并历史和审计记录均不删除。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
+
+题目管理请求与响应包含 `sourceId`；响应另带 `sourceType`、`sourceName`（当前展示名）和
+`sourceCanonicalName`。保存时服务端按 `sourceId` 重新读取来源，忽略客户端伪造的类型和名称，
+并同步 `question_resource.source_type / source_name` 兼容快照。新绑定只接受 active 来源；
+已绑定 disabled 来源的历史题仍可读取。管理前端不提供自由输入来源名，来源统一在“来源管理”创建。
+
+实时 Question API 与新 attempt metadata 按 `question_source.display_name → legacy source_name → 全服题库`
+解析来源。`study_attempt.question_snapshot_json` 是创建 attempt 时的冻结快照，来源后来改名不会修改历史快照。
 
 知识点合并还会在同一事务中迁移 Learner Focus、attempt target、Knowledge Evidence、题目级掌握槽位与 Knowledge Guide。若源与目标同时已有状态，服务端会把题目关系与历史正式作答归一到目标知识点，并重建唯一的 V3 聚合状态。
 
