@@ -273,7 +273,7 @@ public class GameActionService {
         if (!current.path("result").isNull()) return game;
         Instant occurredAt = Instant.now();
         if (!attempts.recordSelfAssessment(snapshot, request.assessment(), occurredAt)) {
-            throw bad("请先查看参考解答，或此题已经完成自评。");
+            throw bad("请先查看参考解析，或此题已经完成自评。");
         }
         DiagnosticLearningService.GradingResult diagnosis = diagnostics.handleGradedAttempt(snapshot,
                 request.assessment(), "self", occurredAt, frozenAllowedKnowledgePointIds(activeRun(game)));

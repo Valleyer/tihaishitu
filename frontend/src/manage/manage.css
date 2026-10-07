@@ -108,6 +108,7 @@
 .danger-zone { border-color: #f4c7c3; border-radius: 12px; background: #fff8f7; padding: 16px; }
 .danger-zone b { color: #912018; }
 .manage-error,.form-error { border-color: #f4c7c3; border-radius: 10px; background: #fff6f5; box-shadow: 0 10px 30px rgba(180,35,24,.1); }
+.form-note { border: 1px solid #f0d9a8; border-radius: 10px; background: #fffbef; color: #7a5a12; padding: 10px; }
 .import-preview,.import-source,.create-user { border-radius: 14px; }
 .import-result { border-radius: 10px; }
 @media(max-width:1000px){.manage-shell{grid-template-columns:204px minmax(0,1fr)}.manage-main{padding:24px}.metric-grid{grid-template-columns:1fr}}

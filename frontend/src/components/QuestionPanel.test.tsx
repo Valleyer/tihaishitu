@@ -92,7 +92,9 @@ describe("World question panel exam metadata", () => {
 
   it("shows solution content as one reference analysis without a separate standard answer", () => {
     const solution = attempt();
-    solution.question.type = "solution";
+    // 后端 DTO 的 type 是展示类型；综合题展示为 self_assessment，原始题型是 solution。
+    solution.question.type = "self_assessment";
+    solution.question.originalType = "solution";
     solution.question.presentationType = "self_assessment";
     solution.question.gradingMode = "self_assessment";
     solution.question.options = {};

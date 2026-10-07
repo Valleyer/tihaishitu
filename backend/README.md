@@ -81,14 +81,14 @@ API_PROXY_TARGET=http://localhost:12345
 - `POST /api/v1/games/{id}/next`：当前知识点完成后领取下一题
 - 地图移动、人物对话、考试报名、物品购买/使用、札记批注、活动结算等游戏行为接口
 - `POST /api/v1/admin/question-banks/import`：原子校验并新增或修订一部文集
-- `POST /api/v1/admin/questions/import`：按 `global-question-batch/v2` 幂等导入全局题目资源，不写入 Book
+- `POST /api/v1/admin/questions/import`：按 `global-question-batch/v4` 幂等导入全局题目资源，不写入 Book（v3 / v2 仅 compatibility）
 - `POST /api/v1/admin/global-question-banks/import`：已弃用的 V1 兼容接口；Knowledge-driven Book 会拒绝旧版覆盖导入
 - `PUT /api/v1/admin/question-banks/{uuid}/metadata`：改名、改简介、启停与调整权重
 - `POST /api/v1/manage/auth/login`、`POST /logout`、`GET /me`：管理后台 Session
 - `/api/v1/manage/knowledge-points`：全服知识点分页、code/name/alias 搜索和审核者维护
 - `POST /api/v1/manage/knowledge-points/{uuid}/merge`：管理员事务迁移知识点关系并保留旧知识点
 - `/api/v1/manage/questions`：独立题目草稿、知识点绑定、提交、审核和归档工作流
-- `POST /api/v1/manage/imports/questions`：管理员批量导入 `global-question-batch/v2` 题目批次
+- `POST /api/v1/manage/imports/questions`：管理员批量导入 `global-question-batch/v4` 题目批次（v3 历史兼容）
 - `POST /api/v1/manage/imports/question-bank`：已弃用的 V1 兼容接口
 - `/api/v1/manage/users`：管理员创建、禁用账号和分配角色
 - `GET /api/v1/manage/audit-logs`：管理员分页检索内容和权限变更记录
@@ -104,6 +104,7 @@ MCP 更适合给外部 AI 工具调用，不替代网页游戏本身所需的 RE
 - `global_knowledge_point` 使用 UUID 主键和唯一稳定 `code`；`M1-H06-035` 不因改名、排序或迁移变化。
 - `knowledge_alias` 独立存储可搜索别名。正式 Math1 源为 469 条：高等数学 198、线性代数 136、概率论与数理统计 135。
 - `question_resource` 保存独立原题，分别记录 `question_type`、`presentation_type`、`grading_mode`。
+- 正式父题（`parent_question_id IS NULL`）不保存独立标准答案配置：客观题唯一答案事实是 `question_resource_option.correct_option`，综合题唯一内容事实是 `analysis_markdown`；`question_resource.standard_answer_json` 对 Formal Parent 一律为 NULL，仅作为 Legacy Remedial 兼容列保留。`study_attempt.standard_answer_json` 相反必须保留，它是 Attempt 创建时冻结的技术判题快照。
 - `question_resource_knowledge` 保存题目与知识点的多对多关系及 core/auxiliary 角色。
 - `question_bank_chapter/question_bank_knowledge` 让 Book 按章节组织 KnowledgePoint；Question 是 KnowledgePoint 的全局训练资源。
 - `question_bank_item` 仅作为旧游戏和 LegacyCatalog 的兼容关系保留，新版导入不会写入该表。旧 `knowledge_point/question_item` 表暂时保留，不会在迁移中删除。

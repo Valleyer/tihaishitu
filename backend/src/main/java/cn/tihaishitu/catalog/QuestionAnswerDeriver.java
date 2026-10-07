@@ -32,7 +32,7 @@ public class QuestionAnswerDeriver {
                 yield answer;
             }
             case "true_false" -> mapper.getNodeFactory().booleanNode(
-                    Boolean.parseBoolean(requireOne(correct).key()));
+                    requireBooleanKey(requireOne(correct).key()));
             case "solution" -> mapper.nullNode();
             default -> throw new IllegalArgumentException("题型不受支持：" + questionType);
         };
@@ -41,5 +41,17 @@ public class QuestionAnswerDeriver {
     private static Option requireOne(List<Option> correct) {
         if (correct.size() != 1) throw new IllegalArgumentException("题目必须且只能有一个正确选项。");
         return correct.get(0);
+    }
+
+    /**
+     * 判断题正确选项键必须显式是 true 或 false。
+     * 禁止使用 Boolean.parseBoolean 之类的宽松解析：非法键会被静默判成 false，造成误判。
+     */
+    private static boolean requireBooleanKey(String key) {
+        String normalized = key == null ? "" : key.strip();
+        if ("true".equals(normalized)) return true;
+        if ("false".equals(normalized)) return false;
+        throw new IllegalArgumentException(
+                "判断题正确选项键必须是 true 或 false，实际为：" + (key == null ? "null" : key));
     }
 }

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuestionAnswerDeriverTest {
     private final QuestionAnswerDeriver deriver = new QuestionAnswerDeriver(new ObjectMapper());
@@ -30,6 +31,19 @@ class QuestionAnswerDeriverTest {
                 .contains("单选题必须且只能有一个正确选项。");
         assertThat(QuestionContractValidator.validateFormal("solution", "self_assessment", "self_assessment", " ", List.of()))
                 .contains("综合题完整解析不能为空。");
+    }
+
+    @Test
+    void trueFalseCorrectKeyMustBeExactlyTrueOrFalseInsteadOfSilentlyBecomingFalse() {
+        // Boolean.parseBoolean("foo") 会静默变 false；必须显式失败，避免判断题误判。
+        assertThatThrownBy(() -> deriver.derive("true_false", List.of(option("foo", true, 0))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("true 或 false")
+                .hasMessageContaining("foo");
+        assertThatThrownBy(() -> deriver.derive("true_false", List.of(option("TRUE", true, 0))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(deriver.derive("true_false", List.of(option(" true ", true, 0))).asBoolean()).isTrue();
+        assertThat(deriver.derive("true_false", List.of(option("false", true, 0))).asBoolean()).isFalse();
     }
 
     private static QuestionAnswerDeriver.Option option(String key, boolean correct, int order) {

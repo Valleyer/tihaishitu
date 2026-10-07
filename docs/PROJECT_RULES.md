@@ -263,6 +263,80 @@ Review Queue
 
 即：子题不产生正式学习证据、不作为普通随机题、不计入分母、不进入错题本。
 
+### 6.1 正式题答案契约（Question Contract V2）
+
+正式父题（`parent_question_id IS NULL`）**不再保存独立的“标准答案配置”**。
+`question_resource.standard_answer_json` 已退场，若仍留库只作为 Legacy Remedial /
+旧格式兼容列存在，Formal Parent 一律为 `NULL`。
+
+客观题：
+
+```text
+single_choice
+multiple_choice
+true_false
+```
+
+唯一答案事实：
+
+```text
+question_resource_option.correct_option
+```
+
+综合题：
+
+```text
+solution
+```
+
+唯一内容事实：
+
+```text
+analysis_markdown
+```
+
+综合题不再拥有独立 reference / standard answer，只保存一份
+`analysis_markdown`，其中包含答案、过程与解析。历史迁移后 `analysis_markdown`
+内部可以带 `## 参考答案` / `## 解析` 小标题，但它仍然是同一个字段。
+
+必须区分两件事：
+
+```text
+question_resource.standard_answer_json   正式 Question 配置层：退场
+study_attempt.standard_answer_json       Attempt 判题快照：必须保留
+```
+
+正式客观题运行流程：
+
+```text
+correct_option
+→ 后端运行时派生 answer（QuestionAnswerDeriver）
+→ Attempt 动态排列选项
+→ 同步 remap derived answer
+→ 冻结 question_snapshot_json
+→ 冻结 study_attempt.standard_answer_json
+→ 判题
+```
+
+约束：
+
+```text
+QuestionDto.answer 若保留，只是 runtime-derived grading value，
+                 不是 Question 持久化的配置答案
+study_attempt.standard_answer_json 是创建 Attempt 时冻结的不可变判题事实，
+                 后续修改题库不得回写历史 Attempt
+solution Attempt 的 study_attempt.standard_answer_json 保存为 JSON null
+作答前 DTO 不得暴露 correct_option，也不得暴露 derived standard
+作答后客观题 result 可以返回 Attempt-specific standard 用于批卷
+solution reveal / self-assessment 不返回 separate standard
+true_false 的 correct option key 必须显式是 true 或 false；
+                 非法 key 必须显式失败，禁止宽松解析成 false
+```
+
+正式题型的答案字段事实只有这一套；`Question Management`、Formal Question Pool、
+Learning Browse、Catalog Formal projection、Learner Practice / World Formal path 与
+`global-question-batch/v4` 都不得再读写 Formal Parent 的 `standard_answer_json`。
+
 ---
 
 ## 7. Mastery V3
@@ -738,7 +812,7 @@ knowledgePoints[{id, name, role}]（core / auxiliary 都显示）
 
 ## 11. 选项随机
 
-Single Choice / Multiple Choice：
+正式客观题（Single Choice / Multiple Choice / True False）：
 
 ```text
 每次创建新的 study_attempt 时生成一次稳定 permutation
@@ -747,14 +821,29 @@ Single Choice / Multiple Choice：
 同时必须：
 
 ```text
-重映射 standard answer
-并冻结进 question_snapshot_json / standard_answer_json
+重映射 derived standard answer
+并冻结进 question_snapshot_json / study_attempt.standard_answer_json
 ```
 
 ```text
 刷新同一个 attempt：顺序不能变化
-再次做同一道 Question：可以重新随机
+再次做同一道 Question：可以重新随机，并尽量避免与上次完全相同
 ```
+
+判断题同样参与排列：`true` / `false` 的选项文字交换时，boolean standard 必须同步 remap。
+
+Hub Practice 与 Learner World / 副本共用同一套 variant / remap 规则
+（`QuestionAttemptVariantService`），不得各自实现一套：
+
+```text
+correct_option
+→ runtime derived answer
+→ variant（排列 + remap）
+→ study_attempt 冻结 standard
+→ 判题
+```
+
+Legacy `/games/**` 没有 Learner，保持既有兼容行为，不在本规则范围内。
 
 禁止 React 前端运行时临时 `Math.random()` shuffle，导致答案映射不稳定。
 
@@ -773,6 +862,25 @@ solution
 
 正式题**不支持** `blank`。原填空题必须先改造成可判定的正式题型，才能进入正式题库。
 判断题、单选、多选继续支持，选项每次发卷打乱。
+
+正式题型与答案内容事实（见 §6.1）：
+
+```text
+single_choice / multiple_choice / true_false → 唯一答案事实 option.correct_option
+solution                                     → 唯一内容事实 analysis_markdown
+```
+
+形态约束：
+
+```text
+single_choice   : 2–6 个选项，恰好 1 个正确
+multiple_choice : 2–6 个选项，至少 2 个正确
+true_false      : 选项键固定为 true / false，恰好 1 个正确
+solution        : 不提供客观题选项，analysis_markdown 非空
+```
+
+`QuestionContractValidator.validateFormal` 是运行期契约的唯一实现；迁移与导入
+必须与它保持同一套合法性标准，不允许出现“迁移放行、应用启动后判为非法”。
 
 ---
 
@@ -872,12 +980,33 @@ SameSite Cookie
 
 ```text
 global-knowledge-batch/v2
-global-question-batch/v3
+global-question-batch/v4    题目批次 canonical
+global-question-batch/v3    仅 compatibility
+global-question-batch/v2    仅 compatibility
 remedial-question-generation/v1
 remedial-question-batch/v1
 knowledge-guide-generation/v1
 knowledge-guide-batch/v1
 ```
+
+题目批次（`global-question-batch/v4`）规则：
+
+```text
+客观题：options[].correct 是唯一答案，禁止 standardAnswer
+综合题：analysis 是唯一内容，禁止 standardAnswer
+```
+
+v3 / v2 compatibility：
+
+```text
+客观题：standardAnswer 只做一致性校验，最终不持久化
+综合题：standardAnswer + analysis → SolutionAnalysisComposer → analysis_markdown
+最终 Formal Parent 的 standard_answer_json 一律为 NULL
+```
+
+管理后台题目导入 UI 允许 `v4` 与 `v3`，并把 `v4` 作为推荐格式；
+v3 必须真的可以提交，不能只在文案里写“兼容”。详细生成规范见
+[`docs/题库生成提示词.md`](./题库生成提示词.md)。
 
 新 schema 不要再把 `subject` 当正式业务边界。legacy 的 `subject_name` /
 `section_name` / `chapter_name` 可以继续留库兼容旧数据，但新逻辑不要依赖。
@@ -912,18 +1041,32 @@ JSON_TABLE
 已发布：
 
 ```text
-V1–V18 已冻结
+V1–V20 已冻结
 ```
 
 以后：
 
 ```text
 禁止修改历史 migration
-新 schema 变更只能 V19+
+新 schema 变更只能 V21+
 或新的 Java Flyway Migration
 ```
 
 `V13__flatten_book_chapters.sql` 属于既有发布历史，保持原样。
+
+`V20__formal_question_answer_contract.java` 是 Question Contract V2 的结构收口，
+只做确定性操作，不猜内容：
+
+```text
+校验 published Formal 题目仍满足正式契约（与 validateFormal 对齐）
+把旧综合题 standard answer 并进 analysis_markdown
+再次校验 published Formal 综合题 analysis 非空，否则 fail 并指出 Question ID
+standard_answer_json 改为可空
+Formal Parent 的 standard_answer_json 清为 NULL
+Remedial 子题的 legacy standard_answer_json 保持原样
+```
+
+迁移失败时必须报告具体 Question ID，不允许绕过迁移或直接删数据。
 
 真题 metadata 整理（`exam_year` 回填、408 `source_name` 补年份前缀）属于数据维护，
 不是 schema 变更，使用幂等脚本 `scripts/normalize-exam-metadata.sql` 执行，不新增 migration。

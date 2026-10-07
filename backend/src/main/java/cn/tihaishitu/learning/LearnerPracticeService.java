@@ -264,7 +264,7 @@ public class LearnerPracticeService {
             if (!snapshot.questionId().equals(questionId)) throw conflict("题目已经变化，请重新载入。");
             Instant occurredAt = Instant.now();
             if (!attempts.recordSelfAssessment(snapshot, assessment, occurredAt))
-                throw conflict("请先查看参考解答，或此题已经完成自评。");
+                throw conflict("请先查看参考解析，或此题已经完成自评。");
             grade(snapshot,assessment,"self",occurredAt,id);
         });
     }

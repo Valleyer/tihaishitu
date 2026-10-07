@@ -149,6 +149,7 @@ class WorldExamMetadataIntegrationTest {
                 VALUES (?,'数学一','real_exam','2014年全国硕士研究生招生考试数学一','2014-1',
                     'true_false','true_false','auto','世界题面','true','解析',2,'published',1)
                 """, id);
+        QuestionFixtures.trueFalseOptions(jdbc, id);
         jdbc.update("UPDATE question_resource SET exam_year=2014 WHERE id=?", id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
                 id, targetPoint);
@@ -165,6 +166,7 @@ class WorldExamMetadataIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'数学一','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)
                 """, id, content);
+        QuestionFixtures.trueFalseOptions(jdbc, id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
                 id, point);
     }

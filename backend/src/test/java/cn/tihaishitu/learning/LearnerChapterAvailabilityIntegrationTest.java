@@ -223,11 +223,24 @@ class LearnerChapterAvailabilityIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'数学一','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)
                 """, id, content);
+        // 正式题唯一答案事实是 option.correct_option，不再读取 standard_answer_json。
+        insertTrueFalseOptions(id);
         jdbc.update("""
                 INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order)
                 VALUES (?,?,'core',0)
                 """, id, point);
         return id;
+    }
+
+    private void insertTrueFalseOptions(String questionId) {
+        jdbc.update("""
+                INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order)
+                VALUES (?,?,?,?,?,?)
+                """, UUID.randomUUID().toString(), questionId, "true", "正确", true, 0);
+        jdbc.update("""
+                INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order)
+                VALUES (?,?,?,?,?,?)
+                """, UUID.randomUUID().toString(), questionId, "false", "错误", false, 1);
     }
 
     /** 走真实判分链路（QuestionAttemptStore.recordAnswer），错题本与最近一次判分结果才会同步写入。 */
