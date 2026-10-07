@@ -59,6 +59,7 @@ class UserDeletionIntegrationTest {
         jdbc.update("UPDATE study_attempt SET diagnosis_session_id=?,practice_session_id=? WHERE id=?", diagnosisId, practiceId, attemptId);
         jdbc.update("UPDATE learner_practice_session SET current_attempt_id=? WHERE id=?", attemptId, practiceId);
         jdbc.update("INSERT INTO answer_record(id,game_id,learner_id,world_id,attempt_id,question_id,submitted_answer_json,correct,grading_source) VALUES (?,NULL,?,'ancient-official',?,?, 'false',FALSE,'automatic')", UUID.randomUUID().toString(), targetId, attemptId, questionId);
+        jdbc.update("INSERT INTO question_report(id,learner_id,question_id,attempt_id,reason,status) VALUES (?,?,?,?, 'other','open')", UUID.randomUUID().toString(), targetId, questionId, attemptId);
         jdbc.update("INSERT INTO learner_knowledge_state(learner_id,knowledge_point_id,mastery_score,stability_days,target_difficulty,evidence_count,correct_streak,wrong_streak,last_outcome,model_version,revision) VALUES (?,?,40,2,2,1,0,1,'wrong','v1',1)", targetId, pointId);
         jdbc.update("INSERT INTO learner_knowledge_evidence(id,learner_id,knowledge_point_id,attempt_id,question_id,world_id,outcome,grading_source,evidence_mode,question_difficulty,quality,learning_rate,effective_mastery_before,mastery_after,stability_before,stability_after,target_difficulty_before,target_difficulty_after,model_version,occurred_at) VALUES (?,?,?,?,?,'ancient-official','wrong','automatic','target',2,0,0.1,50,40,2,2,2,2,'v1',CURRENT_TIMESTAMP)", UUID.randomUUID().toString(), targetId, pointId, attemptId, questionId);
         jdbc.update("INSERT INTO learner_world_state(learner_id,world_id,state_json,revision) VALUES (?,'ancient-official','{}',1)", targetId);
@@ -77,6 +78,7 @@ class UserDeletionIntegrationTest {
         }
         assertThat(count("SELECT COUNT(*) FROM learner_practice_scope WHERE session_id=?", practiceId)).isZero();
         assertThat(count("SELECT COUNT(*) FROM learner_diagnosis_dependency WHERE diagnosis_id=?", diagnosisId)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM question_report WHERE learner_id=?", targetId)).isZero();
         assertThat(count("SELECT COUNT(*) FROM app_user WHERE id=?", legacyId)).isZero();
         assertThat(count("SELECT COUNT(*) FROM question_resource WHERE id=?", questionId)).isOne();
         assertThat(count("SELECT COUNT(*) FROM global_knowledge_point WHERE id IN (?,?)", pointId, targetPointId)).isEqualTo(2);

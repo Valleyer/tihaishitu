@@ -140,6 +140,7 @@ export interface Result {
   changes: Change[];
   assessment?: Assessment;
   gradingSource?: "automatic" | "self";
+  noIdea?: boolean;
 }
 /** 综合题 reveal 只返回一份完整解析，不再有独立参考答案。 */
 export interface RevealedAnswer {
@@ -281,6 +282,7 @@ export interface GameApi {
   getGame(id: string): Promise<Game>;
   deleteGame(id: string): Promise<void>;
   answer(id: string, input: AnswerInput): Promise<Game>;
+  noIdea(id: string, attemptId: string, questionId: string): Promise<Game>;
   reveal(id: string, attemptId: string, questionId: string): Promise<Game>;
   selfAssess(
     id: string,
@@ -288,6 +290,7 @@ export interface GameApi {
     questionId: string,
     assessment: Assessment,
   ): Promise<Game>;
+  reportQuestion(attemptId: string, reason: string, comment: string): Promise<void>;
   next(id: string, attemptId: string, reviewOnly?: boolean): Promise<Game>;
   choose(id: string, eventId: string, choiceId: string): Promise<Game>;
   saveNote(id: string, questionId: string, note: string): Promise<Game>;

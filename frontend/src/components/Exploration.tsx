@@ -197,7 +197,7 @@ export function ActivityShelf({
   return (
     <>
       <p className="hint">
-        点一盏灯，选一卷想读的书。每轮五题；学识随作答积累，六十分获得基础奖励，满分获得完美奖励。
+        点一盏灯，选一卷想读的书。每轮五题；达到通关要求即可获得本轮奖励，满分不再叠加额外档位。
       </p>
       <div className="activity-shelf">
         {activities
@@ -266,7 +266,7 @@ export function ActivityDetail({
         {activity.tiers.filter((t) => t.minScore >= 60).map((t) => (
           <div key={t.minScore}>
             <strong>
-              {t.minScore} 分<small>{t.label}</small>
+              通关奖励<small>达到 {t.minScore} 分</small>
             </strong>
             <span>
               {rewardLines(t.rewards).join(" · ") || "保留本轮学识与错题记录"}

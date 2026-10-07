@@ -504,6 +504,9 @@ export function createLocalApi(
 
       return persist(db, game);
     },
+    async noIdea() {
+      throw new Error("“我没思路”只在联机正式学习中可用。");
+    },
     async reveal(id, attemptId, questionId) {
       const db = read(),
         game = get(db, id),
@@ -573,6 +576,9 @@ export function createLocalApi(
       }
       settleRunAnswer(game, correct, full.id);
       return persist(db, game);
+    },
+    async reportQuestion() {
+      throw new Error("题目反馈只在联机正式学习中可用。");
     },
     async next(id, attemptId, reviewOnly = false) {
       const db = read();

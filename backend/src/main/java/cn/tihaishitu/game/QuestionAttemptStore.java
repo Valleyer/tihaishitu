@@ -170,11 +170,11 @@ public class QuestionAttemptStore {
         if (changed == 0) return false;
         jdbc.update("""
                 INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
-                                          submitted_answer_json, correct, grading_source, assessment)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'automatic', ?)
+                                          submitted_answer_json, correct, grading_source, assessment, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'automatic', ?, ?)
                 """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
                 snapshot.id(), snapshot.questionId(),
-                json(submitted), correct, assessment);
+                json(submitted), correct, assessment, Timestamp.from(occurredAt));
         recordWrongQuestion(snapshot, assessment, occurredAt);
         return true;
     }
@@ -207,12 +207,33 @@ public class QuestionAttemptStore {
         if (changed == 0) return false;
         jdbc.update("""
                 INSERT INTO answer_record(id, game_id, learner_id, world_id, attempt_id, question_id,
-                                          submitted_answer_json, correct, grading_source, assessment)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'self', ?)
+                                          submitted_answer_json, correct, grading_source, assessment, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'self', ?, ?)
                 """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
                 snapshot.id(), snapshot.questionId(),
-                json(assessment), correct, assessment);
+                json(assessment), correct, assessment, Timestamp.from(occurredAt));
         recordWrongQuestion(snapshot, assessment, occurredAt);
+        return true;
+    }
+
+    /** 正式“我没思路”评分；JSON null 明确保留“没有提交答案”的事实。 */
+    public boolean recordNoIdea(Snapshot snapshot, Instant occurredAt) {
+        if (!java.util.Set.of("auto", "self_assessment").contains(snapshot.gradingMode()))
+            throw new ApiException(HttpStatus.CONFLICT, "这道题当前不能使用我没思路。");
+        if (!("active".equals(snapshot.status()) || ("self_assessment".equals(snapshot.gradingMode())
+                && "revealed".equals(snapshot.status())))) return false;
+        int changed = jdbc.update("""
+                UPDATE study_attempt SET status='graded', answered_at=?, grading_source='automatic', assessment='wrong'
+                 WHERE id=? AND (status='active' OR (grading_mode='self_assessment' AND status='revealed'))
+                """, Timestamp.from(occurredAt), snapshot.id());
+        if (changed == 0) return false;
+        jdbc.update("""
+                INSERT INTO answer_record(id,game_id,learner_id,world_id,attempt_id,question_id,
+                                          submitted_answer_json,correct,grading_source,assessment,created_at)
+                VALUES (?,?,?,?,?,?,'null',FALSE,'automatic','wrong',?)
+                """, UUID.randomUUID().toString(), snapshot.gameId(), snapshot.learnerId(), snapshot.worldId(),
+                snapshot.id(), snapshot.questionId(), Timestamp.from(occurredAt));
+        recordWrongQuestion(snapshot, "wrong", occurredAt);
         return true;
     }
 

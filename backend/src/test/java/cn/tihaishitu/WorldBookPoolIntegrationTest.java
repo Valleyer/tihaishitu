@@ -209,6 +209,30 @@ class WorldBookPoolIntegrationTest {
     }
 
     @Test
+    void worldNoIdeaGradesWrongAndAdvancesOneFormalSlot() throws Exception {
+        Cookie cookie = register("world-no-idea");
+        String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='world-no-idea'", String.class);
+        String book = book("无思路文集"); String point = point("NO-IDEA", 0); bookPoint(book, point, 0);
+        String question = question(point, "core", null); selectBook(learner, book);
+        mvc.perform(post("/api/v1/worlds/ancient-official/initialize").with(csrf()).cookie(cookie)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"characterName\":\"学子\",\"gender\":\"男\",\"origin\":\"寒门读书人\"}"))
+                .andExpect(status().isCreated());
+        JsonNode game = mapper.readTree(mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(cookie)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"activityId\":\"read\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String attempt = game.path("attempt").path("id").asText();
+        game = mapper.readTree(mvc.perform(post("/api/v1/worlds/ancient-official/answers/no-idea").with(csrf()).cookie(cookie)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"attemptId\":\"%s\",\"questionId\":\"%s\"}".formatted(attempt, question)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(game.path("attempt").path("result").path("noIdea").asBoolean()).isTrue();
+        assertThat(game.path("adventure").path("run").path("knowledgePointIndex").asInt()).isOne();
+        assertThat(game.path("adventure").path("run").path("status").asText()).isEqualTo("settled");
+        assertThat(jdbc.queryForObject("SELECT submitted_answer_json FROM answer_record WHERE attempt_id=?", String.class, attempt)).isEqualTo("null");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_wrong_question WHERE last_wrong_attempt_id=?", Integer.class, attempt)).isOne();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_diagnosis_session WHERE root_attempt_id=?", Integer.class, attempt)).isZero();
+    }
+
+    @Test
     void worldRunEndsCleanlyWhenTheBookHasFewerQuestionsThanRounds() throws Exception {
         Cookie cookie = register("world-short");
         String learner = jdbc.queryForObject(

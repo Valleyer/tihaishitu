@@ -232,6 +232,12 @@ export const platformApi = {
     request<PracticeSession>(`/learner/practice-sessions/${encodeURIComponent(session.id)}/self-assess`, "POST", {
       attemptId: session.currentAttempt.id, questionId: session.currentAttempt.question.id, assessment,
     }),
+  noIdeaPractice: (session: PracticeSession) =>
+    request<PracticeSession>(`/learner/practice-sessions/${encodeURIComponent(session.id)}/no-idea`, "POST", {
+      attemptId: session.currentAttempt.id, questionId: session.currentAttempt.question.id,
+    }),
+  reportQuestion: (attemptId: string, reason: string, comment: string) =>
+    request<{id:string;status:string}>("/learner/question-reports", "POST", { attemptId, reason, comment }),
   nextPractice: (id: string) =>
     request<PracticeSession>(`/learner/practice-sessions/${encodeURIComponent(id)}/next`, "POST"),
   endPractice: (id: string) =>

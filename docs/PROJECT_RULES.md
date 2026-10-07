@@ -1,4 +1,4 @@
-# 万境求知项目长期规则
+# 万境书院项目长期规则
 
 > 本文件是整个项目**跨 PR 长期规则的唯一主入口**。
 >
@@ -23,7 +23,7 @@
 项目中文名：
 
 ```text
-万境求知
+万境书院
 ```
 
 主学习中枢：
@@ -1220,14 +1220,14 @@ JSON_TABLE
 已发布：
 
 ```text
-V1–V21 已冻结
+V1–V22 已冻结
 ```
 
 以后：
 
 ```text
 禁止修改历史 migration
-新 schema 变更只能 V22+
+新 schema 变更只能 V23+
 或新的 Java Flyway Migration
 ```
 
@@ -1259,6 +1259,20 @@ study_attempt.draw_reason VARCHAR(24) NULL
 
 它必须兼容 MySQL 5.7；`draw_mode` 由服务端 selection strategy 写入，前端不得提交。
 完整取值与语义见 [`question-practice-policy.md`](./question-practice-policy.md) §8。
+
+`V22__question_report.sql` 新增 `question_report`。Learner 只提交 Attempt ID、问题类型和可选备注；
+服务端必须从属于当前 Learner 的 Formal Parent Attempt 派生 learner / question。每个
+`Learner × Attempt` 最多一条反馈。REVIEWER / ADMIN 可分页查看并标记 `resolved` 或
+`dismissed`；反馈不改变 Attempt、Mastery、Wrong Book 或选题状态。Learner / Attempt
+删除时反馈级联清理，Question 仍按全局资产规则禁止被反馈记录级联删除。
+
+正式训练支持独立服务端动作“我没思路”：objective 与 solution 都直接 graded wrong，
+submitted answer 保存 JSON `null`，正常写 Wrong Book、Question Mastery 与 Evidence，并推进
+一个正式题 slot；不得伪造选项，也不得进入 Diagnosis / Remedial。
+
+repeatable Activity 的 canonical runtime 只有 0 分档与一个 pass reward 档，100 分不再叠加
+奖励。task 继续使用 `completionReward` 保留关键 item / flag / title。World 题面把知识点、
+真题标签、题号与来源放在同一 metadata ribbon，冻结来源只显示一次。
 
 真题 metadata 整理（`exam_year` 回填、408 `source_name` 补年份前缀）属于数据维护，
 不是 schema 变更，使用幂等脚本 `scripts/normalize-exam-metadata.sql` 执行，不新增 migration。

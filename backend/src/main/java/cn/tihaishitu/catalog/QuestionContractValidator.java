@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public final class QuestionContractValidator {
-    public static final String BLANK_ERROR = "万境求知不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。";
+    public static final String BLANK_ERROR = "万境书院不支持填空题；原填空题必须在生成阶段转换为单选题或多选题。";
     public record Option(String key, String text, boolean correct, int sortOrder) {
         public Option(String key, String text, boolean correct) {
             this(key, text, correct, 0);

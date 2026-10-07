@@ -14,8 +14,8 @@
     <groupId>cn.tihaishitu</groupId>
     <artifactId>tihaishitu-backend</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>万境求知后端</name>
-    <description>万境求知本地 Spring Boot 服务</description>
+    <name>万境书院后端</name>
+    <description>万境书院本地 Spring Boot 服务</description>
 
     <properties>
         <java.version>17</java.version>

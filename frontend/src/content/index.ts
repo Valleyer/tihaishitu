@@ -78,24 +78,6 @@ function mergeRewards(values: (LegacyRewards | undefined)[]): Rewards {
   return merged;
 }
 
-function mergeRepeatableFirstRewards(values: (LegacyRewards | undefined)[]): Rewards | undefined {
-  const merged: Rewards = {};
-  for (const source of values) {
-    const reward = normalizeReward(source);
-    for (const key of ["knowledge", "coins", "reputation"] as const)
-      if (reward[key]) merged[key] = (merged[key] || 0) + reward[key]!;
-    for (const key of ["attributes", "favorability", "items"] as const)
-      for (const [id, amount] of Object.entries(reward[key] || {})) {
-        merged[key] ??= {};
-        merged[key]![id] = (merged[key]![id] || 0) + amount;
-      }
-    if (reward.flags)
-      merged.flags = [...new Set([...(merged.flags || []), ...reward.flags])];
-    if (reward.title) merged.title = reward.title;
-  }
-  return Object.keys(merged).length ? merged : undefined;
-}
-
 function normalizeActivity(activity: Activity): Activity {
   const rules = adventureData.answerRules;
   const tiers = [...activity.tiers].sort((a, b) => a.minScore - b.minScore);
@@ -152,20 +134,11 @@ function normalizeActivity(activity: Activity): Activity {
       {
         ...base,
         minScore: rules.ordinaryPassScore,
-        label: "基础收获",
+        label: "通关奖励",
         rewards: normalizeReward(base.rewards as LegacyRewards),
         firstRewards: base.firstRewards
           ? normalizeReward(base.firstRewards as LegacyRewards)
           : undefined,
-      },
-      {
-        ...perfect,
-        minScore: rules.perfectScore,
-        label: "圆满收获",
-        rewards: normalizeReward(perfect.rewards as LegacyRewards),
-        firstRewards: mergeRepeatableFirstRewards(
-          tiers.filter((tier) => tier.minScore > 60).map((tier) => tier.firstRewards as LegacyRewards),
-        ),
       },
     ],
   };

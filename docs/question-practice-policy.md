@@ -92,6 +92,11 @@ wrong / partial → learner_wrong_question active
 
 一次 Attempt 仍只给冻结的 `targetKnowledgePointId` 记账，不因为题目多 KP 同时加多个 KP。
 
+“我没思路”是四模式共用的正式 grading action，不是第五种选题模式。它不提交假答案，
+直接把当前 Formal Parent Attempt 判为 wrong，正常推进本模式的一个正式 slot，并写入
+Wrong Book / Mastery / Evidence；solution 在 active 或 revealed 状态均可使用。它同样不触发
+Diagnosis / Remedial。
+
 ---
 
 ## 3. RANDOM
@@ -503,10 +508,9 @@ KNOWLEDGE 只限定建立 Session 时冻结的 target KP
 
 ---
 
-## 10. 本专题明确不做
+## 10. 本专题边界
 
 ```text
-“我没思路”按钮与 API（未来等价于 wrong）
 题目报错 / report
 新的 Diagnosis 设计
 删除 diagnosis / remedial 数据库

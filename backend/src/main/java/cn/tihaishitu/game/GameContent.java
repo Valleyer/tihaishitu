@@ -80,18 +80,8 @@ public class GameContent {
             ArrayNode normalized = mapper.createArrayNode();
             JsonNode zero = tier(original, 0, false);
             JsonNode base = tier(original, 60, false);
-            JsonNode perfect = tier(original, 100, true);
             if (!zero.isMissingNode()) normalized.add(normalizeTier((ObjectNode) zero));
             if (!base.isMissingNode()) normalized.add(normalizeTier((ObjectNode) base));
-            if (!perfect.isMissingNode()) {
-                ObjectNode perfectCopy = normalizeTier((ObjectNode) perfect);
-                ObjectNode mergedFirst = mapper.createObjectNode();
-                for (JsonNode item : original) if (item.path("minScore").asInt() > 60)
-                    mergeRewardSum(mergedFirst, normalizeReward(item.path("firstRewards")));
-                if (!mergedFirst.isEmpty()) perfectCopy.set("firstRewards", mergedFirst);
-                else perfectCopy.remove("firstRewards");
-                normalized.add(perfectCopy);
-            }
             value.set("tiers", normalized);
             return value;
         }

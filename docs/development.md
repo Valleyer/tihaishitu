@@ -16,7 +16,7 @@
 
 默认世界由 components/Exploration.tsx 渲染，题面只有主动开始或恢复活动时展示。WorldMap 负责选择目的地，真正的门槛校验在引擎与 API。
 
-engine/AdventureEngine.ts 统一负责活动门槛、发起、整轮评分、基础奖励、首档奖励、地图移动、人物交流、关系礼物和道具。domain/adventure.ts 是新契约；详细配置见 [探索手册](adventure-guide.md)。
+engine/AdventureEngine.ts 统一负责活动门槛、发起、整轮评分、通关奖励、地图移动、人物交流、关系礼物和道具。domain/adventure.ts 是新契约；详细配置见 [探索手册](adventure-guide.md)。
 
 一次操作仍由 api/local/store.ts 读取、结算并保存。每题保留学习与学识结算；整轮最后一题才调用 settleRunAnswer 发好感、银两与道具。run.status=settled 后重复请求直接返回，finishActivity 只清理界面行程，不再发奖。
 

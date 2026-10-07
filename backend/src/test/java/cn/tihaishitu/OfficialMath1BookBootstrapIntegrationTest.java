@@ -135,12 +135,12 @@ class OfficialMath1BookBootstrapIntegrationTest {
 
             bootstrap.bootstrapAfterCatalogMigration();
 
-            assertThat(description()).isEqualTo("万境求知官方维护的一站式数学一学习书籍。");
+            assertThat(description()).isEqualTo("万境书院官方维护的一站式数学一学习书籍。");
             assertThat(revision()).isEqualTo(4);
 
             bootstrap.bootstrapAfterCatalogMigration();
 
-            assertThat(description()).isEqualTo("万境求知官方维护的一站式数学一学习书籍。");
+            assertThat(description()).isEqualTo("万境书院官方维护的一站式数学一学习书籍。");
             assertThat(revision()).isEqualTo(4);
         }
     }

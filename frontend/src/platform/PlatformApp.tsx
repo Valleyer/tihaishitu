@@ -74,7 +74,7 @@ function AuthPage({ register }: { register: boolean }) {
   };
   return <main className="auth-page">
     <form className="auth-card" onSubmit={submit}>
-      <HubLink className="auth-brand" href="/">万境求知</HubLink>
+      <HubLink className="auth-brand" href="/"><img src="/brand-logo.png" alt="" />万境书院</HubLink>
       <div><h1>{register ? "创建学习账号" : "欢迎回来"}</h1><p className="auth-subtitle">{register ? "建立属于你的统一学习身份" : "继续你的学习旅程"}</p></div>
       <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required /></label>
       {register && <label>显示名称<input value={displayName} onChange={e => setDisplayName(e.target.value)} /></label>}
@@ -95,7 +95,7 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
   return <div className="learning-hub">
-    <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><span aria-hidden="true" />万境求知</HubLink>
+    <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><img src="/brand-logo.png" alt="" />万境书院</HubLink>
       <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href}>{label}</HubLink>)}</nav>
       <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account">{data.learner.displayName}</HubLink></div></div>
     </header>
@@ -287,6 +287,7 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
 
 export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const [session, setSession] = useState<PracticeSession>(); const [selected, setSelected] = useState<string[]>([]); const [error, setError] = useState("");
+  const [reportOpen,setReportOpen]=useState(false); const [reportReason,setReportReason]=useState("content_error"); const [reportComment,setReportComment]=useState(""); const [reportStatus,setReportStatus]=useState("");
   const load = () => platformApi.practice(id).then(value => { setSession(value); setSelected([]); }).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, [id]);
   if (!session) return <Shell data={data}><main className="hub-main narrow"><p>{error || "正在恢复专项练习…"}</p></main></Shell>;
@@ -310,11 +311,13 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
     {tags.length>0&&<div className="tag-row">{tags.map(tag=><HubLink className={`knowledge-tag ${tag.role||"core"}`} href={`/knowledge/${tag.id}`} key={tag.id}>{tag.name}</HubLink>)}</div>}
     <h1>{attempt.evidenceMode === "remedial" ? "分步讲练" : attempt.evidenceMode === "training" ? "补救训练" : "正式练习"}</h1>{error && <p className="hub-error">{error}</p>}
     <section className="hub-panel rich"><RichText>{question.question}</RichText><div className="practice-options">{Object.entries(practiceOptions).map(([key, text]) => <button className={selected.includes(key) ? "selected" : ""} disabled={attempt.status !== "active"} key={key} onClick={() => toggle(key)}><b>{key}.</b><RichText inline>{text}</RichText></button>)}</div></section>
-    {attempt.status === "active" && question.gradingMode === "auto" && <button className="hub-primary" disabled={!selected.length} onClick={submit}>提交答案</button>}
-    {attempt.status === "active" && question.gradingMode === "self_assessment" && <button className="hub-primary" onClick={() => update(platformApi.revealPractice(session))}>查看参考解析并自评</button>}
+    {attempt.status === "active" && question.gradingMode === "auto" && <div className="practice-actions"><button onClick={()=>update(platformApi.noIdeaPractice(session))}>我没思路</button><button className="hub-primary" disabled={!selected.length} onClick={submit}>提交答案</button></div>}
+    {attempt.status === "active" && question.gradingMode === "self_assessment" && <div className="practice-actions"><button onClick={()=>update(platformApi.noIdeaPractice(session))}>我没思路</button><button className="hub-primary" onClick={() => update(platformApi.revealPractice(session))}>查看参考解析并自评</button></div>}
     {attempt.status === "graded" && <section className={`practice-result ${assessment}`}><h2>{assessment === "correct" ? "✓ 回答正确" : assessment === "partial" ? "△ 部分正确" : "✕ 回答错误"}</h2><p>{session.flowComplete ? session.canRepeat ? (session.intent === "wrong_drill" ? "还有没练过的错题，可以继续下一道。" : session.intent === "chapter_drill" ? "章节还有后续题目，可以继续下一道。" : "当前知识点流程已经完成。") : "本轮可练题目已完成" : "继续下一题。"}</p><div className="practice-actions">{session.flowComplete ? <>{session.canRepeat&&<button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>下一道题</button>}<button onClick={finish}>{session.intent === "wrong_review" || session.intent === "wrong_drill" ? "返回错题列表" : "结束专项"}</button></> : <button className="hub-primary" onClick={() => update(platformApi.nextPractice(id))}>继续下一题</button>}</div></section>}
-    {attempt.status === "revealed" && <>{answerDetails}<div className="practice-assessment"><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div></>}
+    {attempt.status === "revealed" && <>{answerDetails}<div className="practice-assessment"><button onClick={()=>update(platformApi.noIdeaPractice(session))}>我没思路</button><button onClick={() => update(platformApi.assessPractice(session, "correct"))}>完全正确</button><button onClick={() => update(platformApi.assessPractice(session, "partial"))}>部分正确</button><button onClick={() => update(platformApi.assessPractice(session, "wrong"))}>需要重学</button></div></>}
     {attempt.status === "graded" && answerDetails}
+    <button className="text-button question-report-trigger" onClick={()=>setReportOpen(true)}>题目有误？</button>
+    {reportOpen&&<Modal title="题目有误？" subtitle="反馈不会影响本次作答" close={()=>setReportOpen(false)}><form className="question-report-form" onSubmit={event=>{event.preventDefault();setReportStatus("提交中…");platformApi.reportQuestion(attempt.id,reportReason,reportComment).then(()=>setReportStatus("已收到反馈")).catch(reason=>setReportStatus((reason as Error).message))}}><label>问题类型<select value={reportReason} onChange={event=>setReportReason(event.target.value)}><option value="content_error">题干有误</option><option value="answer_error">答案有误</option><option value="analysis_error">解析有误</option><option value="format_error">排版有误</option><option value="other">其他</option></select></label><label>补充说明（可空）<textarea maxLength={1000} value={reportComment} onChange={event=>setReportComment(event.target.value)}/></label><button className="hub-primary" disabled={reportStatus==="提交中…"||reportStatus==="已收到反馈"}>提交</button>{reportStatus&&<p role="status">{reportStatus}</p>}</form></Modal>}
   </main></Shell>;
 }
 
@@ -380,7 +383,7 @@ function AuthenticatedPlatform() {
   const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
   useEffect(() => { void load(); }, []);
   if (!data) return <main className="hub-loading">{error || "正在载入万境中枢…"}</main>;
-  if (path === "/worlds/ancient-official") return <div className="world-shell"><HubLink className="world-shell-home" href="/">← 万境中枢</HubLink><App /></div>;
+  if (path === "/worlds/ancient-official") return <div className="world-shell"><App /></div>;
   if (path === "/study") return <StudyPage data={data} reload={load} />;
   if (path.startsWith("/progress/books/") && path.includes("/chapters/")) { const parts=path.split("/"); return <ProgressChapterPage data={data} bookId={parts[3]} chapterId={parts[5]} />; }
   if (path.startsWith("/progress/books/")) return <ProgressBookPage data={data} bookId={path.split("/")[3]} />;

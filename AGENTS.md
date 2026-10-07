@@ -1,4 +1,4 @@
-# 万境求知项目 Agent 开发规则
+# 万境书院项目 Agent 开发规则
 
 本仓库采用：
 
@@ -20,19 +20,19 @@ PR 评论或某个已结束对话里的上下文作为长期事实来源。
 ## 项目位置
 
 ```text
-产品名称：万境求知
+产品名称：万境书院
 本地项目目录：E:\题海仕途
 远程仓库：https://github.com/Valleyer/tihaishitu
 GitHub Repository：Valleyer/tihaishitu
 ```
 
-上面的“万境求知 / 题海仕途 / tihaishitu”指向同一个项目，不是三个项目：
-万境求知是产品名，题海仕途是本地目录名，`tihaishitu` 是 GitHub 仓库名。
+上面的“万境书院 / 题海仕途 / tihaishitu”指向同一个项目，不是三个项目：
+万境书院是产品名，题海仕途是本地目录名，`tihaishitu` 是 GitHub 仓库名。
 
 品牌名与技术身份分离：产品改名不重命名仓库、目录、Java package、
 数据库 schema、World ID、API 路由、数据库表名、Flyway migration 文件名、
 UUID 或兼容 localStorage key。旧的展示名“知境 / 知境中枢”已统一改为
-“万境求知 / 万境中枢”；`docs/archive/**` 与历史记录保留旧品牌作为历史事实。
+“万境书院 / 万境中枢”；`docs/archive/**` 与历史记录保留旧品牌作为历史事实。
 
 具备本地文件系统访问能力的 Agent，默认以：
 
@@ -271,6 +271,6 @@ Agent 最终报告必须明确说明：
 - 错题是永久资产，答对不自动移除，只有用户手动移出；
 - 业务日统一 `Asia/Shanghai`，不使用 UTC 自然日；
 - 生产数据库必须兼容 MySQL 5.7，不使用 MySQL 8 专属语法；
-- `V1–V21` migration 已冻结，新 schema 变更只能 `V22+` 或新的 Java Flyway migration；
+- `V1–V22` migration 已冻结，新 schema 变更只能 `V23+` 或新的 Java Flyway migration；
 - 正式分页列表统一每页 20 条，不提供 20/50/100 自选控件；
 - 选项随机在 attempt 级完成并冻结答案映射，禁止前端运行时 `Math.random()` shuffle。

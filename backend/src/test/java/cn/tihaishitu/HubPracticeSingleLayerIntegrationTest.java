@@ -161,6 +161,50 @@ class HubPracticeSingleLayerIntegrationTest {
                         .with(csrf()).cookie(cookie)).andExpect(status().isConflict());
     }
 
+    @Test void objectiveNoIdeaIsFormalWrongWithoutFakeAnswerOrDiagnosis() throws Exception {
+        Fixture fixture = compositeFixture("true_false");
+        Cookie cookie = register("no-idea-objective", fixture.book());
+        JsonNode session = startKnowledge(cookie, fixture.target());
+        String sessionId = session.path("id").asText();
+        String attemptId = session.path("currentAttempt").path("id").asText();
+        session = json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/no-idea", sessionId)
+                        .with(csrf()).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\"}"
+                                .formatted(attemptId, fixture.question())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(session.path("currentAttempt").path("assessment").asText()).isEqualTo("wrong");
+        assertThat(jdbc.queryForObject("SELECT submitted_answer_json FROM answer_record WHERE attempt_id=?",
+                String.class, attemptId)).isEqualTo("null");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?",
+                Integer.class, attemptId)).isOne();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_wrong_question WHERE last_wrong_attempt_id=?",
+                Integer.class, attemptId)).isOne();
+        assertNoDiagnosisNesting(sessionId, attemptId);
+        mvc.perform(post("/api/v1/learner/practice-sessions/{id}/no-idea", sessionId).with(csrf()).cookie(cookie)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"attemptId\":\"%s\",\"questionId\":\"%s\"}"
+                        .formatted(attemptId, fixture.question()))).andExpect(status().isConflict());
+    }
+
+    @Test void solutionNoIdeaWorksBeforeAndAfterReveal() throws Exception {
+        for (boolean revealFirst : new boolean[]{false, true}) {
+            Fixture fixture = compositeFixture("solution");
+            Cookie cookie = register("no-idea-solution-" + revealFirst, fixture.book());
+            JsonNode session = startKnowledge(cookie, fixture.target());
+            String sessionId = session.path("id").asText(); String attemptId = session.path("currentAttempt").path("id").asText();
+            if (revealFirst) mvc.perform(post("/api/v1/learner/practice-sessions/{id}/reveal", sessionId)
+                    .with(csrf()).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\"}".formatted(attemptId, fixture.question())))
+                    .andExpect(status().isOk());
+            session = json(mvc.perform(post("/api/v1/learner/practice-sessions/{id}/no-idea", sessionId)
+                    .with(csrf()).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\"}".formatted(attemptId, fixture.question())))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertThat(session.path("currentAttempt").path("assessment").asText()).isEqualTo("wrong");
+            assertThat(session.path("currentAttempt").path("explanation").asText()).contains("解析");
+            assertNoDiagnosisNesting(sessionId, attemptId);
+        }
+    }
+
     /** 普通正式训练里不允许出现任何诊断会话、诊断题、training / remedial 子题。 */
     private void assertNoDiagnosisNesting(String sessionId, String rootAttemptId) {
         assertThat(jdbc.queryForObject(

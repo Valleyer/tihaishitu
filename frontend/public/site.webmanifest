@@ -1,0 +1,13 @@
+{
+  "name": "万境书院",
+  "short_name": "万境书院",
+  "description": "以知识掌握为核心，在不同世界中学习、练习与成长。",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#263b77",
+  "background_color": "#f4f6fb",
+  "icons": [
+    {"src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

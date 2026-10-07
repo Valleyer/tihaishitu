@@ -64,6 +64,12 @@ public class LearnerPracticeController {
         return practice.selfAssess(id, request.attemptId(), request.questionId(), request.assessment());
     }
 
+    @PostMapping("/practice-sessions/{id}/no-idea")
+    LearnerPracticeService.SessionView noIdea(@PathVariable String id,
+                                               @Valid @RequestBody AttemptRequest request) {
+        return practice.noIdea(id, request.attemptId(), request.questionId());
+    }
+
     @PostMapping("/practice-sessions/{id}/next")
     LearnerPracticeService.SessionView next(@PathVariable String id) { return practice.next(id); }
 

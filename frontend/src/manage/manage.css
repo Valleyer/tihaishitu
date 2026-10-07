@@ -183,3 +183,8 @@
 @media(max-width:1250px){.manage-toolbar.knowledge-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.manage-toolbar.knowledge-filters>input{grid-column:1/-1}.manage-toolbar.knowledge-filters>button{grid-column:auto}.create-book-form,.create-chapter-form{grid-template-columns:1fr 1fr}}
 
 .create-chapter-form { grid-template-columns: minmax(150px,.8fr) minmax(180px,1fr) auto; }
+.report-cols { grid-template-columns: 1.2fr 1.8fr .8fr 1fr 1.2fr; }
+.report-cols > span { display: grid; gap: 5px; min-width: 0; }
+.report-cols small { color: var(--muted, #64748b); white-space: normal; }
+.report-cols a { color: #4f46e5; }
+.manage-sidebar > header img { width: 46px; height: 46px; object-fit: contain; display: block; margin-bottom: 8px; }

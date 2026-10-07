@@ -1,6 +1,6 @@
-# 万境求知 · 生产部署说明
+# 万境书院 · 生产部署说明
 
-本文件描述把万境求知部署到 Linux 服务器的完整流程：Nginx 托管前端静态文件，
+本文件描述把万境书院部署到 Linux 服务器的完整流程：Nginx 托管前端静态文件，
 `/api` 反向代理到本机 Spring Boot，Spring Boot 连接 MySQL 5.7。
 
 ```text
@@ -375,7 +375,7 @@ curl -fsS http://<SERVER_IP>/actuator/health  # 若已放开该 location
 GET /actuator/health
 首页 /
 登录
-万境中枢加载（品牌文案显示“万境求知 / 万境中枢”）
+万境中枢加载（品牌文案显示“万境书院 / 万境中枢”）
 Study 章节练习
 KnowledgePoint 专项
 错题快练

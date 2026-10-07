@@ -49,6 +49,10 @@ public class WorldController {
     @PostMapping("/ancient-official/answers") public ObjectNode answer(@Valid @RequestBody AnswerRequest body) {
         return inWorld(() -> actions.answer(WorldRegistry.ANCIENT_OFFICIAL, body));
     }
+    @PostMapping("/ancient-official/answers/no-idea") public ObjectNode noIdea(@RequestBody JsonNode body) {
+        return inWorld(() -> actions.noIdea(WorldRegistry.ANCIENT_OFFICIAL,
+                required(body, "attemptId"), required(body, "questionId")));
+    }
     @PostMapping("/ancient-official/answers/reveal") public ObjectNode reveal(@RequestBody JsonNode body) {
         return inWorld(() -> actions.reveal(WorldRegistry.ANCIENT_OFFICIAL, required(body, "attemptId"), required(body, "questionId")));
     }

@@ -1,4 +1,4 @@
-const SAME_ORIGIN_MESSAGE = "万境求知 Learner Session 要求浏览器 API 与前端同源；请将 VITE_API_BASE_URL 设为 /api/v1，并通过 Vite / 反向代理转发。";
+const SAME_ORIGIN_MESSAGE = "万境书院 Learner Session 要求浏览器 API 与前端同源；请将 VITE_API_BASE_URL 设为 /api/v1，并通过 Vite / 反向代理转发。";
 
 export function resolveApiBaseUrl(configured: string | undefined, pageOrigin: string): string {
   const value = (configured?.trim() || "/api/v1").replace(/\/$/, "");

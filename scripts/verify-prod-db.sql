@@ -1,5 +1,5 @@
 -- =============================================================================
--- 万境求知 · 导入生产库后的只读验证（post-import verification）
+-- 万境书院 · 导入生产库后的只读验证（post-import verification）
 --
 -- 用途：mysqldump 导入服务器 MySQL 5.7 之后、启动生产 Spring Boot 之前运行。
 --       确认迁移完整、核心数据已迁入，且不是意外空库 / seed-only 状态。
@@ -184,12 +184,12 @@ SELECT id, name, description, enabled, weight_value, revision
  WHERE id = '628a3d64-c820-4d1f-b482-8e2715bb7cf2';
 
 -- 期望 brand_description = OK_BRAND：应用启动后 OfficialMath1BookBootstrap
--- 会把旧品牌占位说明幂等升级为“万境求知官方维护的一站式数学一学习书籍。”。
+-- 会把旧品牌占位说明幂等升级为“万境书院官方维护的一站式数学一学习书籍。”。
 -- 首次启动生产后端之前，这里可能仍是旧文案，属于预期状态。
 SELECT '5.2 brand description' AS section,
        CASE WHEN EXISTS (SELECT 1 FROM question_bank
                           WHERE id = '628a3d64-c820-4d1f-b482-8e2715bb7cf2'
-                            AND description = '万境求知官方维护的一站式数学一学习书籍。')
+                            AND description = '万境书院官方维护的一站式数学一学习书籍。')
             THEN 'OK_BRAND' ELSE 'PENDING_BOOTSTRAP_UPGRADE' END AS brand_description;
 
 SELECT '5.3 unexpected legacy brand text' AS section,
