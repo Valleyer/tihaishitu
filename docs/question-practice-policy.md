@@ -155,7 +155,14 @@ assessment
 → 优先留在上一 Attempt 冻结的 targetKnowledgePointId，换该 KP 内另一道当天未出的题
 → 该 KP 无题可选时，再从其他 eligible KP 中随机切换
 → 全范围都无题时，当日 RANDOM 候选耗尽，明确结束，不得重复当天已出题
+
+上一题 assessment = null（active / revealed 但未 self-assess）
+→ 不推断为 wrong，也不推断为 correct
+→ 直接在当前 eligible KP 中重新纯随机
 ```
+
+未作答的上一题仍然占用当天 Question quota，它不是“上一题的 grading 结果”，
+因此**不得**用更早一天或更早一题的结果替代它。
 
 一题绑定多个 KP 时，后续依据该 Attempt 已冻结的 `targetKnowledgePointId`，不重新猜。
 
@@ -240,18 +247,34 @@ wrong_fallback
 
 **wrong lane**
 
-只看永久错题本当前 active：
+只看永久错题本当前 active，且把两个事实分开：
 
 ```text
-learner_wrong_question.status = 'active'
+“属于当前 target KP”
+→ question_resource_knowledge 关系（候选题集合本身已经保证）
+
+“是不是当前 active 错题”
+→ learner_wrong_question.status='active' 按 learner + question_id 判断
 ```
 
-手动移出错题本的 Question 不再是 wrong-lane candidate。
+因此 wrong lane **不要求** `learner_wrong_question.target_knowledge_point_id`
+等于当前 KP。一道同时关联 K1 / K2 的题，如果是在 K2 context 下做错的，
+进入 K1 的 wrong lane 时仍然是候选，只要：
+
+```text
+Q 通过 question_resource_knowledge 属于 K1
+Q 当前仍是 learner_wrong_question.status='active'
+Q 今天没被 RANDOM 出过
+```
+
+`learner_wrong_question.target_knowledge_point_id` 继续保留，用于错题本原始归因、
+`wrong_review` 与 `wrong_drill` 的 target，不受本规则影响。
+
+手动移出错题本的 Question 在所有 KP 的 wrong lane 中都立即不再是 candidate。
 
 候选还必须满足：
 
 ```text
-属于当前 target KP
 当前 Formal 可用
 今天未 RANDOM 出过
 ```
@@ -461,7 +484,26 @@ QuestionAttemptStore
 
 ---
 
-## 9. 本专题明确不做
+## 9. Session 冻结 scope
+
+每一个 active Practice Session 在创建时冻结自己的 `learner_practice_scope`。
+已经开始的 Session 只认这份 frozen scope：
+
+```text
+CHAPTER   确定性题序只按 Session 冻结的 KP scope 计算
+WRONG     wrong_drill 候选与 canRepeat 只按 Session 冻结的 KP scope 计算
+KNOWLEDGE 只限定建立 Session 时冻结的 target KP
+```
+
+因此 Learner 在别的页面修改 selected Books，**不会**让正在进行的 Session
+换题池，也不会错误显示 `canRepeat`。
+
+“文集 / 章节是否在当前学习范围内”只在**新开 Session 的入口**校验：不满足时返回明确的
+400 业务提示，而不是让已经开始的 Session 中途失效。
+
+---
+
+## 10. 本专题明确不做
 
 ```text
 “我没思路”按钮与 API（未来等价于 wrong）

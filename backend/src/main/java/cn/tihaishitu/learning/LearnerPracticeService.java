@@ -211,9 +211,15 @@ public class LearnerPracticeService {
     /**
      * 章节练习：固定确定性题序 + 跨 Session 持久 cursor + 末尾 wrap。
      * 不再“KP 顺序 + KP 内随机”，也不再因为当前 KP 无题而返回“没有待练的新题”。
+     *
+     * <p>入口先用 {@code chapterKnowledgePoints}（实时学习范围）确认该章节确实属于 Learner
+     * 当前可练范围；之后题序与 next 一律只按 Session 冻结的 scope 计算，因此 active Session
+     * 不会因为 Learner 在别处改了 selected Books 而换题池。</p>
      */
     private SessionView startChapter(StartRequest request, String learnerId, Set<String> allowed) {
         if (request.targetBookId() == null || request.targetChapterId() == null) throw bad("请选择文集和章节。");
+        if (store.chapterKnowledgePoints(learnerId, request.targetBookId(), request.targetChapterId()).isEmpty())
+            throw bad("这个章节当前没有可练的正式题。");
         ChapterPracticeSelector.Step step = chapters
                 .next(learnerId, request.targetBookId(), request.targetChapterId(), allowed)
                 .orElseThrow(() -> bad("这个章节当前没有可练的正式题。"));
@@ -495,9 +501,9 @@ public class LearnerPracticeService {
         Set<String> allowed = store.scope(session.id());
         Set<String> seen = store.seenQuestions(session.id());
         return switch (session.intent()) {
-            case "chapter_drill" -> !chapters.sequence(session.learnerId(), session.targetBookId(),
+            case "chapter_drill" -> !chapters.sequence(session.targetBookId(),
                     session.targetChapterId(), allowed).isEmpty();
-            case "wrong_drill" -> wrongs.hasRemaining(session.learnerId(), seen);
+            case "wrong_drill" -> wrongs.hasRemaining(session.learnerId(), allowed, seen);
             case "wrong_review" -> false;
             case "knowledge_drill" -> knowledge.hasRemaining(session.targetKnowledgePointId(), allowed, seen);
             default -> false;
@@ -534,7 +540,7 @@ public class LearnerPracticeService {
         Integer index = null;
         Integer count = null;
         if (latest.targetBookId() != null && latest.targetChapterId() != null) {
-            ChapterPracticeSelector.Sequence sequence = chapters.sequence(learnerId, latest.targetBookId(),
+            ChapterPracticeSelector.Sequence sequence = chapters.sequence(latest.targetBookId(),
                     latest.targetChapterId(), store.scope(latest.id()));
             count = sequence.size();
             Optional<String> currentQuestionId = store.currentQuestionId(latest.id());

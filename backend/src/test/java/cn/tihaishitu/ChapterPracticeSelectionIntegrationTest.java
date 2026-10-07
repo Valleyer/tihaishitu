@@ -61,7 +61,7 @@ class ChapterPracticeSelectionIntegrationTest {
         String learner = learnerId("chapter-order");
         selectBook(learner, book);
 
-        assertThat(sequenceIds(learner, book, chapter, Set.of(firstPoint, secondPoint)))
+        assertThat(sequenceIds(book, chapter, Set.of(firstPoint, secondPoint)))
                 .containsExactly(a1, a2, a10, b1);
 
         // 走一遍真实 Hub 流程：KP 顺序 → 自然题号 → 末尾 wrap。
@@ -100,11 +100,11 @@ class ChapterPracticeSelectionIntegrationTest {
         String learner = learner("chapter-source-stability");
         selectBook(learner, book);
 
-        List<String> before = sequenceIds(learner, book, chapter, Set.of(point));
+        List<String> before = sequenceIds(book, chapter, Set.of(point));
         assertThat(before).containsExactly(two, ten);
         // display_name 是可修改的展示事实，绝不能影响题序。
         jdbc.update("UPDATE question_source SET display_name='改过的展示名' WHERE id=?", source);
-        assertThat(sequenceIds(learner, book, chapter, Set.of(point))).isEqualTo(before);
+        assertThat(sequenceIds(book, chapter, Set.of(point))).isEqualTo(before);
     }
 
     @Test void questionRelatedToMultipleChapterKnowledgePointsAppearsOnceWithTheFirstKnowledgePoint() {
@@ -125,7 +125,7 @@ class ChapterPracticeSelectionIntegrationTest {
         String learner = learner("chapter-dedupe");
         selectBook(learner, book);
 
-        ChapterPracticeSelector.Sequence sequence = chapters.sequence(learner, book, chapter, Set.of(first, second));
+        ChapterPracticeSelector.Sequence sequence = chapters.sequence(book, chapter, Set.of(first, second));
         assertThat(sequence.size()).isOne();
         assertThat(sequence.steps().get(0).questionId()).isEqualTo(shared);
         // target KP = 按 KP 顺序第一次遇到它的位置。
@@ -178,7 +178,7 @@ class ChapterPracticeSelectionIntegrationTest {
         jdbc.update("DELETE FROM question_resource_knowledge WHERE question_id=?", first);
         JsonNode restarted = startChapter(cookie, book, chapter);
         assertThat(currentQuestion(restarted)).isEqualTo(second);
-        assertThat(sequenceIds(learner, book, chapter, Set.of(point))).containsExactly(second, third);
+        assertThat(sequenceIds(book, chapter, Set.of(point))).containsExactly(second, third);
     }
 
     @Test void randomDailyQuotaDoesNotBlockChapterPractice() throws Exception {
@@ -201,10 +201,47 @@ class ChapterPracticeSelectionIntegrationTest {
         assertThat(currentQuestion(session)).isEqualTo(second);
     }
 
+    /**
+     * active Chapter Session 只认自己冻结的 scope：Learner 在别处改了 selected Books，
+     * 正在进行的 Session 不会换题池、也不会错误显示 canRepeat；但新开 Session 要按新范围校验。
+     */
+    @Test void activeChapterSessionKeepsItsFrozenScopeWhenSelectedBooksChange() throws Exception {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        insertBook(book, chapter, "章节冻结 scope 文集");
+        String point = pointIn(book, chapter, "CHAPTER-FROZEN", 0);
+        String first = question(point, "1"), second = question(point, "2");
+        // 另一个文集：把学习范围切过去以后，原章节就不该再有可练入口。
+        String otherBook = UUID.randomUUID().toString(), otherChapter = UUID.randomUUID().toString();
+        insertBook(otherBook, otherChapter, "另一个文集");
+        pointIn(otherBook, otherChapter, "CHAPTER-OTHER", 0);
+        Cookie cookie = register("chapter-frozen-scope");
+        String learner = learnerId("chapter-frozen-scope");
+        selectBook(learner, book);
+
+        JsonNode session = startChapter(cookie, book, chapter);
+        assertThat(currentQuestion(session)).isEqualTo(first);
+        session = gradeCurrent(cookie, session, true);
+
+        // 中途把学习范围切到另一个文集。
+        selectBook(learner, otherBook);
+        JsonNode continued = next(cookie, session.path("id").asText());
+        assertThat(currentQuestion(continued)).isEqualTo(second);
+        continued = gradeCurrent(cookie, continued, true);
+        // 章节是连续模式：冻结 scope 的题序非空时永远可以继续（末尾 wrap）。
+        assertThat(continued.path("canRepeat").asBoolean()).isTrue();
+
+        // 新开 Session 仍必须按实时学习范围校验入口。
+        mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"intent\":\"chapter_drill\",\"targetBookId\":\"%s\",\"targetChapterId\":\"%s\"}"
+                                .formatted(book, chapter)))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---------------------------------------------------------------- helpers
 
-    private List<String> sequenceIds(String learner, String book, String chapter, Set<String> points) {
-        return chapters.sequence(learner, book, chapter, points).steps().stream()
+    private List<String> sequenceIds(String book, String chapter, Set<String> points) {
+        return chapters.sequence(book, chapter, points).steps().stream()
                 .map(ChapterPracticeSelector.Step::questionId).toList();
     }
 

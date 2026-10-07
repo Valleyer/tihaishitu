@@ -63,12 +63,17 @@ public class ChapterPracticeSelector {
 
     public ChapterPracticeSelector(PracticeSelectionStore store) { this.store = store; }
 
-    /** 当前 Learner 在该 Book + Chapter 下的确定性题序。 */
-    public Sequence sequence(String learnerId, String bookId, String chapterId,
-                            Set<String> allowedKnowledgePointIds) {
+    /**
+     * 当前冻结 scope 下的确定性题序。
+     *
+     * <p>题序只依赖传入的 {@code allowedKnowledgePointIds}（Session 冻结 scope），
+     * 不读取实时 {@code learner_selected_book}：已经开始的 active Session 不会因为
+     * Learner 在别处修改学习范围而换题池。</p>
+     */
+    public Sequence sequence(String bookId, String chapterId, Set<String> allowedKnowledgePointIds) {
         Map<String, PracticeSelectionStore.ChapterSequenceRow> firstOccurrence = new LinkedHashMap<>();
         for (PracticeSelectionStore.ChapterSequenceRow row
-                : store.chapterSequence(learnerId, bookId, chapterId, allowedKnowledgePointIds)) {
+                : store.chapterSequence(bookId, chapterId, allowedKnowledgePointIds)) {
             // 已按 KP 顺序读回，putIfAbsent 保留“按 KP 顺序第一次遇到它”的位置与 target KP。
             firstOccurrence.putIfAbsent(row.questionId(), row);
         }
@@ -82,7 +87,7 @@ public class ChapterPracticeSelector {
      */
     public Optional<Step> next(String learnerId, String bookId, String chapterId,
                                Set<String> allowedKnowledgePointIds) {
-        Sequence sequence = sequence(learnerId, bookId, chapterId, allowedKnowledgePointIds);
+        Sequence sequence = sequence(bookId, chapterId, allowedKnowledgePointIds);
         if (sequence.isEmpty()) return Optional.empty();
         String cursor = store.latestGradedChapterQuestionId(learnerId, bookId, chapterId).orElse(null);
         return sequence.successorOf(cursor);

@@ -16,12 +16,16 @@ import java.util.concurrent.ThreadLocalRandom;
  * 之后答对**不会**自动移出，只有用户手动移出才 {@code status='removed'}。</p>
  *
  * <p>wrong_drill 候选：{@code learner_wrong_question.status='active'} +
- * 当前 selected Books 范围可用 + published Formal Parent。
+ * 当前 Session 冻结 scope 可用 + published Formal Parent。
  * Session 内随机且不重复，全部耗尽后本轮完成，新开 Session 重新对完整池洗牌；
  * 用户手动移出后 future Session 立即不再包含该题。</p>
  *
+ * <p>候选与 {@code hasRemaining} 一律以调用方传入的冻结
+ * {@code allowedKnowledgePointIds} 为准，不读取实时 {@code learner_selected_book}：
+ * 已经开始的 active Session 不会因为 Learner 在别处改了学习范围而换题池或错报 canRepeat。</p>
+ *
  * <p>wrong_review 从错题列表点指定题时直接发该题，graded 后流程完成，
- * 不进入任何诊断或补救子题。</p>
+ * 不进入任何诊断或补救子题；其 target KP 语义仍然来自错题本原始归因。</p>
  */
 @Service
 public class WrongPracticeSelector {
@@ -38,14 +42,15 @@ public class WrongPracticeSelector {
         this.pool = pool;
     }
 
-    /** 本 Session 还未见过的 active 错题候选。 */
-    public List<String> candidateQuestionIds(String learnerId, Set<String> seenQuestionIds) {
-        return store.wrongDrillQuestionIds(learnerId, seenQuestionIds);
+    /** 本 Session 还未见过的 active 错题候选（限定冻结 scope）。 */
+    public List<String> candidateQuestionIds(String learnerId, Set<String> allowedKnowledgePointIds,
+                                             Set<String> seenQuestionIds) {
+        return store.wrongDrillQuestionIds(learnerId, allowedKnowledgePointIds, seenQuestionIds);
     }
 
     /** Session 内随机不重复地取下一道可用 active 错题；候选耗尽返回空。 */
     public Optional<Selection> select(String learnerId, Set<String> allowedKnowledgePointIds, Set<String> seenQuestionIds) {
-        List<String> candidates = new ArrayList<>(candidateQuestionIds(learnerId, seenQuestionIds));
+        List<String> candidates = new ArrayList<>(candidateQuestionIds(learnerId, allowedKnowledgePointIds, seenQuestionIds));
         while (!candidates.isEmpty()) {
             String questionId = candidates.remove(ThreadLocalRandom.current().nextInt(candidates.size()));
             Optional<String> target = selections.activeWrongTargetKnowledgePoint(learnerId, questionId);
@@ -57,8 +62,11 @@ public class WrongPracticeSelector {
         return Optional.empty();
     }
 
-    /** 本 Session 是否还有没练过的 active 错题（决定 canRepeat）。 */
-    public boolean hasRemaining(String learnerId, Set<String> seenQuestionIds) {
-        return !candidateQuestionIds(learnerId, seenQuestionIds).isEmpty();
+    /**
+     * 本 Session 是否还有没练过的 active 错题（决定 canRepeat）。
+     * 口径与 {@link #select} 完全一致，避免“显示还能继续但 next 报错”。
+     */
+    public boolean hasRemaining(String learnerId, Set<String> allowedKnowledgePointIds, Set<String> seenQuestionIds) {
+        return select(learnerId, allowedKnowledgePointIds, seenQuestionIds).isPresent();
     }
 }

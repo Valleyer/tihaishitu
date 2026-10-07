@@ -145,23 +145,33 @@ public class PracticeSelectionStore {
     }
 
     /**
-     * 永久错题本当前 active、且属于该 target KP 的正式父题。
-     * 用户手动移出（status='removed'）的题立即不再进入 wrong lane。
+     * 给出的候选题里，当前仍在永久错题本 active 的那一部分。
+     *
+     * <p>wrong lane 的两个事实必须分离：</p>
+     *
+     * <pre>
+     * “属于当前 target KnowledgePoint” → question_resource_knowledge 关系（由候选题集合本身保证）
+     * “是不是当前 active 错题”        → learner_wrong_question.status 按 learner + question 判断
+     * </pre>
+     *
+     * <p>因此这里**不**要求 {@code learner_wrong_question.target_knowledge_point_id} 等于当前 KP：
+     * 一道同时关联 K1 / K2 的题若是在 K2 下做错的，进入 K1 的 wrong lane 时仍然是候选。
+     * {@code target_knowledge_point_id} 继续用于错题本原始归因与 wrong_review / wrong_drill。
+     * 用户手动移出（status='removed'）后，所有 KP 的 wrong lane 都立即排除它。</p>
      */
-    public Set<String> activeWrongQuestionIds(String learnerId, String knowledgePointId) {
-        if (learnerId == null || knowledgePointId == null) return Set.of();
+    public Set<String> activeWrongQuestionIds(String learnerId, Collection<String> candidateQuestionIds) {
+        if (learnerId == null || candidateQuestionIds == null || candidateQuestionIds.isEmpty()) return Set.of();
+        List<String> ids = List.copyOf(new LinkedHashSet<>(candidateQuestionIds));
+        List<Object> args = new ArrayList<>();
+        args.add(learnerId);
+        args.addAll(ids);
         return new LinkedHashSet<>(jdbc.query("""
-                SELECT wrong.question_id
-                  FROM learner_wrong_question wrong
-                  JOIN question_resource q ON q.id = wrong.question_id
-                  JOIN global_knowledge_point k ON k.id = wrong.target_knowledge_point_id
-                 WHERE wrong.learner_id = ? AND wrong.status = 'active'
-                   AND wrong.target_knowledge_point_id = ?
-                   AND k.status = 'active'
-                   AND %s
-                 ORDER BY wrong.question_id
-                """.formatted(FormalQuestionPolicy.published("q")),
-                (row, index) -> row.getString(1), learnerId, knowledgePointId));
+                SELECT question_id FROM learner_wrong_question
+                 WHERE learner_id = ? AND status = 'active'
+                   AND question_id IN (%s)
+                 ORDER BY question_id
+                """.formatted(placeholders(ids.size())),
+                (row, index) -> row.getString(1), args.toArray()));
     }
 
     /** 单题 wrong_review：该题在永久错题本中记录的 target KP。 */
@@ -180,14 +190,18 @@ public class PracticeSelectionStore {
      * 回退 source_type + source_name）、exam_year、question_number、question_id。
      * 不使用可修改的 {@code display_name}。去重、自然排序与 target KP 归属由
      * {@link ChapterPracticeSelector} 在 Java 内完成（MySQL 5.7 不引入 Window Function）。</p>
+     *
+     * <p>这里**不**读取实时的 {@code learner_selected_book}：调用方传入的
+     * {@code allowedKnowledgePointIds} 就是该 Session 冻结的 scope，
+     * 因此已经开始的 active Session 不会因为 Learner 在别处改了学习范围而换题池。
+     * “文集是否在当前学习范围内”由 {@code LearnerPracticeService.startChapter} 的入口校验负责。</p>
      */
-    public List<ChapterSequenceRow> chapterSequence(String learnerId, String bookId, String chapterId,
+    public List<ChapterSequenceRow> chapterSequence(String bookId, String chapterId,
                                                     Set<String> allowedKnowledgePointIds) {
-        if (learnerId == null || bookId == null || chapterId == null
+        if (bookId == null || chapterId == null
                 || allowedKnowledgePointIds == null || allowedKnowledgePointIds.isEmpty()) return List.of();
         List<String> points = List.copyOf(allowedKnowledgePointIds);
         List<Object> args = new ArrayList<>();
-        args.add(learnerId);
         args.add(bookId);
         args.add(chapterId);
         args.addAll(points);
@@ -196,8 +210,6 @@ public class PracticeSelectionStore {
                        q.id question_id, q.source_id, q.source_type, q.source_name,
                        q.exam_year, q.question_number
                   FROM question_bank_knowledge bk
-                  JOIN learner_selected_book selected
-                    ON selected.bank_id = bk.bank_id AND selected.learner_id = ?
                   JOIN global_knowledge_point k ON k.id = bk.knowledge_point_id
                   JOIN question_resource_knowledge rel ON rel.knowledge_point_id = bk.knowledge_point_id
                   JOIN question_resource q ON q.id = rel.question_id

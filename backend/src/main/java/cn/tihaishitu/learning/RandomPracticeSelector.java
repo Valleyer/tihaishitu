@@ -99,21 +99,41 @@ public class RandomPracticeSelector {
     }
 
     /**
-     * KP transition 规则。
-     * 当天第一题不看历史，纯随机；之后依据上一个 RANDOM Attempt 已冻结的 targetKnowledgePointId
-     * 与 assessment 决定，不重新猜多 KP 题目的归属。
+     * KP transition 规则。只有明确的 grading 结果能驱动 transition：
+     *
+     * <pre>
+     * 当天第一题（今天还没有 RANDOM 发题）        → 在所有 eligible KP 中纯随机
+     * 上一题 assessment = correct                → 优先换 KP
+     * 上一题 assessment = wrong / partial        → 优先留在原 target KP
+     * 上一题 assessment = null（active / revealed 未自评） → 不推断为错题，重新纯随机
+     * </pre>
+     *
+     * <p>未作答的上一题仍然占用当天 Question quota，但它不是“上一题的 grading 结果”，
+     * 因此既不能当成 wrong，也不能拿更早一天 / 更早一题的结果替代。</p>
      */
     private String chooseKnowledgePoint(String learnerId, Set<String> eligible, boolean firstOfDay) {
         if (firstOfDay) return randomOf(eligible);
         PracticeSelectionStore.LastRandomAttempt previous = store.lastRandomAttempt(learnerId).orElse(null);
         if (previous == null) return randomOf(eligible);
         String previousPoint = previous.knowledgePointId();
-        // wrong / partial（含 assessment 尚未落库的异常情况）：优先留在原 target KP。
-        if (!"correct".equals(previous.assessment()) && previousPoint != null && eligible.contains(previousPoint))
-            return previousPoint;
-        // correct：优先换 KP；当前范围只有一个 eligible KP 时允许继续同 KP，不能死锁。
+        String assessment = previous.assessment();
+        if ("wrong".equals(assessment) || "partial".equals(assessment)) {
+            // wrong / partial：优先留在原 target KP；该 KP 当天无题可选时再切换其他 eligible KP。
+            if (previousPoint != null && eligible.contains(previousPoint)) return previousPoint;
+            return randomOf(switchToOtherPoints(eligible, previousPoint));
+        }
+        if ("correct".equals(assessment)) {
+            // correct：优先换 KP；当前范围只有一个 eligible KP 时允许继续同 KP，不能死锁。
+            return randomOf(switchToOtherPoints(eligible, previousPoint));
+        }
+        // assessment 未知：上一题只是被发出、并未真正判题，不得推断成错题。
+        return randomOf(eligible);
+    }
+
+    /** 除上一 target KP 之外的 eligible KP；为空时回退整个 eligible 集合，避免死锁。 */
+    private static Set<String> switchToOtherPoints(Set<String> eligible, String previousPoint) {
         List<String> others = eligible.stream().filter(id -> !id.equals(previousPoint)).toList();
-        return randomOf(others.isEmpty() ? eligible : others);
+        return others.isEmpty() ? eligible : new LinkedHashSet<>(others);
     }
 
     /** 先按 Lane 决定候选，再按 oldest 事实排序。 */
@@ -122,8 +142,9 @@ public class RandomPracticeSelector {
         if (drawn % 2 == 0) {
             return new Selection(oldestFirst(learnerId, candidates), pointId, PracticeDrawReason.OLDEST);
         }
-        // wrong lane：只看当前 active 永久错题本，手动移出的题立即不再候选。
-        Set<String> activeWrong = store.activeWrongQuestionIds(learnerId, pointId);
+        // wrong lane：只看当前 active 永久错题本。是否“属于当前 KP”已经由候选题集合
+        // （question_resource_knowledge）保证，这里只问“该题现在是否仍是 active 错题”。
+        Set<String> activeWrong = store.activeWrongQuestionIds(learnerId, candidates);
         List<String> wrongCandidates = candidates.stream().filter(activeWrong::contains).toList();
         if (!wrongCandidates.isEmpty()) {
             return new Selection(oldestFirst(learnerId, wrongCandidates), pointId, PracticeDrawReason.WRONG);

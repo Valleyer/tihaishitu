@@ -171,12 +171,21 @@ public class LearnerPracticeStore {
     }
 
     /**
-     * wrong_drill 的候选：当前 Learner 的 active 错题，限定在 selected Books 覆盖范围内，
-     * 且题目仍然是可练的 published 正式父题。随机由 Service 负责。
+     * wrong_drill 的候选：当前 Learner 的 active 错题，限定在该 Session 冻结的
+     * KnowledgePoint scope 内，且题目仍然是可练的 published 正式父题。随机由 Service 负责。
+     *
+     * <p>只按 {@code scopedKnowledgePointIds} 判断范围，不读取实时
+     * {@code learner_selected_book}：已经开始的 active Session 不会因为 Learner 在别处
+     * 改了学习范围而换题池。错题本原始归因 {@code target_knowledge_point_id} 继续保留，
+     * 用于 wrong_review 与错题列表。</p>
      */
-    public List<String> wrongDrillQuestionIds(String learnerId, Collection<String> excludedQuestionIds) {
+    public List<String> wrongDrillQuestionIds(String learnerId, Set<String> scopedKnowledgePointIds,
+                                              Collection<String> excludedQuestionIds) {
+        if (scopedKnowledgePointIds == null || scopedKnowledgePointIds.isEmpty()) return List.of();
+        List<String> points = List.copyOf(scopedKnowledgePointIds);
         List<Object> args = new ArrayList<>();
         args.add(learnerId);
+        args.addAll(points);
         StringBuilder exclusion = new StringBuilder();
         if (excludedQuestionIds != null && !excludedQuestionIds.isEmpty()) {
             exclusion.append(" AND wrong.question_id NOT IN (")
@@ -190,13 +199,13 @@ public class LearnerPracticeStore {
                   JOIN question_resource q ON q.id = wrong.question_id
                   JOIN global_knowledge_point k ON k.id = wrong.target_knowledge_point_id
                  WHERE wrong.learner_id = ? AND wrong.status = 'active'
-                   AND %s
+                   AND wrong.target_knowledge_point_id IN (%s)
                    AND q.status = 'published' AND q.parent_question_id IS NULL
                    AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                    AND k.status = 'active' AND %s
                    %s
                  ORDER BY wrong.question_id
-                """.formatted(inWrongQuestionScope(), TrainableKnowledge.exists("k"), exclusion),
+                """.formatted(placeholders(points.size()), TrainableKnowledge.exists("k"), exclusion),
                 (rs, row) -> rs.getString(1), args.toArray());
     }
 
@@ -349,6 +358,10 @@ public class LearnerPracticeStore {
                 UPDATE learner_wrong_question SET status='removed',removed_at=?,updated_at=CURRENT_TIMESTAMP
                  WHERE learner_id=? AND question_id=? AND status='active'
                 """, Timestamp.from(now), learnerId, questionId) == 1;
+    }
+
+    private static String placeholders(int count) {
+        return String.join(",", java.util.Collections.nCopies(count, "?"));
     }
 
     private List<Session> sessions(String predicate, Object... args) {

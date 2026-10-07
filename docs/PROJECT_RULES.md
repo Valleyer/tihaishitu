@@ -84,8 +84,19 @@ Hub 不属于 World
 ```
 
 World 负责学习体验与游戏体验，Hub 负责学习进度与内容组织；两者在 target
-确定后调用同一套 Question Pool、rotation、grading、Evidence、Diagnosis、
-Training 与 Mastery 更新逻辑。
+确定后共享正式 Question Contract、Attempt Variant、grading、Wrong Book、
+Evidence 与 Mastery。
+
+普通正式训练的选题由四套独立策略负责：
+
+```text
+RANDOM / CHAPTER / KNOWLEDGE / WRONG
+```
+
+它们**不自动进入** Diagnosis / Training / Remedial，见
+[`question-practice-policy.md`](./question-practice-policy.md)。
+诊断与补救相关表、服务、管理端能力与历史数据只作为 Legacy / 未来重新设计能力保留
+（见 §21.3），不再由普通正式训练触发。
 
 ---
 

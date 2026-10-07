@@ -3,6 +3,7 @@ package cn.tihaishitu;
 import cn.tihaishitu.learner.LearnerAuthService;
 import cn.tihaishitu.learning.PracticeBusinessDay;
 import cn.tihaishitu.learning.PracticeDrawReason;
+import cn.tihaishitu.learning.PracticeSelectionStore;
 import cn.tihaishitu.learning.RandomPracticeSelector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +59,7 @@ class RandomPracticeSelectionIntegrationTest {
     private static final Instant ONE_DAY_AGO = TODAY.minus(Duration.ofDays(1));
 
     @Autowired JdbcTemplate jdbc; @Autowired RandomPracticeSelector selector;
+    @Autowired PracticeSelectionStore selections;
     @Autowired MockMvc mvc; @Autowired ObjectMapper mapper;
 
     // ---------------------------------------------------------------- KP transition
@@ -189,6 +191,73 @@ class RandomPracticeSelectionIntegrationTest {
 
         assertThat(selector.remainingToday(learner, Set.of(k1), Set.of())).isEqualTo(2);
         assertThat(selector.select(learner, Set.of(k1), Set.of()).orElseThrow().questionId()).isIn(q1, q2);
+    }
+
+    /**
+     * 发题后完全没有 grading 结果（active / revealed 未自评）时：
+     * 该 Question 仍然占用当天 quota，但 assessment=null 不得被推断成 wrong 而锁定同一 KP。
+     */
+    @Test void ungradedActivePreviousRandomAttemptDoesNotDriveTheKnowledgePointTransition() {
+        assertUngradedAttemptDoesNotLockTheKnowledgePoint("active");
+    }
+
+    @Test void ungradedRevealedPreviousRandomAttemptDoesNotDriveTheKnowledgePointTransition() {
+        assertUngradedAttemptDoesNotLockTheKnowledgePoint("revealed");
+    }
+
+    private void assertUngradedAttemptDoesNotLockTheKnowledgePoint(String status) {
+        String book = book("RANDOM-UNGRADED-" + status);
+        String k1 = point(book, "UNGRADED-K1", 0), k2 = point(book, "UNGRADED-K2", 1);
+        String drawn = question(k1, "1");
+        question(k1, "2");
+        question(k2, "1");
+        question(k2, "2");
+        String learner = learner("random-ungraded-" + status);
+        attempt(learner, k1, drawn, status, null, "random", PracticeDrawReason.OLDEST, TODAY);
+
+        Set<String> drawnPoints = new HashSet<>();
+        for (int round = 0; round < 40; round++) {
+            var selection = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+            // 当天 quota 已经被占用：这道题今天不能再出。
+            assertThat(selection.questionId()).isNotEqualTo(drawn);
+            drawnPoints.add(selection.targetKnowledgePointId());
+        }
+        // 没有 grading 结果时不偏向任何 KP，仍然是在 eligible 集合里纯随机。
+        assertThat(drawnPoints).containsExactlyInAnyOrder(k1, k2);
+    }
+
+    // ---------------------------------------------------------------- wrong lane
+
+    /**
+     * 多 KnowledgePoint Question：错题记录是在另一个 KP 下产生的（target=K2），
+     * 但 Q 本身属于 K1，因此仍然是 K1 wrong lane 的候选。
+     */
+    @Test void wrongLaneAcceptsActiveWrongQuestionBelongingToThePointByRelation() {
+        String book = book("RANDOM-MULTI-KP-WRONG");
+        String k1 = point(book, "MULTI-K1", 0), k2 = point(book, "MULTI-K2", 1);
+        String shared = question(k1, "1");
+        relate(shared, k2, "auxiliary", 1);
+        String pad = question(k1, "2");
+        String learner = learner("random-multi-kp-wrong");
+        // 错题本记录来自 K2 context。
+        wrongBook(learner, k2, shared, "active");
+        // 一道昨天的 RANDOM attempt 让 K1 进入 wrong lane（奇数）。
+        attempt(learner, k1, pad, "graded", "wrong", "random", PracticeDrawReason.OLDEST, YESTERDAY);
+
+        // “属于当前 KP”由 question_resource_knowledge 决定；“是否 active 错题”只看 learner + question。
+        assertThat(selections.activeWrongQuestionIds(learner, List.of(shared))).containsExactly(shared);
+
+        var selection = selector.select(learner, Set.of(k1), Set.of()).orElseThrow();
+        assertThat(selection.targetKnowledgePointId()).isEqualTo(k1);
+        assertThat(selection.drawReason()).isEqualTo(PracticeDrawReason.WRONG);
+        assertThat(selection.questionId()).isEqualTo(shared);
+
+        // 手动移出后，任何 KP 的 wrong lane 都不再包含它。
+        jdbc.update("UPDATE learner_wrong_question SET status='removed' WHERE learner_id=? AND question_id=?",
+                learner, shared);
+        assertThat(selections.activeWrongQuestionIds(learner, List.of(shared))).isEmpty();
+        var fallback = selector.select(learner, Set.of(k1), Set.of()).orElseThrow();
+        assertThat(fallback.drawReason()).isEqualTo(PracticeDrawReason.WRONG_FALLBACK);
     }
 
     // ---------------------------------------------------------------- oldest lane
@@ -369,6 +438,48 @@ class RandomPracticeSelectionIntegrationTest {
                 .andExpect(jsonPath("$.message").value("今天学习范围内的随机题已经全部出过了，明天再来吧。"));
     }
 
+    /**
+     * 发题后不作答、直接放弃本轮：该 Question 当天 quota 已占用，
+     * 新 run 不得重复它，也不得因为这次未作答而产生任何错题记录。
+     */
+    @Test void worldAbandonedUngradedRandomAttemptStillConsumesTheDailyQuota() throws Exception {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        insertBook(book, chapter, "世界放弃回归文集");
+        String point = pointIn(book, chapter, "WORLD-ABANDON-K", 0);
+        String first = questionIn(point, "WORLD-ABANDON", "1");
+        String second = questionIn(point, "WORLD-ABANDON", "2");
+        Cookie cookie = register("random-world-abandon");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username=?", String.class, "random-world-abandon");
+        selectBook(learner, book);
+        initialize(cookie);
+
+        JsonNode game = begin(cookie, "read");
+        assertThat(game.path("adventure").path("run").path("plannedRounds").asInt()).isEqualTo(2);
+        String abandonedAttempt = game.path("attempt").path("id").asText();
+        String abandonedQuestion = game.path("attempt").path("question").path("id").asText();
+
+        // 发题后完全不作答，直接放弃本轮。
+        abandon(cookie, game);
+        assertThat(jdbc.queryForObject("SELECT status FROM study_attempt WHERE id=?", String.class, abandonedAttempt))
+                .isEqualTo("active");
+        assertThat(jdbc.queryForObject("SELECT draw_mode FROM study_attempt WHERE id=?", String.class,
+                abandonedAttempt)).isEqualTo("random");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_wrong_question WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+
+        // 新 run：这道题当天已经发出过，不能重复；只剩一道可出，plannedRounds 收敛为 1。
+        JsonNode restarted = begin(cookie, "read");
+        assertThat(restarted.path("adventure").path("run").path("plannedRounds").asInt()).isEqualTo(1);
+        String restartedAttempt = restarted.path("attempt").path("id").asText();
+        String nextQuestion = restarted.path("attempt").path("question").path("id").asText();
+        assertThat(nextQuestion).isNotEqualTo(abandonedQuestion);
+        assertThat(Set.of(abandonedQuestion, nextQuestion)).isEqualTo(Set.of(first, second));
+        // 上一题没有 assessment，K1 的 lane 仍然按“奇数 = wrong lane”推进，只是 wrong lane 没有候选。
+        assertThat(jdbc.queryForObject("SELECT draw_reason FROM study_attempt WHERE id=?", String.class,
+                restartedAttempt)).isEqualTo(PracticeDrawReason.WRONG_FALLBACK);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void initialize(Cookie cookie) throws Exception {
@@ -402,6 +513,13 @@ class RandomPracticeSelectionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"attemptId\":\"%s\"}".formatted(attempt)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    private void abandon(Cookie cookie, JsonNode game) throws Exception {
+        String runId = game.path("adventure").path("run").path("id").asText();
+        mvc.perform(post("/api/v1/worlds/ancient-official/activities/abandon").with(csrf()).cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"runId\":\"%s\"}".formatted(runId)))
+                .andExpect(status().isOk());
     }
 
     private Cookie register(String username) throws Exception {
@@ -474,6 +592,13 @@ class RandomPracticeSelectionIntegrationTest {
         QuestionFixtures.trueFalseOptions(jdbc, id);
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", id, point);
         return id;
+    }
+
+    private void relate(String question, String point, String role, int order) {
+        jdbc.update("""
+                INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order)
+                VALUES (?,?,?,?)
+                """, question, point, role, order);
     }
 
     /** 直接写一条历史正式 Attempt（默认没有 draw_mode，因此不占 RANDOM 额度）。 */

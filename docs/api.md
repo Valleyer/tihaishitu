@@ -163,7 +163,7 @@ v3 / v2 兼容：客观题 standardAnswer 只做一致性校验，不持久化�
 
 ## Learner Knowledge State V3
 
-正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（normal/training）与 1–5 级题目难度。清晰可归因的 graded attempt 只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。一次 attempt 只有一个 `targetKnowledgePointId`，一题绑定多个知识点不会同时给多个知识点加分。normal composite wrong/partial 是明确例外：raw `study_attempt` 与 `answer_record` 立即保存，根 target evidence 延迟到诊断确认。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态或诊断会话。
+正式 World 发题时，`study_attempt` 固化 `targetKnowledgePointId`、`evidenceMode`（普通正式训练一律 `normal`）与 1–5 级题目难度。清晰可归因的 graded attempt 只为该 target KnowledgePoint 插入一条 evidence，并更新 `(learnerId, knowledgePointId)` 唯一状态；题目关联的其他 core/auxiliary 知识点不直接更新。一次 attempt 只有一个 `targetKnowledgePointId`，一题绑定多个知识点不会同时给多个知识点加分。Practice Selection V2 之后，普通正式训练（RANDOM / CHAPTER / KNOWLEDGE / WRONG）的 wrong / partial 也**立即**对 root target 写 evidence，不再延迟到诊断确认，也不再创建诊断会话。`UNIQUE(attempt_id)` 与既有 attempt 状态转换共同保证重复提交不会重复记证据。Legacy `/games/**` 没有 Learner，因此不创建长期掌握状态。
 
 每个 `(learner, KnowledgePoint, formal parent Question)` 拥有一个 0–100 的题目级掌握槽位。首次答对为 30；以 Asia/Shanghai 为日界线，同一天重复答对不增加槽位分数，后续每个首次跨日答对增加 7，最高 100；当天首答 wrong/partial 当天 +0（正式 attempt 与 evidence 仍保留），错误不直接扣减槽位分数。Remedial SubQuestion 不创建槽位，也不进入分母。
 
@@ -181,23 +181,23 @@ Knowledge Mastery = 所有正式父题槽位分数之和 / 当前正式父题总
 
 每个题目槽位按完整 3 个 Asia/Shanghai 自然日惰性衰减 1 分。KnowledgePoint 的全部正式题均达到 100 时冻结衰减；新增正式题会扩大分母并解除冻结，既有槽位从解除当天重新开始衰减。聚合档位为 0–29 尚未稳固、30–69 基本掌握、70–99 熟练掌握、100 彻底掌握。`stabilityDays` 与 `targetDifficulty` 继续供 Review Queue 与 Adaptive Scheduling 的难度软提示使用，原参数不变。
 
-正式 Hub 与 World 共用同一套 target-only grading、Evidence、Diagnosis、Question Rotation 和 V3 槽位。题目浏览、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
+正式 Hub 与 World 共用同一套 Question Contract、Attempt Variant、target-only grading、Wrong Book、Evidence、Question Rotation 与 V3 槽位。普通正式训练的选题分别由 RANDOM / CHAPTER / KNOWLEDGE / WRONG 四套独立策略负责，**不自动进入** Diagnosis / Training / Remedial。题目浏览、查看答案、reveal、发题、开始或放弃活动都不产生 evidence。
 
 ## Adaptive Scheduling V1
 
-正式 World / 副本使用 **Book Question Pool**：开始活动时冻结 selected Book scope，正式题直接从该范围的全部去重 Formal Question 中随机，**不先选 KnowledgePoint**。
+正式 World / 副本的普通正式题走 **RANDOM KP-first**：开始活动时冻结 selected Book scope，先在该范围内的 active KnowledgePoint 中选 target KP，再在该 KP 内按 oldest / wrong lane 选题。
 
 ```text
 selected Book(s)
-→ 这些 Book 下全部 active KnowledgePoint
-→ 所有与这些 KnowledgePoint 有关系的 published Formal Parent Question
-→ core + auxiliary 都算覆盖
-→ 按 question_id DISTINCT 去重
-→ 排除本 run 的 seenQuestionIds
-→ 等概率随机 Question
+→ 这些 Book 下全部 active KnowledgePoint（当天仍有可出正式题者）
+→ 与这些 KnowledgePoint 有关系的 published Formal Parent Question（core + auxiliary 都算覆盖）
+→ 排除今天已 RANDOM 出过的 Question 与 本 run 的 seenQuestionIds
+→ 先选 target KP，再在该 KP 内选题
 ```
 
-不存在任何前置 KP gating：dependency readiness、`effectiveMastery`、Review due、preferred difficulty 与 exposure 都不参与某道正式题能否被抽到。同一道题关联多个 KP、或同时属于多本 selected Book 时都只出现一次。run 只冻结 `allowedBookIds` / `allowedKnowledgePointIds`（诊断上下文用）/ `plannedRounds` / `seenQuestionIds`；**不再预选 rounds 个不同 KnowledgePoint**，因此 knowledgePointIds 可以为空，知识点数量也不会限制副本能否开始。
+仍然保留的 Book-level 题池 API（`KnowledgeQuestionPoolService.candidatesForBooks` / `selectBookQuestion`、`KnowledgeQuestionPoolStore.candidatesForBooks`）继续按 `question_id` DISTINCT 去重，并保持 store / service 层能力测试；它们已不在现代 Learner World 的发题路径上。
+
+不存在任何前置 KP gating：dependency readiness、`effectiveMastery`、Review due、preferred difficulty 与 exposure 都不参与某道正式题能否被抽到。同一道题关联多个 KP、或同时属于多本 selected Book 时都只出现一次。run 冻结 `allowedBookIds`、`allowedKnowledgePointIds`（RANDOM 的 KP scope）、`plannedRounds` 与 `seenQuestionIds`；**不再预选 rounds 个不同 KnowledgePoint**，因此 knowledgePointIds 可以为空，知识点数量也不会限制副本能否开始。
 
 `rounds` 的新含义是“本轮最多完成多少道正式题”。现代 Learner World 取 `plannedRounds = min(rounds, 当天剩余可出的随机题数)`，`plannedRounds` 在 run 上返回；为 0 时开始活动直接返回 400 业务提示，不会先启动 run 再报错。每完成一道 Formal Parent 的 grading（correct / wrong / partial 都算）推进一个正式题 slot。
 
@@ -205,11 +205,11 @@ RANDOM 是 KP-first：先选 target KnowledgePoint，再在该 KP 内按 oldest 
 
 正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除；RANDOM 另加“同一 Asia/Shanghai 业务日同一 Question 最多出一次”（`study_attempt.draw_mode='random'` 为事实来源，`active` / `revealed` / `graded` 都占额度）。普通正式题答错后**不再**补救训练、不再 retry 同一道题，也不再创建诊断会话。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 
-难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有 TRAINING 模式（Remedial / 诊断补强流程）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
+难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有保留的 TRAINING 模式（Remedial / 诊断补强流程，普通正式训练已不再进入）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
 
-Legacy `/games/**` 没有 Learner，仍按启动时冻结的 KnowledgePoint 顺序出题，不读取 Mastery，也不参与 Book-level 题池。它的 `plannedRounds` 等于 `planKnowledgePoints(...).knowledgePointIds().size()`，**不受** Book-level 题池题数影响；两条路径的轮数必须在各自分支内独立计算。
+Legacy `/games/**` 没有 Learner，仍按启动时冻结的 KnowledgePoint 顺序出题，不读取 Mastery，也不参与现代 RANDOM 选题。它的 `plannedRounds` 等于 `planKnowledgePoints(...).knowledgePointIds().size()`，**不受**题池题数影响；两条路径的轮数必须在各自分支内独立计算。
 
-Learner World 的 Book 题池为空（0 道 published 正式父题）时，开始活动阶段直接返回 400 `当前学习范围内没有可用的正式题。`，不会先给出 `plannedRounds=1` 再在发题时失败。
+Learner World 开始活动时 `plannedRounds = min(activity rounds, 当天剩余可出的随机题数)`。剩余为 0 时直接返回 400：范围里根本没有正式题时是 `当前学习范围内没有可用的正式题。`，只是今天已经出完时是 `今天学习范围内的随机题已经全部出过了，明天再来吧。`，都不会先给出 `plannedRounds=1` 再在发题时失败。
 
 ## Learner Question Rotation V1
 
@@ -217,7 +217,7 @@ Learner World 的 Book 题池为空（0 道 published 正式父题）时，开�
 
 Exposure 只是事实记录，不参与跨 run 软排序：正式题不按 exposure、preferred difficulty 或最久未见排序，只在当前 Session 内用 `seenQuestionIds` 做硬排除。新 Session 从空 seen 开始，全部题目重新进入随机池，因此单题知识点或全部题目都见过时仍能继续出题。
 
-Exposure 不删除候选，不设置固定 cooldown 或 blacklist，也不阻断 Task 重试或 Diagnosis。V10 只为 `study_attempt(learner_id, question_id, created_at)` 增加查询索引，不新增 Exposure 表、状态列、Evidence mode 或前端 Exposure UI。
+Exposure 不删除候选，不设置固定 cooldown 或 blacklist，也不阻断 Task 重试。V10 只为 `study_attempt(learner_id, question_id, created_at)` 增加查询索引，不新增 Exposure 表、状态列、Evidence mode 或前端 Exposure UI。
 
 ## Forgetting-aware Review Queue V1
 
@@ -231,7 +231,7 @@ reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)
 
 `reviewDueAt <= now` 返回 `due`，未来 24 小时内返回 `soon`，24 小时以后至 7 天内返回 `upcoming`，更远的状态不进入默认列表。API 只读取当前 Learner 的 Selected Books，按 KnowledgePoint ID 去重，批量读取状态，并复用“是否存在正式题”的可练判定；`playable=false` 只表示该知识点当前不存在可发的正式题。
 
-Review Queue 只负责 Learning Hub 的复习安排，不改变正式 World target 的随机选择。学习者从 Review Queue 进入知识点专项后，仍走同一套正式题随机抽取，不新增前置限制；答错仍按 Phase G diagnosis 处理，证据模式仍只有 `normal` 与 `training`。
+Review Queue 只负责 Learning Hub 的复习安排，不改变正式 World target 的选择。学习者从 Review Queue 进入知识点专项后，仍走同一套正式题随机抽取，不新增前置限制；答错按单层化规则直接对 target 记 evidence，**不再**进入 Phase G diagnosis。证据模式对普通正式训练一律是 `normal`，`training` 只出现在保留的补救能力里。
 
 Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时间窗口并链接到知识点说明页。复习队列的读取与浏览本身不创建 attempt 或 evidence；进入 Phase J 的知识点专项后，正式作答仍通过共享 Question Engine 更新既有 Mastery，自然推迟下一次 due 或回到薄弱学习队列。
 
@@ -243,15 +243,22 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 近 7 日足迹仅查询当前 Learner 在 Asia/Shanghai 业务日最近 7 个自然日内 `status=graded` 的 `study_attempt`（统计与 Progress 的业务日边界统一为 Asia/Shanghai，不使用 UTC 自然日）。Hub Practice 与 World attempts 统一计入；active、revealed、窗口外记录和 `learner_id IS NULL` 的 Legacy attempts 不计入。响应只提供正式作答数、不同知识点数、活跃学习日期数、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
 
-## Diagnostic State Machine V1
+## Diagnostic State Machine V1（保留能力，普通正式训练不再自动进入）
+
+> Practice Selection V2 之后，RANDOM / CHAPTER / KNOWLEDGE / WRONG 都不再调用
+> `DiagnosticLearningService`。下面这套状态机、相关表与字段**全部保留**，
+> 供未来重新设计诊断时复用，也保证历史数据仍然可读；但它不再由普通正式训练自动触发。
+> 本节描述的是这套保留能力自身的行为，不是当前普通训练的推进规则。
+
+保留的状态机在**被显式调用**时（服务级 API / 未来新入口）行为如下：
 
 normal composite Question 的 wrong/partial 会从 root `question_snapshot_json.knowledgePointIds` 取得发题当时的依赖关系，而不查询当前 Question relation。依赖在创建会话前沿 KnowledgePoint merge chain 解析到 active canonical id、去重并排除 canonical target；按有效掌握度更低、最后证据更早、快照稳定顺序排列。`learner_diagnosis_session` 保存根 attempt、原目标、状态、resolution 与 revision，`learner_diagnosis_dependency` 保存有序 dependency 状态；WorldState 只保留 `diagnosisSessionId` 指针和题数，不复制诊断事实。
 
-状态机使用 `diagnosing_dependencies → remediating_dependency → rechecking_target → remediating_target → resolved`，并支持 `abandoned`。dependency probe 使用 normal evidence，难度先按当前 Profile/状态计算再 cap 到 3；wrong/partial 立即成为该 dependency 的正常证据并停止探查其他依赖，training remediation 答对后回到原 target。所有 dependency 均通过时，才用 root 原始 assessment、grading source 与 answeredAt 延迟写入 target negative evidence；存在 unavailable dependency 时改走 target recheck，根错误永远不强行归因。用户 abandon 同样保留 raw answer 而不补根 evidence。
+状态机使用 `diagnosing_dependencies → remediating_dependency → rechecking_target → remediating_target → resolved`，并支持 `abandoned`。dependency probe 使用 normal evidence，难度先按当前 Profile/状态计算再 cap 到 3；wrong/partial 立即成为该 dependency 的正常证据并停止探查其他依赖，training remediation 答对后回到原 target。所有 dependency 均通过时，才用 root 原始 assessment、grading source 与 answeredAt 写入 target negative evidence；存在 unavailable dependency 时改走 target recheck，根错误永远不强行归因。用户 abandon 同样保留 raw answer 而不补根 evidence。
 
-`study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据模式仍只使用既有 normal/training；Mastery V3 只改变题目级掌握聚合，Adaptive Scheduling 的难度软提示不改变诊断状态机。所有诊断题继续受冻结 Selected Book scope、published 与 run seen 约束。Probe 没有合法 unseen 候选时标为 unavailable，不回退未发布题或无题的依赖。`target_recheck`、`target_remediation` 与 `dependency_remediation` 允许复用本轮已见题：知识点只有一道正式题、或核验/补救所需题已被 root 用过时，仍重新发卷，避免单题知识点导致整轮诊断失败。错题快练（`wrong_drill`）不参与诊断状态机。
+`study_attempt.diagnosis_session_id` 与 `diagnosis_role` 记录 `dependency_probe`、`dependency_remediation`、`target_recheck` 或 `target_remediation`。角色表达诊断目的，证据模式只使用 `normal` / `training`；Mastery V3 只改变题目级掌握聚合，Adaptive Scheduling 的难度软提示不改变状态机。诊断题受冻结 Selected Book scope、published 与 seen 约束。Probe 没有合法 unseen 候选时标为 unavailable，不回退未发布题或无题的依赖。`target_recheck`、`target_remediation` 与 `dependency_remediation` 允许复用本轮已见题：知识点只有一道正式题、或核验/补救所需题已被 root 用过时，仍重新发卷，避免单题知识点导致整轮诊断失败。
 
-根正式题一旦答错，本轮对应知识点的游戏分已经失去。后续 probe、remediation 和 recheck 不增加 `run.correct`；`diagnosticAnswered` 统计 probe/recheck，`trainingAnswered` 统计补强。新 run 会重置 answered、correct 与 seen，可重新取得满分。正式 World 的长期考试/任务状态不累计失败或应试次数，只让 bestScore 上升；passed/cleared 与一次性奖励保持永久、单次和单调。未完成任务可以重新开始，完成后永久关闭且不能重进。
+部署前遗留的旧 diagnosis 在现代流程中会被标记为 `abandoned`，不阻塞下一道普通正式题。旧 World run 上的 `training` / `trainingAnswered` / `diagnosticAnswered` / `diagnosisSessionId` 字段只作为 Legacy 状态兼容保留：现代 Learner World 每完成一道正式题（correct / wrong / partial）都推进一个 slot，并保持 `training=false`、`retryQuestionId=null`、`diagnosisSessionId=null`。Legacy `/games/**` 仍保留“答错后继续练同一题”的兼容分支。新 run 会重置 answered、correct 与 seen；正式 World 的长期考试/任务状态不累计失败或应试次数，只让 bestScore 上升；passed/cleared 与一次性奖励保持永久、单次和单调。未完成任务可以重新开始，完成后永久关闭且不能重进。
 
 正常响应直接返回对象，不包 data/code。错误使用非 2xx 状态及 {"message":"可读错误"}。
 导出接口需要返回“经过 JSON 编码的字符串”，而不是直接返回备份对象，因为前端 request<string> 会调用 response.json()。若希望用附件下载，需同步修改适配器。
@@ -327,7 +334,7 @@ Legacy /games/** 保持既有兼容行为
 - 每次发卷生成新 attemptId，保存题目与答案快照；重新读取同一课卷不再洗牌。
 - 普通活动开始时冻结 5 个互不相同的知识点，主线活动冻结 10 个；一轮内不能用同一知识点重复占分。
 - 每个知识点首题决定该点得分。首题答错后继续返回该知识点的低难度题，答对后才推进；训练题不补回首题失分。
-- ActivityRun 返回 knowledgePointIds、knowledgePointIndex、training、trainingAnswered、diagnosticAnswered、diagnosisSessionId 与 seenQuestionIds，客户端只负责展示，不自行推断诊断事实或进度。
+- ActivityRun 返回 knowledgePointIds、knowledgePointIndex、plannedRounds、training、trainingAnswered、diagnosticAnswered、diagnosisSessionId 与 seenQuestionIds，客户端只负责展示，不自行推断进度。现代 Learner World 的 `training` / `trainingAnswered` / `diagnosticAnswered` / `diagnosisSessionId` 只作为 Legacy 状态兼容存在，始终是 `false` / `0` / `0` / `null`；进度分母使用 `plannedRounds`。
 - 同一 attemptId 重复提交不重复奖励。已换题时旧答题请求返回明确错误。
 - next 的旧 attemptId 重试返回当前进度，不连续跳题。
 - 未判完题、未处理际遇时不允许跳过。
