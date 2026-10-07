@@ -314,10 +314,14 @@ public class LearningBrowseStore {
     }
 
     private Map<String, Object> question(java.sql.ResultSet result) throws java.sql.SQLException {
+        Integer examYear = result.getObject("exam_year", Integer.class);
+        String questionNumber = result.getString("question_number");
         return ordered("id", result.getString("id"), "subject", result.getString("subject_name"),
                 "sourceType", result.getString("source_type"), "sourceName", result.getString("source_name"),
-                "examYear", result.getObject("exam_year", Integer.class),
-                "questionNumber", result.getString("question_number"),
+                "examYear", examYear,
+                "questionNumber", questionNumber,
+                // UI 只使用 displayQuestionNumber；原始 questionNumber 保留为数据事实。
+                "displayQuestionNumber", QuestionNumberFormatter.display(questionNumber, examYear),
                 "questionType", result.getString("question_type"), "presentationType", result.getString("presentation_type"),
                 "gradingMode", result.getString("grading_mode"), "contentMarkdown", result.getString("content_markdown"),
                 "analysisMarkdown", result.getString("analysis_markdown"),

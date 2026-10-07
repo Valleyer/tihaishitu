@@ -20,7 +20,10 @@ export interface Chapter {
 }
 export interface BookDetail extends BookSummary { chapters: Chapter[] }
 export interface BrowseQuestion {
-  id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string; questionType: string;
+  id: string; subject: string; sourceType: string; sourceName?: string; examYear?: number; questionNumber?: string;
+  /** UI 只使用 displayQuestionNumber；questionNumber 是数据库原始题号。 */
+  displayQuestionNumber?: string;
+  questionType: string;
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
   standardAnswer: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
