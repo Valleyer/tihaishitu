@@ -123,8 +123,7 @@ class ManageContentIntegrationTest {
                 java.util.Map.entry("presentationType", "self_assessment"),
                 java.util.Map.entry("gradingMode", "self_assessment"),
                 java.util.Map.entry("content", "设 $\\Sigma$ 含一个奇点，计算曲面积分。"),
-                java.util.Map.entry("standardAnswer", "参考答案"),
-                java.util.Map.entry("analysis", "使用挖洞高斯法。"), java.util.Map.entry("difficulty", 4),
+                java.util.Map.entry("analysis", "## 参考答案\n\n参考答案\n\n## 解析\n\n使用挖洞高斯法。"), java.util.Map.entry("difficulty", 4),
                 java.util.Map.entry("options", java.util.List.of()),
                 java.util.Map.entry("knowledgePoints", java.util.List.of(java.util.Map.of(
                         "knowledgePointId", pointId, "role", "core", "sortOrder", 0)))));

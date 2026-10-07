@@ -187,10 +187,13 @@ class WorldBookPoolIntegrationTest {
 
         // 一次作答只强化 target：auxiliary 不因为同一次 attempt 自动加分。
         String attemptId = attempt.path("id").asText();
+        String frozen = answerJson(attemptId);
+        assertThat(attempt.path("question").path("options").path(Boolean.parseBoolean(frozen) ? "true" : "false").asText())
+                .isEqualTo("正确");
         mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":true}"
-                                .formatted(attemptId, question)))
+                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
+                                .formatted(attemptId, question, answerJson(attemptId))))
                 .andExpect(status().isOk());
 
         assertThat(mastery.projection(learnerId, core, Instant.now()).masteryScore()).isGreaterThan(0);
@@ -222,8 +225,8 @@ class WorldBookPoolIntegrationTest {
         String questionId = mapper.readTree(body).path("attempt").path("question").path("id").asText();
         String answered = mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":true}"
-                                .formatted(attemptId, questionId)))
+                        .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
+                                .formatted(attemptId, questionId, answerJson(attemptId))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // 做完最后一道自然完成本轮，而不是 500 / 无限重复。
         assertThat(mapper.readTree(answered).path("adventure").path("run").path("status").asText()).isEqualTo("settled");
@@ -277,9 +280,10 @@ class WorldBookPoolIntegrationTest {
             JsonNode attempt = mapper.readTree(current).path("attempt");
             current = mvc.perform(post("/api/v1/worlds/ancient-official/answers").with(csrf()).cookie(cookie)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":true}"
+                            .content("{\"attemptId\":\"%s\",\"questionId\":\"%s\",\"answer\":%s}"
                                     .formatted(attempt.path("id").asText(),
-                                            attempt.path("question").path("id").asText())))
+                                            attempt.path("question").path("id").asText(),
+                                            answerJson(attempt.path("id").asText()))))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             JsonNode run = mapper.readTree(current).path("adventure").path("run");
             if (round < 3) {
@@ -364,6 +368,10 @@ class WorldBookPoolIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'数学一','custom','true_false','true_false','auto',?,'true','解析',2,'published',1)
                 """, id, "题池题-" + id);
+        jdbc.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), id, "true", "正确", true, 0);
+        jdbc.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), id, "false", "错误", false, 1);
         relate(id, corePoint, coreRole, coreSortOrder);
         if (extraPoint != null) relate(id, extraPoint, "core", 1);
         return id;
@@ -374,5 +382,10 @@ class WorldBookPoolIntegrationTest {
                 INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order)
                 VALUES (?,?,?,?)
                 """, question, point, role, order);
+    }
+
+    private String answerJson(String attemptId) {
+        return jdbc.queryForObject("SELECT standard_answer_json FROM study_attempt WHERE id=?",
+                String.class, attemptId);
     }
 }

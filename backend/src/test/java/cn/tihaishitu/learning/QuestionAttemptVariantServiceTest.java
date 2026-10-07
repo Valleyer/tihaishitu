@@ -31,13 +31,14 @@ class QuestionAttemptVariantServiceTest {
     }
 
     @Test
-    void leavesTrueFalseUntouchedAndAvoidsThePreviousChoiceOrder() throws Exception {
+    void remapsTrueFalseBooleanWithItsVisibleTextAndAvoidsPreviousChoiceOrder() throws Exception {
         JsonNode trueFalse = mapper.readTree("""
                 {"presentationType":"true_false","options":{"true":"正确","false":"错误"},"answer":true}
                 """);
-        var unchanged = variants.create(trueFalse, mapper.readTree("true"), trueFalse);
-        assertThat(unchanged.question()).isEqualTo(trueFalse);
-        assertThat(unchanged.standard()).isEqualTo(mapper.readTree("true"));
+        var swapped = variants.applyOrder(trueFalse, mapper.readTree("true"), List.of("false", "true"));
+        assertThat(optionTexts(swapped.question())).containsExactly("错误", "正确");
+        assertThat(swapped.standard()).isEqualTo(mapper.readTree("false"));
+        assertThat(QuestionGradingPolicy.matches(swapped.standard(), mapper.readTree("false"))).isTrue();
 
         JsonNode choice = question("single_choice");
         var reshuffled = variants.create(choice, mapper.readTree("\"B\""), choice);

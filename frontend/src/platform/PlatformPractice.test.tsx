@@ -133,7 +133,7 @@ describe("practice interaction closure", () => {
   it("marks only mastered question previews", () => {
     const summary = { id: "q", subject: "数学", sourceType: "custom", questionType: "single_choice",
       presentationType: "single_choice", gradingMode: "auto", contentMarkdown: "题干", analysisMarkdown: "",
-      standardAnswer: "A", difficulty: 2, revision: 1, learnerQuestionStatus: "mastered" as const };
+      correctAnswer: "A", difficulty: 2, revision: 1, learnerQuestionStatus: "mastered" as const };
     const view = render(<QuestionPreviewCard summary={summary} />);
     expect(screen.getByText("✓ 已掌握")).toBeTruthy();
     view.rerender(<QuestionPreviewCard summary={{ ...summary, learnerQuestionStatus: "unseen" }} />);

@@ -34,7 +34,7 @@ class QuestionReviewWorkflowIntegrationTest {
         String source = source();
         String body = """
                 {"subject":"测试","sourceId":"%s","sourceType":"custom","sourceName":"审核题","questionType":"true_false",
-                 "presentationType":"true_false","gradingMode":"auto","content":"待审核题","standardAnswer":true,
+                 "presentationType":"true_false","gradingMode":"auto","content":"待审核题",
                  "analysis":"解析","difficulty":2,"options":[
                    {"key":"true","text":"正确","correct":true,"sortOrder":0},
                    {"key":"false","text":"错误","correct":false,"sortOrder":1}],

@@ -49,7 +49,6 @@ function question(index: number, status = "pending_review"): QuestionView {
     presentationType: "single_choice",
     gradingMode: "auto",
     content: `第 ${index} 题`,
-    standardAnswer: "A",
     analysis: "解析",
     difficulty: 2,
     status,
@@ -132,6 +131,19 @@ describe("QuestionPage pagination", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "题目状态" }), { target: { value: "published" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ status: "published", page: 0 })));
+  });
+
+  it("edits correctness through options and previews the single complete analysis", async () => {
+    const item = question(1, "draft");
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    expect(await screen.findByText("预览解析")).toBeTruthy();
+    expect(screen.queryByText("标准答案（JSON）")).toBeNull();
+    expect(screen.getAllByText("正确").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText("预览解析"));
+    expect(screen.getByText("解析", { selector: ".markdown-preview p" })).toBeTruthy();
   });
 
   it("resets to page zero and always requests pending items when review mode changes", async () => {

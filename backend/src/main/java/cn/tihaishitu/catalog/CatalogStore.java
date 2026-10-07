@@ -24,10 +24,12 @@ public class CatalogStore {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    private final QuestionAnswerDeriver answerDeriver;
 
-    public CatalogStore(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public CatalogStore(JdbcTemplate jdbc, ObjectMapper objectMapper, QuestionAnswerDeriver answerDeriver) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.answerDeriver = answerDeriver;
     }
 
     public int countBanks() {
@@ -165,9 +167,10 @@ public class CatalogStore {
     private List<QuestionDto> loadQuestions(String bankId) {
         if (!hasProjectedItems(bankId)) return loadLegacyQuestions(bankId);
         Map<String, Map<String, String>> options = new LinkedHashMap<>();
+        Map<String, List<QuestionAnswerDeriver.Option>> optionFacts = new LinkedHashMap<>();
         jdbc.query(
                 """
-                SELECT o.question_id, o.option_key, o.option_text
+                SELECT o.question_id, o.option_key, o.option_text, o.correct_option, o.sort_order
                    FROM question_bank_item bi
                    JOIN question_resource q ON q.id = bi.question_id
                    JOIN question_resource_option o ON o.question_id = bi.question_id
@@ -175,9 +178,14 @@ public class CatalogStore {
                     AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
                  ORDER BY o.question_id, o.sort_order
                 """,
-                (RowCallbackHandler) result -> options
-                        .computeIfAbsent(result.getString("question_id"), ignored -> new LinkedHashMap<>())
-                        .put(result.getString("option_key"), result.getString("option_text")),
+                (RowCallbackHandler) result -> {
+                    String questionId = result.getString("question_id");
+                    options.computeIfAbsent(questionId, ignored -> new LinkedHashMap<>())
+                            .put(result.getString("option_key"), result.getString("option_text"));
+                    optionFacts.computeIfAbsent(questionId, ignored -> new ArrayList<>())
+                            .add(new QuestionAnswerDeriver.Option(result.getString("option_key"),
+                                    result.getBoolean("correct_option"), result.getInt("sort_order")));
+                },
                 bankId
         );
         Map<String, List<String>> pointIds = new LinkedHashMap<>();
@@ -201,7 +209,7 @@ public class CatalogStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                       q.analysis_markdown, q.difficulty
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
                   LEFT JOIN question_source s ON s.id=q.source_id
@@ -217,7 +225,8 @@ public class CatalogStore {
                             result.getString("presentation_type"), result.getString("question_type"),
                             result.getString("presentation_type"), result.getString("grading_mode"),
                             result.getString("content_markdown"), options.getOrDefault(id, Map.of()),
-                            readTree(result.getString("standard_answer_json")), result.getString("analysis_markdown"),
+                            answerDeriver.derive(result.getString("question_type"),
+                                    optionFacts.getOrDefault(id, List.of())), result.getString("analysis_markdown"),
                             List.of(), List.of(), result.getInt("difficulty"), 3, List.of(),
                             pointIds.getOrDefault(id, List.of()), true
                     );

@@ -11,6 +11,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class FlywayMigrationIntegrationTest {
@@ -57,6 +58,7 @@ class FlywayMigrationIntegrationTest {
                 """, questionId);
         old.update("INSERT INTO question_resource_knowledge(question_id, knowledge_point_id, relation_role, sort_order) VALUES (?, ?, 'core', 0)", questionId, knowledgeId);
         old.update("INSERT INTO question_bank_item(bank_id, question_id, sort_order) VALUES (?, ?, 0)", bankId, questionId);
+        insertTrueFalseOptions(old, questionId);
 
         Flyway.configure().dataSource(url, "sa", "").load().migrate();
 
@@ -90,6 +92,7 @@ class FlywayMigrationIntegrationTest {
                 """, question);
         old.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)",
                 question, point);
+        insertTrueFalseOptions(old, question);
         old.update("""
                 INSERT INTO study_attempt(id,learner_id,question_id,question_snapshot_json,standard_answer_json,
                     status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,
@@ -132,6 +135,51 @@ class FlywayMigrationIntegrationTest {
         assertThat(old.queryForObject("SELECT source_id FROM question_resource WHERE id=?", String.class, blank)).isNull();
     }
 
+    @Test
+    void v20MigratesFormalAnswersAndPreservesRemedialCompatibility() {
+        String url = "jdbc:h2:mem:v19-question-contract-" + UUID.randomUUID()
+                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        Flyway.configure().dataSource(url, "sa", "").target(MigrationVersion.fromVersion("19")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        String objective = insertLegacyQuestion(old, "custom", "契约迁移");
+        String solution = UUID.randomUUID().toString();
+        old.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
+                VALUES (?,'测试','custom','solution','self_assessment','self_assessment','综合题',?,'旧解析',2,'published',1)
+                """, solution, "\"旧参考答案\"");
+        String child = UUID.randomUUID().toString();
+        old.update("""
+                INSERT INTO question_resource(id,subject_name,source_type,question_type,presentation_type,
+                    grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,
+                    parent_question_id,derivation_type,revision)
+                VALUES (?,'测试','custom','solution','self_assessment','self_assessment','补救题',?,'补救解析',1,
+                    'published',?,'remedial_step',1)
+                """, child, "\"补救答案\"", solution);
+
+        Flyway.configure().dataSource(url, "sa", "").load().migrate();
+
+        assertThat(old.queryForObject("SELECT standard_answer_json FROM question_resource WHERE id=?", String.class, objective)).isNull();
+        assertThat(old.queryForObject("SELECT standard_answer_json FROM question_resource WHERE id=?", String.class, solution)).isNull();
+        assertThat(old.queryForObject("SELECT analysis_markdown FROM question_resource WHERE id=?", String.class, solution))
+                .isEqualTo("## 参考答案\n\n旧参考答案\n\n## 解析\n\n旧解析");
+        assertThat(old.queryForObject("SELECT standard_answer_json FROM question_resource WHERE id=?", String.class, child))
+                .isEqualTo("\"补救答案\"");
+    }
+
+    @Test
+    void v20RejectsInvalidPublishedObjectiveContractWithQuestionId() {
+        String url = "jdbc:h2:mem:v19-invalid-contract-" + UUID.randomUUID()
+                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        Flyway.configure().dataSource(url, "sa", "").target(MigrationVersion.fromVersion("19")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        String invalid = insertLegacyQuestion(old, "custom", "非法契约");
+        old.update("DELETE FROM question_resource_option WHERE question_id=?", invalid);
+
+        assertThatThrownBy(() -> Flyway.configure().dataSource(url, "sa", "").load().migrate())
+                .satisfies(error -> assertThat(rootCause(error).getMessage()).contains(invalid));
+    }
+
     private String insertLegacyQuestion(JdbcTemplate template, String type, String name) {
         String id = UUID.randomUUID().toString();
         template.update("""
@@ -139,7 +187,21 @@ class FlywayMigrationIntegrationTest {
                     grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty,status,revision)
                 VALUES (?,'测试',?,?,'true_false','true_false','auto','题','true','解析',2,'published',1)
                 """, id, type, name);
+        insertTrueFalseOptions(template, id);
         return id;
+    }
+
+    private static void insertTrueFalseOptions(JdbcTemplate template, String questionId) {
+        template.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), questionId, "true", "正确", true, 0);
+        template.update("INSERT INTO question_resource_option(id,question_id,option_key,option_text,correct_option,sort_order) VALUES (?,?,?,?,?,?)",
+                UUID.randomUUID().toString(), questionId, "false", "错误", false, 1);
+    }
+
+    private static Throwable rootCause(Throwable error) {
+        Throwable result = error;
+        while (result.getCause() != null) result = result.getCause();
+        return result;
     }
 
     private boolean tableExists(String name) {

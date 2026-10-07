@@ -180,7 +180,7 @@ class QuestionSourceRegistryIntegrationTest {
         value.put("subject","测试"); if(sourceId!=null)value.put("sourceId",sourceId);
         value.put("sourceType","custom"); value.put("sourceName","伪造"); value.put("examYear",2026);
         value.put("questionNumber","1"); value.put("questionType","true_false"); value.put("presentationType","true_false");
-        value.put("gradingMode","auto"); value.put("content","题"); value.put("standardAnswer",true);
+        value.put("gradingMode","auto"); value.put("content","题");
         value.put("analysis","解析"); value.put("difficulty",1);
         value.put("options",java.util.List.of(Map.of("key","true","text","正确","correct",true,"sortOrder",0),
                 Map.of("key","false","text","错误","correct",false,"sortOrder",1)));

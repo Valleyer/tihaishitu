@@ -285,7 +285,7 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   } catch (reason) { setError((reason as Error).message); } };
   const update = (action: Promise<PracticeSession>) => action.then(value => { setSession(value); setSelected([]); setError(""); }).catch(reason => setError((reason as Error).message));
   const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
-  const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer"><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</section>;
+  const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer">{question.gradingMode === "self_assessment" ? <><h2>参考解析</h2><RichText>{attempt.explanation || ""}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</>}</section>;
   const assessment = attempt.assessment || "wrong";
   const title = examTitle(attempt);
   const tags = attemptKnowledgeTags(attempt);
@@ -305,7 +305,8 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
 function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   const [question, setQuestion] = useState<BrowseQuestion>(); const [error, setError] = useState(""); const [showAnswer, setShowAnswer] = useState(false);
   useEffect(() => { platformApi.question(id).then(setQuestion).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich"><h2>参考答案</h2><pre>{JSON.stringify(question.standardAnswer, null, 2)}</pre><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></section>}</>}</main></Shell>;
+  const solution = question?.questionType === "solution";
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich">{solution ? <><h2>参考解析</h2><RichText>{question.analysisMarkdown}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={question.correctAnswer} presentationType={question.presentationType} options={Object.fromEntries((question.options || []).map(option => [option.key, option.text]))}/><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></>}</section>}</>}</main></Shell>;
 }
 
 function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }

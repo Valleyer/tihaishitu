@@ -32,7 +32,7 @@ public class QuestionAttemptVariantService {
         ObjectNode snapshot = question.deepCopy();
         JsonNode options = snapshot.path("options");
         String presentation = snapshot.path("presentationType").asText(snapshot.path("type").asText());
-        if (!Set.of("single_choice", "multiple_choice").contains(presentation)
+        if (!Set.of("single_choice", "multiple_choice", "true_false").contains(presentation)
                 || !options.isObject() || options.size() < 2) {
             return new AttemptVariant(snapshot, standard.deepCopy());
         }
@@ -88,6 +88,12 @@ public class QuestionAttemptVariantService {
             visibleKeys.stream().filter(remapped::contains).forEach(result::add);
             return result.size() == remapped.size() ? result : standard.deepCopy();
         }
+        if (standard.isBoolean()) {
+            String oldKey = standard.asBoolean() ? "true" : "false";
+            String newKey = oldToNew.get(oldKey);
+            return newKey == null ? standard.deepCopy()
+                    : mapper.getNodeFactory().booleanNode(Boolean.parseBoolean(newKey));
+        }
         return standard.deepCopy();
     }
 
@@ -103,6 +109,7 @@ public class QuestionAttemptVariantService {
         Set<String> values = new HashSet<>();
         if (standard.isArray()) standard.forEach(value -> values.add(value.asText()));
         else if (standard.isTextual()) values.add(standard.asText());
+        else if (standard.isBoolean()) values.add(standard.asBoolean() ? "true" : "false");
         return values;
     }
 

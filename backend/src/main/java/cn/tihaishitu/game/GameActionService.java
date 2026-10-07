@@ -7,6 +7,8 @@ import cn.tihaishitu.learner.StudyProfileService;
 import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import cn.tihaishitu.learning.DiagnosticLearningService;
 import cn.tihaishitu.learning.LearnerKnowledgeStateService;
+import cn.tihaishitu.learning.LearnerQuestionProgressStore;
+import cn.tihaishitu.learning.QuestionAttemptVariantService;
 import cn.tihaishitu.world.WorldActionContext;
 import cn.tihaishitu.world.WorldStateStore;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -39,6 +41,8 @@ public class GameActionService {
     private final AdaptiveStudyPlanner adaptivePlanner;
     private final DiagnosticLearningService diagnostics;
     private final cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder;
+    private final QuestionAttemptVariantService variants;
+    private final LearnerQuestionProgressStore questionProgress;
 
     public GameActionService(GameStore games, QuestionAttemptStore attempts,
                              KnowledgeQuestionPoolService questionPool,
@@ -47,7 +51,9 @@ public class GameActionService {
                              LearnerKnowledgeStateService knowledgeStates,
                              AdaptiveStudyPlanner adaptivePlanner,
                              DiagnosticLearningService diagnostics,
-                             cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder) {
+                             cn.tihaishitu.learning.QuestionExamMetadataBuilder examMetadataBuilder,
+                             QuestionAttemptVariantService variants,
+                             LearnerQuestionProgressStore questionProgress) {
         this.games = games;
         this.attempts = attempts;
         this.questionPool = questionPool;
@@ -60,6 +66,8 @@ public class GameActionService {
         this.adaptivePlanner = adaptivePlanner;
         this.diagnostics = diagnostics;
         this.examMetadataBuilder = examMetadataBuilder;
+        this.variants = variants;
+        this.questionProgress = questionProgress;
     }
 
     @Transactional
@@ -246,7 +254,6 @@ public class GameActionService {
         attempts.reveal(snapshot);
 
         ObjectNode reveal = mapper.createObjectNode();
-        reveal.set("standard", snapshot.standard().deepCopy());
         reveal.put("explanation", snapshot.question().path("explanation").asText());
         reveal.set("knowledgePoints", knowledgeDetails(snapshot.question()));
         current.set("reveal", reveal);
@@ -276,7 +283,6 @@ public class GameActionService {
         result.put("assessment", request.assessment());
         result.put("gradingSource", "self");
         result.put("answer", request.assessment());
-        result.set("standard", snapshot.standard().deepCopy());
         result.put("explanation", snapshot.question().path("explanation").asText());
         result.set("aliases", snapshot.question().path("aliases").deepCopy());
         result.put("story", diagnosis.diagnosisStarted()
@@ -510,7 +516,16 @@ public class GameActionService {
         // displayQuestionNumber / examLabel / 全部 core+auxiliary KP 标签，
         // 一并冻结进 attempt snapshot，World 题面刷新后不会变化。
         full.set("examMetadata", examMetadataBuilder.build(question.id(), question.chapter()));
-        ObjectNode visible = full.deepCopy();
+        QuestionAttemptVariantService.AttemptVariant variant;
+        if (world == null) {
+            variant = new QuestionAttemptVariantService.AttemptVariant(full, question.answer());
+        } else {
+            var previous = questionProgress.latestAttemptForQuestion(world.learnerId(), question.id()).orElse(null);
+            variant = variants.create(full, question.answer(),
+                    previous == null ? full : previous.questionSnapshot(),
+                    previous == null ? question.answer() : previous.standardAnswer());
+        }
+        ObjectNode visible = variant.question().deepCopy();
         visible.remove(List.of("answer", "aliases", "keywords", "explanation"));
         ArrayNode knowledge = mapper.createArrayNode();
         List<KnowledgePointDto> details = questionPool.knowledgeDetails(question.knowledgePointIds());
@@ -543,7 +558,7 @@ public class GameActionService {
         run.put("training", remediation);
         attempt.put("review", remediation);
         game.set("attempt", attempt);
-        attempts.create(attemptId, game.path("id").asText(), question.id(), full, question.answer(),
+        attempts.create(attemptId, game.path("id").asText(), question.id(), variant.question(), variant.standard(),
                 full.path("gradingMode").asText("auto"), target.id(),
                 remediation ? "training" : "normal", question.difficulty(),
                 directive == null ? null : directive.diagnosisSessionId(),

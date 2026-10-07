@@ -1,8 +1,5 @@
 package cn.tihaishitu.manage;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -27,7 +24,7 @@ public class QuestionManagementStore {
             String id, String subject, String sourceId, String sourceType, String sourceName,
             String sourceCanonicalName, Integer examYear,
             String questionNumber, String questionType, String presentationType, String gradingMode,
-            String content, JsonNode standardAnswer, String analysis, int difficulty, String status,
+            String content, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
             String reviewedBy, String reviewComment, long revision, Instant updatedAt,
             List<OptionView> options, List<KnowledgeRelationView> knowledgePoints) {}
@@ -36,16 +33,14 @@ public class QuestionManagementStore {
     public record QuestionInput(
             String subject, String sourceId, String sourceType, String sourceName, Integer examYear, String questionNumber,
             String questionType, String presentationType, String gradingMode, String content,
-            JsonNode standardAnswer, String analysis, int difficulty, String parentQuestionId,
+            String analysis, int difficulty, String parentQuestionId,
             String derivationType, List<OptionInput> options, List<RelationInput> knowledgePoints) {}
 
     private final JdbcTemplate jdbc;
-    private final ObjectMapper mapper;
     private final KnowledgeManagementStore knowledgeStore;
 
-    public QuestionManagementStore(JdbcTemplate jdbc, ObjectMapper mapper, KnowledgeManagementStore knowledgeStore) {
+    public QuestionManagementStore(JdbcTemplate jdbc, KnowledgeManagementStore knowledgeStore) {
         this.jdbc = jdbc;
-        this.mapper = mapper;
         this.knowledgeStore = knowledgeStore;
     }
 
@@ -83,7 +78,7 @@ public class QuestionManagementStore {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, 1)
                 """, id, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
-                input.content(), json(input.standardAnswer()), input.analysis(), input.difficulty(),
+                input.content(), null, input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, actorId);
         replaceChildren(id, input, actorId);
         knowledgeStore.audit(actorId, "QUESTION_CREATED", "question", id, java.util.Map.of());
@@ -102,7 +97,7 @@ public class QuestionManagementStore {
                  WHERE id = ? AND revision = ?
                 """, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
-                input.content(), json(input.standardAnswer()), input.analysis(), input.difficulty(),
+                input.content(), null, input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, id, expectedRevision);
         if (changed == 0) conflictOrMissing(id);
         replaceChildren(id, input, actorId);
@@ -222,8 +217,8 @@ public class QuestionManagementStore {
                 result.getString("source_canonical_name"), (Integer) result.getObject("exam_year"),
                 result.getString("question_number"), result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
-                result.getString("content_markdown"), tree(result.getString("standard_answer_json")),
-                result.getString("analysis_markdown"), result.getInt("difficulty"), result.getString("status"),
+                result.getString("content_markdown"), result.getString("analysis_markdown"),
+                result.getInt("difficulty"), result.getString("status"),
                 result.getString("parent_question_id"), result.getString("derivation_type"),
                 result.getString("created_by"), result.getString("creator_name"),
                 result.getString("reviewed_by"), result.getString("review_comment"), result.getLong("revision"),
@@ -252,16 +247,6 @@ public class QuestionManagementStore {
     private void conflictOrMissing(String id) {
         if (find(id).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "题目不存在。");
         throw new ResponseStatusException(HttpStatus.CONFLICT, "题目已被其他人修改，或状态已经变化，请重新加载。");
-    }
-
-    private String json(JsonNode value) {
-        try { return mapper.writeValueAsString(value == null ? mapper.nullNode() : value); }
-        catch (JsonProcessingException error) { throw new IllegalStateException("答案无法序列化。", error); }
-    }
-
-    private JsonNode tree(String value) {
-        try { return mapper.readTree(value); }
-        catch (JsonProcessingException error) { throw new IllegalStateException("答案数据损坏。", error); }
     }
 
     private static boolean isReview(String action) { return action.startsWith("QUESTION_REVIEW_"); }

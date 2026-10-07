@@ -125,7 +125,7 @@ export interface Scene {
 export interface Result {
   correct: boolean | null;
   answer: Answer;
-  standard: Answer;
+  standard?: Answer;
   explanation: string;
   aliases: string[];
   story: string;
@@ -134,7 +134,6 @@ export interface Result {
   gradingSource?: "automatic" | "self";
 }
 export interface RevealedAnswer {
-  standard: Answer;
   explanation: string;
   knowledgePoints: KnowledgePoint[];
 }

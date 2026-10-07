@@ -91,7 +91,11 @@ public class LegacyCatalogMigrator {
                             difficulty, status, derivation_type, revision
                         ) VALUES (?, ?, 'custom', ?, ?, ?, 'auto', ?, ?, ?, ?, 'published', 'legacy_migration', 1)
                         """, globalId, question.subject(), question.bankName(), question.type(), question.type(),
-                        question.content(), question.answerJson(), value(question.explanation()), question.difficulty());
+                        question.content(), null,
+                        "solution".equals(question.type())
+                                ? SolutionAnalysisComposer.merge(legacyAnswerText(question.answerJson()), question.explanation())
+                                : value(question.explanation()),
+                        question.difficulty());
                 if (!hasChildren("question_resource_option", globalId)) migrateOptions(question, globalId);
                 if (!hasChildren("question_resource_knowledge", globalId)) migrateRelations(question, globalId);
                 jdbc.update("INSERT INTO legacy_question_map(bank_id, legacy_id, global_id) VALUES (?, ?, ?)",
@@ -123,6 +127,11 @@ public class LegacyCatalogMigrator {
                     """, UUID.randomUUID().toString(), globalId, option.key(), option.text(),
                     contains(answer, option.key()), option.sortOrder());
         }
+    }
+
+    private String legacyAnswerText(String answerJson) {
+        JsonNode answer = read(answerJson);
+        return answer != null && answer.isTextual() ? answer.asText() : value(answerJson);
     }
 
     private void migrateRelations(LegacyQuestion question, String globalId) {

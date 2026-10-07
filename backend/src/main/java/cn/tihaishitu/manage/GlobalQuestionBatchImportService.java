@@ -1,6 +1,7 @@
 package cn.tihaishitu.manage;
 
 import cn.tihaishitu.catalog.QuestionContractValidator;
+import cn.tihaishitu.catalog.SolutionAnalysisComposer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,8 +23,9 @@ import java.util.UUID;
 
 @Service
 public class GlobalQuestionBatchImportService {
-    public static final String SCHEMA_VERSION = "global-question-batch/v3";
-    public static final String LEGACY_SCHEMA_VERSION = "global-question-batch/v2";
+    public static final String SCHEMA_VERSION = "global-question-batch/v4";
+    public static final String LEGACY_SCHEMA_VERSION = "global-question-batch/v3";
+    public static final String OLDEST_SCHEMA_VERSION = "global-question-batch/v2";
 
     private static final Set<String> FORBIDDEN_BOOK_FIELDS = Set.of(
             "bank", "book", "targetBookId", "weight", "enabled", "chapter");
@@ -32,6 +34,9 @@ public class GlobalQuestionBatchImportService {
     private static final Set<String> BATCH_FIELDS = Set.of(
             "subject", "sourceType", "sourceName", "examYear");
     private static final Set<String> QUESTION_FIELDS = Set.of(
+            "id", "questionNumber", "questionType", "presentationType", "gradingMode",
+            "content", "analysis", "difficulty", "options", "knowledgePoints");
+    private static final Set<String> LEGACY_QUESTION_FIELDS = Set.of(
             "id", "questionNumber", "questionType", "presentationType", "gradingMode",
             "content", "standardAnswer", "analysis", "difficulty", "options", "knowledgePoints");
     private static final Set<String> OPTION_FIELDS = Set.of(
@@ -59,7 +64,7 @@ public class GlobalQuestionBatchImportService {
 
     private record ValidBatch(String subject, String sourceType, String sourceName, Integer examYear) {}
     private record ResolvedKnowledge(String id, String code, String role, int sortOrder) {}
-    private record ValidQuestion(QuestionInput input, List<OptionInput> options,
+    private record ValidQuestion(QuestionInput input, String analysis, List<OptionInput> options,
                                  List<ResolvedKnowledge> knowledgePoints) {}
     private record ValidImport(String schemaVersion, boolean publish, ValidBatch batch, List<ValidQuestion> questions) {}
     private record KnowledgeRef(String id, String subject) {}
@@ -90,7 +95,7 @@ public class GlobalQuestionBatchImportService {
         for (ValidQuestion question : valid.questions()) {
             boolean existed = count("SELECT COUNT(*) FROM question_resource WHERE id = ?",
                     question.input().id()) > 0;
-            upsertQuestion(valid.batch(), source.id(), question.input(), valid.publish(), actorId);
+            upsertQuestion(valid.batch(), source.id(), question, valid.publish(), actorId);
 
             jdbc.update("DELETE FROM question_resource_option WHERE question_id = ?", question.input().id());
             for (OptionInput option : question.options()) {
@@ -126,11 +131,11 @@ public class GlobalQuestionBatchImportService {
         if (document == null || !document.isObject()) bad("导入内容必须是 JSON 对象。");
         for (String field : FORBIDDEN_BOOK_FIELDS) {
             if (document.has(field)) {
-                bad("V2 题目批次不得包含 Book 字段：" + field + "。");
+                bad("题目批次不得包含 Book 字段：" + field + "。");
             }
         }
         if ("global-question-bank/v1".equals(document.path("schemaVersion").asText())) {
-            bad("这是旧版文集导入格式，请使用 global-question-batch/v2。");
+            bad("这是旧版文集导入格式，请使用 " + SCHEMA_VERSION + "。");
         }
         validateSchemaFields(document);
         try {
@@ -142,9 +147,11 @@ public class GlobalQuestionBatchImportService {
     }
 
     private ValidImport validate(ImportRequest request) {
-        if (request == null || !Set.of(SCHEMA_VERSION, LEGACY_SCHEMA_VERSION).contains(request.schemaVersion())) {
-            bad("schemaVersion 必须为 " + SCHEMA_VERSION + "（旧 v2 仍兼容）。");
+        if (request == null || !Set.of(SCHEMA_VERSION, LEGACY_SCHEMA_VERSION, OLDEST_SCHEMA_VERSION)
+                .contains(request.schemaVersion())) {
+            bad("schemaVersion 必须为 " + SCHEMA_VERSION + "（旧 v3/v2 仍兼容）。");
         }
+        boolean legacy = !SCHEMA_VERSION.equals(request.schemaVersion());
         BatchInput inputBatch = request.batch();
         if (inputBatch == null || blank(inputBatch.subject()) || blank(inputBatch.sourceName())
                 || !SOURCE_TYPES.contains(inputBatch.sourceType())) {
@@ -168,10 +175,9 @@ public class GlobalQuestionBatchImportService {
             if (question == null || !uuid(question.id()) || !ids.add(question.id())) {
                 bad(at + "的 id 非法或重复。");
             }
-            if (blank(question.content()) || blank(question.analysis()) || question.standardAnswer() == null
-                    || question.standardAnswer().isNull()) {
-                bad(at + "缺少题干、标准答案或解析。");
-            }
+            if (blank(question.content()) || blank(question.analysis())) bad(at + "缺少题干或解析。");
+            if (legacy && (question.standardAnswer() == null || question.standardAnswer().isNull()))
+                bad(at + "的旧版 standardAnswer 不能为空。");
             validateQuestionType(question, at);
             if (question.difficulty() == null || question.difficulty() < 1 || question.difficulty() > 5) {
                 bad(at + "的 difficulty 必须为 1–5。");
@@ -185,16 +191,21 @@ public class GlobalQuestionBatchImportService {
             }
             if (question.options() == null) bad(at + "必须提供 options 字段。");
             List<OptionInput> options = normalizeAndValidateOptions(question, at);
-            QuestionContractValidator.validate(question.questionType(), question.presentationType(),
-                    question.gradingMode(), question.standardAnswer(), options.stream().map(option ->
+            String analysis = normalizedAnalysis(question, legacy, at);
+            QuestionContractValidator.validateFormal(question.questionType(), question.presentationType(),
+                    question.gradingMode(), analysis, options.stream().map(option ->
                             new QuestionContractValidator.Option(option.key(), option.text(),
-                                    Boolean.TRUE.equals(option.correct()))).toList())
+                                    Boolean.TRUE.equals(option.correct()), option.sortOrder())).toList())
                     .ifPresent(message -> bad(at + "：" + message));
+            if (legacy && !"solution".equals(question.questionType())
+                    && !answerKeys(question.standardAnswer()).equals(correctKeys(options))) {
+                bad(at + "的 standardAnswer 与 options.correct 不一致。");
+            }
             if (question.knowledgePoints() == null) bad(at + "必须提供 knowledgePoints 字段。");
             List<ResolvedKnowledge> points = resolveKnowledgePoints(
                     question.knowledgePoints(), batch.subject(), at,
-                    LEGACY_SCHEMA_VERSION.equals(request.schemaVersion()));
-            validated.add(new ValidQuestion(question, options, points));
+                    OLDEST_SCHEMA_VERSION.equals(request.schemaVersion()));
+            validated.add(new ValidQuestion(question, analysis, options, points));
         }
         return new ValidImport(request.schemaVersion(), Boolean.TRUE.equals(request.publish()), batch, validated);
     }
@@ -211,7 +222,8 @@ public class GlobalQuestionBatchImportService {
             JsonNode question = questions.get(questionIndex);
             String at = "第 " + (questionIndex + 1) + " 道题";
             if (!question.isObject()) continue;
-            rejectUnknownFields(question, QUESTION_FIELDS, at);
+            boolean legacy = !SCHEMA_VERSION.equals(document.path("schemaVersion").asText());
+            rejectUnknownFields(question, legacy ? LEGACY_QUESTION_FIELDS : QUESTION_FIELDS, at);
             JsonNode options = question.get("options");
             if (options != null && options.isArray()) {
                 for (int optionIndex = 0; optionIndex < options.size(); optionIndex++) {
@@ -302,9 +314,6 @@ public class GlobalQuestionBatchImportService {
         List<OptionInput> options = question.options();
         if ("self_assessment".equals(question.gradingMode())) {
             if (!options.isEmpty()) bad(at + "是自评题，不应提供客观题选项。");
-            if (!question.standardAnswer().isTextual() || blank(question.standardAnswer().asText())) {
-                bad(at + "的自评参考答案必须是 Markdown 字符串。");
-            }
             return List.of();
         }
         if (options.size() < 2 || options.size() > 6) bad(at + "必须提供 2–6 个选项。");
@@ -332,10 +341,22 @@ public class GlobalQuestionBatchImportService {
                 && (options.size() != 2 || correct.size() != 1)) {
             bad(at + "的判断题必须有两个选项和一个正确项。");
         }
-        if (!answerKeys(question.standardAnswer()).equals(correct)) {
-            bad(at + "的 standardAnswer 与 options.correct 不一致。");
-        }
         return normalized;
+    }
+
+    private String normalizedAnalysis(QuestionInput question, boolean legacy, String at) {
+        if (!legacy || !"solution".equals(question.questionType())) return question.analysis().trim();
+        if (!question.standardAnswer().isTextual() || blank(question.standardAnswer().asText())) {
+            bad(at + "的旧版综合题 standardAnswer 必须是 Markdown 字符串。");
+        }
+        return SolutionAnalysisComposer.merge(question.standardAnswer().asText(), question.analysis());
+    }
+
+    private Set<String> correctKeys(List<OptionInput> options) {
+        Set<String> correct = new HashSet<>();
+        options.stream().filter(option -> Boolean.TRUE.equals(option.correct()))
+                .forEach(option -> correct.add(option.key()));
+        return correct;
     }
 
     private List<ResolvedKnowledge> resolveKnowledgePoints(
@@ -385,9 +406,10 @@ public class GlobalQuestionBatchImportService {
         return points.isEmpty() ? null : points.get(0);
     }
 
-    private void upsertQuestion(ValidBatch batch, String sourceId, QuestionInput question, boolean publish, String actorId) {
+    private void upsertQuestion(ValidBatch batch, String sourceId, ValidQuestion validQuestion,
+                                boolean publish, String actorId) {
+        QuestionInput question = validQuestion.input();
         String status = publish ? "published" : "pending_review";
-        String answer = json(question.standardAnswer());
         int changed = jdbc.update("""
                 UPDATE question_resource
                    SET subject_name = ?, source_id = ?, source_type = ?, source_name = ?, exam_year = ?,
@@ -398,7 +420,7 @@ public class GlobalQuestionBatchImportService {
                  WHERE id = ?
                 """, batch.subject(), sourceId, batch.sourceType(), batch.sourceName(), batch.examYear(),
                 nullable(question.questionNumber()), question.questionType(), question.presentationType(),
-                question.gradingMode(), question.content().trim(), answer, question.analysis().trim(),
+                question.gradingMode(), question.content().trim(), null, validQuestion.analysis(),
                 question.difficulty(), status, actorId, question.id());
         if (changed == 0) {
             jdbc.update("""
@@ -410,7 +432,7 @@ public class GlobalQuestionBatchImportService {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                     """, question.id(), batch.subject(), sourceId, batch.sourceType(), batch.sourceName(), batch.examYear(),
                     nullable(question.questionNumber()), question.questionType(), question.presentationType(),
-                    question.gradingMode(), question.content().trim(), answer, question.analysis().trim(),
+                    question.gradingMode(), question.content().trim(), null, validQuestion.analysis(),
                     question.difficulty(), status, actorId, actorId);
         }
     }

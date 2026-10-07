@@ -25,7 +25,7 @@ export interface BrowseQuestion {
   displayQuestionNumber?: string;
   questionType: string;
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
-  standardAnswer: unknown; difficulty: number; revision: number;
+  correctAnswer?: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
   learnerQuestionStatus?: "unseen" | "mastered" | "needs_review";
   latestAssessment?: "correct" | "partial" | "wrong"; lastGradedAt?: string;
