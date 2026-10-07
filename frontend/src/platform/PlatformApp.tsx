@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import App from "../App";
 import { RichText } from "../components/RichText";
@@ -288,7 +288,15 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
 export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const [session, setSession] = useState<PracticeSession>(); const [selected, setSelected] = useState<string[]>([]); const [error, setError] = useState("");
   const [reportOpen,setReportOpen]=useState(false); const [reportReason,setReportReason]=useState("content_error"); const [reportComment,setReportComment]=useState(""); const [reportStatus,setReportStatus]=useState("");
-  const load = () => platformApi.practice(id).then(value => { setSession(value); setSelected([]); }).catch(reason => setError((reason as Error).message));
+  const reportAttemptId=useRef<string | undefined>(undefined);
+  const applySession=(value:PracticeSession)=>{
+    const nextAttemptId=value.currentAttempt.id;
+    if(reportAttemptId.current&&reportAttemptId.current!==nextAttemptId){
+      setReportOpen(false); setReportReason("content_error"); setReportComment(""); setReportStatus("");
+    }
+    reportAttemptId.current=nextAttemptId; setSession(value); setSelected([]); setError("");
+  };
+  const load = () => platformApi.practice(id).then(applySession).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, [id]);
   if (!session) return <Shell data={data}><main className="hub-main narrow"><p>{error || "正在恢复专项练习…"}</p></main></Shell>;
   const attempt = session.currentAttempt; const question = attempt.question;
@@ -298,9 +306,9 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const toggle = (key: string) => setSelected(values => multiple ? (values.includes(key) ? values.filter(value => value !== key) : [...values, key]) : [key]);
   const submit = async () => { try {
     const answer = question.presentationType === "true_false" ? selected[0] === "true" : multiple ? selected : selected[0];
-    setSession(await platformApi.answerPractice(session, answer));
+    applySession(await platformApi.answerPractice(session, answer));
   } catch (reason) { setError((reason as Error).message); } };
-  const update = (action: Promise<PracticeSession>) => action.then(value => { setSession(value); setSelected([]); setError(""); }).catch(reason => setError((reason as Error).message));
+  const update = (action: Promise<PracticeSession>) => action.then(applySession).catch(reason => setError((reason as Error).message));
   const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
   const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer">{question.gradingMode === "self_assessment" ? <><h2>参考解析</h2><RichText>{attempt.explanation || ""}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</>}</section>;
   const assessment = attempt.assessment || "wrong";

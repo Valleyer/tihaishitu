@@ -99,6 +99,46 @@ describe("global question detail", () => {
 });
 
 describe("practice interaction closure", () => {
+  it("scopes question-report state to the current attempt", async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    HTMLDialogElement.prototype.close = function () { this.open = false; };
+    const q1 = { ...session("correct"), currentAttempt: { ...session("correct").currentAttempt, id: "attempt-q1" } };
+    const q2 = { ...session("correct"), flowComplete: false, canRepeat: false, currentAttempt: {
+      ...session("correct").currentAttempt, id: "attempt-q2", status: "active" as const,
+      assessment: undefined, gradingSource: undefined, answerRevealed: false, standard: undefined, explanation: undefined,
+    } };
+    vi.spyOn(platformApi, "practice").mockResolvedValue(q1);
+    vi.spyOn(platformApi, "nextPractice").mockResolvedValue(q2);
+    const report = vi.spyOn(platformApi, "reportQuestion").mockResolvedValue({ id: "report", status: "open" });
+    render(<PracticePage data={data} id="session" />);
+
+    await screen.findByText("✓ 回答正确");
+    fireEvent.click(screen.getByRole("button", { name: "题目有误？" }));
+    fireEvent.change(screen.getByLabelText("问题类型"), { target: { value: "analysis_error" } });
+    fireEvent.change(screen.getByLabelText("补充说明（可空）"), { target: { value: "Q1 解析问题" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    await waitFor(() => expect(report).toHaveBeenCalledWith("attempt-q1", "analysis_error", "Q1 解析问题"));
+    expect(await screen.findByText("已收到反馈")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "提交" }).hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭窗口" }));
+    fireEvent.click(screen.getByRole("button", { name: "题目有误？" }));
+    expect(screen.getByText("已收到反馈")).toBeTruthy();
+    expect(screen.getByLabelText("补充说明（可空）")).toHaveProperty("value", "Q1 解析问题");
+    fireEvent.click(screen.getByRole("button", { name: "关闭窗口" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "下一道题" }));
+    await waitFor(() => expect(platformApi.nextPractice).toHaveBeenCalledWith("session"));
+    fireEvent.click(screen.getByRole("button", { name: "题目有误？" }));
+    expect(screen.queryByText("已收到反馈")).toBeNull();
+    expect(screen.getByLabelText("问题类型")).toHaveProperty("value", "content_error");
+    expect(screen.getByLabelText("补充说明（可空）")).toHaveProperty("value", "");
+    expect(screen.getByRole("button", { name: "提交" }).hasAttribute("disabled")).toBe(false);
+    fireEvent.change(screen.getByLabelText("补充说明（可空）"), { target: { value: "Q2 题干问题" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    await waitFor(() => expect(report).toHaveBeenLastCalledWith("attempt-q2", "content_error", "Q2 题干问题"));
+  });
+
   it("selects a saved trainable book by clicking the whole card and keeps draft scope separate", async () => {
     vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [{ id: "chapter", code: "C",
       name: "函数章", description: "", knowledgePointCount: 1, trainableKnowledgePointCount: 1,

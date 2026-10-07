@@ -65,6 +65,19 @@ describe("World question panel exam metadata", () => {
     expect(screen.getAllByText("2022年全国硕士研究生招生考试数学一")).toHaveLength(1);
   });
 
+  it("deduplicates a source name equal to the exam label after trimming", () => {
+    const duplicate = attempt();
+    duplicate.question.examMetadata!.sourceName = " 2022年考研数学一真题 ";
+    const view = render(
+      <QuestionPanel attempt={duplicate} busy={false} submit={noop} reveal={noop} assess={noop}
+        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        setReview={noop} onEvent={noop} />,
+    );
+    expect(screen.getAllByText("2022年考研数学一真题")).toHaveLength(1);
+    expect(view.container.querySelector(".knowledge-ribbon .exam-source")).toBeNull();
+    expect(screen.getByText("第3题")).toBeTruthy();
+  });
+
   it("renders every knowledge point tag with its role", () => {
     const view = render(
       <QuestionPanel attempt={attempt()} busy={false} submit={noop} reveal={noop} assess={noop}
