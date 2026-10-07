@@ -127,6 +127,18 @@ export interface KnowledgeDirectoryItem extends KnowledgePoint {
   publishedQuestionCount: number;
 }
 export interface KnowledgeDirectoryFacets { subjects: string[] }
+/** 全平台题库（published Formal Parent Question）的筛选条件；浏览不创建 Attempt。 */
+export interface QuestionDirectoryFilters {
+  query?: string; sourceId?: string; examYear?: number | string; questionType?: string;
+  difficulty?: number | string; bookId?: string; chapterId?: string; knowledge?: string;
+  page?: number; size?: number;
+}
+/** `/learning/questions/facets` 返回的只读过滤事实，不受 Learner selected Books 限制。 */
+export interface QuestionDirectoryFacets {
+  sources: { id: string; displayName: string; sourceType: string }[];
+  examYears: number[];
+  books: { id: string; name: string; chapters: { id: string; name: string }[] }[];
+}
 export interface PageResult<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface LearnerStatistics {
   days: 7 | 30 | 90; generatedAt: string;
@@ -164,6 +176,15 @@ export const platformApi = {
     return request<PageResult<KnowledgeDirectoryItem>>("/learning/knowledge-points?" + params.toString());
   },
   knowledgeDirectoryFacets: () => request<KnowledgeDirectoryFacets>("/learning/knowledge-points/facets"),
+  /** 全平台题库列表：published Formal Parent Question 的只读浏览，固定 20 / 页。 */
+  questionDirectory: (filters: QuestionDirectoryFilters) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+    });
+    return request<PageResult<BrowseQuestion>>("/learning/questions?" + params.toString());
+  },
+  questionDirectoryFacets: () => request<QuestionDirectoryFacets>("/learning/questions/facets"),
   knowledgeQuestions: (id: string) => request<BrowseQuestion[]>(
     "/learning/knowledge-points/" + encodeURIComponent(id) + "/questions"),
   question: (id: string) => request<BrowseQuestion>("/learning/questions/" + encodeURIComponent(id)),

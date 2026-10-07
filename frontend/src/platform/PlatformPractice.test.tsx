@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { platformApi, type HubBootstrap, type PracticeSession } from "./api";
-import { PracticePage, QuestionPreviewCard, safePracticeReturnTo, StudyPage, WrongQuestionsPage } from "./PlatformApp";
+import { platformApi, type BrowseQuestion, type HubBootstrap, type PracticeSession } from "./api";
+import { PracticePage, QuestionPage, QuestionPreviewCard, safePracticeReturnTo, StudyPage, WrongQuestionsPage } from "./PlatformApp";
 import { AnswerDisplay } from "./practiceView";
 
 const data = {
@@ -30,6 +30,73 @@ const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRep
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+const browseQuestion = (overrides: Partial<BrowseQuestion> = {}): BrowseQuestion => ({
+  id: "question", subject: "数学一", sourceType: "real_exam", sourceName: "2020年考研数学一真题",
+  examYear: 2020, questionNumber: "2020-7", displayQuestionNumber: "7", questionType: "single_choice",
+  presentationType: "single_choice", gradingMode: "auto", contentMarkdown: "题干 $x^2$",
+  analysisMarkdown: "解析", correctAnswer: "C", difficulty: 2, revision: 1,
+  options: [{ key: "A", text: "甲" }, { key: "B", text: "乙" }, { key: "C", text: "丙" }],
+  // 全平台题目：知识点可能属于 Learner 尚未选择的文集。
+  knowledgePoints: [{ id: "point", code: "K", name: "数列极限计算", subject: "数学一", section: "",
+    chapter: "", description: "", explanation: "", role: "core" }],
+  ...overrides,
+});
+
+describe("global question detail", () => {
+  it("shows the objective answer without JSON quotes and links back to the question bank", async () => {
+    const question = vi.spyOn(platformApi, "question").mockResolvedValue(browseQuestion());
+    const view = render(<QuestionPage data={data} id="question" />);
+
+    await waitFor(() => expect(view.container.querySelector(".question-meta")).toBeTruthy());
+    expect(view.container.querySelector(".question-meta")!.textContent).toContain("第 7 题");
+    expect(screen.getByRole("link", { name: "← 返回题库" }).getAttribute("href")).toBe("/questions");
+    // 全局题库场景的知识点标签不做链接。
+    expect(view.container.querySelector('a[href="/knowledge/point"]')).toBeNull();
+    expect(screen.getByText("数列极限计算").tagName).toBe("SPAN");
+
+    fireEvent.click(screen.getByRole("button", { name: "查看答案与解析" }));
+    expect(await screen.findByText("参考答案")).toBeTruthy();
+    expect(view.container.querySelector(".practice-answer-value")!.textContent).toBe("C");
+    expect(screen.queryByText('"C"')).toBeNull();
+    expect(question).toHaveBeenCalledWith("question");
+  });
+
+  it("renders multiple choice and true/false answers in Chinese", async () => {
+    const question = vi.spyOn(platformApi, "question");
+    question.mockResolvedValue(browseQuestion({ presentationType: "multiple_choice", questionType: "multiple_choice",
+      correctAnswer: ["C", "A"] }));
+    const multiple = render(<QuestionPage data={data} id="question" />);
+    fireEvent.click(await screen.findByRole("button", { name: "查看答案与解析" }));
+    await waitFor(() => expect(multiple.container.querySelector(".practice-answer-value")).toBeTruthy());
+    expect(multiple.container.querySelector(".practice-answer-value")!.textContent).toBe("A、C");
+    cleanup();
+
+    question.mockResolvedValue(browseQuestion({ presentationType: "true_false", questionType: "true_false",
+      correctAnswer: true, options: [{ key: "true", text: "正确" }, { key: "false", text: "错误" }] }));
+    const judge = render(<QuestionPage data={data} id="question" />);
+    fireEvent.click(await screen.findByRole("button", { name: "查看答案与解析" }));
+    await waitFor(() => expect(judge.container.querySelector(".practice-answer-value")).toBeTruthy());
+    expect(judge.container.querySelector(".practice-answer-value")!.textContent).toBe("正确");
+  });
+
+  it("shows only the reference analysis for a solution question", async () => {
+    vi.spyOn(platformApi, "question").mockResolvedValue(browseQuestion({
+      questionType: "solution", presentationType: "self_assessment", gradingMode: "self_assessment",
+      correctAnswer: null, options: [], analysisMarkdown: "完整步骤",
+    }));
+    const view = render(<QuestionPage data={data} id="question" />);
+    fireEvent.click(await screen.findByRole("button", { name: "查看答案与解析" }));
+
+    // 综合题只显示“参考解析”这一份内容，不再有独立参考答案。
+    const heading = await screen.findByRole("heading", { name: "参考解析" });
+    expect(heading).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "参考答案" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "解析" })).toBeNull();
+    await waitFor(() => expect(view.container.querySelector(".practice-answer-value")).toBeNull());
+    expect(view.container.querySelector(".practice-answer")!.textContent).toContain("完整步骤");
+  });
+});
 
 describe("practice interaction closure", () => {
   it("selects a saved trainable book by clicking the whole card and keeps draft scope separate", async () => {
@@ -138,6 +205,22 @@ describe("practice interaction closure", () => {
     expect(screen.getByText("✓ 已掌握")).toBeTruthy();
     view.rerender(<QuestionPreviewCard summary={{ ...summary, learnerQuestionStatus: "unseen" }} />);
     expect(screen.queryByText("✓ 已掌握")).toBeNull();
+  });
+
+  it("links knowledge point tags only in knowledge-scoped contexts", () => {
+    const summary = { id: "q", subject: "数学", sourceType: "custom", questionType: "single_choice",
+      presentationType: "single_choice", gradingMode: "auto", contentMarkdown: "题干", analysisMarkdown: "",
+      correctAnswer: "A", difficulty: 2, revision: 1,
+      knowledgePoints: [{ id: "point", code: "K", name: "数列极限计算", subject: "数学一", section: "",
+        chapter: "", description: "", explanation: "", role: "core" }] };
+    // 全局题库场景：知识点可能属于 Learner 尚未选择的文集，只展示不链接，避免点击后 404。
+    const global = render(<QuestionPreviewCard summary={summary} />);
+    expect(screen.getByText("数列极限计算").tagName).toBe("SPAN");
+    expect(global.container.querySelector('a[href="/knowledge/point"]')).toBeNull();
+    cleanup();
+    // 已确定学习范围的页面继续使用可点击 HubLink。
+    const scoped = render(<QuestionPreviewCard summary={summary} linkKnowledgePoints />);
+    expect(scoped.container.querySelector('a[href="/knowledge/point"]')).toBeTruthy();
   });
 
   it("uses a safe return path and hides the unavailable next action", async () => {

@@ -571,7 +571,22 @@ Statistics 的错题练习作答统计（`wrongReviewAttempts`）。
 
 ---
 
-## 9. Study 与 Question Bank 职责
+## 9. 知识、题库与 Study 职责
+
+Hub 里“知识”和“题库”是两个不同的产品概念，不要混在一起：
+
+```text
+知识（技术 route 仍是 /books）
+= Book → Chapter → KnowledgePoint 目录
+= 单知识点详情、知识讲解、知识点专项
+
+题库（/questions）
+= 全平台所有 published Formal Parent Question 的只读浏览
+= 独立筛选 / 搜索 / 分页 + inline preview + 完整题目详情 + 答案与解析
+```
+
+`/books` 只是技术 route 保持兼容，不是“题库”；不要为了展示名做 API、URL、
+内部标识或测试的大规模重命名。
 
 Study：
 
@@ -580,7 +595,7 @@ Study：
 主要训练：Chapter Practice（intent chapter_drill）
 ```
 
-Question Bank：
+Question Bank / 知识页：
 
 ```text
 攻克单个 KnowledgePoint
@@ -603,7 +618,7 @@ Wrong Book
 Evidence
 ```
 
-不能做两套独立学习状态。Study 只展示已加入学习范围的 Book；题库也以当前
+不能做两套独立学习状态。Study 只展示已加入学习范围的 Book；知识目录也以当前
 selected books 为准。
 
 Chapter 入口的“可练知识点数”等于该 Chapter 内**存在至少一道正式父题**的知识点数
@@ -616,7 +631,45 @@ Review 是否到期
 Mastery 高低
 ```
 
-### 9.1 Playability 与 Mastery Reward 分离
+### 9.1 全平台题库浏览与学习范围解耦
+
+全平台题库（`/questions`）是**全局只读浏览**，与 Learner 当前 selected Books 解耦：
+
+```text
+没有选择某本 Book 也可以在“题库”里浏览平台已发布 Formal Parent Question
+题目详情同样不再要求该题属于当前 selected Books
+```
+
+但“浏览 ≠ 训练”：
+
+```text
+浏览题目不创建 Attempt
+不影响 Mastery
+不写 Wrong Book
+不消耗 RANDOM 每日额度
+不进入 Question Exposure
+```
+
+训练入口仍然受 Study Profile / Practice scope 约束：RANDOM / CHAPTER / KNOWLEDGE /
+WRONG 的候选范围一律不放宽（见 §10 与
+[`question-practice-policy.md`](./question-practice-policy.md) §9）。
+
+全平台题库只展示：
+
+```text
+status = published
+parent_question_id IS NULL
+question_type ∈ single_choice / multiple_choice / true_false / solution
+```
+
+draft / rejected / archived / Remedial 子题一律不可浏览。
+
+全平台题库的知识点标签**不做强跳转**：题目可能关联 Learner 尚未选择的 Book 下的
+KnowledgePoint，跳 `/knowledge/{id}` 会 404。因此全局题库列表与题目详情里的知识点
+标签默认只做展示；`KnowledgePage` / Practice 等已经确定学习范围的上下文继续使用
+可点击标签。不要为此放宽 `KnowledgePage` 的 selected Books 访问边界。
+
+### 9.2 Playability 与 Mastery Reward 分离
 
 必须区分：
 
@@ -831,6 +884,81 @@ knowledgePoints[{id, name, role}]（core / auxiliary 都显示）
 未来若做“历年真题 / 年份分组”，优先设计 Question Collection / Exam Paper / Year grouping；
 如果未来要做“基础书达标才能进入真题书”，也应实现为 **Book → Book prerequisite**，
 不得恢复 Question 级 KnowledgePoint prerequisite gating。
+
+---
+
+### 10.6 Question 搜索与默认排序
+
+Question 的两个浏览入口（Management 题目管理 / 审核中心，以及全平台题库
+`/questions`）使用**同一套**搜索解析与默认排序规则，避免同一份数据出现两种顺序。
+
+#### 10.6.1 “年份-题号”结构化搜索
+用户在关键词里输入的结构化题号必须能命中标准写法。正式规则：
+
+```text
+^\s*(\d{4})\s*[-—–]\s*(.+?)\s*$
+```
+
+即：
+
+```text
+2020-7 / 2020 - 7 / 2020—7   → year = 2020, displayNumber = 7
+```
+
+至少匹配：
+
+```text
+q.exam_year = 2020
+AND (q.question_number = '7' OR q.question_number = '2020-7')
+```
+
+这是对普通 broad search 的**并列**命中方式（OR），不能与题干 / 来源 / 题号的
+`LIKE` 做 AND，否则“`exam_year` + 纯题号”的标准写法反而被排除。
+普通关键词（`极限`、`数学一`、`7`）继续走 broad search。
+
+解析规则由共享的 `QuestionSearchQuery` 唯一实现；Management 与 Learning Browse
+只共用解析结果，SQL WHERE 片段各自维护。
+
+#### 10.6.2 默认排序
+
+```text
+1. 来源（用户可见的解析后名称）
+2. exam_year
+3. question_number 自然排序
+4. question_id 稳定兜底
+```
+
+题号必须自然排序：
+
+```text
+1 < 2 < 7 < 10 < 22
+```
+
+历史写法 `question_number = "2020-7"` 与 `"7"` 取同一个数字事实。禁止字符串排序出
+`1, 10, 2`。排序键必须在 DB 级形成（分页排序不能只在取出一页之后用 Java 排序），
+并且只用 MySQL 5.7 安全的能力：
+
+```text
+允许：CASE / SUBSTRING / LOCATE / CHAR_LENGTH / REPLACE / CONCAT / COALESCE / LPAD
+禁止：Window Function、依赖隐式类型转换的“字符串与字母比较”
+```
+
+不使用 `SUBSTRING_INDEX` 与 `CAST(... AS UNSIGNED)`：它们在生产 MySQL 5.7 可用，
+但本仓库后端集成测试使用的 H2 MySQL 兼容模式不支持，会让 DB 级排序无法被测试覆盖。
+排序规则由共享的 `QuestionNumberSort` 唯一实现，Management 与全平台题库必须复用。
+
+审核中心也使用同一默认排序，不再以“更新时间优先”。
+
+#### 10.6.3 Management 题目列表筛选
+
+普通题目管理页（`reviewOnly=false`）按**题型**筛选，请求参数是 `questionType`，
+不再发送 `status`。审核中心（`reviewOnly=true`）继续固定：
+
+```text
+status = pending_review
+```
+
+因此后端 `status` filter 必须保留，不能因为普通页取消状态筛选而删除。
 
 ---
 

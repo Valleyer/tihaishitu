@@ -180,6 +180,99 @@ class ManagementPolicyIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void questionSearchSupportsStructuredYearNumberQuestionTypeAndNaturalDefaultOrder() throws Exception {
+        // 全部使用独立来源，避免与种子题目或其他测试互相影响。
+        String scope = UUID.randomUUID().toString().substring(0, 8);
+        String sourceId = testSource("管理端检索来源-" + scope);
+        String pointId = activeKnowledgeId();
+        String standard = managedQuestion(sourceId, pointId, "single_choice", 2020, "7", "标准题号题");
+        String legacy = managedQuestion(sourceId, pointId, "single_choice", 2020, "2020-7", "历史题号题");
+        String otherYear = managedQuestion(sourceId, pointId, "single_choice", 2021, "7", "不同年份题");
+        String first = managedQuestion(sourceId, pointId, "single_choice", 2020, "1", "第 1 题");
+        String second = managedQuestion(sourceId, pointId, "single_choice", 2020, "2", "第 2 题");
+        String tenth = managedQuestion(sourceId, pointId, "single_choice", 2020, "10", "第 10 题");
+        String twentySecond = managedQuestion(sourceId, pointId, "single_choice", 2020, "22", "第 22 题");
+        String solution = managedQuestion(sourceId, pointId, "solution", 2020, "3", "综合题");
+        String draft = managedQuestion(sourceId, pointId, "multiple_choice", 2020, "4", "草稿多选题", "draft");
+
+        Cookie contributor = login("policy-contributor");
+        // “2020-7” 必须同时命中 question_number='7' 与历史写法 '2020-7'，且不能命中 2021 年。
+        for (String query : java.util.List.of("2020-7", "2020 - 7", "2020—7")) {
+            java.util.List<String> ids = searchIds(contributor, "query", query, "size", "50");
+            assertThat(ids).as("query=%s", query).contains(standard, legacy);
+            assertThat(ids).as("query=%s", query).doesNotContain(otherYear);
+        }
+
+        // 普通关键词搜索仍然有效，且状态筛选继续可按需使用（审核中心仍依赖它）。
+        assertThat(searchIds(contributor, "query", "历史题号题", "size", "50")).contains(legacy);
+        assertThat(searchIds(contributor, "status", "pending_review", "size", "50")).doesNotContain(draft);
+        assertThat(searchIds(contributor, "status", "draft", "size", "50")).contains(draft);
+
+        // 题型筛选：普通题目页只发送 questionType，不再发送 status。
+        assertThat(searchIds(contributor, "questionType", "multiple_choice", "size", "100")).contains(draft);
+
+        // 默认排序：来源 → 年份 → 题号自然排序（1 < 2 < 3 < 4 < 7 < 10 < 22）→ question_id。
+        // draft 也在这个来源里，同样按“年份 + 题号 + id”排序，不再按 updated_at 优先。
+        // 同一个 JVM 共享内存库，因此只在“本来源的 8 道题”范围内断言相对顺序，
+        // 不用 containsExactly 绑定整个库的规模。
+        java.util.List<String> ids = searchIds(contributor, "sourceType", "custom", "sourceId", sourceId, "size", "50");
+        java.util.List<String> mine = java.util.List.of(first, second, solution, draft, standard, tenth,
+                twentySecond, legacy, otherYear);
+        assertThat(ids).containsAll(mine);
+        java.util.List<String> ourOrder = ids.stream().filter(mine::contains).toList();
+        assertThat(ourOrder).containsExactlyElementsOf(mine);
+        // 字符串排序会得到 1, 10, 2, 20 这种顺序，这里必须证明不是字符串排序。
+        assertThat(ids.indexOf(tenth)).isGreaterThan(ids.indexOf(second));
+        assertThat(ids.indexOf(twentySecond)).isGreaterThan(ids.indexOf(tenth));
+        assertThat(ids.indexOf(legacy)).isGreaterThan(ids.indexOf(twentySecond));
+        // 本来源的题都来自本次 fixture，2021 年的 otherYear 排在所有 2020 年题之后。
+        assertThat(ids.indexOf(otherYear)).isGreaterThan(ids.indexOf(legacy));
+    }
+
+
+    private java.util.List<String> searchIds(Cookie actor, String... params) throws Exception {
+        var request = get("/api/v1/manage/questions").cookie(actor);
+        for (int index = 0; index < params.length; index += 2) request = request.param(params[index], params[index + 1]);
+        String body = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        mapper.readTree(body).path("content").forEach(item -> ids.add(item.path("id").asText()));
+        return ids;
+    }
+
+    private String testSource(String displayName) {
+        String id = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision)
+                VALUES (?,'custom',?,?,'active',1)
+                """, id, "canonical-" + id, displayName);
+        return id;
+    }
+
+    /** 直接写库构造管理端列表 fixture：列表查询只看 question_resource 与来源解析。 */
+    private String managedQuestion(String sourceId, String pointId, String questionType,
+                                   Integer examYear, String questionNumber, String content) {
+        return managedQuestion(sourceId, pointId, questionType, examYear, questionNumber, content, "published");
+    }
+
+    private String managedQuestion(String sourceId, String pointId, String questionType,
+                                   Integer examYear, String questionNumber, String content, String status) {
+        String id = UUID.randomUUID().toString();
+        String presentation = "solution".equals(questionType) ? "self_assessment" : questionType;
+        String grading = "solution".equals(questionType) ? "self_assessment" : "auto";
+        jdbc.update("""
+                INSERT INTO question_resource(id,subject_name,source_id,source_type,source_name,exam_year,question_number,
+                    question_type,presentation_type,grading_mode,content_markdown,standard_answer_json,analysis_markdown,
+                    difficulty,status,revision)
+                VALUES (?,'数学一',?,'custom','管理端检索来源',?,?,?,?,?,?,NULL,'解析',1,?,1)
+                """, id, sourceId, examYear, questionNumber, questionType, presentation, grading, content, status);
+        jdbc.update("""
+                INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order)
+                VALUES (?,?,'core',0)
+                """, id, pointId);
+        return id;
+    }
+
     private ObjectNode choiceQuestion(String pointId, String questionType) {
         ObjectNode question = mapper.createObjectNode();
         question.put("subject", "数学一");

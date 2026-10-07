@@ -26,7 +26,9 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 ### MVP 学习与管理扩展
 
 - `GET /learner/statistics?days=7|30|90`：从正式 graded attempts 和当前 Selected Books 动态派生学习统计；其中 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`。
-- `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量。
+- `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量（知识目录，技术 route 与 `/books` 一致，仍是“知识”而不是“题库”）。
+- `GET /learning/questions`：**全平台题库**。分页浏览所有 published Formal Parent Question，与 Learner 当前 selected Books 解耦。参数：`query`、`sourceId`、`examYear`、`questionType`、`difficulty`、`bookId`、`chapterId`、`knowledge`、`page`、`size`（前端正式页面固定 `size=20`，后端上限 100）。只返回 `status='published'` + `parent_question_id IS NULL` + 四个正式题型；`COUNT(DISTINCT q.id)` 作为 `totalElements`，多 KP / 多 Book 关联不会让卡片或总数重复。`knowledge` 匹配 KnowledgePoint 的 `id` / `code` / `name`。默认排序是“来源 → `exam_year` → `question_number` 自然排序 → `question_id`”，在 DB 级用 MySQL 5.7 安全表达式形成，分页稳定。浏览不创建 Attempt、不计 Exposure、不影响 Mastery / Wrong Book / RANDOM 每日额度。
+- `GET /learning/questions/facets`：题库过滤 UI 的只读事实。`sources` 只列实际有 published 正式题的来源，`examYears` 只列实际存在的年份并降序，`books` 是全平台 enabled Books（不受 selected Books 限制）且章节按 `sort_order`。题型与难度由前端固定，不为此增加数据库查询，也不新建表。
 - `GET /learning/knowledge-points/{id}/guide`：读取独立维护的 Markdown/LaTeX 知识讲解。
 - `GET /learning/knowledge-points/{id}/neighbors?bookId=&chapterId=`：读取同一文集章节中的前后知识点。
 - `GET /learning/books/{id}`：返回单层正式 Chapter 列表；每个 Chapter 同时带目录静态值 `trainableKnowledgePointCount`、已发布正式父题数 `publishedQuestionCount`，以及 `availableKnowledgePointCount`。`availableKnowledgePointCount` 等于“该 Chapter 内（当前学习范围内）存在至少一道正式父题的知识点数”，只随题库内容与学习范围变化，不随每日答题情况、Review 到期或依赖 readiness 变化。前端以它决定“开始章节练习”是否可点，它等于 0 时按钮禁用并显示“暂无可练正式题”，不再让用户点击后才收到 400。
@@ -56,7 +58,9 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
 | GET | /learning/knowledge-points/{id} | 无 | active KnowledgePoint |
 | GET | /learning/knowledge-points/{id}/questions | 无 | published Questions |
-| GET | /learning/questions/{id} | 无 | 只读题目浏览；客观题 `correctAnswer` 由 `option.correct_option` 派生，综合题只有 `analysisMarkdown` |
+| GET | /learning/questions | 无 | 全平台 published Formal Parent Question 分页浏览；`query`（含 `2020-7` 结构化题号）/`sourceId`/`examYear`/`questionType`/`difficulty`/`bookId`/`chapterId`/`knowledge`/`page`/`size`，按 Question ID 去重 |
+| GET | /learning/questions/facets | 无 | 题库过滤事实：有正式题的 `sources`、实际存在的 `examYears`（降序）、全平台 enabled `books` + `chapters` |
+| GET | /learning/questions/{id} | 无 | 全平台 published Formal Question 只读详情；不再要求该题属于当前 selected Books，客观题 `correctAnswer` 由 `option.correct_option` 派生，综合题只有 `analysisMarkdown` |
 | POST | /worlds/ancient-official/initialize | characterName, gender, origin | 唯一 WorldState |
 | GET | /worlds/ancient-official | 无 | 当前 Learner 的 WorldState |
 | POST | /worlds/ancient-official/* | 动作参数 | 保存后的 WorldState |
@@ -147,6 +151,16 @@ v3 / v2 兼容：客观题 standardAnswer 只做一致性校验，不持久化�
 | GET | /manage/audit-logs | ADMIN | 按动作、实体类型和操作者分页查询只读审计记录 |
 
 知识点与题目修改都携带 `expectedRevision`。发生并发修改返回 409，客户端必须重新加载，不能静默覆盖。知识点合并会把源记录标为 deprecated 并写入 `merged_into_id`，逐题迁移关系；目标关系已存在时折叠为一条，任一原关系为 core 则保留 core。源记录、合并历史和审计记录均不删除。题目管理 DTO 保存作者、审核、原题型、展示类型和判题模式；这些字段不进入普通玩家作答 DTO。
+
+题目管理列表与审核中心共用同一套搜索与排序规则（见 [`PROJECT_RULES.md`](./PROJECT_RULES.md) §10.6）：
+
+```text
+query 支持 “年份-题号” 结构化搜索：2020-7 / 2020 - 7 / 2020—7
+  → 命中 exam_year=2020 且 question_number ∈ {"7","2020-7"}
+默认排序：来源 → exam_year → question_number 自然排序（1 < 2 < 7 < 10 < 22）→ question_id
+```
+
+普通题目管理页（`reviewOnly=false`）按 `questionType` 筛选，不再发送 `status`；审核中心继续固定 `status=pending_review`，因此后端 `status` 参数必须保留。默认排序的 sort key 由共享 `QuestionNumberSort` 在 DB 级形成（MySQL 5.7 兼容），Management 与全平台题库复用同一规则。
 
 题目管理请求与响应包含 `sourceId`；响应另带 `sourceType`、`sourceName`（当前展示名）和
 `sourceCanonicalName`。保存时服务端按 `sourceId` 重新读取来源，忽略客户端伪造的类型和名称，
@@ -328,6 +342,42 @@ Legacy /games/** 保持既有兼容行为
 
 `study_attempt.standard_answer_json` 是服务器内部冻结的判题事实，不是客户端可提交的配置；
 题目浏览（`GET /learning/questions/{id}`）不创建 attempt，也不计入 Exposure。
+
+## 全平台题库（`/questions`）
+
+Hub 顶栏把两个概念分开：**知识**（技术 route 仍是 `/books`，展示 Book → Chapter →
+KnowledgePoint 目录）与**题库**（`/questions`，展示全平台 published Formal Parent
+Question）。`/books` 不改名、不改 API，只调整展示名与用户文案。
+
+全平台题库是**全局只读浏览**，与 Learner 当前 selected Books 解耦：
+
+```text
+没有选中某本文集也能浏览平台已发布的正式题与题目详情
+浏览题目不创建 study_attempt，不计 Exposure
+不影响 Mastery / Wrong Book，也不消耗 RANDOM 每日额度
+训练入口（RANDOM / CHAPTER / KNOWLEDGE / WRONG）的 scope 一律不放宽
+```
+
+题目卡片展示 `sourceName`、`examYear`、`displayQuestionNumber`、`questionType`、
+`difficulty`、`contentMarkdown` 与 KnowledgePoint 标签，支持 inline preview 与
+“查看答案与解析”进入 `/questions/{id}`。前端每页固定 20 条。
+
+题目详情里的知识点标签**默认只展示不跳转**：题目可能关联 Learner 尚未选择的 Book
+下的 KnowledgePoint，跳 `/knowledge/{id}` 会 404。`KnowledgePage` / Practice 等已确定
+学习范围的上下文继续使用可点击标签。
+
+正确答案继续走 Question Contract V2：
+
+```text
+question_resource_option.correct_option
+→ QuestionAnswerDeriver
+→ correctAnswer
+→ 前端 AnswerDisplay（单选 C 显示为 C，不带 JSON 引号）
+solution → 只有 analysis_markdown，显示为“参考解析”
+```
+
+`standard_answer_json` 不参与读取；历史脏数据（例如缺少选项的正式题）会让
+`correctAnswer` 明确为 `null`，不会让整个详情返回 500。
 
 ## 后端实现应保持的行为
 

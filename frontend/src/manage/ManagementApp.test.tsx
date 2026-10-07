@@ -21,7 +21,6 @@ vi.mock("./api", () => ({
     importQuestionBatch: vi.fn(),
   },
 }));
-
 const reviewer: ManageUser = {
   id: "reviewer-id",
   username: "reviewer",
@@ -76,6 +75,9 @@ beforeEach(() => {
   sourcesMock.mockReset();
   saveSourceMock.mockReset();
   importBatchMock.mockReset();
+  vi.mocked(manageApi.saveQuestion).mockReset();
+  vi.mocked(manageApi.createQuestion).mockReset();
+  vi.mocked(manageApi.knowledge).mockReset();
   questionsMock.mockResolvedValue(result(Array.from({ length: 20 }, (_, index) => question(index + 1)), 0, 22, 2));
 });
 
@@ -171,7 +173,7 @@ describe("QuestionPage pagination", () => {
     expect((screen.getByRole("button", { name: "下一页" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("returns to page zero when search or status changes", async () => {
+  it("returns to page zero when search or question type changes", async () => {
     questionsMock.mockImplementation(async (filters) => result([question(Number(filters.page) * 20 + 1)], Number(filters.page), 41, 3));
     render(<QuestionPage user={reviewer} fail={vi.fn()} />);
     await screen.findByText("第 1 / 3 页");
@@ -181,8 +183,8 @@ describe("QuestionPage pagination", () => {
     fireEvent.change(screen.getByPlaceholderText("搜索题干 / 来源 / 题号"), { target: { value: "极限" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ query: "极限", page: 0 })));
 
-    fireEvent.change(screen.getByRole("combobox", { name: "题目状态" }), { target: { value: "published" } });
-    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ status: "published", page: 0 })));
+    fireEvent.change(screen.getByRole("combobox", { name: "题型" }), { target: { value: "solution" } });
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ questionType: "solution", page: 0 })));
   });
 
   it("edits correctness through options and previews the single complete analysis", async () => {
@@ -215,6 +217,85 @@ describe("QuestionPage pagination", () => {
     })));
     expect(questionsMock.mock.calls.slice(callsBeforeReviewMode)
       .every(([filters]) => filters.status === "pending_review")).toBe(true);
+  });
+
+  it("replaces the status filter with the question type filter and never sends status", async () => {
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    await screen.findByText("共 22 道");
+
+    // 普通题目管理页不再提供“全部状态”筛选。
+    expect(screen.queryByLabelText("题目状态")).toBeNull();
+    const typeFilter = screen.getByLabelText("题型") as HTMLSelectElement;
+    expect(typeFilter.value).toBe("");
+    expect(screen.getByRole("option", { name: "全部题型" })).toBeTruthy();
+
+    fireEvent.change(typeFilter, { target: { value: "multiple_choice" } });
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionType: "multiple_choice",
+      status: undefined,
+      page: 0,
+    })));
+    // 普通页的任何一次请求都不能带上 status。
+    expect(questionsMock.mock.calls.every(([filters]) => filters.status === undefined)).toBe(true);
+  });
+
+  it("passes the structured 2020-7 query straight to the backend", async () => {
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    await screen.findByText("共 22 道");
+
+    fireEvent.change(screen.getByPlaceholderText("搜索题干 / 来源 / 题号"), { target: { value: "2020-7" } });
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      query: "2020-7", page: 0,
+    })));
+    // 结构化解析是后端共享解析器的职责，前端只原样提交。
+    expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+  });
+
+  it("shows a visible non-blocking success notice after creating a draft and keeps it across the remount", async () => {
+    const creator = { ...reviewer, id: "creator-id", username: "contributor", displayName: "贡献者" };
+    questionsMock.mockResolvedValue(result([], 0, 0, 0));
+    const knowledgeMock = vi.mocked(manageApi.knowledge);
+    const createMock = vi.mocked(manageApi.createQuestion);
+    knowledgeMock.mockResolvedValue({
+      content: [{ id: "knowledge-id", code: "M1-H01-001", name: "函数定义", subject: "数学一", section: "高等数学",
+        chapter: "函数", defaultRole: "core", status: "active", description: "", explanation: "",
+        aliases: [], questionCount: 1, books: [], revision: 1 }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    });
+    createMock.mockResolvedValue({ ...question(3, "draft"), id: "created-question", sourceId: "source-id" });
+
+    render(<QuestionPage user={creator} fail={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "新建题目" }));
+    // 抽屉里有两个“搜索”按钮（来源 / 知识点），取知识点绑定那一个。
+    fireEvent.click(screen.getAllByRole("button", { name: "搜索" })[1]);
+    fireEvent.click(await screen.findByRole("button", { name: /M1-H01-001/ }));
+    fireEvent.change(screen.getByLabelText(/题干（Markdown/), { target: { value: "新建题干" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+
+    // 成功提示同时出现在列表页与抽屉内，都是 role="status"；关键是它必须留得住。
+    await waitFor(() => expect(screen.getAllByRole("status").length).toBeGreaterThan(0));
+    const notices = screen.getAllByRole("status").map(node => node.textContent).join("|");
+    expect(notices).toContain("草稿已创建");
+    expect(createMock).toHaveBeenCalledTimes(1);
+    // 保存成功后 key 从 "new" 变成题目 ID，提示不能因此消失。
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.getAllByRole("status").map(node => node.textContent).join("|")).toContain("草稿已创建");
+  });
+
+  it("shows a visible success notice after saving an existing question", async () => {
+    const item = question(1, "draft");
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    const saveMock = vi.mocked(manageApi.saveQuestion);
+    saveMock.mockResolvedValue({ ...item, revision: 2 });
+
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    fireEvent.click(await screen.findByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => expect(screen.getAllByRole("status").length).toBeGreaterThan(0));
+    expect(screen.getAllByRole("status").map(node => node.textContent).join("|")).toContain("已保存修改");
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ id: item.id, revision: 1 }));
   });
 
   it("steps back and reloads after reviewing the last item on a page", async () => {

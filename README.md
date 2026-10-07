@@ -19,6 +19,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **可重复活动**：普通 Study、Companion 等 Activity 与一次性 Task 分开管理，完成一轮后仍可再次进行。
 - **养成**：26 件装备、消耗品和信物可收入行囊，装备加成实际参与解锁条件。
 - **Learning Hub**：统一管理学习范围与重点知识点，查看学习进度和复习安排，并进行知识点专项练习与错题练习。
+- **知识 / 题库分工**：顶栏的**知识**（技术 route 仍是 `/books`）展示 `Book → Chapter → KnowledgePoint` 目录与知识讲解；**题库**（`/questions`）展示全平台所有已发布正式题目，支持关键词、来源、年份、题型、难度、文集、章节、知识点筛选与固定每页 20 条的分页，可 inline 预览并进入完整题目详情查看答案与解析。题库是全局只读浏览，与当前学习范围解耦：浏览题目不创建 Attempt、不影响掌握度与错题本、也不消耗随机题每日额度。
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
 - **正式训练选题 V2**：正式训练固定为四套**互相独立**的选题策略。RANDOM（寒门仕途普通随机正式题）改为 KP-first：先随机选目标知识点，再在该知识点内按 oldest / wrong 交替 lane 选题；同一学习者同一 `Asia/Shanghai` 业务日内同一道题最多随机出现一次，题目一经发出就占用当天额度。CHAPTER（章节练习）改成一条确定的题序并跨 Session 记住进度。KNOWLEDGE（知识点专项）与 WRONG（错题快练）都是 Session 内随机且不重复。章节 / 知识点 / 错题练过的题不消耗 RANDOM 额度。详见 [正式训练选题策略](docs/question-practice-policy.md)。
 - **普通训练单层化**：RANDOM / CHAPTER / KNOWLEDGE / WRONG 做完一题就直接判题、记录掌握度与错题本，然后进入下一道普通正式题或结束流程；不再自动进入诊断 / 补救嵌套，也不再答错后原地重做同一道父题。诊断与补救相关表、服务与管理端能力仍然保留，供未来重新设计。
@@ -50,7 +51,7 @@ Study 页的错题区域提供**快速练习错题**（intent `wrong_drill`）�
 
 标签由后端按 `exam_year` + `subject_name` 动态生成（数学一 + 2021 → `2021年考研数学一真题`；408 + 2024 → `2024年408考研真题`），不为显示文字新增 tag 表，也不把年份建成 KnowledgePoint。题面 metadata 在发题时冻结进 `question_snapshot_json`，刷新同一 attempt 结果稳定。真题 `exam_year` 只做确定性回填，已有值不覆盖；无法可靠推断的一律不猜。
 
-目录与练习分工固定为 `Book → Chapter → KnowledgePoint` 三层（Chapter 只有一层，不再有“高等数学”这类中间 Section）：Study 负责按章节攻克，题库负责单点攻克 KnowledgePoint，两者共享同一份 Formal Question Mastery 与错题本。章节练习使用**固定确定性题序**（Chapter 内知识点 `sort_order` → 稳定来源标识 → 年份 → 题号自然排序 → 题目 ID），跨 Session 记住进度并在末尾回到第一题；同一道题关联本章多个知识点时只出现一次，归属于按知识点顺序第一次遇到它的位置。章节入口的“可练知识点数”等于该章节内存在正式题的知识点数，不再随今日答题情况、Review 到期或依赖 readiness 变化。Study 页顶部还会显示“最近练习章节”，结束一轮后仍可对同一 Book + Chapter 一键再次练习。用户界面只使用 `question_bank` / `question_bank_chapter` / `question_bank_knowledge` 提供的书名与章节名，数据库中的 legacy `subject_name` / `section_name` / `chapter_name` 仅保留兼容，不再作为展示路径。
+目录与练习分工固定为 `Book → Chapter → KnowledgePoint` 三层（Chapter 只有一层，不再有“高等数学”这类中间 Section）：Study 负责按章节攻克，知识目录负责单点查看与 KnowledgePoint 专项，两者共享同一份 Formal Question Mastery 与错题本。顶栏的“知识”对应技术 route `/books`（文集 → 章节 → 知识点目录），“题库”对应 `/questions`（全平台已发布正式题目浏览）；两者都不创建 Attempt、不计入 Exposure，训练范围仍由当前 selected Books 决定。章节练习使用**固定确定性题序**（Chapter 内知识点 `sort_order` → 稳定来源标识 → 年份 → 题号自然排序 → 题目 ID），跨 Session 记住进度并在末尾回到第一题；同一道题关联本章多个知识点时只出现一次，归属于按知识点顺序第一次遇到它的位置。章节入口的“可练知识点数”等于该章节内存在正式题的知识点数，不再随今日答题情况、Review 到期或依赖 readiness 变化。Study 页顶部还会显示“最近练习章节”，结束一轮后仍可对同一 Book + Chapter 一键再次练习。用户界面只使用 `question_bank` / `question_bank_chapter` / `question_bank_knowledge` 提供的书名与章节名，数据库中的 legacy `subject_name` / `section_name` / `chapter_name` 仅保留兼容，不再作为展示路径。
 
 Learner Question Rotation V1 仍以正式发题产生的 `study_attempt` 作为 Question Exposure 事实源，并按 Learner 跨 run、跨 World 共用。当前 Session / run 的 `seenQuestionIds` 是硬排除；RANDOM 另有“同一业务日同一题只出一次”的硬去重，其事实来源是 `study_attempt.draw_mode='random'`。不再使用曝光次数、preferred difficulty、Mastery 或 Review due 软排序，也不设置固定 cooldown 或永久 blacklist；全部题都出过时本轮结束，新 Session / 新业务日重新进入随机池。Learning Hub 的只读题目浏览不创建 attempt，因此不计入正式 Exposure。
 

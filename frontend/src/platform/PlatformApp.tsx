@@ -5,7 +5,7 @@ import { RichText } from "../components/RichText";
 import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
@@ -38,10 +38,12 @@ const greeting = () => {
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
-/** 只读题目标题取自来源/年份，不再使用 legacy subject_name 作为用户可见路径。 */
+/**
+ * 只读题目标题取自来源与显示题号，不再使用 legacy subject_name 作为用户可见路径。
+ * 年份已经由 ReadonlyQuestion 的 question-meta 展示，这里不重复。
+ */
 const questionTitle = (question: BrowseQuestion) =>
   [question.sourceName || sourceTypeLabel[question.sourceType] || "题目",
-    question.examYear ? String(question.examYear) : "",
     question.displayQuestionNumber ? `${question.displayQuestionNumber} 题` : ""].filter(Boolean).join(" · ");
 export const safePracticeReturnTo = (intent: PracticeSession["intent"]) => {
   const value = new URLSearchParams(window.location.search).get("returnTo");
@@ -88,7 +90,8 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   const location = useCurrentLocation();
   const path = location.split(/[?#]/)[0];
   const nav = [
-    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"], ["统计", "/statistics"], ["题库", "/books"],
+    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"], ["统计", "/statistics"],
+    ["知识", "/books"], ["题库", "/questions"],
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
   return <div className="learning-hub">
@@ -113,7 +116,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
       </article> })}</div>
     </section>
     <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.bookName} · {point.chapterName}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
-      <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览题库</b><span>按知识点查看已发布题目</span></HubLink><HubLink href="/statistics"><b>学习统计</b><span>查看近期正式学习足迹</span></HubLink></div></section></div>
+      <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览知识</b><span>按知识点查看完整知识目录</span></HubLink><HubLink href="/questions"><b>浏览题库</b><span>查看全平台已发布题目与解析</span></HubLink></div></section></div>
   </main></Shell>;
 }
 
@@ -234,12 +237,25 @@ function ChapterSection({ chapter, bookId, states }: { chapter: BookDetail["chap
 function BookPage({ data, id }: { data: HubBootstrap; id: string }) {
   const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
   useEffect(() => { Promise.all([platformApi.book(id), platformApi.knowledgeStatesForBook(id)]).then(([value, stateList]) => { setBook(value); setStates(new Map(stateList.map(state => [state.knowledgePointId, state]))) }).catch(e => setError(e.message)); }, [id]);
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p><p>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} bookId={book.id} states={states} key={chapter.id} />)}</>}</main></Shell>;
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回知识</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><h1>{book.name}</h1><p>{book.description}</p><p>{book.knowledgePointCount} 个知识点 · {book.questionCount} 道已发布题目</p>{book.chapters.map(chapter => <ChapterSection chapter={chapter} bookId={book.id} states={states} key={chapter.id} />)}</>}</main></Shell>;
 }
 
-function ReadonlyQuestion({ question }: { question: BrowseQuestion }) { return <><div className="question-meta"><span>{question.examYear||""}{question.displayQuestionNumber?` · 第 ${question.displayQuestionNumber} 题`:""}</span><span>{questionTypeLabel[question.questionType] || "题目"}</span><span>难度 {question.difficulty}</span></div><section className="hub-panel rich"><RichText>{question.contentMarkdown}</RichText>{question.options?.map(option=><p className="readonly-option" key={option.key}><b>{option.key}.</b> <RichText inline>{option.text}</RichText></p>)}</section><div className="tag-row">{question.knowledgePoints?.map(point=><HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>)}</div></>; }
+/**
+ * 只读题目的知识点标签。
+ *
+ * <p>{@code link} 默认关闭：全平台题库可能出现 Learner 尚未选择的 Book 下的知识点，
+ * 跳 {@code /knowledge/{id}} 会 404，所以全局题库场景只渲染标签、不做链接。
+ * 已经确定学习范围的页面（KnowledgePage / Practice 等）继续传 {@code true} 保持可点击。</p>
+ */
+function KnowledgeTags({ points, link }: { points?: BrowseQuestion["knowledgePoints"]; link: boolean }) {
+  return <div className="tag-row">{points?.map(point => link
+    ? <HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>
+    : <span className={`knowledge-tag ${point.role||"core"}`} key={point.id}>{point.name}</span>)}</div>;
+}
 
-export function QuestionPreviewCard({ summary }: { summary: BrowseQuestion }) { const [open,setOpen]=useState(false); const [question,setQuestion]=useState<BrowseQuestion>(); const toggle=async()=>{if(!open&&!question)setQuestion(await platformApi.question(summary.id));setOpen(v=>!v)}; return <article className="hub-panel question-summary"><div><p>{summary.sourceName||sourceTypeLabel[summary.sourceType]||"题目"}{summary.examYear?` · ${summary.examYear}`:""}{summary.displayQuestionNumber?` · 第${summary.displayQuestionNumber}题`:""}{summary.learnerQuestionStatus==="mastered"&&<span className="question-mastered">✓ 已掌握</span>}</p><h3><RichText>{summary.contentMarkdown}</RichText></h3><div className="tag-row">{summary.knowledgePoints?.map(point=><span className={`knowledge-tag ${point.role||"core"}`} key={point.id}>{point.name}</span>)}</div></div><div className="question-summary-actions"><button onClick={toggle}>{open?"收起预览":"预览"}</button><HubLink href={`/questions/${summary.id}`}>查看答案与解析</HubLink></div>{open&&question&&<div className="inline-question-preview"><ReadonlyQuestion question={question}/></div>}</article>; }
+function ReadonlyQuestion({ question, linkKnowledgePoints = false }: { question: BrowseQuestion; linkKnowledgePoints?: boolean }) { return <><div className="question-meta"><span>{question.examYear||""}{question.displayQuestionNumber?` · 第 ${question.displayQuestionNumber} 题`:""}</span><span>{questionTypeLabel[question.questionType] || "题目"}</span><span>难度 {question.difficulty}</span></div><section className="hub-panel rich"><RichText>{question.contentMarkdown}</RichText>{question.options?.map(option=><p className="readonly-option" key={option.key}><b>{option.key}.</b> <RichText inline>{option.text}</RichText></p>)}</section><KnowledgeTags points={question.knowledgePoints} link={linkKnowledgePoints}/></>; }
+
+export function QuestionPreviewCard({ summary, linkKnowledgePoints = false }: { summary: BrowseQuestion; linkKnowledgePoints?: boolean }) { const [open,setOpen]=useState(false); const [question,setQuestion]=useState<BrowseQuestion>(); const [error,setError]=useState(""); const toggle=async()=>{if(!open&&!question){try{setQuestion(await platformApi.question(summary.id))}catch(reason){setError((reason as Error).message)}}setOpen(v=>!v)}; return <article className="hub-panel question-summary"><div><p>{summary.sourceName||sourceTypeLabel[summary.sourceType]||"题目"}{summary.examYear?` · ${summary.examYear}`:""}{summary.displayQuestionNumber?` · 第${summary.displayQuestionNumber}题`:""}{summary.learnerQuestionStatus==="mastered"&&<span className="question-mastered">✓ 已掌握</span>}</p><h3><RichText>{summary.contentMarkdown}</RichText></h3><KnowledgeTags points={summary.knowledgePoints} link={linkKnowledgePoints}/></div><div className="question-summary-actions"><button onClick={toggle}>{open?"收起预览":"预览"}</button><HubLink href={`/questions/${summary.id}`}>查看答案与解析</HubLink></div>{error&&<p className="hub-error" role="alert">{error}</p>}{open&&question&&<div className="inline-question-preview"><ReadonlyQuestion question={question} linkKnowledgePoints={linkKnowledgePoints}/></div>}</article>; }
 
 function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
   const [point,setPoint]=useState<(KnowledgePoint&{books:{id:string;name:string;chapterId:string;chapterName:string}[]})>(); const [questions,setQuestions]=useState<BrowseQuestion[]>([]); const [state,setState]=useState<KnowledgeState>(); const [neighbors,setNeighbors]=useState<Awaited<ReturnType<typeof platformApi.knowledgeNeighbors>>>(); const [guide,setGuide]=useState<Awaited<ReturnType<typeof platformApi.knowledgeGuide>>>(); const [guideOpen,setGuideOpen]=useState(false); const [error,setError]=useState("");
@@ -250,7 +266,7 @@ function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
   const contextQuery=context?`?bookId=${encodeURIComponent(context.id)}&chapterId=${encodeURIComponent(context.chapterId)}`:"";
   const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
   const openGuide=async()=>{setGuideOpen(true);try{setGuide(await platformApi.knowledgeGuide(id))}catch(reason){setError((reason as Error).message)}};
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{context?`${context.name} · ${context.chapterName}`:"知识点"}</p><h1>{point.name}</h1><div className="knowledge-actions"><button className="hub-primary" onClick={start}>开始知识点练习</button><button onClick={openGuide}>知识讲解</button>{neighbors?.next?<HubLink href={`/knowledge/${neighbors.next.id}?bookId=${encodeURIComponent(context!.id)}&chapterId=${encodeURIComponent(neighbors.next.chapterId)}`}>下一个知识点 →</HubLink>:<span className="muted">已到文集末尾</span>}</div>{state&&<section className={`hub-panel mastery-summary ${state.band==="proficient"?"mastery-perfect":""}`}><h2>当前状态</h2><p className="mastery-score"><b>{state.band==="proficient"?"✦ ":""}{bandLabel[state.band]}</b> · {state.effectiveMastery.toFixed(1)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<h2>相关正式真题</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}{guideOpen&&<Modal title={`${point.name} · 知识讲解`} wide close={()=>setGuideOpen(false)}>{guide===undefined?<p>正在载入知识讲解…</p>:guide.contentMarkdown?<div className="rich"><RichText>{guide.contentMarkdown}</RichText></div>:<div className="empty-state"><h3>知识讲解尚未录入</h3></div>}</Modal>}</>}</main></Shell>;
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回知识</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{context?`${context.name} · ${context.chapterName}`:"知识点"}</p><h1>{point.name}</h1><div className="knowledge-actions"><button className="hub-primary" onClick={start}>开始知识点练习</button><button onClick={openGuide}>知识讲解</button>{neighbors?.next?<HubLink href={`/knowledge/${neighbors.next.id}?bookId=${encodeURIComponent(context!.id)}&chapterId=${encodeURIComponent(neighbors.next.chapterId)}`}>下一个知识点 →</HubLink>:<span className="muted">已到文集末尾</span>}</div>{state&&<section className={`hub-panel mastery-summary ${state.band==="proficient"?"mastery-perfect":""}`}><h2>当前状态</h2><p className="mastery-score"><b>{state.band==="proficient"?"✦ ":""}{bandLabel[state.band]}</b> · {state.effectiveMastery.toFixed(1)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<h2>相关正式真题</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} linkKnowledgePoints key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}{guideOpen&&<Modal title={`${point.name} · 知识讲解`} wide close={()=>setGuideOpen(false)}>{guide===undefined?<p>正在载入知识讲解…</p>:guide.contentMarkdown?<div className="rich"><RichText>{guide.contentMarkdown}</RichText></div>:<div className="empty-state"><h3>知识讲解尚未录入</h3></div>}</Modal>}</>}</main></Shell>;
 }
 
 export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
@@ -302,11 +318,58 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   </main></Shell>;
 }
 
-function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
+/**
+ * 全平台题库：所有 published Formal Parent Question 的只读浏览。
+ *
+ * <p>它是全局浏览，与 Learner 当前 selected Books 解耦：没有选中文集也能看题，
+ * 但浏览不创建 Attempt、不影响 Mastery / Wrong Book / RANDOM 每日额度。
+ * 分页固定每页 20 条，不提供 page-size 自选控件。</p>
+ */
+export function QuestionDirectoryPage({ data }: { data: HubBootstrap }) {
+  const [query,setQuery]=useState(""); const [sourceId,setSourceId]=useState(""); const [examYear,setExamYear]=useState("");
+  const [questionType,setQuestionType]=useState(""); const [difficulty,setDifficulty]=useState("");
+  const [bookId,setBookId]=useState(""); const [chapterId,setChapterId]=useState(""); const [knowledge,setKnowledge]=useState("");
+  const [facets,setFacets]=useState<QuestionDirectoryFacets>();
+  const [items,setItems]=useState<BrowseQuestion[]>([]); const [error,setError]=useState("");
+  const [page,setPage]=useState(0); const [totalElements,setTotalElements]=useState(0); const [totalPages,setTotalPages]=useState(0);
+  useEffect(()=>{platformApi.questionDirectoryFacets().then(setFacets).catch(reason=>setError((reason as Error).message))},[]);
+  useEffect(()=>{
+    let cancelled=false;
+    platformApi.questionDirectory({query,sourceId,examYear,questionType,difficulty,bookId,chapterId,knowledge,page,size:PAGE_SIZE})
+      .then(result=>{if(cancelled)return;setItems(result.content);setTotalElements(result.totalElements);setTotalPages(result.totalPages);setError("")})
+      .catch(reason=>{if(!cancelled)setError((reason as Error).message)});
+    return ()=>{cancelled=true};
+  },[query,sourceId,examYear,questionType,difficulty,bookId,chapterId,knowledge,page]);
+  /** 任何筛选变化都必须把 page 归零，否则会停在旧页码的空页上。 */
+  const change=(setter:(value:string)=>void)=>(value:string)=>{setter(value);setPage(0)};
+  const chapters=facets?.books.find(book=>book.id===bookId)?.chapters||[];
+  const reset=()=>{setQuery("");setSourceId("");setExamYear("");setQuestionType("");setDifficulty("");setBookId("");setChapterId("");setKnowledge("");setPage(0)};
+  return <Shell data={data}><main className="hub-main question-bank-page">
+    <header className="page-title"><div><h1>题库</h1><p>全平台已发布正式题目，共 {totalElements} 道</p></div></header>
+    {error&&<p className="hub-error" role="alert">{error}</p>}
+    <div className="bank-filters question-directory-filters">
+      <input aria-label="关键词" placeholder="搜索题干 / 来源 / 题号（支持 2020-7）" value={query} onChange={e=>change(setQuery)(e.target.value)}/>
+      <select aria-label="来源" value={sourceId} onChange={e=>change(setSourceId)(e.target.value)}><option value="">全部来源</option>{facets?.sources.map(source=><option value={source.id} key={source.id}>{source.displayName}</option>)}</select>
+      <select aria-label="年份" value={examYear} onChange={e=>change(setExamYear)(e.target.value)}><option value="">全部年份</option>{facets?.examYears.map(year=><option value={year} key={year}>{year}</option>)}</select>
+      <select aria-label="题型" value={questionType} onChange={e=>change(setQuestionType)(e.target.value)}><option value="">全部题型</option>{Object.entries(questionTypeLabel).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select>
+      <select aria-label="难度" value={difficulty} onChange={e=>change(setDifficulty)(e.target.value)}><option value="">全部难度</option>{[1,2,3,4,5].map(value=><option value={value} key={value}>难度 {value}</option>)}</select>
+      <select aria-label="文集" value={bookId} onChange={e=>{setBookId(e.target.value);setChapterId("");setPage(0)}}><option value="">全部文集</option>{facets?.books.map(book=><option value={book.id} key={book.id}>{book.name}</option>)}</select>
+      <select aria-label="章节" value={chapterId} disabled={!bookId} onChange={e=>change(setChapterId)(e.target.value)}><option value="">全部章节</option>{chapters.map(chapter=><option value={chapter.id} key={chapter.id}>{chapter.name}</option>)}</select>
+      <input aria-label="知识点" placeholder="知识点 ID / 编码 / 名称" value={knowledge} onChange={e=>change(setKnowledge)(e.target.value)}/>
+      <button onClick={reset}>重置筛选</button>
+    </div>
+    {items.length===0&&!error&&<p className="empty-state">没有符合条件的题目。</p>}
+    <div className="question-preview-list">{items.map(question=><QuestionPreviewCard summary={question} key={question.id}/>)}</div>
+    <div className="directory-pagination"><span>共 {totalElements} 道题</span><span>第 {totalPages?page+1:0} / {totalPages} 页</span><button disabled={page===0} onClick={()=>setPage(value=>value-1)}>上一页</button><button disabled={!totalPages||page>=totalPages-1} onClick={()=>setPage(value=>value+1)}>下一页</button></div>
+  </main></Shell>;
+}
+
+export function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   const [question, setQuestion] = useState<BrowseQuestion>(); const [error, setError] = useState(""); const [showAnswer, setShowAnswer] = useState(false);
   useEffect(() => { platformApi.question(id).then(setQuestion).catch(e => setError(e.message)); }, [id]);
   const solution = question?.questionType === "solution";
-  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">只读题目浏览 · {question.sourceName}</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich">{solution ? <><h2>参考解析</h2><RichText>{question.analysisMarkdown}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={question.correctAnswer} presentationType={question.presentationType} options={Object.fromEntries((question.options || []).map(option => [option.key, option.text]))}/><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></>}</section>}</>}</main></Shell>;
+  // 全平台题目详情：题目的知识点可能属于 Learner 尚未选择的文集，标签只展示、不跳转。
+  return <Shell data={data}><main className="hub-main narrow"><HubLink href="/questions">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">全平台题库 · 只读题目浏览</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich practice-answer">{solution ? <><h2>参考解析</h2><RichText>{question.analysisMarkdown}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={question.correctAnswer} presentationType={question.presentationType} options={Object.fromEntries((question.options || []).map(option => [option.key, option.text]))}/><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></>}</section>}</>}</main></Shell>;
 }
 
 function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
@@ -329,6 +392,7 @@ function AuthenticatedPlatform() {
   if (path === "/books") return <BooksPage data={data} />;
   if (path.startsWith("/books/")) return <BookPage data={data} id={idAfter("/books/")} />;
   if (path.startsWith("/knowledge/")) return <KnowledgePage data={data} id={idAfter("/knowledge/")} />;
+  if (path === "/questions") return <QuestionDirectoryPage data={data} />;
   if (path.startsWith("/questions/")) return <QuestionPage data={data} id={idAfter("/questions/")} />;
   if (path === "/account") return <AccountPage data={data} />;
   return <HubHome data={data} />;

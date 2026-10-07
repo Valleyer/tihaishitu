@@ -2,7 +2,7 @@ import { useEffect, useState, type AnchorHTMLAttributes, type MouseEvent } from 
 
 const INTERNAL_PREFIXES = [
   "/study", "/progress", "/statistics", "/books", "/knowledge/",
-  "/questions/", "/wrong-questions", "/practice/", "/account",
+  "/questions", "/wrong-questions", "/practice/", "/account",
 ];
 
 export function isHubPath(path: string) {
