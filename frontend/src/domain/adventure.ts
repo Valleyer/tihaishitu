@@ -106,8 +106,14 @@ export interface ActivityRun {
   correct: number;
   /** 本轮抽取的不同知识点，数量等于普通 5 / 主线 10。 */
   knowledgePointIds: string[];
+  /** 本轮已完成 / 已作答的正式题数：correct / wrong / partial 都推进一个 slot。 */
   knowledgePointIndex: number;
-  /** 首题答错后留在当前知识点，持续抽取低难度同类题。 */
+  /**
+   * 本轮计划完成的正式题数（= min(活动 rounds, 当天剩余可出的随机题数)）。
+   * 进度分母必须用它，不能在题目不足时仍然按 activity.rounds 显示。
+   */
+  plannedRounds?: number;
+  /** Legacy /games/** 兼容字段：现代 Learner World 不再进入 training 分支。 */
   training: boolean;
   trainingAnswered: number;
   /** 前置核验与目标复核题数；不计入本轮得分。 */

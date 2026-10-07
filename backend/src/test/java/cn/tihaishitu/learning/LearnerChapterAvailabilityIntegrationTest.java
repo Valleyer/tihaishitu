@@ -253,7 +253,7 @@ class LearnerChapterAvailabilityIntegrationTest {
                 """, attemptId, learner, question, point);
         var snapshot = new QuestionAttemptStore.Snapshot(attemptId, null, learner, null, null, question,
                 mapper.createObjectNode(), mapper.getNodeFactory().textNode("true"),
-                "active", "auto", null, null, point, "normal", 2, null, null, null);
+                "active", "auto", null, null, point, "normal", 2, null, null, null, null, null);
         boolean recorded = attempts.recordAnswer(snapshot,
                 mapper.getNodeFactory().textNode(correct ? "true" : "false"), correct, occurredAt);
         assertThat(recorded).isTrue();

@@ -269,7 +269,7 @@ class LearnerWrongDrillIntegrationTest {
                 """, attemptId, learner, question, snapshot, point, "normal");
         var attempt = new QuestionAttemptStore.Snapshot(attemptId, null, learner, null, null, question,
                 mapper.readTree(snapshot), mapper.readTree("\"B\""), "active", "auto", null, null,
-                point, "normal", 2, null, null, null);
+                point, "normal", 2, null, null, null, null, null);
         attempts.recordAnswer(attempt, mapper.getNodeFactory().textNode("A"), false, Instant.now());
     }
 

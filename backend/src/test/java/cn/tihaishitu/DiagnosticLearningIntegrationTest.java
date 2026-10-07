@@ -12,6 +12,10 @@ import cn.tihaishitu.world.WorldRegistry;
 import cn.tihaishitu.world.WorldStateStore;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,48 +28,71 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DiagnosticLearningIntegrationTest extends DiagnosticWorldTestSupport {
     @Autowired WorldStateStore worldStates;
 
+    /**
+     * 覆盖保留下来的诊断能力：依赖探针失败 → 依赖补救 → 目标复核 → 归因 dependency_gap，
+     * 根题的错误证据始终不落到目标知识点。
+     *
+     * <p>PR3 后普通正式训练不再自动进入诊断链，因此本用例直接通过
+     * {@link cn.tihaishitu.learning.DiagnosticLearningService} 驱动状态机；
+     * 只属于 World 运行态的断言（run 计数、world best score 等）已不再适用。</p>
+     */
     @Test
     void dependencyFailureIsRemediatedBeforeTargetRecheckWithoutRestoringWorldScore() throws Exception {
         Scenario scenario = scenario(1, true);
-        Cookie cookie = register("diagnostic-dependency-route");
-        configureLearner("diagnostic-dependency-route", scenario);
-        forceScenarioPlan(scenario);
-        initialize(cookie);
+        register("diagnostic-dependency-route");
+        String learner = configureLearner("diagnostic-dependency-route", scenario);
+        String dependency = scenario.dependencies().get(0);
+        Set<String> allowed = Set.copyOf(scenario.dependencies());
+        Instant at = Instant.now();
 
-        JsonNode game = begin(cookie, "read");
-        String rootAttempt = currentAttempt(game);
-        assertThat(currentQuestion(game)).isEqualTo(scenario.rootQuestion());
-        game = answer(cookie, game, false);
-
-        String diagnosis = jdbc.queryForObject(
-                "SELECT id FROM learner_diagnosis_session WHERE root_attempt_id=?", String.class, rootAttempt);
+        String rootAttempt = createDiagnosisAttempt(learner, scenario.rootQuestion(),
+                rootKnowledgePointIds(scenario), scenario.target(), "normal", null, null);
+        var started = gradeDiagnosisAttempt(learner, rootAttempt, false, allowed, at);
+        assertThat(started.diagnosisStarted()).isTrue();
+        String diagnosis = started.diagnosisSessionId();
+        assertThat(diagnosis).isNotBlank();
+        assertThat(jdbc.queryForObject(
+                "SELECT id FROM learner_diagnosis_session WHERE root_attempt_id=?", String.class, rootAttempt))
+                .isEqualTo(diagnosis);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM answer_record WHERE attempt_id=?", Integer.class, rootAttempt)).isOne();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?", Integer.class, rootAttempt)).isZero();
-        assertThat(game.path("adventure").path("run").path("correct").asInt()).isZero();
 
-        game = next(cookie, game);
-        String probe = currentAttempt(game);
+        // 依赖探针答错：依赖转 failed，会话转入 remediating_dependency。
+        var probeDirective = nextDiagnosisDirective(learner, diagnosis);
+        assertThat(probeDirective.role()).isEqualTo("dependency_probe");
+        assertThat(probeDirective.targetKnowledgePointId()).isEqualTo(dependency);
+        String probe = createDiagnosisAttempt(learner, formalQuestion(dependency), List.of(dependency), dependency,
+                probeDirective.evidenceMode(), probeDirective.diagnosisSessionId(), probeDirective.role());
         assertThat(jdbc.queryForObject("SELECT diagnosis_role FROM study_attempt WHERE id=?", String.class, probe))
                 .isEqualTo("dependency_probe");
-        game = answer(cookie, game, false);
+        gradeDiagnosisAttempt(learner, probe, false, allowed, at.plusSeconds(60));
         assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis))
                 .isEqualTo("remediating_dependency");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?", Integer.class, probe)).isOne();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, scenario.target())).isZero();
 
-        game = next(cookie, game);
-        String remediation = currentAttempt(game);
+        // 依赖补救答对：依赖转 remediated，会话转入 rechecking_target。
+        var remediationDirective = nextDiagnosisDirective(learner, diagnosis);
+        assertThat(remediationDirective.role()).isEqualTo("dependency_remediation");
+        assertThat(remediationDirective.targetKnowledgePointId()).isEqualTo(dependency);
+        String remediation = createDiagnosisAttempt(learner, formalQuestion(dependency), List.of(dependency), dependency,
+                remediationDirective.evidenceMode(), remediationDirective.diagnosisSessionId(), remediationDirective.role());
         assertThat(jdbc.queryForObject("SELECT diagnosis_role FROM study_attempt WHERE id=?", String.class, remediation))
                 .isEqualTo("dependency_remediation");
-        game = answer(cookie, game, true);
+        gradeDiagnosisAttempt(learner, remediation, true, allowed, at.plusSeconds(120));
         assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis))
                 .isEqualTo("rechecking_target");
 
-        game = next(cookie, game);
-        String recheck = currentAttempt(game);
+        // 目标复核答对：归因 dependency_gap，根题错误被依赖缺口吸收。
+        var recheckDirective = nextDiagnosisDirective(learner, diagnosis);
+        assertThat(recheckDirective.role()).isEqualTo("target_recheck");
+        assertThat(recheckDirective.targetKnowledgePointId()).isEqualTo(scenario.target());
+        String recheck = createDiagnosisAttempt(learner, formalQuestion(scenario.target()), List.of(scenario.target()),
+                scenario.target(), recheckDirective.evidenceMode(), recheckDirective.diagnosisSessionId(), recheckDirective.role());
         assertThat(jdbc.queryForObject("SELECT diagnosis_role FROM study_attempt WHERE id=?", String.class, recheck))
                 .isEqualTo("target_recheck");
-        game = answer(cookie, game, true);
+        var resolved = gradeDiagnosisAttempt(learner, recheck, true, allowed, at.plusSeconds(180));
+        assertThat(resolved.targetCompleted()).isTrue();
 
         assertThat(jdbc.queryForObject("SELECT status FROM learner_diagnosis_session WHERE id=?", String.class, diagnosis))
                 .isEqualTo("resolved");
@@ -73,13 +100,7 @@ class DiagnosticLearningIntegrationTest extends DiagnosticWorldTestSupport {
                 .isEqualTo("dependency_gap");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE attempt_id=?", Integer.class, rootAttempt)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, scenario.target())).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, scenario.dependencies().get(0))).isEqualTo(2);
-        JsonNode run = game.path("adventure").path("run");
-        assertThat(run.path("knowledgePointIndex").asInt()).isEqualTo(1);
-        assertThat(run.path("correct").asInt()).isZero();
-        assertThat(run.path("answered").asInt()).isEqualTo(4);
-        assertThat(run.path("diagnosticAnswered").asInt()).isEqualTo(2);
-        assertThat(run.path("trainingAnswered").asInt()).isOne();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, dependency)).isEqualTo(2);
     }
 
     @Test

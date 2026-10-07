@@ -105,6 +105,17 @@ public class DiagnosticLearningService {
         if (!Set.of("resolved", "abandoned").contains(session.status())) store.abandon(session.id(), clock.instant());
     }
 
+    /**
+     * PR3 部署前遗留状态兼容：普通正式训练不再推进诊断链，
+     * 因此看到旧的未完成 diagnosisSessionId 时把它标为 abandoned 并继续走普通 selector。
+     * 会话不存在（历史数据已清理）时静默跳过，不让旧状态把新流程打成 500。
+     */
+    public void abandonIfPresent(String diagnosisId) {
+        if (diagnosisId == null || diagnosisId.isBlank()) return;
+        if (store.find(diagnosisId).isEmpty()) return;
+        abandon(diagnosisId);
+    }
+
     private boolean shouldDiagnose(QuestionAttemptStore.Snapshot attempt, String outcome) {
         if (!"normal".equals(attempt.evidenceMode()) || !Set.of("wrong", "partial").contains(outcome)) return false;
         Set<String> ids = new LinkedHashSet<>();

@@ -263,6 +263,9 @@ Review Queue
 
 即：子题不产生正式学习证据、不作为普通随机题、不计入分母、不进入错题本。
 
+普通正式训练（RANDOM / CHAPTER / KNOWLEDGE / WRONG）**不再自动进入**补救教学，
+子题能力保留但不再由普通训练触发，见 §21.3。
+
 ### 6.1 正式题答案契约（Question Contract V2）
 
 正式父题（`parent_question_id IS NULL`）**不再保存独立的“标准答案配置”**。
@@ -573,8 +576,11 @@ Question Bank：
 主要训练：Knowledge Drill（intent knowledge_drill）
 ```
 
-Chapter 内按 KnowledgePoint 顺序轮次推进：第一轮每章知识点各一题，还有待练内容时
-再从第一个知识点开启下一轮，而不是在同一知识点一次刷十道。
+Chapter Practice 使用**固定确定性题序**：先按 Chapter 内 KnowledgePoint 的
+`question_bank_knowledge.sort_order`，再按稳定 Source identity、`exam_year`、
+`question_number` 自然排序与 `question_id` 兜底；跨 Session 持久 cursor，末尾 wrap，
+不因为“到末尾”永久 complete。详见
+[`question-practice-policy.md`](./question-practice-policy.md) §4。
 
 二者共享：
 
@@ -635,35 +641,36 @@ Review 未到期返回“当前没有待练题”。
 
 ## 10. 正式题抽取
 
-### 10.1 Book-level：World / 副本 / 自由训练的题池
+### 10.1 四套独立选题策略
 
-World / 副本 / Book-level 自由训练统一使用 **Book Question Pool**：
-
-```text
-Selected Book(s)
-→ 这些 Book 下全部 active KnowledgePoint
-→ 所有与这些 KnowledgePoint 有关系的 published Formal Parent Question
-→ core + auxiliary 都算覆盖
-→ 按 question_id DISTINCT 去重
-→ 排除当前 run 的 seenQuestionIds
-→ 在剩余 Question 中直接等概率随机
-```
-
-关键约束：
+正式训练固定为四套独立策略，各自独立实现，不做成巨型 if/else selector：
 
 ```text
-不先选 KnowledgePoint 再抽题
-同一道题关联多个 KP、或同时属于多本 selected Book，都只出现一次
-不会因为“知识点数量少于 rounds”阻止副本开始
+RANDOM     Learner World / 寒门仕途普通随机正式题（KP-first + 每日硬去重 + oldest/wrong lane）
+CHAPTER    章节练习（固定确定性题序 + 跨 Session 持久 cursor + 末尾 wrap）
+KNOWLEDGE  知识点专项（Session 内随机不重复）
+WRONG      单题错题重做 / 错题快练（Session 内随机不重复）
 ```
 
-`rounds` 表示“本轮最多完成多少道正式题”，不表示“必须预先准备多少个不同
-KnowledgePoint”。Formal Question 总量少于 `rounds` 时，本轮做完全部题目即自然完成，
-不为了凑满轮数而立刻重复出题。
+完整规则见 [`question-practice-policy.md`](./question-practice-policy.md)。要点：
+
+```text
+RANDOM 先选 target KnowledgePoint 再在该 KP 内选题，不再对整书题池直接 uniform random
+RANDOM 同一 Learner × 同一 Asia/Shanghai 业务日同一 Question 最多出一次（发出即占额度）
+CHAPTER / KNOWLEDGE / WRONG 做过的题不消耗 RANDOM quota，RANDOM 也不阻止它们练到同一题
+四模式都不再根据 Mastery / readiness / Review due / preferred difficulty / dependency 筛题
+```
+
+`rounds` 表示“本轮最多完成多少道正式题”。现代 Learner World 取
+`plannedRounds = min(activity rounds, 当天剩余可出的随机题数)`；
+`plannedRounds = 0` 时开始阶段直接给清晰业务提示，不做“先启动 run 再报错”。
+本轮每完成一道 Formal Parent 的 grading（correct / wrong / partial 都算）就推进一个 slot，
+进度是 `completedFormalCount / plannedRounds`，不硬编码百分比，也不在答错后停在原地。
 
 ### 10.2 target KnowledgePoint 的稳定归属
 
-Book-level 抽到题后仍只归属一个 target KnowledgePoint：
+从任何按 ID 发题的路径（仍然保留的 Book-level 题池 API、wrong_review 等）取题后，
+仍只归属一个 target KnowledgePoint：
 
 ```text
 该题关联 KnowledgePoint 中，先限定在当前 selected Book scope 内
@@ -672,20 +679,22 @@ Book-level 抽到题后仍只归属一个 target KnowledgePoint：
 ```
 
 解析结果必须稳定，不随机，否则同一道题会在不同时间强化不同知识点。
-一次 attempt 仍然只有一个 `targetKnowledgePointId`，**不会**因为一题绑定多个 KP
-就一次作答同时给全部 KP 加分（Mastery coverage 是 core + auxiliary，但单次 Evidence
-只有唯一目标）。
+RANDOM 策略则由 KP-first 直接冻结它选中的那个 KP，不重新解析。
+两种路径都保证：一次 attempt 仍然只有一个 `targetKnowledgePointId`，**不会**因为
+一题绑定多个 KP 就一次作答同时给全部 KP 加分（Mastery coverage 是 core + auxiliary，
+但单次 Evidence 只有唯一目标）。
 
-### 10.3 KnowledgePoint 专项与 Chapter Practice
+### 10.3 KnowledgePoint 专项、Chapter Practice 与 Wrong Drill
 
 ```text
 KnowledgePoint 专项：当前 KnowledgePoint → 该 KP 关联的全部 Formal Question（core + auxiliary）→ Session 内未见 → 随机
-Chapter Practice：继续限定当前 Book + Chapter，保持自己的轮次推进实现
+Chapter Practice：限定当前 Book + Chapter，走固定确定性题序 + 持久 cursor + 末尾 wrap
 Wrong Drill：active Wrong Book → 当前 selected Book scope → Session 内未见 → 随机
 ```
 
-三者都直接随机 Question，不先随机 KnowledgePoint。Chapter Practice 不在
-Book-level 改造范围内，不要顺手重写。
+KNOWLEDGE 与 WRONG 都是 Session 内随机且不重复，候选耗尽即本轮完成，
+新开 Session 重新洗牌。CHAPTER 的题序、跨 KP 去重、target KP 归属与 cursor 规则见
+[`question-practice-policy.md`](./question-practice-policy.md) §4。
 
 ### 10.3.1 Legacy `/games/**` 兼容路径
 
@@ -719,9 +728,9 @@ Learner World / 副本与 Legacy 的轮数计算必须在各自的 if 分支内�
 ```text
 status = published
 parent_question_id IS NULL
-正式题型
+四个正式题型
 当前训练上下文所属 Book / Chapter / KnowledgePoint 范围
-本 Session / run 未见
+本 Session / run 未见（RANDOM 另加“同一业务日同一题最多出一次”的硬去重）
 ```
 
 禁止再用以下因素决定一题“能不能被抽到”：
@@ -736,12 +745,13 @@ exposure soft ordering
 ```
 
 `difficulty` 只是题目元数据；`AdaptiveSchedulingPolicy.preferredDifficulty` 仍然存在，
-但只作为 Remedial / training 出题的软提示，不阻止正式题被抽中。掌握上限按有效掌握度
-分档（未开始或低于 40 为 2、低于 70 为 3、低于 100 为 4、100 为 5），
+但只作为保留的 Remedial / training 能力的软提示，普通四模式的选题一律不看它。
+掌握上限按有效掌握度分档（未开始或低于 40 为 2、低于 70 为 3、低于 100 为 4、100 为 5），
 `standard` 取目标难度与上限的较小值，`gentle` 再下调一级但不低于 1。
 
-Remedial 子题内部若仍需要低难度策略可以保留，因为它不是普通 Formal Question 抽取。
-正式题答错后的补救训练继续练同一道题，不换题、不换知识点。
+普通正式题答错后**不再**补救训练、不再 retry 同一道题：一次 grading 即完成一个正式 slot
+（correct / wrong / partial 都推进），下一题由该模式自己的 selector 决定。
+Remedial 子题能力继续保留，但普通正式训练不再自动进入。
 
 `study_attempt` 仍是 Question Exposure 的事实来源，Learning Hub 的只读题目浏览
 不创建 attempt，不计入 Exposure。全部候选都见过时不报错阻断，由调用方结束本轮。
@@ -765,7 +775,10 @@ question_source.display_name
 → 全服题库
 ```
 
-读取来源；不得由 Hub、World 或前端各自拼接。`question_resource.source_type / source_name`
+读取来源；不得由 Hub、World 或前端各自拼接。Chapter 题序的 Source 分组只使用
+`question_resource.source_id`（legacy 无 source_id 时回退 `source_type + source_name`），
+**不得**使用可修改的 `display_name` 作为排序事实。
+`question_resource.source_type / source_name`
 暂时保留，绑定来源时同步写入来源类型与 `canonical_name` 兼容快照。`disabled` 来源不能用于
 新的题目绑定，但既有绑定仍然可读。来源展示名变更只影响后续实时读取和新 attempt；
 已经写入 `study_attempt.question_snapshot_json` 的历史来源 metadata 永不回写。
@@ -1041,14 +1054,14 @@ JSON_TABLE
 已发布：
 
 ```text
-V1–V20 已冻结
+V1–V21 已冻结
 ```
 
 以后：
 
 ```text
 禁止修改历史 migration
-新 schema 变更只能 V21+
+新 schema 变更只能 V22+
 或新的 Java Flyway Migration
 ```
 
@@ -1067,6 +1080,19 @@ Remedial 子题的 legacy standard_answer_json 保持原样
 ```
 
 迁移失败时必须报告具体 Question ID，不允许绕过迁移或直接删数据。
+
+`V21__practice_selection_draw_mode.sql` 是 Practice Selection V2 的结构补充，只做确定性
+加法，不猜历史来源：
+
+```text
+study_attempt.draw_mode   VARCHAR(24) NULL
+study_attempt.draw_reason VARCHAR(24) NULL
+索引 (learner_id, draw_mode, created_at, question_id)
+旧 Attempt 的 draw_mode / draw_reason 保持 NULL，不做回填
+```
+
+它必须兼容 MySQL 5.7；`draw_mode` 由服务端 selection strategy 写入，前端不得提交。
+完整取值与语义见 [`question-practice-policy.md`](./question-practice-policy.md) §8。
 
 真题 metadata 整理（`exam_year` 回填、408 `source_name` 补年份前缀）属于数据维护，
 不是 schema 变更，使用幂等脚本 `scripts/normalize-exam-metadata.sql` 执行，不新增 migration。
@@ -1145,6 +1171,30 @@ frontend/src/components/Library.tsx
 是寒门仕途“藏书阁”的真实入口（非死代码），仍使用旧 World Bank 模型：
 按“科目 / 分类”筛选、显示 `subject · category`、分页每页 5 条。与现行正式原则冲突，
 但涉及 World legacy 模型，需单独任务重构，不在稳定化 PR 中处理。
+
+### 21.3 保留但已停用的自动诊断 / 补救链路
+
+Practice Selection V2 之后，普通正式训练（RANDOM / CHAPTER / KNOWLEDGE / WRONG）
+不再自动调用：
+
+```text
+DiagnosticLearningService.handleGradedAttempt
+learner_diagnosis_session / learner_diagnosis_dependency
+Remedial 子题与 retry parent
+```
+
+下列内容**全部保留**，因为诊断以后会重新设计，不要在无关 PR 中删除或顺手清理：
+
+```text
+learner_diagnosis_session / learner_diagnosis_dependency 表与历史数据
+DiagnosticLearningService / DiagnosticLearningStore
+RemedialQuestionStore 与管理端补救题导入导出
+AdaptiveStudyPlanner / AdaptiveSchedulingPolicy / Mode.TRAINING
+KnowledgeQuestionPoolStore.candidatesForBooks 等保留的题池查询 API
+```
+
+历史 diagnosis / remedial 数据仍然必须可读；旧未完成 diagnosis 在现代流程中被标记为
+`abandoned`，不阻塞下一题。
 
 ---
 

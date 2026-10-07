@@ -241,11 +241,6 @@ public class LearnerPracticeStore {
                 """, (rs, row) -> rs.getString(1), id, id));
     }
 
-    public int attemptCount(String sessionId,String questionId){
-        Integer count=jdbc.queryForObject("SELECT COUNT(*) FROM study_attempt WHERE practice_session_id=? AND question_id=?",Integer.class,sessionId,questionId);
-        return count==null?0:count;
-    }
-
     public void setCurrentAttempt(String id, String learnerId, String attemptId) {
         int changed = jdbc.update("""
                 UPDATE learner_practice_session

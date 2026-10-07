@@ -147,6 +147,19 @@ public class KnowledgeQuestionPoolService {
     }
 
     /**
+     * 普通正式题候选（KnowledgePoint 专项 / Chapter / Wrong 共用口径）：
+     * 只受“与目标知识点的关系 + 当前范围 + published 正式父题 + Session 内未见”限制。
+     *
+     * <p>PR3 之后 preferred difficulty 不再参与普通正式题抽取，因此这里不需要难度参数。</p>
+     */
+    public List<QuestionDto> eligibleFormalQuestions(String knowledgePointId,
+                                                     Set<String> allowedKnowledgePointIds,
+                                                     Set<String> seenQuestionIds) {
+        return eligibleQuestionsForLearner(new AdaptiveQuestionPoolRequest(
+                knowledgePointId, allowedKnowledgePointIds, seenQuestionIds, 0, Mode.NORMAL));
+    }
+
+    /**
      * Knowledge 专项候选同样只受“关系 + 范围 + published + Session 内未见”限制。
      * core 与 auxiliary 都算候选；今天已经答对、Review 未到期、其他知识点未掌握都不再让候选清空。
      */

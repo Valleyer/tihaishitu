@@ -27,6 +27,11 @@ class TaskLifecycleIntegrationTest extends DiagnosticWorldTestSupport {
     @Test
     void mainAndSideTasksRetryWithoutPenaltyThenClosePermanentlyOnCompletion() throws Exception {
         ExamScenario scenario = examScenario();
+        // PR3 起 RANDOM 在同一 Learner × 同一 Asia/Shanghai 业务日内同一道 Question 只能出一次，
+        // 而本测试要跑 county-exam-paper（10 题 × 2 轮）+ story-letter（5 题 × 2 轮）= 30 道正式题。
+        // 因此先把试卷文集补到 40 道，避免第二个 Phase 因为当天额度耗尽而无法开始。
+        for (int extra = 0; extra < 2; extra++)
+            for (String point : scenario.points()) question(2, java.util.List.of(relation(point, "core")));
         Cookie cookie = register("task-lifecycle");
         String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username=?", String.class,
                 "task-lifecycle");
@@ -84,12 +89,18 @@ class TaskLifecycleIntegrationTest extends DiagnosticWorldTestSupport {
     private JsonNode complete(JsonNode game, Cookie cookie, int formalMisses) throws Exception {
         int missed = 0;
         while ("active".equals(game.path("adventure").path("run").path("status").asText())) {
-            boolean training = game.path("adventure").path("run").path("training").asBoolean();
-            boolean correct = training || missed >= formalMisses;
-            if (!training && !correct) missed++;
+            boolean correct = missed >= formalMisses;
+            String answeredQuestion = game.path("attempt").path("question").path("id").asText();
+            if (!correct) missed++;
             game = answer(cookie, game, correct);
-            if ("active".equals(game.path("adventure").path("run").path("status").asText()))
-                game = next(cookie, game);
+            JsonNode run = game.path("adventure").path("run");
+            // 普通正式训练单层化：无论 correct / wrong / partial 都只推进一个正式题 slot，
+            // 不再 training、不再 retry 父题、也不再创建诊断会话。
+            assertThat(run.path("training").asBoolean()).isFalse();
+            assertThat(run.path("retryQuestionId").isNull()).isTrue();
+            assertThat(run.path("diagnosisSessionId").isNull()).isTrue();
+            assertThat(run.path("seenQuestionIds")).anySatisfy(id -> assertThat(id.asText()).isEqualTo(answeredQuestion));
+            if ("active".equals(run.path("status").asText())) game = next(cookie, game);
         }
         return game;
     }
