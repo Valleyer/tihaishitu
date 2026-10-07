@@ -1,26 +1,24 @@
 package cn.tihaishitu;
 
+import cn.tihaishitu.catalog.QuestionDto;
+import cn.tihaishitu.game.KnowledgeQuestionPoolStore;
 import cn.tihaishitu.learner.LearnerAuthService;
-import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
-
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,7 +27,8 @@ abstract class DiagnosticWorldTestSupport {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
-    @MockitoSpyBean AdaptiveStudyPlanner planner;
+    /** 只用于把 Book-level 题池固定成 root 一道题，其余方法仍然走真实实现。 */
+    @MockitoSpyBean KnowledgeQuestionPoolStore poolStore;
 
     record Scenario(String book, String target, List<String> dependencies, List<String> fillers,
                     String rootQuestion) {}
@@ -61,25 +60,7 @@ abstract class DiagnosticWorldTestSupport {
         rootRelations.add(relation(target, "core"));
         dependencies.forEach(dependency -> rootRelations.add(relation(dependency, "auxiliary")));
         String root = question(2, rootRelations);
-        // 目标知识点只保留 root 一道正式题：
-        // 正式题抽取现在在候选池内随机，多留同知识点的干扰题会让“第一题必须是 root”的断言不确定；
-        // 同时也能覆盖“知识点只有一道题时核验 / 补救复用该题”的真实场景。
-        deleteExtraTargetQuestions(target, root);
         return new Scenario(book, target, List.copyOf(dependencies), List.copyOf(fillers), root);
-    }
-
-    /** 删除某个知识点除 keep 之外的正式父题及其关系，保证该知识点的候选题唯一。 */
-    private void deleteExtraTargetQuestions(String point, String keep) {
-        List<String> others = jdbc.queryForList("""
-                SELECT DISTINCT q.id FROM question_resource q
-                JOIN question_resource_knowledge qk ON qk.question_id = q.id
-                WHERE qk.knowledge_point_id = ? AND q.id <> ?
-                """, String.class, point, keep);
-        for (String id : others) {
-            jdbc.update("DELETE FROM question_resource_knowledge WHERE question_id=?", id);
-            jdbc.update("DELETE FROM question_resource_option WHERE question_id=?", id);
-            jdbc.update("DELETE FROM question_resource WHERE id=?", id);
-        }
     }
 
     ExamScenario examScenario() {
@@ -113,17 +94,39 @@ abstract class DiagnosticWorldTestSupport {
     }
 
     void forceScenarioPlan(Scenario scenario) {
-        LinkedHashSet<String> allowed = new LinkedHashSet<>();
-        allowed.add(scenario.target());
-        allowed.addAll(scenario.dependencies());
-        allowed.addAll(scenario.fillers());
-        doAnswer(invocation -> {
-            int count = invocation.getArgument(2);
-            List<String> targets = new ArrayList<>();
-            targets.add(scenario.target());
-            targets.addAll(scenario.fillers());
-            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed, List.copyOf(targets.subList(0, count)));
-        }).when(planner).randomPlan(anyString(), anySet(), anyInt());
+        // World 正式发题改为"整书题池直接随机"后，不再伪造 KnowledgePoint plan。
+        // 但诊断测试需要"第一题一定是 root"才能断言 probe / remediation 顺序，
+        // 所以这里固定 Book-level 题池返回 root 一道题（依赖诊断题仍由真实 store 提供）。
+        QuestionDto root = questionDto(scenario.rootQuestion());
+        doAnswer(invocation -> List.of(root))
+                .when(poolStore).candidatesForBooks(anySet(), anySet());
+    }
+
+    /** 从测试数据还原一道 QuestionDto，供 Book-level 题池 stub 使用。 */
+    private QuestionDto questionDto(String questionId) {
+        List<String> pointIds = jdbc.queryForList("""
+                SELECT knowledge_point_id FROM question_resource_knowledge
+                 WHERE question_id = ? ORDER BY sort_order, knowledge_point_id
+                """, String.class, questionId);
+        return jdbc.queryForObject("""
+                SELECT id,subject_name,source_type,source_name,question_type,presentation_type,
+                       grading_mode,content_markdown,standard_answer_json,analysis_markdown,difficulty
+                  FROM question_resource WHERE id=?
+                """, (rs, row) -> new QuestionDto(
+                rs.getString("id"), rs.getString("subject_name"), rs.getString("source_type"),
+                rs.getString("source_name"), rs.getString("question_type"), rs.getString("question_type"),
+                rs.getString("presentation_type"), rs.getString("grading_mode"),
+                rs.getString("content_markdown"), Map.of(), readJson(rs.getString("standard_answer_json")),
+                rs.getString("analysis_markdown"), List.of(), List.of(), rs.getInt("difficulty"), 3,
+                List.of(), pointIds, true), questionId);
+    }
+
+    private JsonNode readJson(String value) {
+        try {
+            return mapper.readTree(value);
+        } catch (Exception error) {
+            throw new IllegalStateException("测试题目答案不是合法 JSON。", error);
+        }
     }
 
     void initialize(Cookie cookie) throws Exception {

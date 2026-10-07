@@ -137,18 +137,35 @@ public class GameActionService {
         if (player.path("coins").asInt() < entryCost) throw bad("入场银两不足。");
         player.put("coins", player.path("coins").asInt() - entryCost);
         int rounds = activity.path("rounds").asInt(5);
-        KnowledgeQuestionPoolService.StudyPlan plan = WorldActionContext.active()
-                ? studyProfiles.plan(rounds)
-                : questionPool.planKnowledgePoints(selectedBookIds(game), rounds);
+        Set<String> bookScope = selectedBookIds(game);
+        // Book-level 正式题池：整本书（或整批 selected books）覆盖到的全部去重 Formal Question。
+        // 副本轮数不再要求“至少存在 rounds 个不同 KnowledgePoint”；题目总量少于 rounds 时，
+        // 本轮就只做这些题，做完自然结束。
+        int plannedRounds = Math.max(1, Math.min(rounds,
+                questionPool.candidatesForBooks(bookScope, Set.of()).size()));
         ObjectNode run = mapper.createObjectNode();
         run.put("id", UUID.randomUUID().toString());
         run.set("definition", activity.deepCopy());
         run.put("answered", 0);
         run.put("correct", 0);
-        run.set("knowledgePointIds", mapper.valueToTree(plan.knowledgePointIds()));
-        // Freeze the selected Book boundary; formal draws recompute readiness inside this scope.
-        run.set("allowedKnowledgePointIds", mapper.valueToTree(plan.allowedKnowledgePointIds()));
+        // Learner World 不再预选 KnowledgePoint：正式题从 Book-level 题池直接随机。
+        // Legacy /games/** 兼容路径仍按启动时冻结的 KnowledgePoint 顺序出题，因此保留 plan。
+        if (!WorldActionContext.active()) {
+            KnowledgeQuestionPoolService.StudyPlan legacyPlan =
+                    questionPool.planKnowledgePoints(bookScope, rounds);
+            run.set("knowledgePointIds", mapper.valueToTree(legacyPlan.knowledgePointIds()));
+            run.set("allowedKnowledgePointIds", mapper.valueToTree(legacyPlan.allowedKnowledgePointIds()));
+        } else {
+            run.set("knowledgePointIds", mapper.createArrayNode());
+            // Freeze the selected Book boundary; formal draws build the Book-level question pool from this scope.
+            run.set("allowedKnowledgePointIds", mapper.valueToTree(questionPool.allowedKnowledgePointIds(bookScope)));
+        }
+        // Freeze the book scope itself for Book-level question pool draws.
+        run.set("allowedBookIds", mapper.valueToTree(bookScope));
+        run.put("plannedRounds", plannedRounds);
+        // 本轮已完成 / 已作答的正式题数（不再是知识目录下标）。
         run.put("knowledgePointIndex", 0);
+        run.putNull("retryQuestionId");
         run.put("training", false);
         run.put("trainingAnswered", 0);
         run.put("diagnosticAnswered", 0);
@@ -427,13 +444,12 @@ public class GameActionService {
         WorldActionContext.Scope world = WorldActionContext.currentOrNull();
         DiagnosticLearningService.Directive directive = null;
         String pointId;
-        KnowledgeQuestionPoolService.Mode mode;
         QuestionDto question;
         if (world != null && run.hasNonNull("diagnosisSessionId")) {
             while (true) {
                 directive = diagnostics.nextDirective(run.path("diagnosisSessionId").asText());
                 pointId = directive.targetKnowledgePointId();
-                mode = "training".equals(directive.evidenceMode())
+                KnowledgeQuestionPoolService.Mode mode = "training".equals(directive.evidenceMode())
                         ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL;
                 var profile = studyProfiles.rawCurrent();
                 AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
@@ -457,22 +473,28 @@ public class GameActionService {
                 question = questionPool.selectQuestionForLearner(world.learnerId(), request);
                 break;
             }
-        } else {
-            int index = run.path("knowledgePointIndex").asInt();
-            pointId = run.path("knowledgePointIds").path(index).asText();
-            mode = run.path("training").asBoolean()
-                    ? KnowledgeQuestionPoolService.Mode.TRAINING : KnowledgeQuestionPoolService.Mode.NORMAL;
-            if (world == null) {
+        } else if (world == null) {
+            // Legacy /games/** 兼容路径：仍按启动时冻结的 KnowledgePoint 顺序出题，
+            // 不参与 Learner 的 Book-level 整书题池。
+            pointId = run.path("knowledgePointIds").path(run.path("knowledgePointIndex").asInt()).asText();
             question = questionPool.selectQuestion(new KnowledgeQuestionPoolService.QuestionPoolRequest(
-                    pointId, allowed, seen, null, mode));
+                    pointId, allowed, seen, null,
+                    run.path("training").asBoolean()
+                            ? KnowledgeQuestionPoolService.Mode.TRAINING
+                            : KnowledgeQuestionPoolService.Mode.NORMAL));
+        } else {
+            // Book-level 正式题：直接从 selected Book(s) 覆盖的全部去重 Formal Question 中随机，
+            // 不先选 KnowledgePoint，也不受 readiness / Mastery / Review / difficulty 限制。
+            // 答错后的补救训练继续练同一道题（retryQuestionId），不换知识点。
+            if (run.path("training").asBoolean() && run.hasNonNull("retryQuestionId")) {
+                question = questionPool.questionForLearner(run.path("retryQuestionId").asText())
+                        .orElseGet(() -> questionPool.selectBookQuestion(frozenBookIds(game, run), Set.of()));
             } else {
-                var profile = studyProfiles.rawCurrent();
-                AdaptiveStudyPlanner.QuestionContext context = adaptivePlanner.questionContext(
-                        world.learnerId(), allowed, pointId, profile.difficulty());
-                question = questionPool.selectQuestionForLearner(world.learnerId(),
-                        new KnowledgeQuestionPoolService.AdaptiveQuestionPoolRequest(pointId, allowed,
-                                seen, context.preferredDifficulty(), mode));
+                question = questionPool.selectBookQuestion(frozenBookIds(game, run), seen);
             }
+            pointId = questionPool.targetKnowledgePointFor(question.id(), allowed)
+                    .orElseGet(() -> questionPool.targetKnowledgePointFor(question.id(), Set.of())
+                            .orElseThrow(() -> bad("这道题当前没有可用的知识点。")));
         }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
@@ -495,7 +517,9 @@ public class GameActionService {
         visible.set("knowledgePoints", knowledge);
         ObjectNode attempt = mapper.createObjectNode();
         attempt.put("id", attemptId);
-        String selectedPointId = pointId;
+        // Book-level 抽题时 target 已经由"该题在 scope 内稳定的 core → auxiliary"解析出来；
+        // 显式传入，避免同一次发题再解析成另一个知识点。
+        final String selectedPointId = pointId;
         KnowledgePointDto target = details.stream().filter(point -> selectedPointId.equals(point.id())).findFirst()
                 .orElseThrow(() -> bad("当前修习知识点已经停用或不存在。"));
         attempt.put("targetKnowledgePointId", target.id());
@@ -564,6 +588,26 @@ public class GameActionService {
         return allowed;
     }
 
+    /**
+     * Book-level 题池使用的冻结 book 范围。
+     * 新 run 在开始时写入 `allowedBookIds`；旧存档没有该字段时回退到当前 selected books。
+     */
+    private Set<String> frozenBookIds(ObjectNode game, ObjectNode run) {
+        Set<String> books = new LinkedHashSet<>();
+        run.path("allowedBookIds").forEach(id -> books.add(id.asText()));
+        if (!books.isEmpty()) return books;
+        books.addAll(selectedBookIds(game));
+        run.set("allowedBookIds", mapper.valueToTree(books));
+        return books;
+    }
+
+    /** 本轮计划完成的正式题数；旧存档没有该字段时回退到活动配置的 rounds。 */
+    private static int plannedRounds(ObjectNode run) {
+        int planned = run.path("plannedRounds").asInt(0);
+        if (planned > 0) return planned;
+        return Math.max(1, run.path("definition").path("rounds").asInt(5));
+    }
+
     private void settleRunAnswer(ObjectNode game, boolean correct, String questionId,
                                  DiagnosticLearningService.GradingResult diagnosis) {
         ObjectNode run = activeRun(game);
@@ -575,6 +619,8 @@ public class GameActionService {
             return;
         }
         if (diagnosis.diagnosisRole() != null) {
+            // 诊断流程（probe / remediation / recheck）不推进 Book-level 轮次；
+            // 只有诊断真正收束时，才把“本轮这一道正式题”算作完成。
             if (Set.of(DiagnosticLearningService.DEPENDENCY_PROBE,
                     DiagnosticLearningService.TARGET_RECHECK).contains(diagnosis.diagnosisRole()))
                 run.put("diagnosticAnswered", run.path("diagnosticAnswered").asInt() + 1);
@@ -582,29 +628,42 @@ public class GameActionService {
             if (diagnosis.targetCompleted()) {
                 run.putNull("diagnosisSessionId");
                 run.put("training", false);
-                run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
+                advanceRunRound(run);
                 settleRunIfComplete(game, run);
             }
             return;
         }
         if (run.path("training").asBoolean()) {
+            // 正式题答错后的补救训练继续练同一道题，不换题、不换知识点。
+            run.put("retryQuestionId", questionId);
             run.put("trainingAnswered", run.path("trainingAnswered").asInt() + 1);
             if (correct) {
                 run.put("training", false);
-                run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
+                run.putNull("retryQuestionId");
+                advanceRunRound(run);
             }
         } else if (correct) {
             run.put("correct", run.path("correct").asInt() + 1);
-            run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
+            advanceRunRound(run);
         } else {
             run.put("training", true);
         }
         settleRunIfComplete(game, run);
     }
 
+    /**
+     * 完成一道正式题：推进本轮进度。
+     * `knowledgePointIndex` 现在表示“本轮已完成 / 已作答的正式题数”，
+     * 不再表示知识目录下标，也不再依赖 run 开始时预选的 KnowledgePoint 数量。
+     */
+    private static void advanceRunRound(ObjectNode run) {
+        run.put("knowledgePointIndex", run.path("knowledgePointIndex").asInt() + 1);
+    }
+
     private void settleRunIfComplete(ObjectNode game, ObjectNode run) {
-        if (run.path("knowledgePointIndex").asInt() < run.path("knowledgePointIds").size()) return;
-        int score = Math.round(run.path("correct").asInt() * 100f / run.path("knowledgePointIds").size());
+        int planned = plannedRounds(run);
+        if (run.path("knowledgePointIndex").asInt() < planned) return;
+        int score = Math.round(run.path("correct").asInt() * 100f / planned);
         run.put("score", score);
         run.put("status", "settled");
         boolean task = "task".equals(run.path("definition").path("activityMode").asText());

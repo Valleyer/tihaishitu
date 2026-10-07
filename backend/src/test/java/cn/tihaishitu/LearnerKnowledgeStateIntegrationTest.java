@@ -1,7 +1,6 @@
 package cn.tihaishitu;
 
 import cn.tihaishitu.learner.LearnerAuthService;
-import cn.tihaishitu.learning.AdaptiveStudyPlanner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -12,13 +11,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -26,16 +21,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
 
 @SpringBootTest @AutoConfigureMockMvc
 @TestPropertySource(properties = "spring.datasource.url=jdbc:h2:mem:learner-knowledge-state;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 class LearnerKnowledgeStateIntegrationTest {
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired ObjectMapper mapper;
-    @MockitoSpyBean AdaptiveStudyPlanner planner;
 
     @Test
     void officialWorldAttributesOnlyTargetAndKeepsWrongThenTrainingAsTwoEvidenceEvents() throws Exception {
@@ -49,15 +39,8 @@ class LearnerKnowledgeStateIntegrationTest {
         for (String q : new String[]{q1, q2}) {
             jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", q, k1);
         }
-        List<String> fillers = new ArrayList<>();
-        for (int index = 3; index <= 6; index++) {
-            String point = UUID.randomUUID().toString(), question = UUID.randomUUID().toString();
-            fillers.add(point);
-            insertKnowledge(point, "STATE-K" + index);
-            jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,?)", book, point, chapter, index);
-            insertQuestion(question, 2);
-            jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'core',0)", question, point);
-        }
+        // World 现在直接从整书正式题池随机，所以这里只保留 k1 的两道题：
+        // 第一题必然是 k1，答错后的补救训练仍然是同一道题。
         Cookie learner = register();
         String learnerId = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='state-user'", String.class);
         jdbc.update("""
@@ -68,19 +51,12 @@ class LearnerKnowledgeStateIntegrationTest {
                 """, learnerId, k2);
         jdbc.update("UPDATE learner_study_profile SET focus_mode='manual' WHERE learner_id=?", learnerId);
         jdbc.update("INSERT INTO learner_focus_knowledge(learner_id,knowledge_point_id,sort_order) VALUES (?,?,0)", learnerId, k1);
-        LinkedHashSet<String> allowed = new LinkedHashSet<>();
-        allowed.add(k1); allowed.add(k2); allowed.addAll(fillers);
-        doAnswer(invocation -> {
-            int count = invocation.getArgument(2);
-            List<String> targets = new ArrayList<>(); targets.add(k1); targets.addAll(fillers);
-            return new AdaptiveStudyPlanner.AdaptiveStudyPlan(allowed,
-                    List.copyOf(targets.subList(0, count)));
-        }).when(planner).randomPlan(anyString(), anySet(), anyInt());
         mvc.perform(get("/api/v1/learner/knowledge-states/{id}", k1).cookie(learner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.band").value("unstarted"))
                 .andExpect(jsonPath("$.evidenceCount").value(0));
+        // 只有 k1 / k2 两个知识点在书内，但 k2 没有正式题。
         mvc.perform(get("/api/v1/learner/knowledge-states").param("bookId", book).cookie(learner))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(5));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isZero();
         initialize(learner);
         JsonNode game = json(mvc.perform(post("/api/v1/worlds/ancient-official/activities").with(csrf()).cookie(learner)
@@ -103,7 +79,8 @@ class LearnerKnowledgeStateIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE knowledge_point_id=?", Integer.class, k2)).isZero();
-        assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k2)).isZero();
+        // k2 的 state 是测试预置的（evidence_count = 1），World 发题不再碰它。
+        assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k2)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT evidence_count FROM learner_knowledge_state WHERE knowledge_point_id=?", Integer.class, k1)).isEqualTo(2);
         mvc.perform(get("/api/v1/learner/knowledge-states/{id}", k1).cookie(learner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.evidenceCount").value(2))

@@ -20,7 +20,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **养成**：26 件装备、消耗品和信物可收入行囊，装备加成实际参与解锁条件。
 - **Learning Hub**：统一管理学习范围与重点知识点，查看学习进度和复习安排，并进行知识点专项练习与错题练习。
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
-- **自适应学习 V1**：正式 World 从 Selected Books 覆盖到、且存在正式题的 KnowledgePoint 中随机确定目标；目标确定后在候选池内随机发题，不再因为其他关联知识点未掌握而阻止发题。
+- **自适应学习 V1**：正式 World / 副本把当前 Selected Books 覆盖到的全部正式题按题目去重成一个题池，直接随机抽题；不再先随机知识点，也不会因为知识点数量少于副本轮数而无法开始。每道题仍只归属一个稳定的目标知识点。
 - **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
 - **跨轮次题目轮换 V1**：当前 Session / run 内排除已见题，避免立刻重复；候选池内随机发题，新 Session 重新进入随机池。不再使用 Mastery、Review due、前置依赖或曝光软排序决定一题能不能被抽到。
 - **综合题诊断 V1**：综合题答错时先保留原始作答，再核验最可疑的前置知识、补强薄弱点并复核目标知识点；只有诊断确认后才把根错误归因到目标。
@@ -32,7 +32,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 能不能练与能不能获得 Mastery 奖励已经分离：今天已经答对过的题仍然可以再练，只是同一业务日后续正确不再增加熟练度。KnowledgePoint 的 `relation_role`（core / auxiliary）只用于标签主次显示与诊断解释，既不影响题目能不能做，也不影响它是否进入 Mastery 分母。正式题发题条件只剩 `status=published`、`parent_question_id IS NULL`、正式题型与当前训练上下文范围，加上当前 Session / run 的 `seenQuestionIds` 排除。
 
-Adaptive Scheduling V1 仍然按惰性遗忘后的有效掌握度计算“软提示难度”（未开始或有效掌握度低于 40 为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 取目标难度与掌握上限的较小值，`gentle` 再下调一级但不低于 1），但难度只作为 Remedial / training 出题的软提示，不再阻止正式题被抽中。World target 从当前 Selected Books 覆盖到、且存在正式题的知识点中随机抽取，Mastery、Review 与 Manual Focus 不决定 target 优先级，也不再有 dependency readiness 校验；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
+Adaptive Scheduling V1 仍然按惰性遗忘后的有效掌握度计算“软提示难度”（未开始或有效掌握度低于 40 为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 取目标难度与掌握上限的较小值，`gentle` 再下调一级但不低于 1），但难度只作为 Remedial / training 出题的软提示，不再阻止正式题被抽中。World / 副本的正式题来自 Book-level 题池：Selected Book(s) 覆盖到的全部 published 正式父题，core 与 auxiliary 都算，按 `question_id` 去重后排除本 run 已见题，再等概率随机；`rounds` 只是本轮最多完成几道题，题目不够就自然提前完成。抽到题后按“scope 内 core 优先，其次 auxiliary”的稳定规则解析 target KnowledgePoint，一次 attempt 只强化这一个目标；旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
 Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 展示与解释计划，并可进入共享 Question Engine 的正式专项练习；Review 与 Focus 不改变 World target 的随机选择。
 
@@ -131,4 +131,4 @@ build 包含配置引用、图片路径、题目知识点数量检查与类型�
 
 Learning Hub 提供 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题及其 Diagnosis/Training 结束后，学习者可以再来一道同 KnowledgePoint 或结束。KnowledgePoint 专项候选包含 core 与 auxiliary 关联的全部正式父题，不再因为其他知识点未 ready 而卡住。错题本为**永久错题本**：正式父题一旦 wrong 或 partial 即进入错题本，之后即使重做正确也**不会自动移出**，只有学习者确认掌握并手动移出才消失；以后再次做错会自动重新加入。错题本与 Mastery 相互独立，允许 KnowledgePoint 掌握度 100% 的同时仍保留历史错题。Wrong Practice 首题固定为原 Question；快速练习错题则在 active 错题中随机连续出题，Session 内不重复。
 
-World target 从 Selected Books 覆盖到、且存在正式题的 KnowledgePoint 随机抽取，包含 unstarted、weak 与 proficient，不使用 Review、Mastery 或 Manual Focus 排序。target 确定后，Hub 与 World 共用 Question Pool、随机抽取、grading、Evidence、Diagnosis、Training 和 Mastery 更新；不再有 dependency readiness gating。
+World / 副本从 Selected Books 覆盖到的全部正式题（core + auxiliary，按题目去重）中直接随机抽题，不先选 KnowledgePoint，也不使用 Review、Mastery 或 Manual Focus 排序；`rounds` 只是本轮题数上限，题目不足时自然提前完成。target 确定后，Hub 与 World 共用 Question Pool、随机抽取、grading、Evidence、Diagnosis、Training 和 Mastery 更新；不再有 dependency readiness gating。KnowledgePoint 专项与 Chapter Practice 仍保持各自的范围。

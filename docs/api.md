@@ -146,15 +146,29 @@ Knowledge Mastery = 所有正式父题槽位分数之和 / 当前正式父题总
 
 ## Adaptive Scheduling V1
 
-正式 World 开始活动时先从 Selected Books 得到冻结的 allowed KnowledgePoint scope。某个目标知识点可进入本轮计划的条件只有一个：它至少存在一道 published 正式父题（与该知识点的关系是 core 或 auxiliary 都算）。不存在任何前置 KP gating：dependency readiness、`effectiveMastery`、Review due、preferred difficulty 与 exposure 都不参与某个知识点能否发题的判定，题目关联的其他知识点也不需要 ready。
+正式 World / 副本使用 **Book Question Pool**：开始活动时冻结 selected Book scope，正式题直接从该范围的全部去重 Formal Question 中随机，**不先选 KnowledgePoint**。
 
-Planner 批量读取 allowed scope 内已有 state，未开始的知识点使用虚拟初始状态且不写库。正式 World 从 Selected Books 覆盖到、且至少存在一道正式父题的知识点集合中随机抽取不同 target；Manual Focus 只做优先级前置，Mastery、Review 与 dependency 不参与 target 排序。可训练目标不足活动轮数时返回明确的 400，不会放宽规则。`AdaptiveStudyPlan` 只包含 `allowedKnowledgePointIds` 与 `targetKnowledgePointIds`，不再返回 ready set；`QuestionContext` 只保留 `preferredDifficulty`。
+```text
+selected Book(s)
+→ 这些 Book 下全部 active KnowledgePoint
+→ 所有与这些 KnowledgePoint 有关系的 published Formal Parent Question
+→ core + auxiliary 都算覆盖
+→ 按 question_id DISTINCT 去重
+→ 排除本 run 的 seenQuestionIds
+→ 等概率随机 Question
+```
 
-target 确定后的正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文（Book / Chapter / KnowledgePoint）范围 + 本 Session `seenQuestionIds` 排除。合法候选内等概率随机，不使用 dependency readiness、Mastery、Review due、preferred difficulty 或 exposure 决定抽到哪道题，也不做难度硬分桶。发题请求 `AdaptiveQuestionPoolRequest` 只包含 `currentKnowledgePointId`、`allowedKnowledgePointIds`、`seenQuestionIds`、`preferredDifficulty` 与 `mode`，不再携带 dependency policy。
+不存在任何前置 KP gating：dependency readiness、`effectiveMastery`、Review due、preferred difficulty 与 exposure 都不参与某道正式题能否被抽到。同一道题关联多个 KP、或同时属于多本 selected Book 时都只出现一次。run 只冻结 `allowedBookIds` / `allowedKnowledgePointIds`（诊断上下文用）/ `plannedRounds` / `seenQuestionIds`；**不再预选 rounds 个不同 KnowledgePoint**，因此 knowledgePointIds 可以为空，知识点数量也不会限制副本能否开始。
+
+`rounds` 的新含义是“本轮最多完成多少道正式题”。当 Book 覆盖的 Formal Question 总量少于 `rounds` 时，`plannedRounds = min(rounds, 题目数)`，本轮做完全部题目即自然完成，不为了凑满轮数而立刻重复出题。`plannedRounds` 在 run 上返回。
+
+抽到题后仍只归属一个 target KnowledgePoint：先限定在该题关联且在 scope 内的知识点，优先 `relation_role='core'`，再按 `sort_order`、`knowledge_point_id` 取第一个；没有 core 时取 auxiliary 中 `sort_order` 最小的一个。解析稳定、不随机；一次 attempt 不会给该题的全部 core + auxiliary 同时加分。
+
+正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除。正式题答错后的补救训练继续练同一道题（不换题、不换知识点）。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。
 
 难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有 TRAINING 模式（Remedial / 诊断补强流程）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
 
-Legacy `/games/**` 与 Learner 共用同一套正式题池与随机抽取规则；没有 Learner 的 Legacy 路径不读取 Mastery。
+Legacy `/games/**` 没有 Learner，仍按启动时冻结的 KnowledgePoint 顺序出题，不读取 Mastery，也不参与 Book-level 题池。
 
 ## Learner Question Rotation V1
 
@@ -327,4 +341,4 @@ Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded atte
 
 Hub Practice 与 World 在 target 确定后调用同一 AdaptiveStudyPlanner question context、KnowledgeQuestionPoolService、rotation、grading、Evidence 与 Diagnosis 服务。Hub mutation 校验 learner/session/diagnosis owner，且不写 `learner_world_state`。
 
-World target 从 Selected Books 覆盖到、且至少存在一道正式父题的知识点中 shuffle 后 distinct 截取活动轮数；unstarted 不被排除，也不按 mastery/review 排序（Manual Focus 只做优先级前置）。
+World / 副本不再预选 target KnowledgePoint：正式题从 Selected Books 覆盖到的全部去重 Formal Question 中直接随机，抽到题后再按“scope 内 core 优先、其次 auxiliary”解析出稳定的 target；unstarted 不被排除，也不按 mastery/review 排序。

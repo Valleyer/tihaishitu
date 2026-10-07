@@ -44,8 +44,12 @@ public class AdaptiveStudyPlanner {
     }
 
     /**
-     * 正式目标随机抽取：候选池是 Selected Books 覆盖到、且至少存在一道正式父题的知识点。
-     * 不再使用 dependency readiness、Mastery 带宽或 Review due 决定谁能进入本轮计划。
+     * KnowledgePoint 集合层面的计划能力（scope + 可练知识点），仅用于按知识点组织的场景。
+     *
+     * <p>World / 副本 / Book-level 自由训练**不再**使用本方法预选 rounds 个 KnowledgePoint：
+     * 它直接从 Book-level 题池随机抽题（见 {@code KnowledgeQuestionPoolStore.candidatesForBooks}）。</p>
+     *
+     * <p>不针对某个知识点做 prerequisite / readiness 判定，只保留“该知识点是否存在正式题”。</p>
      */
     public AdaptiveStudyPlan plan(String learnerId, Set<String> selectedBookIds,
                                   List<String> focusedKnowledgePointIds, boolean manualFocus, int count) {
@@ -68,7 +72,7 @@ public class AdaptiveStudyPlanner {
                 .filter(playable::contains).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (candidates.size() < count) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "当前学习范围只有 " + candidates.size() + " 个可挑战知识点，本活动需要 "
+                    "当前学习范围只有 " + candidates.size() + " 个存在正式题的知识点，本次需要 "
                             + count + " 个不同知识点。");
         }
 

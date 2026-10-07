@@ -180,6 +180,38 @@ public class KnowledgeQuestionPoolService {
         return store.knowledgeDetails(new LinkedHashSet<>(knowledgePointIds));
     }
 
+    /**
+     * Book-level 正式题池（World / 副本 / Book 自由训练使用）。
+     *
+     * <p>先把 Selected Book(s) 覆盖到的全部 Formal Question 按 question_id 去重收集成一个池子，
+     * 排除本 run 已见题，再由调用方等概率随机抽题。**不先选 KnowledgePoint**，
+     * 因此各知识点题量不均时不会扭曲抽中概率；知识点数量也不会限制副本轮数。</p>
+     */
+    public List<QuestionDto> candidatesForBooks(Set<String> selectedBookIds, Set<String> excludedQuestionIds) {
+        return store.candidatesForBooks(selectedBookIds, excludedQuestionIds);
+    }
+
+    /** Book-level 抽题：候选池内等概率随机。 */
+    public QuestionDto selectBookQuestion(Set<String> selectedBookIds, Set<String> excludedQuestionIds) {
+        List<QuestionDto> candidates = candidatesForBooks(selectedBookIds, excludedQuestionIds);
+        if (candidates.isEmpty()) throw bad("当前学习范围内没有可用的正式题。");
+        return random(candidates);
+    }
+
+    /** 按题目 ID 直接取回可作为正式题的 Question 列表。 */
+    public List<QuestionDto> questionsByIds(Set<String> questionIds) {
+        return store.candidatesForQuestions(questionIds);
+    }
+
+    /**
+     * 一道题的稳定 target KnowledgePoint：优先 scope 内 core（再按 sort_order / id），
+     * 否则 scope 内 auxiliary；scope 内找不到时退回该题任意 active 关联知识点。
+     */
+    public java.util.Optional<String> targetKnowledgePointFor(String questionId,
+                                                              Set<String> scopeKnowledgePointIds) {
+        return store.targetKnowledgePointFor(questionId, scopeKnowledgePointIds);
+    }
+
     /** 题目的来源元数据（科目 / 来源名 / 年份 / 题号）。 */
     public java.util.Optional<KnowledgeQuestionPoolStore.QuestionSource> questionSource(String questionId) {
         return store.questionSource(questionId);
@@ -190,6 +222,15 @@ public class KnowledgeQuestionPoolService {
         return store.questionKnowledge(questionId).stream()
                 .map(tag -> new KnowledgePointTag(tag.knowledgePointId(), tag.name(), tag.role()))
                 .toList();
+    }
+
+    /**
+     * 按题目 ID 直接取回可作为正式题的 Question（例如 Book-level 答错后的补救重做同一题）。
+     * 只校验它仍是 published 正式父题。
+     */
+    public java.util.Optional<QuestionDto> questionForLearner(String questionId) {
+        if (questionId == null) return java.util.Optional.empty();
+        return questionsByIds(Set.of(questionId)).stream().findFirst();
     }
 
     /**

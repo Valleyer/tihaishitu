@@ -542,13 +542,59 @@ Review 未到期返回“当前没有待练题”。
 
 ## 10. 正式题抽取
 
-正式候选池确定后：
+### 10.1 Book-level：World / 副本 / 自由训练的题池
+
+World / 副本 / Book-level 自由训练统一使用 **Book Question Pool**：
 
 ```text
-当前 Session / run 内优先排除 seenQuestionIds，避免立刻重复
-未见候选中随机选择
-新 Session / 新 run 重新进入随机池
+Selected Book(s)
+→ 这些 Book 下全部 active KnowledgePoint
+→ 所有与这些 KnowledgePoint 有关系的 published Formal Parent Question
+→ core + auxiliary 都算覆盖
+→ 按 question_id DISTINCT 去重
+→ 排除当前 run 的 seenQuestionIds
+→ 在剩余 Question 中直接等概率随机
 ```
+
+关键约束：
+
+```text
+不先选 KnowledgePoint 再抽题
+同一道题关联多个 KP、或同时属于多本 selected Book，都只出现一次
+不会因为“知识点数量少于 rounds”阻止副本开始
+```
+
+`rounds` 表示“本轮最多完成多少道正式题”，不表示“必须预先准备多少个不同
+KnowledgePoint”。Formal Question 总量少于 `rounds` 时，本轮做完全部题目即自然完成，
+不为了凑满轮数而立刻重复出题。
+
+### 10.2 target KnowledgePoint 的稳定归属
+
+Book-level 抽到题后仍只归属一个 target KnowledgePoint：
+
+```text
+该题关联 KnowledgePoint 中，先限定在当前 selected Book scope 内
+→ 优先 relation_role = 'core'，按 sort_order、knowledge_point_id 取第一个
+→ 没有 core 时取 auxiliary 中 sort_order 最小的一个
+```
+
+解析结果必须稳定，不随机，否则同一道题会在不同时间强化不同知识点。
+一次 attempt 仍然只有一个 `targetKnowledgePointId`，**不会**因为一题绑定多个 KP
+就一次作答同时给全部 KP 加分（Mastery coverage 是 core + auxiliary，但单次 Evidence
+只有唯一目标）。
+
+### 10.3 KnowledgePoint 专项与 Chapter Practice
+
+```text
+KnowledgePoint 专项：当前 KnowledgePoint → 该 KP 关联的全部 Formal Question（core + auxiliary）→ Session 内未见 → 随机
+Chapter Practice：继续限定当前 Book + Chapter，保持自己的轮次推进实现
+Wrong Drill：active Wrong Book → 当前 selected Book scope → Session 内未见 → 随机
+```
+
+三者都直接随机 Question，不先随机 KnowledgePoint。Chapter Practice 不在
+Book-level 改造范围内，不要顺手重写。
+
+### 10.4 正式题发题条件
 
 正式题发题条件只剩：
 
@@ -568,6 +614,7 @@ Mastery
 Review due
 preferred difficulty
 exposure soft ordering
+不同 KnowledgePoint 数量
 ```
 
 `difficulty` 只是题目元数据；`AdaptiveSchedulingPolicy.preferredDifficulty` 仍然存在，
@@ -576,13 +623,14 @@ exposure soft ordering
 `standard` 取目标难度与上限的较小值，`gentle` 再下调一级但不低于 1。
 
 Remedial 子题内部若仍需要低难度策略可以保留，因为它不是普通 Formal Question 抽取。
+正式题答错后的补救训练继续练同一道题，不换题、不换知识点。
 
 `study_attempt` 仍是 Question Exposure 的事实来源，Learning Hub 的只读题目浏览
 不创建 attempt，不计入 Exposure。全部候选都见过时不报错阻断，由调用方结束本轮。
 
 ---
 
-## 10.1 真题来源与展示标签
+### 10.5 真题来源与展示标签
 
 真题的事实来源是结构化字段：
 

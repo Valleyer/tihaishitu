@@ -68,6 +68,112 @@ public class KnowledgeQuestionPoolStore {
     }
 
     /**
+     * Book-level 正式题池：Selected Book(s) 覆盖到的**全部**去重 Formal Question。
+     *
+     * <p>与 KnowledgePoint 专项不同，这里不先选知识点，而是直接把整本书（或整批 selected books）
+     * 覆盖到的正式题收集成一个池子，再由调用方等概率随机抽题。语义：</p>
+     *
+     * <pre>
+     * selected Book(s)
+     *   → 这些 Book 下全部 active 的 KnowledgePoint
+     *   → 与这些 KnowledgePoint 有关系的 published Formal Parent Question
+     *   → core + auxiliary 都算覆盖
+     *   → 按 question_id DISTINCT 去重（一题关联多个 KP、或同时属于多本 selected Book，都只出现一次）
+     * </pre>
+     *
+     * <p>selected Book 为空时沿用其他学习链路的约定：使用全部 enabled Book
+     * （与 {@link #bookScope} 的解析一致）。</p>
+     */
+    public List<QuestionDto> candidatesForBooks(Set<String> requestedBookIds,
+                                                Set<String> excludedQuestionIds) {
+        List<String> bookIds = enabledBookIds(requestedBookIds);
+        if (bookIds.isEmpty()) return List.of();
+        Set<String> excluded = excludedQuestionIds == null ? Set.of() : excludedQuestionIds;
+        List<Object> args = new ArrayList<>(bookIds);
+        StringBuilder exclusion = new StringBuilder();
+        if (!excluded.isEmpty()) {
+            exclusion.append(" AND q.id NOT IN (").append(placeholders(excluded.size())).append(")");
+            args.addAll(excluded);
+        }
+        List<QuestionRow> rows = jdbc.query("""
+                SELECT DISTINCT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year, q.question_number,
+                       q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
+                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                  FROM question_resource q
+                  JOIN question_resource_knowledge qk ON qk.question_id = q.id
+                  JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
+                  JOIN question_bank_knowledge bk ON bk.knowledge_point_id = k.id
+                 WHERE bk.bank_id IN (%s)
+                   AND k.status = 'active'
+                   AND q.status = 'published'
+                   AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                   %s
+                 ORDER BY q.id
+                """.formatted(placeholders(bookIds.size()), exclusion),
+                (result, row) -> questionRow(result), args.toArray());
+        return questions(rows);
+    }
+
+    /**
+     * 按题目 ID 取回候选正式题（用于补救重做同一道题等按 ID 发题场景）。
+     * 只保留仍是 published 正式父题的记录。
+     */
+    public List<QuestionDto> candidatesForQuestions(Set<String> questionIds) {
+        if (questionIds == null || questionIds.isEmpty()) return List.of();
+        List<QuestionRow> rows = jdbc.query("""
+                SELECT q.id, q.subject_name, q.source_type, q.source_name, q.exam_year, q.question_number,
+                       q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
+                       q.standard_answer_json, q.analysis_markdown, q.difficulty
+                  FROM question_resource q
+                 WHERE q.id IN (%s)
+                   AND q.status = 'published'
+                   AND q.parent_question_id IS NULL
+                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                 ORDER BY q.id
+                """.formatted(placeholders(questionIds.size())),
+                (result, row) -> questionRow(result), questionIds.toArray());
+        return questions(rows);
+    }
+
+    /**
+     * 为一道题解析稳定的 target KnowledgePoint：只考虑传入 scope 内的关联知识点，
+     * 优先 relation_role = 'core'，再按 sort_order、knowledge_point_id 取第一个；
+     * 没有 core 时取 auxiliary 中 sort_order 最小的一个。
+     *
+     * <p>同一道题每次解析结果一致，不做随机，避免同一题在不同时间强化不同知识点。</p>
+     */
+    public Optional<String> targetKnowledgePointFor(String questionId, Set<String> scopeKnowledgePointIds) {
+        if (questionId == null) return Optional.empty();
+        Optional<String> picked = pickTargetPoint(questionId, scopeKnowledgePointIds, true);
+        return picked.isPresent() ? picked : pickTargetPoint(questionId, scopeKnowledgePointIds, false);
+    }
+
+    /** core 优先、再按 sort_order / knowledge_point_id 的最小关联知识点。 */
+    private Optional<String> pickTargetPoint(String questionId, Set<String> scopeKnowledgePointIds, boolean scoped) {
+        StringBuilder scope = new StringBuilder();
+        List<Object> args = new ArrayList<>();
+        args.add(questionId);
+        if (scoped) {
+            if (scopeKnowledgePointIds == null || scopeKnowledgePointIds.isEmpty()) return Optional.empty();
+            scope.append(" AND qk.knowledge_point_id IN (")
+                    .append(placeholders(scopeKnowledgePointIds.size())).append(")");
+            args.addAll(scopeKnowledgePointIds);
+        }
+        return jdbc.query("""
+                SELECT qk.knowledge_point_id
+                  FROM question_resource_knowledge qk
+                  JOIN global_knowledge_point k ON k.id = qk.knowledge_point_id
+                 WHERE qk.question_id = ?
+                   AND k.status = 'active'
+                   %s
+                 ORDER BY CASE WHEN qk.relation_role = 'core' THEN 0 ELSE 1 END, qk.sort_order, qk.knowledge_point_id
+                 LIMIT 1
+                """.formatted(scope), (result, row) -> result.getString(1), args.toArray())
+                .stream().findFirst();
+    }
+
+    /**
      * 有正式题可练（至少一道 published 正式父题与该知识点有关系）的知识点。
      * core / auxiliary 都算覆盖，不再要求题目的其他关联知识点处于 allowed scope 或 ready。
      */
