@@ -54,7 +54,8 @@ public class QuestionManagementStore {
                                            String creator, String knowledge, int page, int size) {
         SqlFilter filter = filter(query, subject, sourceType, examYear, questionType, gradingMode,
                 status, creator, knowledge);
-        Long total = jdbc.queryForObject("SELECT COUNT(*) FROM question_resource q " + filter.where(),
+        Long total = jdbc.queryForObject("SELECT COUNT(*) FROM question_resource q "
+                        + "LEFT JOIN question_source s ON s.id=q.source_id " + filter.where(),
                 Long.class, filter.params().toArray());
         List<Object> params = new ArrayList<>(filter.params());
         params.add(size); params.add(page * size);

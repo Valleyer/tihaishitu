@@ -40,7 +40,7 @@ public class QuestionManagementService {
     public QuestionManagementStore.QuestionView create(
             QuestionManagementStore.QuestionInput input, Authentication auth) {
         String actor = actorId(auth);
-        QuestionManagementStore.QuestionInput bound = bind(input, null, actor);
+        QuestionManagementStore.QuestionInput bound = bind(input, null);
         validate(bound);
         return store.create(bound, actor);
     }
@@ -49,7 +49,7 @@ public class QuestionManagementService {
             String id, QuestionManagementStore.QuestionInput input, long expectedRevision, Authentication auth) {
         var current = require(id);
         String actor = actorId(auth);
-        QuestionManagementStore.QuestionInput bound = bind(input, current.sourceId(), actor);
+        QuestionManagementStore.QuestionInput bound = bind(input, current.sourceId());
         validate(bound);
         return store.update(id, bound, expectedRevision, actor);
     }
@@ -172,13 +172,9 @@ public class QuestionManagementService {
         if (!hasCore) bad("题目至少需要一个核心知识点。");
     }
 
-    private QuestionManagementStore.QuestionInput bind(QuestionManagementStore.QuestionInput input, String existingSourceId,
-                                                         String actorId) {
-        String sourceId = input.sourceId();
-        if ((sourceId == null || sourceId.isBlank()) && input.sourceType() != null && input.sourceName() != null) {
-            sourceId = sources.resolveOrCreate(input.sourceType(), input.sourceName(), actorId).id();
-        }
-        var source = sources.requireForBinding(sourceId, existingSourceId);
+    private QuestionManagementStore.QuestionInput bind(QuestionManagementStore.QuestionInput input,
+                                                         String existingSourceId) {
+        var source = sources.requireForBinding(input.sourceId(), existingSourceId);
         return new QuestionManagementStore.QuestionInput(input.subject(), source.id(), source.sourceType(),
                 source.canonicalName(), input.examYear(), input.questionNumber(), input.questionType(),
                 input.presentationType(), input.gradingMode(), input.content(), input.standardAnswer(), input.analysis(),

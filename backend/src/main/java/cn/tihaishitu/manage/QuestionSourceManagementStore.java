@@ -72,9 +72,12 @@ public class QuestionSourceManagementStore {
 
     @Transactional
     public SourceView update(String id, SourceInput input, long expectedRevision, String actorId) {
+        SourceView before = find(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "来源不存在。"));
+        if (before.questionCount() > 0 && !before.sourceType().equals(input.sourceType())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "已有题目绑定的来源不能修改来源类型。");
+        }
         Optional<SourceView> duplicate = findByIdentity(input.sourceType(), input.canonicalName());
         if (duplicate.isPresent() && !duplicate.get().id().equals(id)) duplicate();
-        SourceView before = find(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "来源不存在。"));
         int changed = jdbc.update("UPDATE question_source SET source_type=?,canonical_name=?,display_name=?,status=?,"
                         + "revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND revision=?",
                 input.sourceType(), input.canonicalName(), input.displayName(), input.status(), id, expectedRevision);

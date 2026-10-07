@@ -70,13 +70,13 @@ class BulkReviewIntegrationTest {
 
     private JsonNode pending(Cookie creator, String point, String number) throws Exception {
         String body = """
-                {"subject":"测试","sourceType":"custom","sourceName":"批量审核","questionNumber":"%s",
+                {"subject":"测试","sourceId":"%s","sourceType":"custom","sourceName":"批量审核","questionNumber":"%s",
                  "questionType":"true_false","presentationType":"true_false","gradingMode":"auto",
                  "content":"题目 %s","standardAnswer":true,"analysis":"解析","difficulty":2,
                  "options":[{"key":"true","text":"正确","correct":true,"sortOrder":0},
                             {"key":"false","text":"错误","correct":false,"sortOrder":1}],
                  "knowledgePoints":[{"knowledgePointId":"%s","role":"core","sortOrder":0}]}
-                """.formatted(number, number, point);
+                """.formatted(sourceId(), number, number, point);
         JsonNode created = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(creator)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
@@ -122,6 +122,15 @@ class BulkReviewIntegrationTest {
         String id = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,?,?,?,?,?,?,?,?,?,0,1)",
                 id, "BULK-" + id.substring(0, 8), "批量审核知识", "测试", "节", "章", "core", "active", "", "");
+        return id;
+    }
+
+    private String sourceId() {
+        String id = jdbc.query("SELECT id FROM question_source WHERE source_type='custom' AND canonical_name='批量审核'",
+                result -> result.next() ? result.getString(1) : null);
+        if (id != null) return id;
+        id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'custom','批量审核','批量审核','active',1)", id);
         return id;
     }
 

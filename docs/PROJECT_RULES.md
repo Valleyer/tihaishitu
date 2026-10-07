@@ -695,6 +695,9 @@ question_source.display_name
 暂时保留，绑定来源时同步写入来源类型与 `canonical_name` 兼容快照。`disabled` 来源不能用于
 新的题目绑定，但既有绑定仍然可读。来源展示名变更只影响后续实时读取和新 attempt；
 已经写入 `study_attempt.question_snapshot_json` 的历史来源 metadata 永不回写。
+浏览器题目创建与编辑必须提交已存在的 `source_id`，不得通过兼容的类型与名称隐式创建来源；
+只有 ADMIN 来源管理与 ADMIN 批量导入兼容路径可以创建来源。已有题目绑定的来源不得修改
+`source_type`，但仍可修改 `canonical_name`、`display_name` 与 `status`；尚未绑定题目的来源可以改类型。
 
 真题年份、科目和题号继续来自结构化字段：
 

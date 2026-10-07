@@ -115,7 +115,8 @@ class ManageContentIntegrationTest {
 
     private String solutionQuestion(String pointId) throws Exception {
         return mapper.writeValueAsString(java.util.Map.ofEntries(
-                java.util.Map.entry("subject", "数学一"), java.util.Map.entry("sourceType", "real_exam"),
+                java.util.Map.entry("subject", "数学一"), java.util.Map.entry("sourceId", sourceId()),
+                java.util.Map.entry("sourceType", "real_exam"),
                 java.util.Map.entry("sourceName", "2024年全国硕士研究生招生考试"),
                 java.util.Map.entry("examYear", 2024), java.util.Map.entry("questionNumber", "20"),
                 java.util.Map.entry("questionType", "solution"),
@@ -127,6 +128,15 @@ class ManageContentIntegrationTest {
                 java.util.Map.entry("options", java.util.List.of()),
                 java.util.Map.entry("knowledgePoints", java.util.List.of(java.util.Map.of(
                         "knowledgePointId", pointId, "role", "core", "sortOrder", 0)))));
+    }
+
+    private String sourceId() {
+        String id = jdbc.query("SELECT id FROM question_source WHERE source_type='real_exam' AND canonical_name='2024年全国硕士研究生招生考试'",
+                result -> result.next() ? result.getString(1) : null);
+        if (id != null) return id;
+        id = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'real_exam','2024年全国硕士研究生招生考试','2024年全国硕士研究生招生考试','active',1)", id);
+        return id;
     }
 
     private Cookie login(String username) throws Exception {

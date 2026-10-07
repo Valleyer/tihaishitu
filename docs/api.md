@@ -127,7 +127,10 @@ V3 导入相同 Question UUID 会原子更新题目并递增 revision，不创�
 题目管理请求与响应包含 `sourceId`；响应另带 `sourceType`、`sourceName`（当前展示名）和
 `sourceCanonicalName`。保存时服务端按 `sourceId` 重新读取来源，忽略客户端伪造的类型和名称，
 并同步 `question_resource.source_type / source_name` 兼容快照。新绑定只接受 active 来源；
-已绑定 disabled 来源的历史题仍可读取。管理前端不提供自由输入来源名，来源统一在“来源管理”创建。
+已绑定 disabled 来源的历史题仍可读取和编辑其他字段。浏览器 Question create/update 必须绑定已有
+`sourceId`，不会再按客户端提交的 `sourceType / sourceName` 隐式创建来源；ADMIN 的
+`global-question-batch/v3` 导入仍可按兼容字段解析或创建来源。管理前端不提供自由输入来源名，
+来源统一在“来源管理”创建。已有题目绑定的来源禁止修改 `sourceType`，未绑定来源可以修改类型。
 
 实时 Question API 与新 attempt metadata 按 `question_source.display_name → legacy source_name → 全服题库`
 解析来源。`study_attempt.question_snapshot_json` 是创建 attempt 时的冻结快照，来源后来改名不会修改历史快照。
