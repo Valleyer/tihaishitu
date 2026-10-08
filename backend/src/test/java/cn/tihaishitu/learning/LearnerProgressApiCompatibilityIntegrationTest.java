@@ -83,11 +83,14 @@ class LearnerProgressApiCompatibilityIntegrationTest {
                 // 新增的最近接触：来源是有效 Attempt，按首次有效行动时间，含仅查看答案。
                 .andExpect(jsonPath("$.recentContacts.length()").value(1))
                 .andExpect(jsonPath("$.recentContacts[0].knowledgePointId").value(point))
-                .andExpect(jsonPath("$.recentContacts[0].revealedOnly").value(true))
+                .andExpect(jsonPath("$.recentContacts[0].lastOutcomeRevealedOnly").value(true))
+                .andExpect(jsonPath("$.recentContacts[0].lastGraded").value(false))
                 .andExpect(jsonPath("$.recentContacts[0].evidenceCount").value(0))
                 .andExpect(jsonPath("$.recentContacts[0].lastEffectiveContactAt").exists())
                 .andExpect(jsonPath("$.recentContacts[0].lastEvidenceAt").doesNotExist())
-                .andExpect(jsonPath("$.recentContacts[0].bookName").value("兼容文集"));
+                .andExpect(jsonPath("$.recentContacts[0].bookName").value("兼容文集"))
+                // 旧 recent.knowledgePoints 恢复为 Mastery Evidence 列表：这里没有 Evidence，故为空。
+                .andExpect(jsonPath("$.recent.knowledgePoints").isEmpty());
 
         // 仅查看答案不得改写 Attempt 状态，也不得产生 Mastery / Evidence / 错题本。
         org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
@@ -98,13 +101,95 @@ class LearnerProgressApiCompatibilityIntegrationTest {
                 "SELECT COUNT(*) FROM learner_wrong_question WHERE learner_id=?", Integer.class, learner)).isZero();
     }
 
+    @Test
+    void returnsTheLegacyEvidenceKnowledgePointsListOrderedByLatestEvidence() throws Exception {
+        Cookie cookie = mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
+                        .contentType("application/json")
+                        .content("{\"username\":\"pr7-evidence\",\"displayName\":\"证据列表学习者\",\"password\":\"password-123\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+        String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='pr7-evidence'",
+                String.class);
+        String older = knowledge("较早证据知识点");
+        String newer = knowledge("最近证据知识点");
+        String revealed = knowledge("仅有接触知识点");
+        BookFixture book = book();
+        member(book, older);
+        member(book, newer);
+        member(book, revealed);
+        select(learner, book.id());
+        String question = question(older);
+        question(newer);
+        String revealedQuestion = question(revealed);
+
+        var zone = PracticeBusinessDay.ZONE;
+        var today = Instant.now().atZone(zone).toLocalDate();
+        Instant revealedAt = today.atTime(8, 0).atZone(zone).toInstant();
+        Instant olderAt = today.minusDays(3).atTime(9, 0).atZone(zone).toInstant();
+        Instant newerAt = today.minusDays(1).atTime(9, 0).atZone(zone).toInstant();
+        // 真实评分的 Attempt + Mastery 证据：两个知识点都有有效接触与 Evidence。
+        attempt(learner, question, older, "graded", olderAt, "correct");
+        attempt(learner, question(newer), newer, "graded", newerAt, "correct");
+        saveMastery(learner, older, olderAt);
+        saveMastery(learner, newer, newerAt);
+        // 仅查看答案：只进 recentContacts，不进旧 Evidence 列表。
+        reveal(learner, revealedQuestion, revealed, revealedAt);
+
+        mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
+                .andExpect(status().isOk())
+                // 旧字段必须返回真实内容，而不是永远空数组。
+                .andExpect(jsonPath("$.recent.knowledgePoints.length()").value(2))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].knowledgePointId").value(newer))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].name").value("最近证据知识点"))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].bookName").value("兼容文集"))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapterName").value("总章"))
+                .andExpect(jsonPath("$.recent.knowledgePoints[0].band").isNotEmpty())
+                .andExpect(jsonPath("$.recent.knowledgePoints[1].knowledgePointId").value(older))
+                // 仅 reveal 的知识点只在 recentContacts。
+                .andExpect(jsonPath("$.recentContacts[0].knowledgePointId").value(revealed))
+                .andExpect(jsonPath("$.recentContacts[0].lastOutcomeRevealedOnly").value(true))
+                .andExpect(jsonPath("$.recentContacts[1].knowledgePointId").value(newer));
+    }
+
+    /**
+     * 直接写 Mastery 投影，模拟该知识点确实产生过 Mastery Evidence。
+     *
+     * <p>{@code settle()} 会用 {@code learner_question_mastery} 覆盖 evidenceCount 与
+     * lastEvidenceAt，因此两行都要写；本 PR 不修改任何 Mastery 写入逻辑。</p>
+     */
+    private void saveMastery(String learner, String point, Instant at) {
+        String question = jdbc.queryForObject("""
+                SELECT q.id FROM question_resource q
+                JOIN question_resource_knowledge qk ON qk.question_id=q.id
+                WHERE qk.knowledge_point_id=? AND qk.relation_role='core' AND q.parent_question_id IS NULL
+                ORDER BY q.id LIMIT 1
+                """, String.class, point);
+        var day = at.atZone(PracticeBusinessDay.ZONE).toLocalDate();
+        jdbc.update("""
+                INSERT INTO learner_question_mastery(learner_id,knowledge_point_id,question_id,score,
+                    first_correct_at,last_correct_at,last_reward_date,last_decay_date,last_assessment,last_attempt_at,
+                    decay_frozen,revision) VALUES (?,?,?,?,?,?,?,?,?,?,FALSE,1)
+                """, learner, point, question, 60.0, Timestamp.from(at), Timestamp.from(at),
+                java.sql.Date.valueOf(day), java.sql.Date.valueOf(day), "correct", Timestamp.from(at));
+        jdbc.update("""
+                INSERT INTO learner_knowledge_state(learner_id,knowledge_point_id,mastery_score,stability_days,
+                    target_difficulty,evidence_count,correct_streak,wrong_streak,last_outcome,last_evidence_at,
+                    last_correct_at,model_version,revision)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)
+                """, learner, point, 60.0, 10.0, 2, 1, 1, 0, "correct", Timestamp.from(at), Timestamp.from(at),
+                KnowledgeModelPolicy.MODEL_VERSION);
+    }
+
     private String knowledge() {
+        return knowledge("兼容知识点");
+    }
+
+    private String knowledge(String name) {
         String id = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,
                     default_role,status,description,explanation,sort_order,revision)
                 VALUES (?,?,?,'数学一','测试分科','测试章节','core','active','','',0,1)
-                """, id, "COMPAT-" + id, "兼容知识点");
+                """, id, "COMPAT-" + id, name);
         return id;
     }
 

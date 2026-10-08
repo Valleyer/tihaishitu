@@ -82,6 +82,7 @@ export interface LearnerActivity {
 export interface RecentGradedProgress {
   gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
   daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
+  /** Mastery Evidence 投影列表，按 lastEvidenceAt 倒序，最多 10 条；仅查看答案不出现在这里。 */
   knowledgePoints: {
     knowledgePointId: string; name: string; bookName: string; chapterName: string;
     band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
@@ -91,14 +92,18 @@ export interface RecentGradedProgress {
  * 最近接触的一个知识点（PR7 合并前复核修复）。
  *
  * `lastEffectiveContactAt` 是有效接触时间（reveal 或 graded 的首次有效行动）；
- * `lastEvidenceAt` 只在真实评分后存在。`evidenceCount === 0` 表示只有「仅查看答案」，
- * 此时不得展示掌握度。
+ * `lastEvidenceAt` 只在真实评分后存在。
+ *
+ * 行为标签必须看 `lastOutcomeRevealedOnly` / `lastGraded`，**不能**用 `evidenceCount === 0`
+ * 反推：真实评分但暂无掌握证据时 `lastGraded` 为 true、`lastOutcomeRevealedOnly` 为 false。
  */
 export interface RecentContact {
   knowledgePointId: string; name: string; bookName: string; chapterName: string;
   band: MasteryBand; effectiveMastery: number; stabilityDays: number;
   evidenceCount: number; lastEvidenceAt?: string | null;
-  lastEffectiveContactAt: string; revealedOnly: boolean;
+  lastEffectiveContactAt: string;
+  lastOutcomeRevealedOnly: boolean; lastGraded: boolean;
+  assessment?: string | null;
 }
 export interface LearnerProgress {
   generatedAt: string;

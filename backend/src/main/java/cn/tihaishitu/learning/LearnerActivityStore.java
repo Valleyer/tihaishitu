@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -47,11 +46,10 @@ public class LearnerActivityStore {
         Map<String, EffectiveAction> actions = new LinkedHashMap<>();
         for (List<String> batch : batches(scope)) {
             for (AttemptRow row : attemptRows(learnerId, batch)) {
-                Outcome outcome = outcome(row).orElse(null);
-                if (outcome == null) continue;
                 Instant actionAt = actionAt(row);
                 actions.putIfAbsent(row.attemptId(), new EffectiveAction(row.attemptId(), row.knowledgePointId(),
-                        outcome, actionAt, actionAt.atZone(PracticeBusinessDay.ZONE).toLocalDate()));
+                        outcome(row), actionAt, actionAt.atZone(PracticeBusinessDay.ZONE).toLocalDate(),
+                        row.assessment(), row.answeredAt()));
             }
         }
         return List.copyOf(actions.values());
@@ -73,16 +71,20 @@ public class LearnerActivityStore {
     /**
      * 结果分类。
      *
-     * <p>{@code graded} 但 assessment 缺失或非法的历史记录无法判定，明确排除而不是编造结果；
-     * {@code revealed} 只归类为「仅查看答案」。</p>
+     * <p>{@code status='graded'} 的记录一定有 assessment 列的值，但历史上可能出现非标准取值
+     * （{@code skipped} 之类）。这类记录仍是一次真实评分事实，因此归入
+     * {@link Outcome#OTHER}：它不进结果分布，但历史七日的 graded-only 兼容字段必须把它算进去
+     * （旧契约只要求 {@code status='graded'} + {@code answered_at}）。</p>
+     *
+     * <p>{@code revealed} 只归类为「仅查看答案」。</p>
      */
-    private static Optional<Outcome> outcome(AttemptRow row) {
-        if ("revealed".equals(row.status())) return Optional.of(Outcome.REVEALED_ONLY);
+    private static Outcome outcome(AttemptRow row) {
+        if ("revealed".equals(row.status())) return Outcome.REVEALED_ONLY;
         return switch (row.assessment() == null ? "" : row.assessment()) {
-            case "correct" -> Optional.of(Outcome.CORRECT);
-            case "partial" -> Optional.of(Outcome.PARTIAL);
-            case "wrong" -> Optional.of(Outcome.WRONG);
-            default -> Optional.empty();
+            case "correct" -> Outcome.CORRECT;
+            case "partial" -> Outcome.PARTIAL;
+            case "wrong" -> Outcome.WRONG;
+            default -> Outcome.OTHER;
         };
     }
 
@@ -124,17 +126,23 @@ public class LearnerActivityStore {
         return value == null ? null : value.toInstant();
     }
 
-    /** 有效答题的结果分类；{@code REVEALED_ONLY} 表示「仅查看答案」，不可当成错误或掌握。 */
-    public enum Outcome { CORRECT, PARTIAL, WRONG, REVEALED_ONLY }
+    /**
+     * 有效答题的结果分类；{@code REVEALED_ONLY} 表示「仅查看答案」，{@code OTHER} 表示
+     * {@code status='graded'} 但 assessment 非标准取值的历史记录。
+     */
+    public enum Outcome { CORRECT, PARTIAL, WRONG, REVEALED_ONLY, OTHER }
 
     /**
      * 一次有效 Attempt。
      *
-     * <p>{@code actionAt} 是首次有效行动时刻，{@code actionDate} 是它所在的上海业务日。
-     * 它们表示「有效接触」，与「Mastery 最后证据时间」是两个不同概念。</p>
+     * <p>{@code actionAt} 是首次有效行动时刻（reveal 或 graded），{@code actionDate} 是它所在的
+     * 上海业务日 — 两者表示「有效接触」，与「Mastery 最后证据时间」是两个不同概念。
+     * {@code answeredAt} 是评分时刻（仅 graded 有值），保留给需要按<b>评分日</b>归属的历史兼容
+     * 字段使用；{@code assessment} 保留原始结果值供 UI 描述真实行为。</p>
      */
     public record EffectiveAction(String attemptId, String knowledgePointId, Outcome outcome,
-                                  Instant actionAt, LocalDate actionDate) {}
+                                  Instant actionAt, LocalDate actionDate,
+                                  String assessment, Instant answeredAt) {}
 
     private record AttemptRow(String attemptId, String knowledgePointId, String status, String assessment,
                               Instant answeredAt, Instant revealedAt) {}

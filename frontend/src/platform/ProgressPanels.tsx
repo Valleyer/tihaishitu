@@ -1,4 +1,5 @@
-import type { ActivityDaily, ActivityMetrics } from "./api";
+import { progressBandLabels, recentContactLabel } from "./progressView";
+import type { ActivityDaily, ActivityMetrics, RecentContact } from "./api";
 
 /**
  * PR7 进度统计 V3：六个核心指标与近 7 日趋势的展示组件。
@@ -28,6 +29,22 @@ export function progressMetrics(metrics: ActivityMetrics): MetricSpec[] {
 
 export function isActivityEmpty(daily: ActivityDaily[]): boolean {
   return daily.every(day => day.effectiveAttempts === 0 && day.distinctKnowledgePoints === 0);
+}
+
+/**
+ * 「最近接触」条目的状态展示。
+ *
+ * <p>判据来自最近一次 Attempt 的真实状态（{@code lastOutcomeRevealedOnly} / {@code lastGraded}），
+ * 不是 {@code evidenceCount}：已有真实评分但暂无 Mastery Evidence 时显示
+ * 「已作答 · 暂无掌握证据」，绝不说成「仅查看答案」；两种情况都不展示虚构百分比。</p>
+ */
+export function RecentContactState({ contact }: { contact: RecentContact }) {
+  const label = recentContactLabel(contact);
+  if (label.kind === "mastery") {
+    return <><span className={`mastery-band ${contact.band}`}>{progressBandLabels[contact.band]}</span>
+      <b>{Math.round(contact.effectiveMastery)}%</b></>;
+  }
+  return <span className={`mastery-band ${label.kind === "reveal_only" ? "unstarted" : "learning"}`}>{label.text}</span>;
 }
 
 /**

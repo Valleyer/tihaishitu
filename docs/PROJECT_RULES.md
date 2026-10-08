@@ -1188,9 +1188,32 @@ Mastery 证据时间 lastEvidenceAt      = 只有真实 graded 才产生，来�
 ```
 
 「最近接触知识点」按**有效接触时间**排序与展示，因此仅查看参考解析也正确出现；掌握度展示
-仍来自 Mastery 事实。`evidenceCount = 0` 表示该知识点只有「仅查看答案」，UI 只能说明接触
-方式，**不得**展示百分比掌握度。严禁为了展示足迹把 reveal 写成 `graded`、制造 Evidence 或
-Mastery。
+仍来自 Mastery 事实。严禁为了展示足迹把 reveal 写成 `graded`、制造 Evidence 或 Mastery。
+
+**行为标签的判据是最近一条 Attempt 的真实状态，不是 `evidenceCount`。**
+`LearnerKnowledgeStateService.apply()` 在 `!mastery.effective() && !migrated` 时会提前返回，
+所以「已真实评分」但「暂无 Mastery Evidence」是合法且真实存在的状态：
+
+```text
+lastOutcomeRevealedOnly = true                  → 「仅查看答案 · 未自评」，不展示百分比
+lastGraded = true 且 evidenceCount = 0          → 「已作答 · 暂无掌握证据」，不展示百分比
+evidenceCount > 0                               → 按 Mastery 真值展示掌握度
+既有掌握度又有 reveal-only 接触时，两者都要保留：接触时间单独显示，掌握度另算
+```
+
+### 14.1.2.2 评分日与首次有效行动日并存
+
+同一个跨天 `reveal → 自评` Attempt 在两个契约里属于**不同字段的不同含义**，这不是重复计数：
+
+```text
+activity / recentContacts  → 首次有效行动日（review 那天），永久保持
+recent（graded-only 兼容）  → answered_at 评分日，沿用 PR7 之前的旧契约
+```
+
+旧 `recent.gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily` 因此按
+`answered_at` 归属上海业务日，只统计真实评分的 Attempt（reveal-only 绝不填入带 `graded` 的
+字段），窗口同时检查起点与终点（未来时间记录不混入）。`assessment` 非标准取值的历史记录既
+不算有效 Attempt、也不算任何结果分类，避免编造结果。
 
 ### 14.1.3 当前学习范围
 
@@ -1229,20 +1252,31 @@ PR6 的错题本或 Mastery 归因。
 实现（范围解析 + 一次只读派生），`LearnerProgressService` 组装进度视图，`LearnerStatisticsService`
 只作为旧接口兼容层。禁止在 Progress 与 Statistics 各自写一套聚合 SQL。
 
+**一个 `GET /learner/progress` 请求只允许读取一次全历史有效 Attempt。** `activity`、
+`recent`（兼容）与 `recentContacts` 必须由 `LearnerActivityStatsService.views()` 的同一次
+派生结果提供；Controller 不得再调用一次 `current()`，否则既重复全表扫描，也可能在同一响应内
+读到不同时间点的快照。
+
 ```text
 GET /api/v1/learner/progress     统一总览（summary / bands / books / recent / recentContacts / activity）
 GET /api/v1/learner/statistics   兼容接口，summary 与 progress.activity 同源；days 只影响 daily 长度
 ```
 
-`recent` 是**保留的旧契约**，字段名、类型与近 7 个上海业务日语义都不得改动，且必须是
-**graded-only**：只统计真实 `graded + correct/partial/wrong`，绝不把 reveal-only 填入
-`gradedAttempts7d` / `daily` / `distinctKnowledgePoints7d` 之类的字段名。`recent.knowledgePoints`
-保留为空数组以维持字段存在性，学习足迹由 `recentContacts` 承担。
+`recent` 是**保留的旧契约**，字段名、类型与近 7 个上海业务日语义都不得改动：
 
-`recentContacts` 与 `activity` 是 PR7 新增的完整口径（含 reveal-only）。旧 `/learner/statistics`
-的 `knowledgeDrillAttempts` / `wrongReviewAttempts` / `worldAttempts` 是 **graded-only 出场分布**，
-不含 reveal-only；其 `gradedAttempts` / `activeStudyDays` / `distinctKnowledgePoints` /
-`correct` / `partial` / `wrong` / `revealedOnly` 与 `progress.activity` 同源。
+```text
+gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily
+    graded-only，日期取 answered_at（评分日），reveal-only 绝不填入
+knowledgePoints
+    Mastery Evidence 投影列表，按 lastEvidenceAt DESC + knowledgePointId 稳定排序、至多 10 条、
+    限当前学习范围；仅查看答案不出现在这里。不得只保留字段名而永远返回空数组。
+```
+
+`recentContacts` 与 `activity` 是 PR7 的完整口径（含 reveal-only），日期取首次有效行动。
+旧 `/learner/statistics` 的 `knowledgeDrillAttempts` / `wrongReviewAttempts` / `worldAttempts`
+是 **graded-only 出场分布**，不含 reveal-only；其 `gradedAttempts` / `activeStudyDays` /
+`distinctKnowledgePoints` / `correct` / `partial` / `wrong` / `revealedOnly` 与
+`progress.activity` 同源。
 
 时间范围统一「近 7 天」，不再提供 7 / 30 / 90 天切换控件。所有接口按登录 Learner 隔离，跨
 Learner 不可读。进度页与统计页不得对同一指标给出不同数字。

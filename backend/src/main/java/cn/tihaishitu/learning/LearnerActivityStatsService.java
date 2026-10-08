@@ -21,9 +21,13 @@ import java.util.Set;
  * 一套 SQL。SQL 本身在 {@link LearnerActivityStore}；口径记录在
  * {@code docs/PROJECT_RULES.md}「进度统计 V3」一节。</p>
  *
- * <p>计数单位是 {@code study_attempt.id}：同一道题的不同有效 Attempt 各计 1 次；一次
- * Attempt 先 reveal 再自评仍然只计 1 次；仅打开后直接退出的 {@code active}、Legacy 无
- * Learner 身份、Remedial 子题、非正式题与只读浏览都不计数。</p>
+ * <p>一次 {@link #views} 调用只读一次全历史 Attempt，然后同时产出三份互不混淆的投影：</p>
+ * <ul>
+ *   <li>{@link ActivityView}：完整有效答题口径（含 reveal-only），日期取<b>首次有效行动</b>；</li>
+ *   <li>{@link GradedRecentView}：旧 {@code recent} 兼容契约，<b>graded-only</b> 且日期取
+ *       {@code answered_at}（评分日）；</li>
+ *   <li>{@link RecentContact}：最近接触列表，日期取首次有效行动，含 reveal-only。</li>
+ * </ul>
  *
  * <p>本类只读：不修改 grading、Mastery V3、永久错题本或 PR6 选题策略。</p>
  */
@@ -32,6 +36,19 @@ public class LearnerActivityStatsService {
 
     /** 活跃学习日与趋势曲线固定的业务日窗口长度。 */
     public static final int WINDOW_DAYS = 7;
+
+    /**
+     * 只有这三类真实评分结果才进入统一有效答题口径；reveal-only 单独成类。
+     *
+     * <p>{@link LearnerActivityStore.Outcome#OTHER}（assessment 非标准取值的历史记录）既不算
+     * 「有效 Attempt」，也不算任何结果分类，避免编造结果。</p>
+     */
+    private static final Set<LearnerActivityStore.Outcome> SCORED_OUTCOMES =
+            Set.of(LearnerActivityStore.Outcome.CORRECT, LearnerActivityStore.Outcome.PARTIAL,
+                    LearnerActivityStore.Outcome.WRONG);
+
+    /** 旧 {@code recent.knowledgePoints}（Evidence 列表）的展示上限。 */
+    public static final int RECENT_EVIDENCE_LIMIT = 10;
 
     private final LearnerActivityStore store;
     private final LearnerProgressStore progress;
@@ -52,11 +69,6 @@ public class LearnerActivityStatsService {
         return contactsAt(LearnerContext.learnerId(), clock.instant());
     }
 
-    /** 指定 Learner 在当前学习范围内的最近接触知识点，按最近有效接触时间倒序。 */
-    public List<RecentContact> contactsAt(String learnerId, Instant now) {
-        return buildContacts(store.effectiveActions(learnerId, scopedKnowledgePointIds(learnerId)));
-    }
-
     /**
      * 统一活动统计。
      *
@@ -64,52 +76,26 @@ public class LearnerActivityStatsService {
      * 截断；{@code windowDays} 只决定 {@code daily} 曲线的长度。</p>
      */
     public ActivityView activityAt(String learnerId, Instant now, int windowDays) {
-        return derive(learnerId, now, windowDays).activity();
+        Set<String> scope = scopedKnowledgePointIds(learnerId);
+        return activityView(store.effectiveActions(learnerId, scope), scope, now, windowDays);
+    }
+
+    /** 指定 Learner 在当前学习范围内的最近接触知识点，按最近有效接触时间倒序。 */
+    public List<RecentContact> contactsAt(String learnerId, Instant now) {
+        return buildContacts(store.effectiveActions(learnerId, scopedKnowledgePointIds(learnerId)));
     }
 
     /**
-     * 当前范围下的完整派生事实。
+     * 一次只读派生全部进度视图事实。
      *
-     * <p>只读一次有效 Attempt，同时产出统一 {@code activity} 与兼容的 graded-only
-     * {@code recent}，避免同一份指标出现两套 SQL 或两次语义不同的聚合。</p>
+     * <p>调用方必须复用这里的结果，不要为了拿 {@code activity} 再单独调用一次统计接口，
+     * 否则同一个请求会重复扫描全历史 Attempt，并可能在两个时间点读到不同快照。</p>
      */
-    public Derived derive(String learnerId, Instant now, int windowDays) {
-        LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
+    public Views views(String learnerId, Instant now) {
         Set<String> scope = scopedKnowledgePointIds(learnerId);
         List<LearnerActivityStore.EffectiveAction> actions = store.effectiveActions(learnerId, scope);
-
-        int correct = 0, partial = 0, wrong = 0, revealedOnly = 0, todayAttempts = 0;
-        Set<String> touchedPoints = new LinkedHashSet<>();
-        Map<LocalDate, List<LearnerActivityStore.EffectiveAction>> byDate = new LinkedHashMap<>();
-        LocalDate windowStart = today.minusDays(windowDays - 1L);
-        for (LearnerActivityStore.EffectiveAction action : actions) {
-            switch (action.outcome()) {
-                case CORRECT -> correct++;
-                case PARTIAL -> partial++;
-                case WRONG -> wrong++;
-                case REVEALED_ONLY -> revealedOnly++;
-            }
-            touchedPoints.add(action.knowledgePointId());
-            if (action.actionDate().equals(today)) todayAttempts++;
-            if (!action.actionDate().isBefore(windowStart) && !action.actionDate().isAfter(today)) {
-                byDate.computeIfAbsent(action.actionDate(), ignored -> new ArrayList<>()).add(action);
-            }
-        }
-
-        List<DailyActivity> daily = new ArrayList<>();
-        int activeStudyDays = 0;
-        for (LocalDate date = windowStart; !date.isAfter(today); date = date.plusDays(1)) {
-            DailyActivity day = dailyActivity(date, byDate.getOrDefault(date, List.of()));
-            if (day.effectiveAttempts() > 0) activeStudyDays++;
-            daily.add(day);
-        }
-
-        Metrics metrics = new Metrics(activeStudyDays, todayAttempts, scope.size(), touchedPoints.size(),
-                actions.size(), correct);
-        OutcomeSummary outcomes = new OutcomeSummary(correct, partial, wrong, revealedOnly);
-        ActivityView activity = new ActivityView(windowDays, now, metrics, outcomes, daily);
-        RecentProgress recent = gradedRecent(actions, daily, today);
-        return new Derived(activity, recent, buildContacts(actions));
+        return new Views(activityView(actions, scope, now, WINDOW_DAYS),
+                gradedRecentView(actions, now), buildContacts(actions));
     }
 
     /** 当前学习范围内、可学习的去重 KnowledgePoint 集合。 */
@@ -120,40 +106,116 @@ public class LearnerActivityStatsService {
     }
 
     /**
-     * 兼容旧 {@code recent} 契约的 graded-only 投影。
+     * 完整有效答题口径。
      *
-     * <p>字段名带 {@code graded}，因此只统计真实 {@code graded + correct/partial/wrong}：
-     * 仅查看答案（{@code revealed_only}）绝不填入这些字段，避免字段名与历史语义背离。
-     * 完整的有效答题口径（含 reveal-only）由 {@link ActivityView} 负责。</p>
+     * <p>日期取<b>首次有效行动</b>（reveal 或 graded），因此跨天 reveal→自评仍归在 reveal 那天。
+     * 结果分布只统计合法 assessment，reveal-only 单独一类。</p>
      */
-    private static RecentProgress gradedRecent(List<LearnerActivityStore.EffectiveAction> actions,
-                                               List<DailyActivity> daily, LocalDate today) {
+    private ActivityView activityView(List<LearnerActivityStore.EffectiveAction> actions, Set<String> scope,
+                                      Instant now, int windowDays) {
+        LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
+        LocalDate windowStart = today.minusDays(windowDays - 1L);
+
+        int correct = 0, partial = 0, wrong = 0, revealedOnly = 0, todayAttempts = 0, effective = 0;
+        Set<String> touchedPoints = new LinkedHashSet<>();
+        Map<LocalDate, List<LearnerActivityStore.Outcome>> byDate = new LinkedHashMap<>();
+        for (LearnerActivityStore.EffectiveAction action : actions) {
+            LearnerActivityStore.Outcome outcome = action.outcome();
+            // assessment 非标准取值的历史记录：既不算有效 Attempt，也不编造结果分类。
+            if (outcome == LearnerActivityStore.Outcome.OTHER) continue;
+            effective++;
+            switch (outcome) {
+                case CORRECT -> correct++;
+                case PARTIAL -> partial++;
+                case WRONG -> wrong++;
+                case REVEALED_ONLY -> revealedOnly++;
+                case OTHER -> { }
+            }
+            touchedPoints.add(action.knowledgePointId());
+            if (action.actionDate().equals(today)) todayAttempts++;
+            if (!action.actionDate().isBefore(windowStart) && !action.actionDate().isAfter(today)) {
+                byDate.computeIfAbsent(action.actionDate(), ignored -> new ArrayList<>()).add(outcome);
+            }
+        }
+
+        List<DailyActivity> daily = new ArrayList<>();
+        int activeStudyDays = 0;
+        for (LocalDate date = windowStart; !date.isAfter(today); date = date.plusDays(1)) {
+            DailyActivity day = dailyActivity(date, actions, byDate.getOrDefault(date, List.of()));
+            if (day.effectiveAttempts() > 0) activeStudyDays++;
+            daily.add(day);
+        }
+
+        Metrics metrics = new Metrics(activeStudyDays, todayAttempts, scope.size(), touchedPoints.size(),
+                effective, correct);
+        OutcomeSummary outcomes = new OutcomeSummary(correct, partial, wrong, revealedOnly);
+        return new ActivityView(windowDays, now, metrics, outcomes, daily);
+    }
+
+    private static DailyActivity dailyActivity(LocalDate date,
+                                               List<LearnerActivityStore.EffectiveAction> actions,
+                                               List<LearnerActivityStore.Outcome> outcomes) {
+        int correct = 0, partial = 0, wrong = 0, revealedOnly = 0;
+        for (LearnerActivityStore.Outcome outcome : outcomes) {
+            switch (outcome) {
+                case CORRECT -> correct++;
+                case PARTIAL -> partial++;
+                case WRONG -> wrong++;
+                case REVEALED_ONLY -> revealedOnly++;
+                case OTHER -> { }
+            }
+        }
+        Set<String> points = new LinkedHashSet<>();
+        for (LearnerActivityStore.EffectiveAction action : actions) {
+            if (action.actionDate().equals(date)) points.add(action.knowledgePointId());
+        }
+        return new DailyActivity(date, outcomes.size(), points.size(), correct, partial, wrong, revealedOnly);
+    }
+
+    /**
+     * 旧 {@code recent} 的 graded-only 七日投影。
+     *
+     * <p><b>日期语义与 {@code activity} 不同</b>：这里按 {@code answered_at}（评分日）归属上海
+     * 业务日，沿用 PR7 之前的旧契约；{@code activity} / {@code recentContacts} 用首次有效行动日。
+     * 因此同一个跨天 reveal→自评 Attempt 会分别出现在两个字段各自的日期上，这不是重复计数。</p>
+     *
+     * <p>只统计真实评分（非 reveal-only）的 Attempt，reveal-only 绝不填入带 {@code graded} 的
+     * 字段；窗口同时检查起点与终点，避免未来时间的记录混入。</p>
+     */
+    private GradedRecentView gradedRecentView(List<LearnerActivityStore.EffectiveAction> actions, Instant now) {
+        LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
         LocalDate windowStart = today.minusDays(WINDOW_DAYS - 1L);
+
+        int graded7d = 0;
         Set<String> distinct7d = new LinkedHashSet<>();
         Map<LocalDate, Set<String>> pointsByDate = new LinkedHashMap<>();
-        int graded7d = 0;
+        Map<LocalDate, Integer> gradedByDate = new LinkedHashMap<>();
         for (LearnerActivityStore.EffectiveAction action : actions) {
-            // 仅查看答案不计入任何 graded-only 兼容字段。
-            if (action.outcome() == LearnerActivityStore.Outcome.REVEALED_ONLY) continue;
-            if (action.actionDate().isBefore(windowStart)) continue;
+            if (!SCORED_OUTCOMES.contains(action.outcome())) continue;
+            Instant answeredAt = action.answeredAt();
+            if (answeredAt == null) continue;
+            LocalDate date = answeredAt.atZone(PracticeBusinessDay.ZONE).toLocalDate();
+            if (date.isBefore(windowStart) || date.isAfter(today)) continue;
             graded7d++;
             distinct7d.add(action.knowledgePointId());
-            pointsByDate.computeIfAbsent(action.actionDate(), ignored -> new LinkedHashSet<>())
-                    .add(action.knowledgePointId());
+            gradedByDate.merge(date, 1, Integer::sum);
+            pointsByDate.computeIfAbsent(date, ignored -> new LinkedHashSet<>()).add(action.knowledgePointId());
         }
-        List<DailyProgress> gradedDaily = daily.stream()
-                .map(day -> new DailyProgress(day.date(), day.correct() + day.partial() + day.wrong(),
-                        pointsByDate.getOrDefault(day.date(), Set.of()).size()))
-                .toList();
-        int activeDays = (int) gradedDaily.stream().filter(day -> day.gradedAttempts() > 0).count();
-        return new RecentProgress(graded7d, distinct7d.size(), activeDays, gradedDaily, List.of());
+
+        List<DailyProgress> daily = new ArrayList<>();
+        for (LocalDate date = windowStart; !date.isAfter(today); date = date.plusDays(1)) {
+            daily.add(new DailyProgress(date, gradedByDate.getOrDefault(date, 0),
+                    pointsByDate.getOrDefault(date, Set.of()).size()));
+        }
+        int activeDays = (int) daily.stream().filter(day -> day.gradedAttempts() > 0).count();
+        return new GradedRecentView(graded7d, distinct7d.size(), activeDays, daily);
     }
 
     /**
      * 最近接触知识点：按最近一次「有效接触」时间倒序，包含仅查看答案。
      *
-     * <p>同一 KnowledgePoint 的多次有效 Attempt 只保留最近一次；{@code revealedOnly} 表示该
-     * 知识点最近一次有效行动是仅查看答案。这里只描述「接触」，掌握度仍由 Mastery 事实决定。</p>
+     * <p>{@code lastOutcomeRevealedOnly} 表达该 KnowledgePoint <b>最近一次</b>有效行动是不是
+     * 仅查看答案，UI 必须用它判断行为标签，不得用 {@code evidenceCount} 反推。</p>
      */
     private static List<RecentContact> buildContacts(List<LearnerActivityStore.EffectiveAction> actions) {
         Map<String, RecentContact> latest = new LinkedHashMap<>();
@@ -162,7 +224,8 @@ public class LearnerActivityStatsService {
             if (previous == null || action.actionAt().isAfter(previous.lastEffectiveContactAt())) {
                 latest.put(action.knowledgePointId(),
                         new RecentContact(action.knowledgePointId(), action.actionAt(), action.actionDate(),
-                                action.outcome() == LearnerActivityStore.Outcome.REVEALED_ONLY));
+                                action.outcome() == LearnerActivityStore.Outcome.REVEALED_ONLY,
+                                action.answeredAt() != null, action.assessment()));
             }
         }
         return latest.values().stream()
@@ -171,27 +234,11 @@ public class LearnerActivityStatsService {
                 .toList();
     }
 
-    private static DailyActivity dailyActivity(LocalDate date,
-                                               List<LearnerActivityStore.EffectiveAction> actions) {
-        Set<String> points = new LinkedHashSet<>();
-        int correct = 0, partial = 0, wrong = 0, revealedOnly = 0;
-        for (LearnerActivityStore.EffectiveAction action : actions) {
-            points.add(action.knowledgePointId());
-            switch (action.outcome()) {
-                case CORRECT -> correct++;
-                case PARTIAL -> partial++;
-                case WRONG -> wrong++;
-                case REVEALED_ONLY -> revealedOnly++;
-            }
-        }
-        return new DailyActivity(date, actions.size(), points.size(), correct, partial, wrong, revealedOnly);
-    }
-
     /** 六个核心指标，与前端字段一一对应。 */
     public record Metrics(int activeStudyDays7d, int todayEffectiveAttempts, int totalKnowledgePoints,
                           int touchedKnowledgePoints, int totalEffectiveAttempts, int totalCorrectAttempts) {}
 
-    /** 结果分布；四类之和等于 {@code totalEffectiveAttempts}。 */
+    /** 结果分布；四类之和等于有效答题总数（assessment 非标准的记录不计入任一类）。 */
     public record OutcomeSummary(int correct, int partial, int wrong, int revealedOnly) {}
 
     public record DailyActivity(LocalDate date, int effectiveAttempts, int distinctKnowledgePoints,
@@ -204,22 +251,22 @@ public class LearnerActivityStatsService {
      * 最近接触的一个 KnowledgePoint。
      *
      * <p>{@code lastEffectiveContactAt} 是有效接触时间（reveal 或 graded 的首次有效行动），
-     * 不是 Mastery 证据时间；{@code revealedOnly} 表示当前范围内该知识点最近一次有效行动
-     * 只有「查看参考解析」，尚无任何 Mastery Evidence。</p>
+     * 不是 Mastery 证据时间。</p>
+     *
+     * <p>{@code lastOutcomeRevealedOnly} 表示最近一次有效行动是否为仅查看答案，由最近一条
+     * Attempt 的真实状态产生，不能由 {@code evidenceCount} 推断；{@code lastGraded} 表示最近
+     * 一次有效行动已被真实评分（因此即使暂无 Mastery Evidence 也不该显示为「仅查看答案」）；
+     * {@code assessment} 是最近一次的真实结果值，可为空。</p>
      */
     public record RecentContact(String knowledgePointId, Instant lastEffectiveContactAt, LocalDate actionDate,
-                                boolean revealedOnly) {}
+                                boolean lastOutcomeRevealedOnly, boolean lastGraded, String assessment) {}
 
-    /** 一次只读派生：统一 {@code activity} + 兼容 graded-only {@code recent} + 最近接触。 */
-    public record Derived(ActivityView activity, RecentProgress recent, List<RecentContact> contacts) {}
-
-    /** 旧 {@code recent} 契约（graded-only）；保留字段名、类型与七天业务日语义。 */
-    public record RecentProgress(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
-                                 List<DailyProgress> daily, List<RecentKnowledgePoint> knowledgePoints) {}
+    /** 旧 {@code recent} 的 graded-only 数值（日期取评分日 {@code answered_at}）。 */
+    public record GradedRecentView(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
+                                   List<DailyProgress> daily) {}
 
     public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
 
-    public record RecentKnowledgePoint(String knowledgePointId, String name, String bookName, String chapterName,
-                                       String band, double effectiveMastery, double stabilityDays,
-                                       Instant lastEvidenceAt) {}
+    /** 一次只读的三个视图。调用方必须复用，不得再次查询统计事实。 */
+    public record Views(ActivityView activity, GradedRecentView recent, List<RecentContact> contacts) {}
 }

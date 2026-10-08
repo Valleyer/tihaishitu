@@ -25,10 +25,10 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 
 ### MVP 学习与管理扩展
 
-- `GET /learner/progress`：**进度与统计的唯一首选读接口**（PR7 进度统计 V3）。保留原有 `summary` / `bands` / `books` / `recent` 字段语义，并新增 `recentContacts` 与 `activity`。
-  - `recent` 是**保留的旧契约，语义为 graded-only**：`gradedAttempts7d` / `distinctKnowledgePoints7d` / `activeStudyDays7d` / `daily`（近 7 个上海业务日，字段名与类型不变）/ `knowledgePoints`（保留字段，恒为空数组）。这些字段只统计真实 `graded + correct/partial/wrong`，**不含**仅查看答案。
-  - `recentContacts` 是最近接触知识点，来源是有效 Attempt（含仅查看答案），按 `lastEffectiveContactAt`（reveal 或 graded 的首次有效行动）倒序，最多 10 条；`evidenceCount = 0` 表示只有「仅查看答案」，此时 `lastEvidenceAt` 为 null 且不得展示掌握度。`lastEffectiveContactAt` 与 `lastEvidenceAt` 是两个不同概念。
-  - `activity`：`windowDays`、`generatedAt`、`metrics`（`activeStudyDays7d` / `todayEffectiveAttempts` / `totalKnowledgePoints` / `touchedKnowledgePoints` / `totalEffectiveAttempts` / `totalCorrectAttempts`）、`outcomes`（`correct` / `partial` / `wrong` / `revealedOnly`，四类之和等于 `totalEffectiveAttempts`）、`daily`（近 7 个上海业务日，从早到晚，零值日期保留）。这是完整的有效答题口径，含 reveal-only。统一口径见 `PROJECT_RULES.md` §14.1。
+- `GET /learner/progress`：**进度与统计的唯一首选读接口**（PR7 进度统计 V3）。保留原有 `summary` / `bands` / `books` / `recent` 字段语义，并新增 `recentContacts` 与 `activity`。**一个请求只读取一次全历史有效 Attempt**，三个视图来自同一份快照。
+  - `recent` 是**保留的旧契约**：`gradedAttempts7d` / `distinctKnowledgePoints7d` / `activeStudyDays7d` / `daily`（近 7 个上海业务日，字段名与类型不变）为 **graded-only 且按 `answered_at` 评分日**归属业务日，不含仅查看答案；`knowledgePoints` 恢复为 **Mastery Evidence 投影列表**（`knowledgePointId` / `name` / `bookName` / `chapterName` / `band` / `effectiveMastery` / `stabilityDays` / `lastEvidenceAt`），按 `lastEvidenceAt` 倒序、`knowledgePointId` 次序稳定，最多 10 条并限当前学习范围，仅查看答案不出现在该列表中。
+  - `recentContacts` 是最近接触知识点，来源是有效 Attempt（含仅查看答案），按 `lastEffectiveContactAt`（reveal 或 graded 的首次有效行动）倒序，最多 10 条。行为标签判据是 `lastOutcomeRevealedOnly` / `lastGraded`，**不是** `evidenceCount`：`lastOutcomeRevealedOnly=true` 表示最近一次是仅查看答案（`evidenceCount=0` 时不得展示百分比）；`lastGraded=true` 且 `evidenceCount=0` 表示已真实评分但暂无掌握证据（例如当天首答 wrong 不新增证据），此时也不得展示百分比；`evidenceCount>0` 时按 Mastery 真值展示掌握度，接触时间仍单独显示。`lastEffectiveContactAt` 与 `lastEvidenceAt` 是两个不同概念。
+  - `activity`：`windowDays`、`generatedAt`、`metrics`（`activeStudyDays7d` / `todayEffectiveAttempts` / `totalKnowledgePoints` / `touchedKnowledgePoints` / `totalEffectiveAttempts` / `totalCorrectAttempts`）、`outcomes`（`correct` / `partial` / `wrong` / `revealedOnly`）、`daily`（近 7 个上海业务日，从早到晚，零值日期保留）。日期取**首次有效行动日**，与旧 `recent` 的评分日语义并存：同一个跨天 reveal→自评 Attempt 会在 `activity.daily[reveal 日]` 计 1 次、在 `recent.daily[评分日]` 计 1 次，这是两个字段各自的正确含义，不是重复计数。统一口径见 `PROJECT_RULES.md` §14.1。
 - `GET /learner/statistics?days=7|30|90`：**旧接口兼容层**。`summary` 的 `gradedAttempts` / `activeStudyDays` / `distinctKnowledgePoints` / `correct` / `partial` / `wrong` / `revealedOnly` 与 `/learner/progress.activity` 同源（含 reveal-only）；`days` 只影响 `daily` 曲线长度，不再影响 summary 语义。`knowledgeDrillAttempts` / `wrongReviewAttempts`（同时统计 `wrong_review` 与 `wrong_drill`）/ `worldAttempts` 是**graded-only 出场分布**，不含 reveal-only。进度页不再调用本接口，也不展示 7/30/90 切换控件。
 - `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量（知识目录，技术 route 与 `/books` 一致，仍是“知识”而不是“题库”）。
 - `GET /learning/questions`：**全平台题库**。分页浏览所有 published Formal Parent Question，与 Learner 当前 selected Books 解耦。参数：`query`、`sourceId`、`examYear`、`questionType`、`difficulty`、`bookId`、`chapterId`、`knowledge`、`page`、`size`（前端正式页面固定 `size=20`，后端上限 100）。只返回 `status='published'` + `parent_question_id IS NULL` + 四个正式题型；`totalElements` 是 `COUNT(DISTINCT q.id)`，多 KP / 多 Book 关联不会让卡片或总数重复。分页 ID 查询只做 `question_resource LEFT JOIN question_source`（一对一），Book / Chapter / Knowledge 都通过 EXISTS 参与，因此使用 `SELECT q.id ... ORDER BY ... LIMIT/OFFSET` 且不用 `DISTINCT`——`DISTINCT` 与“ORDER BY 引用未出现在 SELECT list 的表达式”组合在真实 MySQL 5.7 严格 sql_mode 下有报错风险。`knowledge` 匹配 KnowledgePoint 的 `id` / `code` / `name`。默认排序是“来源 → `exam_year` → `question_number` 自然排序 → `question_id`”，在 DB 级用 MySQL 5.7 安全表达式形成，分页稳定；只有题号确实带“与 `exam_year` 相同的年份前缀”时才剥离该前缀，因此 `2020 + "7"` 与 `2020 + "2020-7"` 得到同一个自然题号 7，而 `A-3` / `21A` / `3(1)` 与年份不一致的前缀题号都归入最后一档，不会被猜成数字。浏览不创建 Attempt、不计 Exposure、不影响 Mastery / Wrong Book / RANDOM 每日额度。
@@ -56,7 +56,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | GET | /learner/knowledge-states/{knowledgePointId} | 无 | 当前 Learner 的 Knowledge State；无证据时返回未开始虚拟状态且不写库 |
 | GET | /learner/knowledge-states?bookId={bookId} | 无 | enabled Book 全部 active KnowledgePoint 的批量状态 |
 | GET | /learner/review-queue | 无 | 当前 Selected Books 范围内动态派生的 7 天复习安排；只读且不写库 |
-| GET | /learner/progress | 无 | 当前 Selected Books 范围内动态派生的掌握分布、文集/章节聚合、保留的 graded-only `recent`、最近接触 `recentContacts`，以及统一的 `activity` 指标 / 结果分布 / 近 7 日曲线 |
+| GET | /learner/progress | 无 | 当前 Selected Books 范围内动态派生的掌握分布、文集/章节聚合、保留的 graded-only `recent`（含 Evidence 投影 `knowledgePoints`）、最近接触 `recentContacts`，以及统一的 `activity` 指标 / 结果分布 / 近 7 日曲线；单请求只读一次全历史有效 Attempt |
 | GET | /bootstrap | 无 | learner、canManage、studyProfile、worlds、bankManifest、questionCatalog |
 | GET | /learning/books | 无 | 可见文集 |
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
@@ -264,7 +264,9 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 近 7 日足迹与六个核心指标统一由 `LearnerActivityStatsService` 派生（PR7 进度统计 V3），SQL 只在 `LearnerActivityStore`，口径见 `PROJECT_RULES.md` §14.1。`graded`（`assessment ∈ {correct, partial, wrong}`）与已 reveal 的 `revealed_only` 都算有效答题；`active`、窗口外记录与 `learner_id IS NULL` 的 Legacy attempts 不算。一次 Attempt 先 `reveal` 再自评只计 1 次，业务日归到首次有效行动所在日。所有指标受当前 Selected Books 范围约束，并按冻结 `target_knowledge_point_id` 归属；取消文集只隐藏历史，不删除任何 Attempt。
 
-「最近接触知识点」（`recentContacts`）按 `lastEffectiveContactAt`（有效接触时间）排序，因此仅查看参考解析也能正确出现；`lastEvidenceAt`（Mastery 最后证据时间）与 `evidenceCount` 只在真实评分后才有值，`evidenceCount = 0` 时 UI 只说明「仅查看答案」，不展示掌握度。响应不提供正确率、错误率、失败次数或排名。
+「最近接触知识点」（`recentContacts`）按 `lastEffectiveContactAt`（有效接触时间）排序，因此仅查看参考解析也能正确出现；`lastEvidenceAt`（Mastery 最后证据时间）与 `evidenceCount` 只在真实评分后才有值。行为标签由最近一次 Attempt 的真实状态决定：`lastOutcomeRevealedOnly` 才是「仅查看答案」，`lastGraded && evidenceCount == 0` 是「已作答 · 暂无掌握证据」（`LearnerKnowledgeStateService.apply()` 在 `!mastery.effective() && !migrated` 时会提前返回，这是合法状态），两者都不展示百分比。
+
+旧 `recent` 的 `gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily` 保持 graded-only 且按 `answered_at` 评分日归属业务日，窗口同时检查起点与终点。同一个跨天 reveal→自评 Attempt 在 `activity`（首次有效行动日）与旧 `recent`（评分日）分别计一次，属于两个字段各自的正确含义。响应不提供正确率、错误率、失败次数或排名。
 
 ## Diagnostic State Machine V1（保留能力，普通正式训练不再自动进入）
 

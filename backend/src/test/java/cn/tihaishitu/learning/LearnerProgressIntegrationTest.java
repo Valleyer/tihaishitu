@@ -99,7 +99,8 @@ class LearnerProgressIntegrationTest {
 
         // 仅 reveal 的知识点：有效接触时间非空，但 Mastery 证据时间与证据数保持为空 / 0。
         LearnerProgressService.RecentContact revealedOnly = view.recentContacts().get(0);
-        assertThat(revealedOnly.revealedOnly()).isTrue();
+        assertThat(revealedOnly.lastOutcomeRevealedOnly()).isTrue();
+        assertThat(revealedOnly.lastGraded()).isFalse();
         assertThat(revealedOnly.evidenceCount()).isZero();
         assertThat(revealedOnly.lastEvidenceAt()).isNull();
         assertThat(revealedOnly.lastEffectiveContactAt()).isEqualTo(NOW.minusSeconds(60));
@@ -107,7 +108,8 @@ class LearnerProgressIntegrationTest {
 
         // 真实评分的知识点：两个时间概念都存在且互不替代。
         LearnerProgressService.RecentContact graded = view.recentContacts().get(1);
-        assertThat(graded.revealedOnly()).isFalse();
+        assertThat(graded.lastOutcomeRevealedOnly()).isFalse();
+        assertThat(graded.lastGraded()).isTrue();
         // evidenceCount 由 Mastery 事实派生，真实评分后必须是有证据的；具体条数不属于本测试关注点。
         assertThat(graded.evidenceCount()).isPositive();
         assertThat(graded.lastEffectiveContactAt()).isEqualTo(NOW.minusSeconds(86_400L));

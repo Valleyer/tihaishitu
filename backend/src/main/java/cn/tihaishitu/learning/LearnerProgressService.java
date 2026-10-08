@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -64,9 +65,9 @@ public class LearnerProgressService {
         List<LearnerProgressStore.ChapterRow> chapters = progress.selectedChapters(learnerId);
         List<LearnerProgressStore.MembershipRow> memberships = progress.selectedMemberships(learnerId);
 
-        // 有效 Attempt 事实（含仅查看答案）只读一次，统一 activity 与兼容 recent 从同一份派生。
-        LearnerActivityStatsService.Derived derived =
-                activity.derive(learnerId, now, LearnerActivityStatsService.WINDOW_DAYS);
+        // 有效 Attempt 事实（含仅查看答案）只读一次：统一 activity、旧 recent 兼容投影与最近接触
+        // 都从同一份快照派生，避免同一请求重复扫描全历史，也避免读到不同时间点。
+        LearnerActivityStatsService.Views derived = activity.views(learnerId, now);
 
         Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
         memberships.forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
@@ -113,9 +114,22 @@ public class LearnerProgressService {
                 chaptersByBook.getOrDefault(book.id(), List.of()),
                 membershipsByBook.getOrDefault(book.id(), List.of()), points, dueOrSoon)).toList();
 
-        // 最近接触知识点：来源是有效 Attempt（含仅查看答案），而不是 Mastery Evidence。
-        // 展示沿用既有 Mastery 状态与正式目录路径；仅 reveal、暂无 Evidence 时只显示
-        // 「尚未评分」，不编造掌握度。
+        // 旧 recent.knowledgePoints：Mastery Evidence 投影，保持 PR7 之前的语义 —— 当前范围内
+        // 有 Evidence 且 lastEvidenceAt 非空，按 lastEvidenceAt DESC + knowledgePointId 稳定排序，
+        // 至多 10 条。仅为投影，不新建 SQL、不读新表。
+        List<GradedRecentPoint> evidencePoints = points.values().stream()
+                .filter(point -> point.evidenceCount() > 0 && point.lastEvidenceAt() != null)
+                .sorted(Comparator.comparing(PointProgress::lastEvidenceAt).reversed()
+                        .thenComparing(PointProgress::knowledgePointId))
+                .limit(LearnerActivityStatsService.RECENT_EVIDENCE_LIMIT)
+                .map(point -> new GradedRecentPoint(point.knowledgePointId(), point.name(),
+                        point.bookName(), point.chapterName(), point.band(), point.effectiveMastery(),
+                        point.stabilityDays(), point.lastEvidenceAt()))
+                .toList();
+
+        // 最近接触知识点：来源是有效 Attempt（含仅查看答案），而不是 Mastery Evidence；
+        // 行为标签由最近一次 Attempt 的真实状态决定（lastOutcomeRevealedOnly / lastGraded），
+        // 绝不用 evidenceCount 反推用户做过什么。
         List<RecentContact> recentContacts = derived.contacts().stream()
                 .map(contact -> {
                     PointProgress point = points.get(contact.knowledgePointId());
@@ -128,11 +142,15 @@ public class LearnerProgressService {
                             point == null ? 0 : point.stabilityDays(),
                             point == null ? 0 : point.evidenceCount(),
                             point == null ? null : point.lastEvidenceAt(),
-                            contact.lastEffectiveContactAt(), contact.revealedOnly());
+                            contact.lastEffectiveContactAt(), contact.lastOutcomeRevealedOnly(),
+                            contact.lastGraded(), contact.assessment());
                 })
                 .limit(RECENT_CONTACT_LIMIT)
                 .toList();
-        return new ProgressView(now, summary, bands, bookViews, derived.recent(), recentContacts);
+        return new ProgressView(now, summary, bands, bookViews,
+                new GradedRecentView(derived.recent().gradedAttempts7d(), derived.recent().distinctKnowledgePoints7d(),
+                        derived.recent().activeStudyDays7d(), derived.recent().daily(), evidencePoints),
+                recentContacts, derived.activity());
     }
 
     private BookProgress bookProgress(LearnerProgressStore.BookRow book,
@@ -182,13 +200,14 @@ public class LearnerProgressService {
     /**
      * 进度总览。
      *
-     * <p>{@code recent} 是保留的旧兼容契约（graded-only，字段名与语义不变）；
-     * {@code recentContacts} 是 PR7 新增的最近接触列表，来源是有效 Attempt（含仅查看答案），
-     * 两者都不改变判题、Mastery V3 与错题本。</p>
+     * <p>{@code recent} 是保留的旧兼容契约：graded-only 数值（日期取评分日）加上 Evidence 投影
+     * 列表 {@code knowledgePoints}；{@code recentContacts} 是 PR7 的最近接触列表（来源为有效
+     * Attempt，含仅查看答案）；{@code activity} 是完整有效答题口径。三者语义不同但都由同一次
+     * 只读派生得出。</p>
      */
     public record ProgressView(Instant generatedAt, Summary summary, Map<String, Integer> bands,
-                               List<BookProgress> books, LearnerActivityStatsService.RecentProgress recent,
-                               List<RecentContact> recentContacts) {}
+                               List<BookProgress> books, GradedRecentView recent,
+                               List<RecentContact> recentContacts, LearnerActivityStatsService.ActivityView activity) {}
     public record Summary(int selectedBooks, int totalKnowledgePoints, int startedKnowledgePoints,
                           int readyKnowledgePoints, int proficientKnowledgePoints, int reviewDue,
                           int reviewSoon, int reviewUpcoming, int wrongQuestions) {}
@@ -197,17 +216,44 @@ public class LearnerProgressService {
                                List<ChapterProgress> chapters) {}
     public record ChapterProgress(String chapterId, String code, String name, int total, int started,
                                   int ready, int proficient, double masteryProgress) {}
+
+    /**
+     * 旧 {@code recent} 契约。
+     *
+     * <p>{@code gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily} 是
+     * graded-only 且按 {@code answered_at}（评分日）归属上海业务日；{@code knowledgePoints} 恢复
+     * 为 Mastery Evidence 投影列表，按 {@code lastEvidenceAt DESC, knowledgePointId} 稳定排序，
+     * 至多 10 条、限当前学习范围。仅查看答案的知识点不出现在该列表里。</p>
+     */
+    public record GradedRecentView(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
+                                  List<LearnerActivityStatsService.DailyProgress> daily,
+                                  List<GradedRecentPoint> knowledgePoints) {}
+
+    /**
+     * 旧 {@code recent.knowledgePoints} 的一条记录（Mastery Evidence 投影）。
+     *
+     * <p>只暴露正式目录 Book → Chapter 路径，不携带 legacy subject / section /
+     * legacy chapter_name，避免用户界面回落到旧字段。</p>
+     */
+    public record GradedRecentPoint(String knowledgePointId, String name, String bookName, String chapterName,
+                                    String band, double effectiveMastery, double stabilityDays,
+                                    Instant lastEvidenceAt) {}
+
     /**
      * 一个「最近接触」的知识点。
      *
      * <p>排序键是 {@code lastEffectiveContactAt}（reveal 或 graded 的首次有效行动），
-     * 与 {@code lastEvidenceAt}（Mastery 最后证据时间，仅 graded 会产生）是两个不同概念。
-     * {@code evidenceCount == 0} 表示该知识点只有「仅查看答案」，UI 不得展示掌握度。</p>
+     * 与 {@code lastEvidenceAt}（Mastery 最后证据时间，仅 graded 会产生）是两个不同概念。</p>
+     *
+     * <p>行为标签必须看 {@code lastOutcomeRevealedOnly} / {@code lastGraded}：已真实评分但暂无
+     * Evidence（{@code lastGraded && evidenceCount == 0}）应说明「已作答 · 暂无掌握证据」，不得
+     * 因为 {@code evidenceCount == 0} 就写成「仅查看答案」。</p>
      *
      * <p>只暴露正式目录 Book → Chapter 路径，不携带 legacy subject / section /
      * legacy chapter_name，避免用户界面回落到旧字段。</p>
      */
     public record RecentContact(String knowledgePointId, String name, String bookName, String chapterName,
                                 String band, double effectiveMastery, double stabilityDays, int evidenceCount,
-                                Instant lastEvidenceAt, Instant lastEffectiveContactAt, boolean revealedOnly) {}
+                                Instant lastEvidenceAt, Instant lastEffectiveContactAt,
+                                boolean lastOutcomeRevealedOnly, boolean lastGraded, String assessment) {}
 }

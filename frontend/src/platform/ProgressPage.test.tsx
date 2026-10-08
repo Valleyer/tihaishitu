@@ -58,11 +58,15 @@ const progress = (overrides: Partial<LearnerProgress> = {}): LearnerProgress => 
     { knowledgePointId: "point-1", name: "函数极限", bookName: "考研数学一", chapterName: "第一章",
       band: "learning", effectiveMastery: 62.5, stabilityDays: 4, evidenceCount: 5,
       lastEvidenceAt: "2026-10-05T02:00:00Z", lastEffectiveContactAt: "2026-10-05T02:00:00Z",
-      revealedOnly: false },
+      lastOutcomeRevealedOnly: false, lastGraded: true, assessment: "correct" },
     { knowledgePointId: "point-2", name: "反常积分的敛散性", bookName: "考研数学一",
       chapterName: "第三章 一元函数积分学", band: "unstarted", effectiveMastery: 0, stabilityDays: 0,
       evidenceCount: 0, lastEvidenceAt: null, lastEffectiveContactAt: "2026-10-05T01:00:00Z",
-      revealedOnly: true },
+      lastOutcomeRevealedOnly: true, lastGraded: false, assessment: null },
+    { knowledgePointId: "point-3", name: "定积分的换元法", bookName: "考研数学一",
+      chapterName: "第三章 一元函数积分学", band: "unstarted", effectiveMastery: 0, stabilityDays: 0,
+      evidenceCount: 0, lastEvidenceAt: null, lastEffectiveContactAt: "2026-10-05T00:30:00Z",
+      lastOutcomeRevealedOnly: false, lastGraded: true, assessment: "wrong" },
   ],
   ...overrides,
 });
@@ -172,7 +176,7 @@ describe("ProgressPage", () => {
     // 仅查看答案的知识点也出现在「最近接触」里，并可进入知识点页。
     const revealed = screen.getByRole("link", { name: /反常积分的敛散性/ });
     expect(revealed.getAttribute("href")).toBe("/knowledge/point-2");
-    // 没有真实评分时不展示掌握度，只说明接触方式。
+    // 没有真实评分时不展示掌握度。
     expect(screen.getByText("仅查看答案 · 未自评")).toBeTruthy();
     expect(revealed.textContent).not.toContain("%");
     // 真实评分的知识点仍然展示掌握度。
@@ -180,7 +184,40 @@ describe("ProgressPage", () => {
 
     // 足迹顺序沿用后端的有效接触时间倒序，不在前端重排。
     const order = [...view.container.querySelectorAll(".recent-points > a h3")].map(node => node.textContent);
-    expect(order).toEqual(["函数极限", "反常积分的敛散性"]);
+    expect(order).toEqual(["函数极限", "反常积分的敛散性", "定积分的换元法"]);
+  });
+
+  it("labels each contact from its last attempt instead of from evidenceCount", async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByText("学习足迹");
+
+    const labelOf = (href: string) =>
+      view.container.querySelector(`.recent-points > a[href="${href}"] .recent-point-state`)!.textContent ?? "";
+    // evidenceCount>0：展示真实掌握度。
+    expect(labelOf("/knowledge/point-1")).toContain("基本掌握");
+    expect(labelOf("/knowledge/point-1")).toContain("63%");
+    // 最近一次是仅查看答案：说明接触方式，不展示百分比。
+    expect(labelOf("/knowledge/point-2")).toContain("仅查看答案 · 未自评");
+    expect(labelOf("/knowledge/point-2")).not.toContain("%");
+    // 真实评分但暂无 Mastery Evidence：绝不能显示为「仅查看答案」。
+    expect(labelOf("/knowledge/point-3")).toContain("已作答 · 暂无掌握证据");
+    expect(labelOf("/knowledge/point-3")).not.toContain("仅查看答案");
+    expect(labelOf("/knowledge/point-3")).not.toContain("%");
+  });
+
+  it("never calls a graded but evidence-less contact reveal-only", async () => {
+    // 足迹里只有「真实评分但无 Evidence」一个知识点时必须给出诚实的标签。
+    const gradedOnly = progress();
+    mockPlatform(progress({ recentContacts: gradedOnly.recentContacts.filter(
+      contact => contact.knowledgePointId === "point-3") }));
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByText("学习足迹");
+
+    const footprint = view.container.querySelector(".recent-points")!;
+    expect(footprint.textContent).toContain("已作答 · 暂无掌握证据");
+    expect(footprint.textContent).not.toContain("仅查看答案");
+    expect(view.container.querySelectorAll(".recent-points > a")).toHaveLength(1);
   });
 
   it("reads the footprint from effective contacts rather than the legacy graded list", async () => {
