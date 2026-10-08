@@ -280,7 +280,7 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   };
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
     {error && <p className="hub-error">{error}</p>}
-    {items.length === 0 && <section className="hub-panel"><h2>错题本还是空的</h2></section>}
+    {items.length === 0 && <section className="hub-panel"><h2>当前学习范围内暂无可练错题</h2><p className="muted">切换回曾经学习的文集后，保留的错题会自动恢复显示。</p></section>}
     <div className="wrong-cards">{items.map(item => <article className="hub-panel" key={item.questionId}>{item.examLabel&&<div className="practice-exam-meta"><span className="practice-exam-label">{item.examLabel}</span>{item.displayQuestionNumber&&<span className="practice-question-number">第{item.displayQuestionNumber}题</span>}</div>}<h2>{item.knowledgePointName}</h2>{item.knowledgePoints&&item.knowledgePoints.length>0&&<div className="tag-row">{item.knowledgePoints.map(point=><HubLink className={`knowledge-tag ${point.role||"core"}`} href={`/knowledge/${point.id}`} key={point.id}>{point.name}</HubLink>)}</div>}<div className="wrong-question-content"><RichText>{item.contentMarkdown}</RichText></div><small>最近做错：{new Date(item.lastGradedAt).toLocaleString("zh-CN", { hour12: false })}</small>{!item.available&&<p className="muted">{wrongQuestionUnavailableLabel(item.unavailableReason)}</p>}<div className="wrong-actions"><button className="hub-primary" disabled={!item.available} onClick={() => start(item.questionId)}>重做这道题</button><button className="secondary" onClick={() => remove(item.questionId)}>移出错题本</button></div></article>)}</div>
   </main></Shell>;
 }

@@ -283,6 +283,25 @@ class FlywayMigrationIntegrationTest {
         assertThat(indexExists(old, "study_attempt", "idx_attempt_learner_draw_mode")).isTrue();
     }
 
+    @Test
+    void v23AddsPerLearnerRotationWithoutBackfillAndCascadesOnLearnerDelete() {
+        String url = migrationUrl("v22-random-kp-rotation");
+        Flyway.configure().dataSource(url, "sa", "")
+                .target(MigrationVersion.fromVersion("22")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        String learner = UUID.randomUUID().toString();
+        old.update("INSERT INTO learner_account(id,username,display_name,password_hash,status,revision) VALUES (?,?,'轮换','x','active',1)",
+                learner, "rotation-" + learner);
+
+        Flyway.configure().dataSource(url, "sa", "").load().migrate();
+
+        assertThat(old.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation", Integer.class)).isZero();
+        old.update("INSERT INTO learner_random_kp_rotation(learner_id,last_requested_pool,selection_count) VALUES (?,'all',1)",
+                learner);
+        old.update("DELETE FROM learner_account WHERE id=?", learner);
+        assertThat(old.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation", Integer.class)).isZero();
+    }
+
     private String migrationUrl(String name) {
         return "jdbc:h2:mem:" + name + "-" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";

@@ -126,7 +126,10 @@ public class LearnerPracticeService {
     }
 
     public List<LearnerPracticeStore.WrongQuestion> wrongQuestions() {
-        return store.wrongQuestions(LearnerContext.learnerId());
+        String learnerId = LearnerContext.learnerId();
+        Set<String> allowed = pool.allowedKnowledgePointIds(
+                new LinkedHashSet<>(profiles.rawCurrent(learnerId).selectedBookIds()));
+        return store.wrongQuestions(learnerId, allowed);
     }
 
     /**
@@ -240,16 +243,19 @@ public class LearnerPracticeService {
      */
     private SessionView startWrongReview(StartRequest request, String learnerId, Set<String> allowed) {
         if (request.sourceQuestionId() == null) throw bad("请选择要重做的错题。");
-        var wrong = store.activeWrongQuestion(learnerId, request.sourceQuestionId())
-                .orElseThrow(() -> bad("这道题已不在错题本中。"));
-        if (!wrong.available()) throw bad(wrongQuestionUnavailableMessage(wrong.unavailableReason()));
-        QuestionDto question = pool.questionForLearner(wrong.targetKnowledgePointId(), allowed,
-                        request.sourceQuestionId())
-                .orElseThrow(() -> bad("该题当前不可练习。你仍可将它移出错题本。"));
+        store.activeWrongQuestion(learnerId, request.sourceQuestionId(), allowed)
+                .orElseThrow(() -> bad("这道题已不在当前学习范围的错题本中。"));
+        WrongPracticeSelector.Selection selection = wrongs
+                .selectQuestion(learnerId, allowed, request.sourceQuestionId())
+                .orElseThrow(() -> bad("该题当前不可练习。它的永久错题记录仍会保留。"));
+        QuestionDto question = pool.questionForLearner(selection.targetKnowledgePointId(), allowed,
+                        selection.questionId())
+                .orElseThrow(() -> bad("该题当前不可练习。它的永久错题记录仍会保留。"));
         String id = UUID.randomUUID().toString();
-        store.create(id, learnerId, "wrong_review", wrong.targetKnowledgePointId(), request.sourceQuestionId(), allowed);
+        store.create(id, learnerId, "wrong_review", selection.targetKnowledgePointId(),
+                request.sourceQuestionId(), allowed);
         PracticeActionContext.within(learnerId, id, () -> {
-            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, wrong.targetKnowledgePointId(),
+            store.setCurrentAttempt(id, learnerId, createAttempt(learnerId, selection.targetKnowledgePointId(),
                     question.id(), PracticeDrawMode.WRONG));
             return null;
         });
@@ -574,14 +580,4 @@ public class LearnerPracticeService {
     private static ApiException bad(String message) { return new ApiException(HttpStatus.BAD_REQUEST, message); }
     private static ApiException conflict(String message) { return new ApiException(HttpStatus.CONFLICT, message); }
 
-    /** 错题卡不可练习时的用户文案；原因由 LearnerPracticeStore.wrongQuestions 的 SQL 判定。 */
-    private static String wrongQuestionUnavailableMessage(String unavailableReason) {
-        if ("out_of_scope".equals(unavailableReason)) {
-            return "该题当前不在所选文集范围内。你仍可将它移出错题本。";
-        }
-        if ("knowledge_unavailable".equals(unavailableReason)) {
-            return "该题所属知识点当前不可练习。你仍可将它移出错题本。";
-        }
-        return "该题当前不可练习。你仍可将它移出错题本。";
-    }
 }

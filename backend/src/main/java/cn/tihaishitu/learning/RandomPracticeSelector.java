@@ -21,8 +21,8 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <pre>
  * 1. 先选 target KnowledgePoint，再在该 KP 内选题（KP-first，不做 readiness / Mastery gating）
- * 2. 当天第一次 RANDOM：从所有“今天仍有 eligible Question”的 KP 中纯随机选一个
- * 3. 上一题 correct：优先换 KP（只剩一个 eligible KP 时允许继续同 KP，不死锁）
+ * 2. 当天第一次 RANDOM 与上一题 correct 后的切换：按持久化次序交替请求 ALL / WRONG KP 池
+ *    （WRONG 无候选时回退 ALL 但仍消费本槽；只剩一个 eligible KP 时允许继续同 KP）
  * 4. 上一题 wrong / partial：优先留在原 target KP，换该 KP 内另一道当天未出的题
  * 5. 同一 Learner × 同一 Asia/Shanghai 业务日，同一 Question 最多创建一次 RANDOM Attempt
  *    （active / revealed / graded 都算“已经出过”，发出即占额度）
@@ -35,7 +35,10 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class RandomPracticeSelector {
     /** 选出的题、它冻结的 target KnowledgePoint，以及实际走到的 lane。 */
-    public record Selection(String questionId, String targetKnowledgePointId, String drawReason) {}
+    public record Selection(String questionId, String targetKnowledgePointId, String drawReason,
+                            PracticeSelectionStore.RequestedKnowledgePool requestedPool) {
+        public boolean consumesPoolRotation() { return requestedPool != null; }
+    }
 
     private final PracticeSelectionStore store;
 
@@ -73,8 +76,18 @@ public class RandomPracticeSelector {
         Map<String, List<String>> eligible = eligibleByKnowledgePoint(allowedKnowledgePointIds,
                 excludedToday(learnerId, runSeen));
         if (eligible.isEmpty()) return Optional.empty();
-        String pointId = chooseKnowledgePoint(learnerId, eligible.keySet(), firstOfDay);
-        return Optional.of(drawInKnowledgePoint(learnerId, pointId, eligible.get(pointId)));
+        KnowledgePointChoice choice = chooseKnowledgePoint(learnerId, eligible.keySet(), firstOfDay);
+        Selection draw = drawInKnowledgePoint(learnerId, choice.knowledgePointId(),
+                eligible.get(choice.knowledgePointId()));
+        return Optional.of(new Selection(draw.questionId(), draw.targetKnowledgePointId(),
+                draw.drawReason(), choice.requestedPool()));
+    }
+
+    /** Attempt 已成功写入后，由调用方在同一事务内消费本次轮换槽。 */
+    public void recordPoolRotation(String learnerId, Selection selection) {
+        if (selection != null && selection.consumesPoolRotation()) {
+            store.recordRequestedKnowledgePool(learnerId, selection.requestedPool());
+        }
     }
 
     /** 当天已经占用的 RANDOM 额度 + 本 run 额外保护（run 内 seen 不是唯一事实源）。 */
@@ -102,8 +115,8 @@ public class RandomPracticeSelector {
      * KP transition 规则。只有明确的 grading 结果能驱动 transition：
      *
      * <pre>
-     * 当天第一题（今天还没有 RANDOM 发题）        → 在所有 eligible KP 中纯随机
-     * 上一题 assessment = correct                → 优先换 KP
+     * 当天第一题（今天还没有 RANDOM 发题）        → 消费一次 ALL / WRONG 池轮换
+     * 上一题 assessment = correct                → 优先换 KP，并消费一次池轮换
      * 上一题 assessment = wrong / partial        → 优先留在原 target KP
      * 上一题 assessment = null（active / revealed 未自评） → 不推断为错题，重新纯随机
      * </pre>
@@ -111,24 +124,38 @@ public class RandomPracticeSelector {
      * <p>未作答的上一题仍然占用当天 Question quota，但它不是“上一题的 grading 结果”，
      * 因此既不能当成 wrong，也不能拿更早一天 / 更早一题的结果替代。</p>
      */
-    private String chooseKnowledgePoint(String learnerId, Set<String> eligible, boolean firstOfDay) {
-        if (firstOfDay) return randomOf(eligible);
+    private KnowledgePointChoice chooseKnowledgePoint(String learnerId, Set<String> eligible, boolean firstOfDay) {
+        if (firstOfDay) return chooseFromRotatingPool(learnerId, eligible);
         PracticeSelectionStore.LastRandomAttempt previous = store.lastRandomAttempt(learnerId).orElse(null);
-        if (previous == null) return randomOf(eligible);
+        if (previous == null) return new KnowledgePointChoice(randomOf(eligible), null);
         String previousPoint = previous.knowledgePointId();
         String assessment = previous.assessment();
         if ("wrong".equals(assessment) || "partial".equals(assessment)) {
             // wrong / partial：优先留在原 target KP；该 KP 当天无题可选时再切换其他 eligible KP。
-            if (previousPoint != null && eligible.contains(previousPoint)) return previousPoint;
-            return randomOf(switchToOtherPoints(eligible, previousPoint));
+            if (previousPoint != null && eligible.contains(previousPoint))
+                return new KnowledgePointChoice(previousPoint, null);
+            return new KnowledgePointChoice(randomOf(switchToOtherPoints(eligible, previousPoint)), null);
         }
         if ("correct".equals(assessment)) {
-            // correct：优先换 KP；当前范围只有一个 eligible KP 时允许继续同 KP，不能死锁。
-            return randomOf(switchToOtherPoints(eligible, previousPoint));
+            // correct：池轮换发生在 KP 层；先排除 previous，再尝试当次池，失败则回退 ALL。
+            return chooseFromRotatingPool(learnerId, switchToOtherPoints(eligible, previousPoint));
         }
         // assessment 未知：上一题只是被发出、并未真正判题，不得推断成错题。
-        return randomOf(eligible);
+        return new KnowledgePointChoice(randomOf(eligible), null);
     }
+
+    private KnowledgePointChoice chooseFromRotatingPool(String learnerId, Set<String> allCandidates) {
+        PracticeSelectionStore.RequestedKnowledgePool requested = store.nextRequestedKnowledgePool(learnerId);
+        Set<String> candidates = allCandidates;
+        if (requested == PracticeSelectionStore.RequestedKnowledgePool.WRONG) {
+            Set<String> wrongPoints = store.activeWrongKnowledgePointIds(learnerId, allCandidates);
+            if (!wrongPoints.isEmpty()) candidates = wrongPoints;
+        }
+        return new KnowledgePointChoice(randomOf(candidates), requested);
+    }
+
+    private record KnowledgePointChoice(String knowledgePointId,
+                                        PracticeSelectionStore.RequestedKnowledgePool requestedPool) {}
 
     /** 除上一 target KP 之外的 eligible KP；为空时回退整个 eligible 集合，避免死锁。 */
     private static Set<String> switchToOtherPoints(Set<String> eligible, String previousPoint) {
@@ -140,17 +167,17 @@ public class RandomPracticeSelector {
     private Selection drawInKnowledgePoint(String learnerId, String pointId, List<String> candidates) {
         int drawn = store.randomDrawCount(learnerId, pointId);
         if (drawn % 2 == 0) {
-            return new Selection(oldestFirst(learnerId, candidates), pointId, PracticeDrawReason.OLDEST);
+            return new Selection(oldestFirst(learnerId, candidates), pointId, PracticeDrawReason.OLDEST, null);
         }
         // wrong lane：只看当前 active 永久错题本。是否“属于当前 KP”已经由候选题集合
         // （question_resource_knowledge）保证，这里只问“该题现在是否仍是 active 错题”。
         Set<String> activeWrong = store.activeWrongQuestionIds(learnerId, candidates);
         List<String> wrongCandidates = candidates.stream().filter(activeWrong::contains).toList();
         if (!wrongCandidates.isEmpty()) {
-            return new Selection(oldestFirst(learnerId, wrongCandidates), pointId, PracticeDrawReason.WRONG);
+            return new Selection(oldestFirst(learnerId, wrongCandidates), pointId, PracticeDrawReason.WRONG, null);
         }
         // wrong lane 没有可用错题：fallback oldest，但这个 wrong slot 仍然算消费，下一次回到 oldest。
-        return new Selection(oldestFirst(learnerId, candidates), pointId, PracticeDrawReason.WRONG_FALLBACK);
+        return new Selection(oldestFirst(learnerId, candidates), pointId, PracticeDrawReason.WRONG_FALLBACK, null);
     }
 
     /**

@@ -25,20 +25,18 @@ import java.util.concurrent.ThreadLocalRandom;
  * 已经开始的 active Session 不会因为 Learner 在别处改了学习范围而换题池或错报 canRepeat。</p>
  *
  * <p>wrong_review 从错题列表点指定题时直接发该题，graded 后流程完成，
- * 不进入任何诊断或补救子题；其 target KP 语义仍然来自错题本原始归因。</p>
+ * 不进入任何诊断或补救子题；历史 target 当前仍合法时沿用，否则选择当前 scope 内
+ * 的稳定合法绑定，且不改写永久错题的历史归因。</p>
  */
 @Service
 public class WrongPracticeSelector {
     public record Selection(String questionId, String targetKnowledgePointId) {}
 
     private final LearnerPracticeStore store;
-    private final PracticeSelectionStore selections;
     private final KnowledgeQuestionPoolService pool;
 
-    public WrongPracticeSelector(LearnerPracticeStore store, PracticeSelectionStore selections,
-                                 KnowledgeQuestionPoolService pool) {
+    public WrongPracticeSelector(LearnerPracticeStore store, KnowledgeQuestionPoolService pool) {
         this.store = store;
-        this.selections = selections;
         this.pool = pool;
     }
 
@@ -50,16 +48,28 @@ public class WrongPracticeSelector {
 
     /** Session 内随机不重复地取下一道可用 active 错题；候选耗尽返回空。 */
     public Optional<Selection> select(String learnerId, Set<String> allowedKnowledgePointIds, Set<String> seenQuestionIds) {
-        List<String> candidates = new ArrayList<>(candidateQuestionIds(learnerId, allowedKnowledgePointIds, seenQuestionIds));
+        List<LearnerPracticeStore.WrongPracticeCandidate> candidates = new ArrayList<>(
+                store.wrongDrillCandidates(learnerId, allowedKnowledgePointIds, seenQuestionIds));
         while (!candidates.isEmpty()) {
-            String questionId = candidates.remove(ThreadLocalRandom.current().nextInt(candidates.size()));
-            Optional<String> target = selections.activeWrongTargetKnowledgePoint(learnerId, questionId);
-            if (target.isEmpty()) continue;
+            LearnerPracticeStore.WrongPracticeCandidate candidate = candidates.remove(
+                    ThreadLocalRandom.current().nextInt(candidates.size()));
             // 题目可能已经被下架、解绑或离开当前 Session 冻结范围：跳过而不是 500。
-            if (pool.questionForLearner(target.get(), allowedKnowledgePointIds, questionId).isEmpty()) continue;
-            return Optional.of(new Selection(questionId, target.get()));
+            if (pool.questionForLearner(candidate.targetKnowledgePointId(), allowedKnowledgePointIds,
+                    candidate.questionId()).isEmpty()) continue;
+            return Optional.of(new Selection(candidate.questionId(), candidate.targetKnowledgePointId()));
         }
         return Optional.empty();
+    }
+
+    /** 单题重做：历史 target 合法则沿用，否则使用当前范围内的稳定有效绑定。 */
+    public Optional<Selection> selectQuestion(String learnerId, Set<String> allowedKnowledgePointIds,
+                                              String questionId) {
+        return store.wrongDrillCandidates(learnerId, allowedKnowledgePointIds, Set.of()).stream()
+                .filter(candidate -> candidate.questionId().equals(questionId))
+                .filter(candidate -> pool.questionForLearner(candidate.targetKnowledgePointId(),
+                        allowedKnowledgePointIds, questionId).isPresent())
+                .findFirst()
+                .map(candidate -> new Selection(candidate.questionId(), candidate.targetKnowledgePointId()));
     }
 
     /**

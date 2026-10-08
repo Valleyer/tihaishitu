@@ -28,7 +28,8 @@ import java.util.Set;
  * WRONG     复用 LearnerPracticeStore 的 active 错题口径
  * </pre>
  *
- * <p>本类只读，不写任何状态；lane 与 cursor 都不新增状态表，全部从既有事实推导。</p>
+ * <p>KP 内 lane 与 Chapter cursor 仍从既有事实推导；PR6 仅为 RANDOM 第一层
+ * ALL / WRONG KP 池轮换持久化每个 Learner 的最小状态。</p>
  */
 @Repository
 public class PracticeSelectionStore {
@@ -37,6 +38,14 @@ public class PracticeSelectionStore {
 
     /** 上一个 RANDOM 正式 Attempt 的目标知识点与判题结果。 */
     public record LastRandomAttempt(String knowledgePointId, String assessment) {}
+
+    public enum RequestedKnowledgePool {
+        ALL("all"), WRONG("wrong");
+
+        private final String wireValue;
+        RequestedKnowledgePool(String wireValue) { this.wireValue = wireValue; }
+        public String wireValue() { return wireValue; }
+    }
 
     /** Chapter 确定性题序的原始行（未去重、未排序）。 */
     public record ChapterSequenceRow(String knowledgePointId, int knowledgePointSortOrder, String questionId,
@@ -102,6 +111,67 @@ public class PracticeSelectionStore {
                  ORDER BY created_at DESC, id DESC LIMIT 1
                 """, (row, index) -> new LastRandomAttempt(row.getString(1), row.getString(2)), learnerId)
                 .stream().findFirst();
+    }
+
+    /** 没有 V23 状态行的既有 Learner 从 ALL 开始；旧 Attempt 不参与猜测或回填。 */
+    public RequestedKnowledgePool nextRequestedKnowledgePool(String learnerId) {
+        if (learnerId == null) return RequestedKnowledgePool.ALL;
+        Optional<String> last = jdbc.query("""
+                SELECT last_requested_pool FROM learner_random_kp_rotation WHERE learner_id = ?
+                """, (row, index) -> row.getString(1), learnerId).stream().findFirst();
+        if (last.isEmpty()) return RequestedKnowledgePool.ALL;
+        return RequestedKnowledgePool.WRONG.wireValue().equals(last.get())
+                ? RequestedKnowledgePool.ALL : RequestedKnowledgePool.WRONG;
+    }
+
+    /**
+     * 在正式 RANDOM Attempt 创建成功后、同一事务内消费池轮换槽。
+     * 调用方必须先持有 learner_account 行锁；事务失败会连同 Attempt 一起回滚。
+     */
+    public void recordRequestedKnowledgePool(String learnerId, RequestedKnowledgePool requested) {
+        int changed = jdbc.update("""
+                UPDATE learner_random_kp_rotation
+                   SET last_requested_pool = ?, selection_count = selection_count + 1,
+                       updated_at = CURRENT_TIMESTAMP
+                 WHERE learner_id = ?
+                """, requested.wireValue(), learnerId);
+        if (changed == 0) {
+            jdbc.update("""
+                    INSERT INTO learner_random_kp_rotation(
+                        learner_id, last_requested_pool, selection_count, updated_at)
+                    VALUES (?, ?, 1, CURRENT_TIMESTAMP)
+                    """, learnerId, requested.wireValue());
+        }
+    }
+
+    /**
+     * active 永久错题通过当前有效 core/auxiliary 关系覆盖到的候选 KP。
+     * 错题本历史 target 不参与；错题本身今天是否已 RANDOM 出过也不参与。
+     */
+    public Set<String> activeWrongKnowledgePointIds(String learnerId,
+                                                    Collection<String> candidateKnowledgePointIds) {
+        if (learnerId == null || candidateKnowledgePointIds == null
+                || candidateKnowledgePointIds.isEmpty()) return Set.of();
+        List<String> points = List.copyOf(new LinkedHashSet<>(candidateKnowledgePointIds));
+        List<Object> args = new ArrayList<>();
+        args.add(learnerId);
+        args.addAll(points);
+        return new LinkedHashSet<>(jdbc.query("""
+                SELECT DISTINCT rel.knowledge_point_id
+                  FROM learner_wrong_question wrong
+                  JOIN question_resource q ON q.id = wrong.question_id
+                  JOIN question_resource_knowledge rel ON rel.question_id = q.id
+                  JOIN global_knowledge_point k ON k.id = rel.knowledge_point_id
+                 WHERE wrong.learner_id = ? AND wrong.status = 'active'
+                   AND rel.knowledge_point_id IN (%s)
+                   AND k.status = 'active'
+                   AND %s
+                   AND %s
+                 ORDER BY rel.knowledge_point_id
+                """.formatted(placeholders(points.size()),
+                        KnowledgeQuestionCoveragePolicy.anyRelationRole("rel"),
+                        FormalQuestionPolicy.published("q")),
+                (row, index) -> row.getString(1), args.toArray()));
     }
 
     /**
@@ -172,15 +242,6 @@ public class PracticeSelectionStore {
                  ORDER BY question_id
                 """.formatted(placeholders(ids.size())),
                 (row, index) -> row.getString(1), args.toArray()));
-    }
-
-    /** 单题 wrong_review：该题在永久错题本中记录的 target KP。 */
-    public Optional<String> activeWrongTargetKnowledgePoint(String learnerId, String questionId) {
-        if (learnerId == null || questionId == null) return Optional.empty();
-        return jdbc.query("""
-                SELECT target_knowledge_point_id FROM learner_wrong_question
-                 WHERE learner_id = ? AND question_id = ? AND status = 'active'
-                """, (row, index) -> row.getString(1), learnerId, questionId).stream().findFirst();
     }
 
     /**

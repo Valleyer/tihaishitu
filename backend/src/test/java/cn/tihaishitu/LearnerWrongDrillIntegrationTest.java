@@ -41,6 +41,67 @@ class LearnerWrongDrillIntegrationTest {
     @Autowired QuestionAttemptStore attempts;
     @Autowired cn.tihaishitu.learning.LearnerPracticeService practice;
     @Autowired cn.tihaishitu.learning.LearnerPracticeStore store;
+    @Autowired cn.tihaishitu.learning.PracticeSelectionStore selections;
+
+    @Test
+    void multiKnowledgeWrongUsesCurrentLegalBindingWithoutRewritingHistoricalTarget() throws Exception {
+        String mathBook = UUID.randomUUID().toString(), mathChapter = UUID.randomUUID().toString();
+        String csBook = UUID.randomUUID().toString(), csChapter = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'数学','',TRUE,1,1)", mathBook);
+        jdbc.update("INSERT INTO question_bank(id,name,description,enabled,weight_value,revision) VALUES (?,'计算机','',TRUE,1,1)", csBook);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'M','数学章','',0,1)", mathChapter, mathBook);
+        jdbc.update("INSERT INTO question_bank_chapter(id,bank_id,chapter_code,name,description,sort_order,revision) VALUES (?,?,'C','计算机章','',0,1)", csChapter, csBook);
+        String math = UUID.randomUUID().toString(), cs = UUID.randomUUID().toString();
+        insertPoint(math, "MULTI-MATH", "数学知识", "core");
+        insertPoint(cs, "MULTI-CS", "计算机知识", "core");
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", mathBook, math, mathChapter);
+        jdbc.update("INSERT INTO question_bank_knowledge(bank_id,knowledge_point_id,chapter_id,sort_order) VALUES (?,?,?,0)", csBook, cs, csChapter);
+        String shared = question(cs, "跨学科错题", 1, math);
+
+        Cookie cookie = register("wrong-drill-multi-kp");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username='wrong-drill-multi-kp'", String.class);
+        graded(learner, shared, cs);
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
+                learner, mathBook);
+
+        JsonNode queue = json(mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(queue).hasSize(1);
+        assertThat(queue.get(0).path("questionId").asText()).isEqualTo(shared);
+        assertThat(queue.get(0).path("targetKnowledgePointId").asText()).isEqualTo(cs);
+        assertThat(queue.get(0).path("knowledgePoints")).hasSize(2);
+        assertThat(selections.activeWrongKnowledgePointIds(learner, Set.of(math))).containsExactly(math);
+
+        JsonNode review = start(cookie,
+                "{\"intent\":\"wrong_review\",\"sourceQuestionId\":\"%s\"}".formatted(shared));
+        assertThat(review.path("currentAttempt").path("targetKnowledgePointId").asText()).isEqualTo(math);
+        JsonNode drill = start(cookie, "{\"intent\":\"wrong_drill\"}");
+        assertThat(drill.path("currentAttempt").path("targetKnowledgePointId").asText()).isEqualTo(math);
+        assertThat(jdbc.queryForObject("SELECT target_knowledge_point_id FROM learner_wrong_question WHERE learner_id=? AND question_id=?",
+                String.class, learner, shared)).isEqualTo(cs);
+
+        JsonNode progress = json(mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(progress.path("summary").path("wrongQuestions").asInt()).isOne();
+
+        // 兼容既有默认语义：没有显式选书时回退全部 enabled Books，而不是空范围。
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
+        assertThat(json(mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())).hasSize(1);
+        assertThat(json(mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                .path("summary").path("wrongQuestions").asInt()).isOne();
+
+        // 下架只从所有可练投影隐藏，永久错题事实保持 active。
+        jdbc.update("UPDATE question_resource SET status='archived' WHERE id=?", shared);
+        assertThat(json(mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())).isEmpty();
+        assertThat(selections.activeWrongKnowledgePointIds(learner, Set.of(math, cs))).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT status FROM learner_wrong_question WHERE learner_id=? AND question_id=?",
+                String.class, learner, shared)).isEqualTo("active");
+    }
 
     @Test
     void wrongDrillRunsEachActiveWrongQuestionOnceAndKeepsThemInTheBook() throws Exception {

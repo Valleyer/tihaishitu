@@ -121,6 +121,8 @@ public class GameActionService {
 
     @Transactional
     public ObjectNode beginActivity(String gameId, String activityId) {
+        // 与 grading / next 保持相同锁顺序：先锁 Learner，再读 World、Attempt 与轮换状态。
+        knowledgeStates.lockCurrentLearnerForGrading();
         ObjectNode game = game(gameId);
         ObjectNode activity = content.activity(activityId)
                 .orElseThrow(() -> bad("这项活动暂不可用。"));
@@ -504,6 +506,7 @@ public class GameActionService {
         QuestionDto question;
         String drawMode;
         String drawReason = null;
+        RandomPracticeSelector.Selection randomSelection = null;
         if (world == null) {
             // Legacy /games/** 兼容路径：仍按启动时冻结的 KnowledgePoint 顺序出题，
             // 不参与 Learner 的 RANDOM KP-first 选题。
@@ -529,6 +532,7 @@ public class GameActionService {
             pointId = selection.targetKnowledgePointId();
             drawMode = PracticeDrawMode.RANDOM.wireValue();
             drawReason = selection.drawReason();
+            randomSelection = selection;
         }
         String attemptId = UUID.randomUUID().toString();
         ObjectNode full = mapper.valueToTree(question);
@@ -580,6 +584,9 @@ public class GameActionService {
                 full.path("gradingMode").asText("auto"), target.id(),
                 remediation ? "training" : "normal", question.difficulty(),
                 null, null, drawMode, drawReason);
+        // 只有 first-of-day / previous-correct 的完全随机 KP 触发带 requestedPool。
+        // Attempt 成功后才写轮换；后续任何异常会由外层事务将两者一起回滚。
+        if (world != null) randomSelector.recordPoolRotation(world.learnerId(), randomSelection);
     }
 
     /**

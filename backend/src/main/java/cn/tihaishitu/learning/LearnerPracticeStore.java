@@ -158,6 +158,7 @@ public class LearnerPracticeStore {
     }
 
     public record ChapterNames(String bookName, String chapterName) {}
+    public record WrongPracticeCandidate(String questionId, String targetKnowledgePointId) {}
 
     /**
      * 当前 Session 实际练到哪道题（用于“最近章节”进度展示）。
@@ -177,10 +178,21 @@ public class LearnerPracticeStore {
      * <p>只按 {@code scopedKnowledgePointIds} 判断范围，不读取实时
      * {@code learner_selected_book}：已经开始的 active Session 不会因为 Learner 在别处
      * 改了学习范围而换题池。错题本原始归因 {@code target_knowledge_point_id} 继续保留，
-     * 用于 wrong_review 与错题列表。</p>
+     * 但仅在其仍是当前合法绑定时作为实际发题 target。</p>
      */
     public List<String> wrongDrillQuestionIds(String learnerId, Set<String> scopedKnowledgePointIds,
                                               Collection<String> excludedQuestionIds) {
+        return wrongDrillCandidates(learnerId, scopedKnowledgePointIds, excludedQuestionIds).stream()
+                .map(WrongPracticeCandidate::questionId).toList();
+    }
+
+    /**
+     * 错题快练候选与 target：按题目的当前有效多 KP 绑定判断 scope，而不是历史 target。
+     * 历史 target 仍合法时优先沿用；否则按 core、关系 sort_order、KP ID 稳定选择。
+     */
+    public List<WrongPracticeCandidate> wrongDrillCandidates(String learnerId,
+                                                              Set<String> scopedKnowledgePointIds,
+                                                              Collection<String> excludedQuestionIds) {
         if (scopedKnowledgePointIds == null || scopedKnowledgePointIds.isEmpty()) return List.of();
         List<String> points = List.copyOf(scopedKnowledgePointIds);
         List<Object> args = new ArrayList<>();
@@ -193,23 +205,32 @@ public class LearnerPracticeStore {
                     .append(")");
             args.addAll(excludedQuestionIds);
         }
-        return jdbc.query("""
-                SELECT wrong.question_id
+        List<WrongPracticeCandidate> rows = jdbc.query("""
+                SELECT wrong.question_id, rel.knowledge_point_id
                   FROM learner_wrong_question wrong
                   JOIN question_resource q ON q.id = wrong.question_id
-                  JOIN global_knowledge_point k ON k.id = wrong.target_knowledge_point_id
+                  JOIN question_resource_knowledge rel ON rel.question_id = q.id
+                  JOIN global_knowledge_point k ON k.id = rel.knowledge_point_id
                  WHERE wrong.learner_id = ? AND wrong.status = 'active'
-                   AND wrong.target_knowledge_point_id IN (%s)
-                   AND q.status = 'published' AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
+                   AND rel.knowledge_point_id IN (%s)
+                   AND %s
+                   AND %s
                    AND k.status = 'active' AND %s
                    %s
-                 ORDER BY wrong.question_id
-                """.formatted(placeholders(points.size()), TrainableKnowledge.exists("k"), exclusion),
-                (rs, row) -> rs.getString(1), args.toArray());
+                 ORDER BY wrong.question_id,
+                          CASE WHEN rel.knowledge_point_id = wrong.target_knowledge_point_id THEN 0 ELSE 1 END,
+                          CASE WHEN rel.relation_role = 'core' THEN 0 ELSE 1 END,
+                          rel.sort_order, rel.knowledge_point_id
+                """.formatted(placeholders(points.size()),
+                        KnowledgeQuestionCoveragePolicy.anyRelationRole("rel"),
+                        FormalQuestionPolicy.published("q"), TrainableKnowledge.exists("k"), exclusion),
+                (rs, row) -> new WrongPracticeCandidate(rs.getString(1), rs.getString(2)), args.toArray());
+        Map<String, WrongPracticeCandidate> distinct = new LinkedHashMap<>();
+        rows.forEach(row -> distinct.putIfAbsent(row.questionId(), row));
+        return List.copyOf(distinct.values());
     }
 
-    /** active 错题总数（不要求当前可练），用于 Study 页按钮禁用与友好提示。 */
+    /** active 错题历史总数（不要求当前可练），只用于区分友好错误提示。 */
     public int activeWrongQuestionCount(String learnerId) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM learner_wrong_question WHERE learner_id=? AND status='active'",
@@ -268,32 +289,42 @@ public class LearnerPracticeStore {
         if (changed != 1) throw new IllegalStateException("专项练习已经结束。");
     }
 
-    public List<WrongQuestion> wrongQuestions(String learnerId) {
+    public List<WrongQuestion> wrongQuestions(String learnerId, Set<String> allowedKnowledgePointIds) {
+        if (allowedKnowledgePointIds == null || allowedKnowledgePointIds.isEmpty()) return List.of();
+        List<String> points = List.copyOf(allowedKnowledgePointIds);
+        List<Object> args = new ArrayList<>();
+        args.addAll(points);
+        args.add(learnerId);
         List<WrongQuestion> questions = jdbc.query("""
                 SELECT wrong.question_id,wrong.target_knowledge_point_id,k.name knowledge_name,
                        q.content_markdown,q.subject_name,q.exam_year,q.question_number,
-                       wrong.last_wrong_at,
-                       CASE
-                           WHEN NOT (%s) THEN 'out_of_scope'
-                           WHEN NOT (q.status='published' AND q.parent_question_id IS NULL
-                                     AND q.question_type IN ('single_choice','multiple_choice','true_false','solution'))
-                               THEN 'question_unavailable'
-                           WHEN NOT (k.status='active' AND %s) THEN 'knowledge_unavailable'
-                           ELSE NULL
-                       END unavailable_reason
+                       wrong.last_wrong_at
                   FROM learner_wrong_question wrong
                   JOIN question_resource q ON q.id=wrong.question_id
-                  JOIN global_knowledge_point k ON k.id=wrong.target_knowledge_point_id
-                 WHERE wrong.learner_id=? AND wrong.status='active'
+                  LEFT JOIN global_knowledge_point k ON k.id=wrong.target_knowledge_point_id
+                 WHERE EXISTS (
+                           SELECT 1
+                             FROM question_resource_knowledge visible_rel
+                             JOIN global_knowledge_point visible_k
+                               ON visible_k.id = visible_rel.knowledge_point_id
+                            WHERE visible_rel.question_id = wrong.question_id
+                              AND visible_rel.knowledge_point_id IN (%s)
+                              AND visible_k.status = 'active'
+                              AND %s
+                              AND %s
+                       )
+                   AND wrong.learner_id=? AND wrong.status='active'
+                   AND %s
                  ORDER BY wrong.last_wrong_at DESC,wrong.question_id
-                """.formatted(inWrongQuestionScope(), TrainableKnowledge.exists("k")),
+                """.formatted(placeholders(points.size()),
+                        KnowledgeQuestionCoveragePolicy.anyRelationRole("visible_rel"),
+                        TrainableKnowledge.exists("visible_k"), FormalQuestionPolicy.published("q")),
                 (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
                 rs.getString("content_markdown"), rs.getString("subject_name"),
                 rs.getObject("exam_year", Integer.class), rs.getString("question_number"),
                 rs.getTimestamp("last_wrong_at").toInstant(),
-                rs.getString("unavailable_reason") == null, rs.getString("unavailable_reason"),
-                List.of()), learnerId);
+                true, null, List.of()), args.toArray());
         if (questions.isEmpty()) return questions;
         List<String> questionIds = questions.stream().map(WrongQuestion::questionId).toList();
         Map<String, List<KnowledgePointTag>> tags = new LinkedHashMap<>();
@@ -312,45 +343,10 @@ public class LearnerPracticeStore {
                 tags.getOrDefault(question.questionId(), List.of()))).toList();
     }
 
-    /**
-     * Login 与 bookScope 的“学习范围”保持一致的 SQL 片段：知识点必须通过现代
-     * question_bank_knowledge 或 legacy_knowledge_map 归属于该 Learner 已选且启用的文集。
-     * 未选择任何文集时范围视为全部启用文集（与 KnowledgeQuestionPoolStore.enabledBookIds 一致）。
-     */
-    private static String inWrongQuestionScope() {
-        return """
-                EXISTS (
-                    SELECT 1
-                      FROM question_bank scope_book
-                     WHERE scope_book.enabled = TRUE
-                       AND (
-                           NOT EXISTS (
-                               SELECT 1 FROM learner_selected_book scope_any WHERE scope_any.learner_id = wrong.learner_id
-                           )
-                           OR EXISTS (
-                               SELECT 1 FROM learner_selected_book scope_selected
-                                WHERE scope_selected.learner_id = wrong.learner_id
-                                  AND scope_selected.bank_id = scope_book.id
-                           )
-                       )
-                       AND (
-                           EXISTS (
-                               SELECT 1 FROM question_bank_knowledge scope_modern
-                                WHERE scope_modern.bank_id = scope_book.id
-                                  AND scope_modern.knowledge_point_id = wrong.target_knowledge_point_id
-                           )
-                           OR EXISTS (
-                               SELECT 1 FROM legacy_knowledge_map scope_legacy
-                                WHERE scope_legacy.bank_id = scope_book.id
-                                  AND scope_legacy.global_id = wrong.target_knowledge_point_id
-                           )
-                       )
-                )
-                """.trim();
-    }
-
-    public Optional<WrongQuestion> activeWrongQuestion(String learnerId, String questionId) {
-        return wrongQuestions(learnerId).stream().filter(item -> item.questionId().equals(questionId)).findFirst();
+    public Optional<WrongQuestion> activeWrongQuestion(String learnerId, String questionId,
+                                                       Set<String> allowedKnowledgePointIds) {
+        return wrongQuestions(learnerId, allowedKnowledgePointIds).stream()
+                .filter(item -> item.questionId().equals(questionId)).findFirst();
     }
 
     public boolean removeWrongQuestion(String learnerId, String questionId, Instant now) {

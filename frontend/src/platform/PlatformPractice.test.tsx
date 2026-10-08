@@ -230,7 +230,7 @@ describe("practice interaction closure", () => {
   it("keeps the wrong-question empty state concise and returns to Study", async () => {
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
     render(<WrongQuestionsPage data={data} />);
-    expect(await screen.findByText("错题本还是空的")).toBeTruthy();
+    expect(await screen.findByText("当前学习范围内暂无可练错题")).toBeTruthy();
     expect(screen.getByRole("link", { name: "← 返回学习" }).getAttribute("href")).toBe("/study");
     expect(screen.queryByText(/这里只保留/)).toBeNull();
     expect(screen.queryByText(/之后若同一道题/)).toBeNull();

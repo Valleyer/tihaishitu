@@ -1,4 +1,4 @@
-# 正式训练选题策略（Practice Selection V2）
+# 正式训练选题策略（Practice Selection V3）
 
 > 本文件是「正式训练如何选下一道题、答完以后如何推进」的专题长期文档。
 >
@@ -36,10 +36,11 @@ RandomPracticeSelector     RANDOM
 ChapterPracticeSelector    CHAPTER
 KnowledgePracticeSelector  KNOWLEDGE
 WrongPracticeSelector      WRONG
-PracticeSelectionStore     四者共用的只读候选事实查询
+PracticeSelectionStore     四者共用的候选事实查询 + RANDOM 第一层池轮换持久化
 ```
 
-四个 selector 都不写状态：lane 与 cursor 全部从既有事实推导，不新增状态表。
+KP 内 oldest / wrong lane 与 Chapter cursor 继续从既有 Attempt 事实推导；只有 RANDOM
+第一层 ALL / WRONG KP 池交替使用 V23 最小状态表，不能从旧 Attempt 猜测或按日期重置。
 
 ---
 
@@ -139,10 +140,18 @@ dependency gating
 
 ```text
 当天第一次创建 draw_mode=random 的 Attempt
-→ 从所有“当天仍有 eligible Question”的 KP 中纯随机选一个
+或上一 RANDOM Attempt assessment=correct、需要随机切换 KP
+→ 消费一次跨天持久的 ALL / WRONG KP 池轮换
 ```
 
-纯随机含义：不看 Mastery、不看难度、不做 KP 权重排序。
+第一次新规则触发为 ALL，之后 WRONG / ALL / WRONG 交替；不按业务日、World 活动、
+浏览器或服务进程重置。ALL 是当前全部 eligible KP。WRONG 是这些 eligible KP 与 active
+永久错题通过当前有效 core / auxiliary 题目关系覆盖到的 KP 交集。两个池都在 KP 层等概率，
+不看 Mastery、不看难度、不按错题数量加权。错题题目本身今天是否已 RANDOM 出过，
+不影响其关联 KP 进入 WRONG 池，只要该 KP 仍有任一 eligible 正式题。
+
+轮到 WRONG 但池为空，或 correct 后 WRONG 只能提供 previous KP 而 ALL 仍有其他 KP 时，
+回退 ALL 并继续优先切换 KP；本次仍记录为已消费 WRONG 槽，下一次轮到 ALL。
 
 后续 RANDOM 题查看 Learner **上一个 RANDOM Formal Attempt** 的：
 
@@ -165,6 +174,11 @@ assessment
 → 不推断为 wrong，也不推断为 correct
 → 直接在当前 eligible KP 中重新纯随机
 ```
+
+wrong / partial 留原 KP、原 KP 无题后的旧兜底、assessment=null、CHAPTER / KNOWLEDGE /
+WRONG 与 Legacy `/games/**` 都不消费第一层池轮换。一次发题最多消费一次；Attempt 未成功
+创建或事务回滚不消费。现代 World 先锁 Learner，并在同一事务内创建 Attempt、更新轮换状态
+和保存 World 状态，因此同 Learner 并发不会双重消费，不同 Learner 互不影响。
 
 未作答的上一题仍然占用当天 Question quota，它不是“上一题的 grading 结果”，
 因此**不得**用更早一天或更早一题的结果替代它。
@@ -272,8 +286,8 @@ Q 当前仍是 learner_wrong_question.status='active'
 Q 今天没被 RANDOM 出过
 ```
 
-`learner_wrong_question.target_knowledge_point_id` 继续保留，用于错题本原始归因、
-`wrong_review` 与 `wrong_drill` 的 target，不受本规则影响。
+`learner_wrong_question.target_knowledge_point_id` 继续保留为错题本原始归因；错题列表、
+`wrong_review` 与 `wrong_drill` 的当前可练性不能只依赖它。
 
 手动移出错题本的 Question 在所有 KP 的 wrong lane 中都立即不再是 candidate。
 
@@ -404,7 +418,7 @@ Chapter 是连续练习模式，到序列末尾 wrap，不因为“到末尾”�
 
 ```text
 learner_wrong_question.status = 'active'
-当前 selected Books 范围可用
+Question 通过任一有效 core / auxiliary 绑定落入 Session 冻结 KP scope
 published Formal Parent
 ```
 
@@ -415,11 +429,14 @@ Session 内随机且不重复
 ```
 
 用户手动移出错题本后，future wrong candidate 立即不再包含该题。
+`hasRemaining()` 与实际 `select()` 使用同一候选和 target 解析；历史 target 仍在冻结 scope
+且题目确实绑定它时优先沿用，否则按 core、关系 sort_order、KP ID 选择稳定合法 target。
 
 ### 6.2 wrong_review（单题错题重做）
 
-从错题列表点指定题时直接发该题；graded 后流程完成，返回错题列表，
-不插诊断或补救题。
+错题列表只包含当前 selected Books 范围内、通过至少一个有效题目关系可练的 active 错题。
+从列表点指定题时，历史 target 合法则沿用，否则按上述稳定规则选择当前合法 target；
+graded 后流程完成，不插诊断或补救题，也不回写历史错题 target。
 
 ### 6.3 永久错题语义
 
@@ -428,6 +445,10 @@ Session 内随机且不重复
 用户手动移出 → removed
 以后再次 wrong / partial → 重新 active
 ```
+
+取消文集只让相关错题从动态列表、学习页数量、下一轮 wrong_drill 与 RANDOM WRONG KP 池
+隐藏，不删除或改状态；重新选择后原 `last_wrong_at` 与历史归因立即恢复。没有显式选书时，
+继续按全部 enabled Books 作为默认学习范围。已经开始的 wrong_drill 始终按 Session 冻结 scope。
 
 ---
 
