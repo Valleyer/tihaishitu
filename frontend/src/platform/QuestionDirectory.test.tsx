@@ -53,6 +53,22 @@ function mockDirectory() {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("QuestionDirectoryPage", () => {
+  it("drops the top title block and lets the filters start the page", async () => {
+    mockDirectory();
+    const view = render(<QuestionDirectoryPage data={data} />);
+    await screen.findByText("共 22 道题");
+
+    // 顶部两行（题库 / 全平台已发布正式题目，共 X 道）已删除，且不得用别的标题替代。
+    expect(view.container.querySelector(".page-title")).toBeNull();
+    expect(view.container.querySelector("h1")).toBeNull();
+    expect(view.container.textContent).not.toContain("全平台已发布正式题目");
+    expect(view.container.textContent).not.toContain("题库题库");
+    // 筛选区是页面第一个内容块；总数只在底部翻页行出现一次。
+    const main = view.container.querySelector(".question-bank-page")!;
+    expect(main.firstElementChild!.classList.contains("question-directory-filters")).toBe(true);
+    expect(screen.getAllByText("共 22 道题")).toHaveLength(1);
+  });
+
   it("loads 20 questions per page and pages with previous/next buttons", async () => {
     const directory = mockDirectory();
     render(<QuestionDirectoryPage data={data} />);

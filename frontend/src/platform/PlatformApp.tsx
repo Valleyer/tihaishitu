@@ -209,7 +209,34 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
   /** 章节本地分页：只对已加载的 visibleChapters 做 slice，不新增请求、不写 URL、不持久化。 */
   const [chapterPage, setChapterPage] = useState(0);
-  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.recentChapter().then(setRecent).catch(()=>setRecent(null)); }, [data.studyProfile.selectedBookIds]);
+  /**
+   * 顶部 hero 依赖 details + progress + recent 三者。
+   *
+   * <p>这三者必须**在同一个 Promise continuation 里一次性提交**：否则 recent 先到会出现
+   * 章节与按钮、progress 后到再把进度条插到按钮前面，导致按钮被顶下去的 layout shift。
+   * wrongCount 不影响 hero 结构，可以独立加载。</p>
+   */
+  const [studyCoreReady, setStudyCoreReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const detailsPromise = Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id)))
+      .then(value => ({ value, error: "" }))
+      .catch((reason: Error) => ({ value: [] as BookDetail[], error: reason.message }));
+    const progressPromise = platformApi.progress().catch(() => null);
+    const recentPromise = platformApi.recentChapter().catch(() => null);
+    Promise.all([detailsPromise, progressPromise, recentPromise]).then(([detailsResult, progressResult, recentResult]) => {
+      if (cancelled) return;
+      // 同一个 continuation 内提交，React 会合并为一次渲染。
+      setDetails(detailsResult.value);
+      setProgress(progressResult);
+      setRecent(recentResult);
+      if (detailsResult.error) setMessage(detailsResult.error);
+      setStudyCoreReady(true);
+    });
+    platformApi.wrongQuestions().then(items => { if (!cancelled) setWrongCount(items.length); })
+      .catch(() => { if (!cancelled) setWrongCount(0); });
+    return () => { cancelled = true; };
+  }, [data.studyProfile.selectedBookIds]);
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
   const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
   const start=async()=>{if(!startBookId||!chapter)return;try{const session=await platformApi.startChapterPractice(startBookId,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
@@ -244,11 +271,13 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   return <Shell data={data}><main className="hub-main study-page">
     <section className="learning-focus-grid">
       <article className="continue-card study-hero">
-        <div className="study-hero-body">
-          <h2 className="study-hero-book">{recentBook?.name||recent?.bookName||"章节知识练习"}</h2>
-          {recentStudyChapter&&<p className="study-hero-chapter">{recentStudyChapter.name}</p>}
-          {recentChapterProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(recentProgress)}%`}><span style={{width:filledWidth(recentProgress)}} /><em style={{left:chipLeft}}>{Math.round(recentProgress)}%</em></div>}
-          {recentStudyChapter&&<button className="hub-primary" onClick={recentAction}>再次练习</button>}
+        <div className={studyCoreReady?"study-hero-body":"study-hero-body loading"}>
+          {studyCoreReady&&<>
+            <h2 className="study-hero-book">{recentBook?.name||recent?.bookName||"章节知识练习"}</h2>
+            {recentStudyChapter&&<p className="study-hero-chapter">{recentStudyChapter.name}</p>}
+            {recentChapterProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(recentProgress)}%`}><span style={{width:filledWidth(recentProgress)}} /><em style={{left:chipLeft}}>{Math.round(recentProgress)}%</em></div>}
+            {recentStudyChapter&&<button className="hub-primary" onClick={recentAction}>再次练习</button>}
+          </>}
         </div>
         <StudyHeroArt />
       </article>
@@ -508,7 +537,6 @@ export function QuestionDirectoryPage({ data }: { data: HubBootstrap }) {
   const chapters=facets?.books.find(book=>book.id===bookId)?.chapters||[];
   const reset=()=>{setQuery("");setSourceId("");setExamYear("");setQuestionType("");setDifficulty("");setBookId("");setChapterId("");setKnowledge("");setPage(0)};
   return <Shell data={data}><main className="hub-main question-bank-page">
-    <header className="page-title"><div><h1>题库</h1><p>全平台已发布正式题目，共 {totalElements} 道</p></div></header>
     {error&&<p className="hub-error" role="alert">{error}</p>}
     <div className="bank-filters question-directory-filters">
       <input aria-label="关键词" placeholder="搜索题干 / 来源 / 题号（支持 2020-7）" value={query} onChange={e=>change(setQuery)(e.target.value)}/>

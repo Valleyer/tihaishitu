@@ -326,3 +326,76 @@ describe("Shell header", () => {
     expect(account.getAttribute("href")).toBe("/account");
   });
 });
+
+describe("Study page hero render stability", () => {
+  it("keeps the hero body hidden until all three core responses have committed", async () => {
+    // 用可控的 promise 让 progress 最后完成：旧实现会先渲染章节+按钮、再把进度条插到前面，
+    // 把按钮顶下去。现在三者必须一次性提交。
+    let releaseProgress: (() => void) | undefined;
+    let releaseRecent: (() => void) | undefined;
+    vi.spyOn(platformApi, "book").mockImplementation(async id => id === "cs408" ? cs : math);
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
+    vi.spyOn(platformApi, "recentChapter").mockImplementation(() => new Promise(resolve => {
+      releaseRecent = () => resolve(recentChapter);
+    }));
+    vi.spyOn(platformApi, "progress").mockImplementation(() => new Promise(resolve => {
+      releaseProgress = () => resolve(progress);
+    }));
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
+
+    const view = render(<StudyPage data={data} reload={vi.fn()} />);
+
+    // 数据未到：hero 只占位，不渲染半成品（没有标题 / 章节 / 进度条 / 按钮）。
+    const body = view.container.querySelector(".study-hero-body")!;
+    expect(body.classList.contains("loading")).toBe(true);
+    expect(view.container.querySelector(".study-hero-book")).toBeNull();
+    expect(view.container.querySelector(".study-progress")).toBeNull();
+    expect(screen.queryByRole("button", { name: "再次练习" })).toBeNull();
+
+    // 先放行 recent：hero 仍不得出现，避免只到一半的结构变化。
+    releaseRecent!();
+    await waitFor(() => expect(platformApi.recentChapter).toHaveBeenCalled());
+    expect(view.container.querySelector(".study-hero-chapter")).toBeNull();
+    expect(screen.queryByRole("button", { name: "再次练习" })).toBeNull();
+
+    // 再放行 progress：三者在同一个 continuation 内一次提交，之后结构不再变化。
+    releaseProgress!();
+    await waitFor(() => expect(view.container.querySelector(".study-progress")).toBeTruthy());
+    expect(view.container.querySelector(".study-hero-body")!.classList.contains("loading")).toBe(false);
+    expect(view.container.querySelector(".study-hero-book")!.textContent).toBe("考研数学一");
+    expect(view.container.querySelector(".study-hero-chapter")!.textContent).toBe("第 3 章");
+    expect(screen.getByRole("button", { name: "再次练习" })).toBeTruthy();
+    // 进度条在按钮之前，且此后不再插入任何新节点。
+    const heroChildren = [...view.container.querySelector(".study-hero-body")!.children].map(node => node.className);
+    expect(heroChildren).toEqual(["study-hero-book", "study-hero-chapter", "study-progress", "hub-primary"]);
+  });
+
+  it("renders the same hero structure when the three responses race the other way", async () => {
+    const { view } = await renderStudy();
+    const heroChildren = [...view.container.querySelector(".study-hero-body")!.children].map(node => node.className);
+    expect(heroChildren).toEqual(["study-hero-book", "study-hero-chapter", "study-progress", "hub-primary"]);
+    expect(screen.getByRole("button", { name: "再次练习" }).textContent).toBe("再次练习");
+  });
+});
+
+describe("Study page alignment and icons", () => {
+  it("centers the book icon inside a single icon box for both books and states", async () => {
+    const { view } = await renderStudy();
+
+    const cards = [...bookCards(view)];
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      const box = card.querySelector(".book-cover-icon")!;
+      expect(box).toBeTruthy();
+      // 图标容器只包一层，且 SVG 只保留一套尺寸规则。
+      expect(box.querySelectorAll("svg")).toHaveLength(1);
+      expect(box.children).toHaveLength(1);
+      expect(box.getAttribute("aria-hidden")).toBe("true");
+    }
+    // 选中态只改卡片描边/底色，不改变图标容器本身。
+    fireEvent.click(cards[1]);
+    await waitFor(() => expect(cards[1].className).toContain("selected"));
+    expect(cards[1].querySelector(".book-cover-icon")).toBe(cards[1].querySelector(".book-cover-icon"));
+    expect(cards[1].querySelectorAll(".book-cover-icon svg")).toHaveLength(1);
+  });
+});
