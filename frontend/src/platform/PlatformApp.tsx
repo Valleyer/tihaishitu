@@ -38,13 +38,11 @@ const greeting = () => {  const hour = new Date().getHours();
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
-/** 章节编号色块的循环配色（[底色, 字色]）：低饱和，只用于辅助辨识。 */
+/** 章节图标块的循环配色（[底色, 字色]）：低饱和，只用于辅助辨识。 */
 const CHAPTER_TINTS: [string, string][] = [
   ["#e8efff", "#2f5bd0"], ["#efeaff", "#5b3fd0"], ["#e4f6ec", "#17794a"],
   ["#fdf3dd", "#9a6a06"], ["#fdeaf1", "#b03a68"],
 ];
-/** 章节编号块内的数学字形，纯装饰、按章节序号循环，不承载业务含义。 */
-const CHAPTER_GLYPHS = ["∑", "∫", "π", "∞", "f(x)", "dx"];
 
 /**
  * 进度条已完成宽度：夹在 0–100%。
@@ -216,28 +214,33 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   /** 快速练习错题：随机连续刷 active 错题，答对不会自动移出错题本。 */
   const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const mode=recentChapterMode(recent);
-  // 当前书籍：显式选择优先，否则回落到最近练习书籍 / 首本可练书籍，使章节卡片无需先点击即可浏览。
-  const focusBook=scopedBooks.find(item=>item.id===bookId)||scopedBooks.find(item=>item.id===recent?.bookId)||scopedBooks.find(item=>item.knowledgePointCount>0);
-  const focusDetail=details.find(item=>item.id===focusBook?.id);
-  const visibleChapters=focusDetail?flattenChapters(focusDetail.chapters):[];
-  const focusChapter=focusDetail?.chapters.find(item=>item.id===chapterId)
-    || focusDetail?.chapters.find(item=>item.id===recent?.chapterId)
-    || (bookId?undefined:visibleChapters[0]);
-  // 章节练习动作与顶部卡片使用同一个「当前书籍 + 当前章节」，避免两处各自解析出不同结果。
-  const chapter=focusChapter;
-  const startBookId=focusBook?.id;
-  const focusProgress=progress?.books.find(item=>item.bookId===focusBook?.id)?.chapters
-    .find(item=>item.chapterId===focusChapter?.id)?.masteryProgress;
-  const focusAction=mode==="active"&&recent?.activeSessionId?()=>go(practicePath(recent.activeSessionId!,"/study")):again;
+  // 顶部「最近学习」卡片：只读最近一次章节练习，不受下方书籍/章节浏览影响。
+  const recentBook=scopedBooks.find(item=>item.id===recent?.bookId);
+  const recentDetail=details.find(item=>item.id===recent?.bookId);
+  const recentStudyChapter=recentDetail?.chapters.find(item=>item.id===recent?.chapterId);
+  const recentChapterProgress=progress?.books.find(item=>item.bookId===recent?.bookId)?.chapters
+    .find(item=>item.chapterId===recent?.chapterId)?.masteryProgress;
+  const recentAction=mode==="active"&&recent?.activeSessionId?()=>go(practicePath(recent.activeSessionId!,"/study")):again;
+  const recentProgress=Math.min(100,Math.max(0,recentChapterProgress??0));
+  // 进度浮块位置：夹在轨道内（左右各留 22px），0% 与 100% 都不会被裁切。
+  const chipLeft=`clamp(22px, ${recentProgress}%, calc(100% - 22px))`;
+
+  // 下方章节浏览：只使用用户主动点击产生的状态，不从 recent / 第一本文集 fallback。
+  const browseBook=scopedBooks.find(item=>item.id===bookId);
+  const browseDetail=details.find(item=>item.id===bookId);
+  const visibleChapters=bookId&&browseDetail?flattenChapters(browseDetail.chapters):[];
+  const chapter=browseDetail?.chapters.find(item=>item.id===chapterId);
+  const startBookId=browseBook?.id;
+
   const status=[{key:"started",value:progress?.summary.startedKnowledgePoints,label:"已开始知识点"},{key:"ready",value:progress?.summary.readyKnowledgePoints,label:"熟练掌握及以上"},{key:"wrong",value:progress?.summary.wrongQuestions,label:"错题本题目"},{key:"today",value:progress?.activity.metrics.todayEffectiveAttempts,label:"今日答题"}];
   return <Shell data={data}><main className="hub-main study-page">
     <section className="learning-focus-grid">
       <article className="continue-card study-hero">
         <div className="study-hero-body">
-          <h2 className="study-hero-book">{focusBook?.name||recent?.bookName||"章节知识练习"}</h2>
-          {focusChapter&&<p className="study-hero-chapter">{focusChapter.name}</p>}
-          {focusProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(focusProgress)}%`}><span style={{width:filledWidth(focusProgress)}} /><em style={{left:filledWidth(focusProgress)}}>{Math.round(focusProgress)}%</em></div>}
-          {focusChapter&&<button className="hub-primary" onClick={focusAction}>再次练习</button>}
+          <h2 className="study-hero-book">{recentBook?.name||recent?.bookName||"章节知识练习"}</h2>
+          {recentStudyChapter&&<p className="study-hero-chapter">{recentStudyChapter.name}</p>}
+          {recentChapterProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(recentProgress)}%`}><span style={{width:filledWidth(recentProgress)}} /><em style={{left:chipLeft}}>{Math.round(recentProgress)}%</em></div>}
+          {recentStudyChapter&&<button className="hub-primary" onClick={recentAction}>再次练习</button>}
         </div>
         <StudyHeroArt />
       </article>
@@ -249,8 +252,8 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
         <small>{item.knowledgePointCount} 个知识点</small>
         {!trainable?<em>暂无已发布正式题</em>:null}
       </button>})}</div>
-      {visibleChapters.length>0 && <div className="chapter-cards">{visibleChapters.map((item,index)=>{const value=progress?.books.find(entry=>entry.bookId===focusBook?.id)?.chapters.find(entry=>entry.chapterId===item.id)?.masteryProgress??0;const tint=CHAPTER_TINTS[index%CHAPTER_TINTS.length];const glyph=CHAPTER_GLYPHS[index%CHAPTER_GLYPHS.length];const filled=`${Math.min(100,Math.max(0,value))}%`;return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filled} as CSSProperties} key={item.id} onClick={()=>setChapterId(item.id)}><span className="chapter-number" aria-hidden="true">{glyph}</span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>})}</div>}
-      {chapter && <div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
+      {bookId&&visibleChapters.length>0&&<div className="chapter-cards">{visibleChapters.map((item,index)=>{const value=progress?.books.find(entry=>entry.bookId===bookId)?.chapters.find(entry=>entry.chapterId===item.id)?.masteryProgress??0;const tint=CHAPTER_TINTS[index%CHAPTER_TINTS.length];return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filledWidth(value)} as CSSProperties} key={item.id} onClick={()=>setChapterId(item.id)}><span className="chapter-number" aria-hidden="true"><StudyChapterIcon index={index}/></span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>})}</div>}
+      {bookId&&chapterId&&chapter&&<div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
       <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><div className="wrong-entry-actions"><button className="hub-primary" disabled={wrongCount===0} onClick={quickWrong}>快速练习错题</button><HubLink href="/wrong-questions">进入错题本</HubLink></div></section>
@@ -260,29 +263,52 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
 }
 
 /**
- * 顶部主学习卡片的轻量数学插画（纯装饰）。
+ * 顶部主学习卡片的轻量背景插画（纯装饰）。
  *
- * <p>只用内联 SVG：蓝紫书本、积分号、π、三角尺与柔和抽象背景，不承载业务信息、不引入依赖，
- * 在窄屏隐藏以免压正文。</p>
+ * <p>只保留一本柔和蓝紫色的书与极淡的椭圆背景：没有文字、没有公式，也不含 π / 积分号 /
+ * 三角尺等数学符号拼贴。不承载业务信息、不参与交互、不引入依赖，窄屏隐藏。</p>
  */
 function StudyHeroArt() {
   return <svg className="study-hero-art" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
-    <ellipse cx="196" cy="176" rx="118" ry="34" fill="#e8ecff" />
-    <ellipse cx="150" cy="164" rx="72" ry="22" fill="#eef2fb" />
-    <path d="M168 44c-22 0-34 12-34 30v64c0 18-12 30-34 30" stroke="#c7cffb" strokeWidth="5" fill="none" strokeLinecap="round" />
-    <path d="M120 44h20M104 168h20" stroke="#c7cffb" strokeWidth="5" strokeLinecap="round" />
-    <text x="252" y="70" fill="#b9c2f5" fontSize="34" fontFamily="Georgia, 'Times New Roman', serif">π</text>
-    <g transform="translate(206 62) rotate(-4)">
-      <rect x="0" y="0" width="86" height="112" rx="9" fill="#7b83eb" />
-      <rect x="6" y="6" width="80" height="106" rx="7" fill="#5b64d9" />
-      <rect x="6" y="6" width="14" height="106" rx="7" fill="#4a52c4" />
-      <text x="42" y="66" fill="#e8ebff" fontSize="15" textAnchor="middle">数学一</text>
+    <ellipse cx="186" cy="172" rx="126" ry="34" fill="#eef1fd" />
+    <ellipse cx="164" cy="166" rx="74" ry="21" fill="#f3f5fd" />
+    {/* 书身：左侧书脊 + 封面 + 书页，全部为纯图形，封面无任何文字。 */}
+    <g transform="translate(120 44) rotate(-4)">
+      <rect x="82" y="8" width="10" height="118" rx="5" fill="#dfe4fb" />
+      <rect x="0" y="0" width="92" height="126" rx="10" fill="#7b83eb" />
+      <rect x="6" y="6" width="80" height="114" rx="7" fill="#5b64d9" />
+      <rect x="6" y="6" width="16" height="114" rx="7" fill="#4951c2" />
+      <rect x="34" y="34" width="42" height="6" rx="3" fill="#8f97f0" opacity=".55" />
+      <rect x="34" y="52" width="34" height="6" rx="3" fill="#8f97f0" opacity=".38" />
+      <rect x="34" y="70" width="40" height="6" rx="3" fill="#8f97f0" opacity=".26" />
     </g>
-    <path d="M96 122 128 176H64Z" fill="none" stroke="#d3daf7" strokeWidth="5" strokeLinejoin="round" />
-    <path d="M272 116v34M255 133h34" stroke="#dbe1fa" strokeWidth="4" strokeLinecap="round" />
-    <circle cx="86" cy="72" r="13" fill="#eef1fd" />
-    <circle cx="286" cy="42" r="8" fill="#eef1fd" />
+    <circle cx="86" cy="96" r="12" fill="#eef1fd" />
+    <circle cx="286" cy="62" r="9" fill="#eef1fd" />
   </svg>;
+}
+
+/**
+ * 章节卡片的轻量教育类图标（6 种，按位置循环）。
+ *
+ * <p>项目没有图标库，这里用内联 SVG 覆盖书、铅笔、毕业帽、书签、灯泡、目标等通用学习语义，
+ * 不做数学符号拼贴，也不承载业务信息。</p>
+ */
+function StudyChapterIcon({ index }: { index: number }) {
+  const paths = [
+    // 打开的书
+    "M12 7.2C10.4 5.6 7.8 5 4 5v11c3.8 0 6.4.6 8 2.2 1.6-1.6 4.2-2.2 8-2.2V5c-3.8 0-6.4.6-8 2.2Zm0 0V18",
+    // 铅笔
+    "M4 20l1-4 10-10 3 3-10 10-4 1Zm11-11 2-2a1.5 1.5 0 0 1 2 0l1 1a1.5 1.5 0 0 1 0 2l-2 2",
+    // 毕业帽
+    "M3 9.5 12 5l9 4.5-9 4.5-9-4.5Zm3 2.6V16c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4v-3.9",
+    // 书签
+    "M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15l-6.5-3.6L5.5 20V5A1.5 1.5 0 0 1 7 3.5Z",
+    // 灯泡
+    "M12 3.5c2.7 0 4.8 2.1 4.8 4.7 0 1.7-.9 2.8-1.7 3.8-.6.7-1 1.3-1 2.2h-4.2c0-.9-.4-1.5-1-2.2-.8-1-1.7-2.1-1.7-3.8C7.2 5.6 9.3 3.5 12 3.5Zm-2.1 13h4.2M10.5 20h3",
+    // 目标
+    "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Zm0 4.2a4.3 4.3 0 1 0 0 8.6 4.3 4.3 0 0 0 0-8.6Zm0 3.1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z",
+  ];
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" focusable="false"><path d={paths[index%paths.length]} /></svg>;
 }
 
 /** 学习状态四项的小图标：柔和浅色圆底，不改变整体紫蓝中性主色。 */
