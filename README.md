@@ -8,6 +8,8 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 > **开始开发前先读**：[`AGENTS.md`](AGENTS.md)（Agent 开发流程与文档纪律）与 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md)（跨 PR 长期规则的唯一主入口）。本仓库采用“一个 PR = 一个独立 Agent 对话”，长期规则不依赖聊天记录。
 
+**Skills 与插件**：规划和开发 Agent 应主动检查当前环境中与任务直接相关的已安装 Skills、已连接插件及可用工具。前端视觉任务优先检查 `frontend-design` 和 `ui-ux-pro-max`（以实际可用为前提），并遵守 [Agent 自动调用规则](AGENTS.md#skills--plugins--tools-自动发现与使用) 与 [前端视觉设计规范](docs/PROJECT_RULES.md#23-前端视觉设计规范)；任何工具不扩大 Git、生产部署或数据权限。
+
 ## 现在怎么玩
 
 默认进入万境中枢，题面不会自动出现。`寒门仕途` 是万境书院当前开放的第一个游戏世界：
