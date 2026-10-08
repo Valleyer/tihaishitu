@@ -3,12 +3,16 @@ package cn.tihaishitu.learning;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
+/**
+ * 进度与统计共用的范围读取。
+ *
+ * <p>PR7 起，``study_attempt`` 的活动事实统一由 {@link LearnerActivityStatsService}
+ * 派生；本 Store 只负责按当前 Selected Books 读取正式目录
+ * （{@code question_bank → question_bank_chapter → question_bank_knowledge}）
+ * 的去重 KnowledgePoint 范围，不再各自聚合答题数值。</p>
+ */
 @Repository
 public class LearnerProgressStore {
     public record BookRow(String id, String name, String description) {}
@@ -16,9 +20,6 @@ public class LearnerProgressStore {
     public record MembershipRow(String bookId, String chapterId, String knowledgePointId,
                                 String name, String subject, String section, String chapter,
                                 String bookName, String chapterName) {}
-    public record RecentTotals(int gradedAttempts, int distinctKnowledgePoints) {}
-    public record DailyRow(LocalDate date, int gradedAttempts, Set<String> knowledgePointIds) {}
-    public record RecentAttempt(Instant answeredAt, String knowledgePointId) {}
 
     private final JdbcTemplate jdbc;
 
@@ -53,6 +54,12 @@ public class LearnerProgressStore {
                 rs.getString("chapter_code"), rs.getString("name")), learnerId);
     }
 
+    /**
+     * 当前范围内可学习的去重 membership。
+     *
+     * <p>多本文集共享同一 KnowledgePoint 时会返回多行，调用方必须按 KnowledgePoint ID
+     * 去重（{@link LearnerProgressService#scopedKnowledgePointIds}），不能直接按行数统计。</p>
+     */
     public List<MembershipRow> selectedMemberships(String learnerId) {
         return jdbc.query("""
                 SELECT membership.bank_id,membership.chapter_id,k.id,k.name,k.subject_name,
@@ -70,32 +77,5 @@ public class LearnerProgressStore {
                 rs.getString("id"), rs.getString("name"), rs.getString("subject_name"),
                 rs.getString("section_name"), rs.getString("catalog_chapter"),
                 rs.getString("catalog_book"), rs.getString("catalog_chapter")), learnerId);
-    }
-
-    public RecentTotals recentTotals(String learnerId, Instant from, Instant through) {
-        return jdbc.query("""
-                SELECT COUNT(*) graded_attempts,
-                       COUNT(DISTINCT target_knowledge_point_id) distinct_points
-                  FROM study_attempt a
-                  JOIN question_resource q ON q.id=a.question_id
-                 WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
-                   AND q.status='published' AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                """, (rs, row) -> new RecentTotals(rs.getInt("graded_attempts"),
-                rs.getInt("distinct_points")), learnerId, Timestamp.from(from), Timestamp.from(through)).get(0);
-    }
-
-    public List<RecentAttempt> recentAttempts(String learnerId, Instant from, Instant through) {
-        return jdbc.query("""
-                SELECT answered_at,target_knowledge_point_id
-                  FROM study_attempt a
-                  JOIN question_resource q ON q.id=a.question_id
-                 WHERE a.learner_id=? AND a.status='graded' AND a.answered_at>=? AND a.answered_at<=?
-                   AND q.status='published' AND q.parent_question_id IS NULL
-                   AND q.question_type IN ('single_choice','multiple_choice','true_false','solution')
-                 ORDER BY answered_at,a.id
-                """, (rs, row) -> new RecentAttempt(rs.getTimestamp("answered_at").toInstant(),
-                rs.getString("target_knowledge_point_id")), learnerId,
-                Timestamp.from(from), Timestamp.from(through));
     }
 }

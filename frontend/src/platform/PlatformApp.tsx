@@ -5,12 +5,18 @@ import { RichText } from "../components/RichText";
 import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
+import { ActivityBarChart, RecentContactState, progressMetrics, trendSeries } from "./ProgressPanels";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
+import {
+  invalidateLearnerAllData, invalidateLearnerDynamicData, learnerScopeKey, loadBook, loadProgress,
+  loadStudyCore, peekProgress, peekStudyCore, prefetchProgress, prefetchStudyCore,
+  scheduleHubPrefetch, scheduleProgressWindowPrefetch, type ProgressDays, type StudyCoreSnapshot,
+} from "./learnerDataCache";
 import { AnswerDisplay } from "./practiceView";
-import { attemptKnowledgeTags, chapterProgressText, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
+import { attemptKnowledgeTags, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
 import "./platform.css";
 
 const go = navigate;
@@ -28,8 +34,7 @@ const wrongQuestionUnavailableLabel = (reason?: string | null) =>
   reason === "out_of_scope" ? "当前不在学习范围"
     : reason === "knowledge_unavailable" ? "该题所属知识点当前不可练习"
       : "该题当前不可练习";
-const greeting = () => {
-  const hour = new Date().getHours();
+const greeting = () => {  const hour = new Date().getHours();
   if (hour < 6) return "夜深了";
   if (hour < 12) return "上午好";
   if (hour < 18) return "下午好";
@@ -38,6 +43,22 @@ const greeting = () => {
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
+/** 章节图标块的循环配色（[底色, 字色]）：低饱和，只用于辅助辨识。 */
+const CHAPTER_TINTS: [string, string][] = [
+  ["#e8efff", "#2f5bd0"], ["#efeaff", "#5b3fd0"], ["#e4f6ec", "#17794a"],
+  ["#fdf3dd", "#9a6a06"], ["#fdeaf1", "#b03a68"],
+];
+/** 章节一次最多显示 9 个（桌面 3 行 × 3 列）；纯前端本地分页。 */
+const CHAPTER_PAGE_SIZE = 9;
+
+/**
+ * 进度条已完成宽度：夹在 0–100%。
+ *
+ * <p>0% 时刻意保持 0 宽度，让百分比浮块在 0% / 1% / 5% 这类小值下也不会溢出轨道。</p>
+ */
+function filledWidth(percent: number): string {
+  return `${Math.min(100, Math.max(0, percent))}%`;
+}
 /**
  * 只读题目标题取自来源与显示题号，不再使用 legacy subject_name 作为用户可见路径。
  * 年份已经由 ReadonlyQuestion 的 question-meta 展示，这里不重复。
@@ -90,23 +111,38 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   const location = useCurrentLocation();
   const path = location.split(/[?#]/)[0];
   const nav = [
-    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"], ["统计", "/statistics"],
+    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"],
     ["知识", "/books"], ["题库", "/questions"],
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+  /**
+   * 顶部导航意图预取：只针对 /study 与 /progress，不改 HubLink 的全局语义。
+   * 依赖缓存 in-flight dedupe，鼠标来回移动不会重复发请求。
+   */
+  const intentPrefetch = (href: string) => () => {
+    if (href === "/study") prefetchStudyCore(data);
+    else if (href === "/progress") prefetchProgress(data, 7);
+  };
   return <div className="learning-hub">
     <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><img src="/brand-logo.png" alt="" />万境书院</HubLink>
-      <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href}>{label}</HubLink>)}</nav>
-      <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account">{data.learner.displayName}</HubLink></div></div>
+      <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href} onPointerEnter={intentPrefetch(href)} onFocus={intentPrefetch(href)} onTouchStart={intentPrefetch(href)}>{label}</HubLink>)}</nav>
+      <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account"><span className="hub-account-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8.6" r="3.6" /><path d="M5 20c0-3.4 3.1-5.4 7-5.4s7 2 7 5.4" /></svg></span><span>{data.learner.displayName}</span></HubLink></div></div>
     </header>
     {children}
   </div>;
 }
 
 function HubHome({ data }: { data: HubBootstrap }) {
-  const [progress, setProgress] = useState<LearnerProgress | null>();
+  // 与 Study / Progress 共享同一份 progress:7 缓存（含 in-flight dedupe）。
+  const [progress, setProgress] = useState<LearnerProgress | null | undefined>(() => peekProgress(data, 7));
   const [homeError, setHomeError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(() => { setProgress(null); setHomeError("学习数据暂时未能载入，可以稍后再试。"); }); }, []);
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => {
+    let cancelled = false;
+    loadProgress(data, 7).then(value => { if (!cancelled) setProgress(value); })
+      .catch(() => { if (!cancelled) { setProgress(current => current ?? null); setHomeError("学习数据暂时未能载入，可以稍后再试。"); } });
+    return () => { cancelled = true; };
+  }, [scopeKey, data]);
   return <Shell data={data}><main className="hub-main hub-home">
     <section className="hub-greeting"><h1>{greeting()}，{data.learner.displayName}</h1></section>
     {homeError && <p className="hub-error" role="alert">{homeError}</p>}
@@ -115,7 +151,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <HubLink className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</HubLink> : <span className="world-unavailable">尚未开放</span>}</div>
       </article> })}</div>
     </section>
-    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.bookName} · {point.chapterName}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
+    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recentContacts.length ? <div className="recent-home-list">{progress.recentContacts.slice(0, 5).map(contact => <HubLink href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}><div><b>{contact.name}</b><span>{contact.bookName} · {contact.chapterName}</span></div><div><RecentContactState contact={contact} timestamp={recentTime(contact.lastEffectiveContactAt)} /></div></HubLink>)}</div> : <div className="empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p></div>}</section>
       <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览知识</b><span>按知识点查看完整知识目录</span></HubLink><HubLink href="/questions"><b>浏览题库</b><span>查看全平台已发布题目与解析</span></HubLink></div></section></div>
   </main></Shell>;
 }
@@ -125,20 +161,113 @@ function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bo
   </li>;
 }
 
-function ProgressPage({ data }: { data: HubBootstrap }) {
-  const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
-  return <Shell data={data}><main className="hub-main progress-page">
-    {error && <p className="hub-error">{error}</p>}{!progress && !error && <p>正在整理学习进度…</p>}
-    {progress&&<section className="overview-card"><div className="section-heading"><h2>当前学习范围</h2></div><div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>彻底掌握</span></p></div></section>}
-    <div className="progress-books">{progress?.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}><h2>{book.name}</h2><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><b>{Math.round(book.masteryProgress)}%</b><small>掌握进度 · {book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small><HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink></article>)}</div>
-    {progress?.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
+/** 进度页初始窗口：固定 7 天，与 Bootstrap 预取、首页、Study Core 共用同一 cache key。 */
+const INITIAL_PROGRESS_DAYS: ProgressDays = 7;
+
+export function ProgressPage({ data }: { data: HubBootstrap }) {
+  // 活动趋势窗口：默认近 7 天。days 代表「当前实际展示的数据窗口」，而不是尚未完成的目标请求。
+  const [days, setDays] = useState<ProgressDays>(INITIAL_PROGRESS_DAYS);
+  const [progress, setProgress] = useState<LearnerProgress | undefined>(() => peekProgress(data, INITIAL_PROGRESS_DAYS));
+  const [error, setError] = useState("");
+  /** 最后一次切换请求的目标窗口：快速 30→90 时只有最新的请求允许 commit。 */
+  const requestedDaysRef = useRef<ProgressDays>(INITIAL_PROGRESS_DAYS);
+  const scopeKey = learnerScopeKey(data);
+
+  // 初次进入 / scope 变化：stale-while-revalidate。
+  // 命中且仍在 TTL 内时不重复请求（否则会在 Bootstrap 预热刚结束的瞬间又打一份同样的 progress）；
+  // 只有过期或从未加载才会重新取数，且失败时绝不清空已有内容。
+  useEffect(() => {
+    let cancelled = false;
+    requestedDaysRef.current = INITIAL_PROGRESS_DAYS;
+    const cached = peekProgress(data, INITIAL_PROGRESS_DAYS);
+    if (cached) setProgress(cached);
+    setDays(INITIAL_PROGRESS_DAYS);
+    loadProgress(data, INITIAL_PROGRESS_DAYS)
+      .then(value => {
+        if (cancelled || requestedDaysRef.current !== INITIAL_PROGRESS_DAYS) return;
+        setProgress(value);
+        setError("");
+      })
+      .catch((reason: Error) => { if (!cancelled && !cached) setError(reason.message); });
+    return () => { cancelled = true; };
+  }, [scopeKey, data]);
+
+  // 7 天稳定渲染后再空闲预热 30 / 90，不阻塞首屏（prefetch 幂等，重复触发不会重复请求）。
+  useEffect(() => { if (progress) scheduleProgressWindowPrefetch(data); }, [progress, data]);
+
+  /**
+   * 切换窗口：
+   * - cache hit：立即原子切换（按钮 active 与数据同时变），再后台刷新目标窗口；
+   * - cache miss：**保持当前完整页面**，目标数据到位后一次性提交 days + progress；
+   * - 两种情况都用 requestedDaysRef 做竞态保护，旧 response 不得覆盖新窗口。
+   */
+  const switchDays = (nextDays: ProgressDays) => {
+    if (nextDays === days) return;
+    requestedDaysRef.current = nextDays;
+    const cached = peekProgress(data, nextDays);
+    if (cached) {
+      setDays(nextDays); setProgress(cached); setError("");
+      void loadProgress(data, nextDays, { force: true })
+        .then(next => { if (requestedDaysRef.current === nextDays) setProgress(next); })
+        .catch(() => undefined);
+      return;
+    }
+    loadProgress(data, nextDays)
+      .then(next => {
+        if (requestedDaysRef.current !== nextDays) return;
+        setDays(nextDays); setProgress(next); setError("");
+      })
+      .catch((reason: Error) => { if (requestedDaysRef.current === nextDays) setError(reason.message); });
+  };
+  /** 7/30/90 按钮意图预取：鼠标移向按钮时即开始取数。 */
+  const windowIntent = (value: ProgressDays) => () => prefetchProgress(data, value);
+  const activity = progress?.activity; const metrics = activity && progressMetrics(activity.metrics);
+  const series = activity && trendSeries(activity.daily);
+  return <Shell data={data}><main className="hub-main statistics-page">
+    <div className="panel-heading">
+      <h1>学习进度</h1>
+      <div className="segmented">{([7, 30, 90] as const).map(value =>
+        <button className={days === value ? "active" : ""} onClick={() => switchDays(value)} onPointerEnter={windowIntent(value)} onFocus={windowIntent(value)} onTouchStart={windowIntent(value)} key={value}>近 {value} 天</button>)}
+      </div>
+    </div>
+    {error && <p className="hub-error" role="alert">{error}</p>}
+    {!progress && !error && <p>正在整理学习进度…</p>}
+    {progress && activity && metrics && series && <>
+      <section className="statistics-summary" aria-label="六个核心指标">
+        {metrics.map(metric => <article key={metric.label}>
+          <b>{metric.value}</b><span>{metric.label}</span>
+        </article>)}
+      </section>
+      <ActivityBarChart title="每日答题次数" days={activity.windowDays} unit="次" values={series.attempts} />
+      <ActivityBarChart title="每日接触知识点" days={activity.windowDays} unit="个" values={series.knowledgePoints} />
+      <div className="progress-books">
+        {progress.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}>
+          <h2>{book.name}</h2>
+          <div className="mastery-progress"><span style={{ width: `${book.masteryProgress}%` }} /></div>
+          <b>{Math.round(book.masteryProgress)}%</b>
+          <small>掌握进度 · {book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small>
+          <HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink>
+        </article>)}
+      </div>
+      {progress.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
+    </>}
   </main></Shell>;
 }
 
 function ProgressBookPage({ data, bookId }: { data: HubBootstrap; bookId: string }) {
-  const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, [bookId]);
+  // 复用 progress(7) 缓存：/progress → /progress/books/:id 不再重新请求。
+  const [progress, setProgress] = useState<LearnerProgress | undefined>(() => peekProgress(data, INITIAL_PROGRESS_DAYS));
+  const [error, setError] = useState("");
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => {
+    let cancelled = false;
+    const cached = peekProgress(data, INITIAL_PROGRESS_DAYS);
+    if (cached) setProgress(cached);
+    loadProgress(data, INITIAL_PROGRESS_DAYS)
+      .then(value => { if (!cancelled) { setProgress(value); setError(""); } })
+      .catch((reason: Error) => { if (!cancelled && !cached) setError(reason.message); });
+    return () => { cancelled = true; };
+  }, [bookId, scopeKey, data]);
   const book = progress?.books.find(item => item.bookId === bookId);
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/progress">← 返回文集进度</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><p className="eyebrow">文集进度</p><h1>{book.name}</h1><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(book.masteryProgress)}% · {book.totalKnowledgePoints} 个知识点</p><ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={bookId} key={chapter.chapterId} />)}</ul></>}</main></Shell>;
 }
@@ -149,46 +278,191 @@ function chapterPoints(chapter: BookDetail["chapters"][number]): KnowledgePoint[
 
 function ProgressChapterPage({ data, bookId, chapterId }: { data: HubBootstrap; bookId: string; chapterId: string }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
-  useEffect(() => { Promise.all([platformApi.progress(), platformApi.book(bookId), platformApi.knowledgeStatesForBook(bookId)]).then(([p,b,s]) => { setProgress(p); setBook(b); setStates(new Map(s.map(item => [item.knowledgePointId,item]))); }).catch(reason => setError((reason as Error).message)); }, [bookId, chapterId]);
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => { Promise.all([loadProgress(data, INITIAL_PROGRESS_DAYS), loadBook(data, bookId), platformApi.knowledgeStatesForBook(bookId)]).then(([p,b,s]) => { setProgress(p); setBook(b); setStates(new Map(s.map(item => [item.knowledgePointId,item]))); }).catch(reason => setError((reason as Error).message)); }, [bookId, chapterId, scopeKey, data]);
   const aggregate = progress?.books.find(item => item.bookId === bookId); const chapterProgress = aggregate && findProgressChapter(aggregate.chapters, chapterId); const chapter = book && findBookChapter(book.chapters, chapterId);
-  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); go(practicePath(session.id, `/progress/books/${bookId}/chapters/${chapterId}`)); } catch(reason){ setError((reason as Error).message); } };
+  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); invalidateLearnerDynamicData(); go(practicePath(session.id, `/progress/books/${bookId}/chapters/${chapterId}`)); } catch(reason){ setError((reason as Error).message); } };
   return <Shell data={data}><main className="hub-main narrow"><HubLink href={`/progress/books/${bookId}`}>← 返回章节进度</HubLink>{error && <p className="hub-error">{error}</p>}{chapter && chapterProgress && <><p className="eyebrow">章节进度</p><h1>{chapter.name}</h1><div className="mastery-progress"><span style={{width:`${chapterProgress.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(chapterProgress.masteryProgress)}% · {chapterProgress.total} 个知识点</p><div className="progress-point-list">{chapterPoints(chapter).map(point => { const state=states.get(point.id); return <article className="hub-panel" key={point.id}><div><h2><HubLink href={`/knowledge/${point.id}`}>{point.name}</HubLink></h2><p>{state?.lastEvidenceAt ? `最近学习 ${new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN")}` : "未开始"}</p></div><div><span className={`mastery-band ${state?.band || "unstarted"}`}>{progressBandLabels[state?.band || "unstarted"]}</span><b>{Math.round(state?.effectiveMastery || 0)}%</b><button onClick={() => start(point.id)}>开始专项</button></div></article> })}</div></>}</main></Shell>;
 }
 
 export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise<void> }) {
   const [profile, setProfile] = useState<StudyProfile>(data.studyProfile); const [selected, setSelected] = useState(data.studyProfile.selectedBookIds);
-  const [details, setDetails] = useState<BookDetail[]>([]); const [wrongCount, setWrongCount] = useState(0);
-  const [progress,setProgress]=useState<LearnerProgress|null>();
-  const [recent,setRecent]=useState<RecentChapter|null>();
+  const [wrongCount, setWrongCount] = useState(0);
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
-  useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.recentChapter().then(setRecent).catch(()=>setRecent(null)); }, [data.studyProfile.selectedBookIds]);
-  const book=details.find(item=>item.id===bookId); const chapters=book ? flattenChapters(book.chapters) : []; const chapter=chapters.find(item=>item.id===chapterId);
+  /** 章节本地分页：只对已加载的 visibleChapters 做 slice，不新增请求、不写 URL、不持久化。 */
+  const [chapterPage, setChapterPage] = useState(0);
+  /**
+   * 顶部 hero 的完整快照。
+   *
+   * <p>cache hit 时同步初始化，首帧就渲染真实内容；cache miss 时保持 undefined，
+   * 由 loadStudyCore 把 details + progress + recent **一次性**提交，避免
+   * 「章节与按钮先到、进度条后到把按钮顶下去」的 layout shift。</p>
+   */
+  const [studyCore, setStudyCore] = useState<StudyCoreSnapshot | undefined>(() => peekStudyCore(data));
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => {
+    let cancelled = false;
+    const cached = peekStudyCore(data);
+    if (cached) setStudyCore(cached);
+    // 缓存仍然新鲜时直接复用（不再重复请求）；只有缺失或过期才取数。
+    // 无论哪条路径，三者都由 loadStudyCore 一次性组合提交，因此不会恢复 layout shift；
+    // 请求失败且有旧快照时保留旧内容，不清空页面。
+    loadStudyCore(data)
+      .then(value => { if (!cancelled) setStudyCore(value); })
+      .catch((reason: Error) => { if (!cancelled && !cached) setMessage(reason.message); });
+    platformApi.wrongQuestions().then(items => { if (!cancelled) setWrongCount(items.length); })
+      .catch(() => { if (!cancelled) setWrongCount(0); });
+    return () => { cancelled = true; };
+  }, [scopeKey, data]);
+  const details = studyCore?.details ?? [];
+  const progress = studyCore?.progress;
+  const recent = studyCore?.recent;
+  const studyCoreReady = studyCore !== undefined;
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
-  const start=async()=>{if(!book||!chapter)return;try{const session=await platformApi.startChapterPractice(book.id,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
-  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
+  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);invalidateLearnerAllData();setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
+  const start=async()=>{if(!startBookId||!chapter)return;try{const session=await platformApi.startChapterPractice(startBookId,chapter.id);invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 再次练习：用最近一次章节练习的 Book + Chapter 新建 chapter_drill，不恢复已结束的 Session。 */
-  const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 快速练习错题：随机连续刷 active 错题，答对不会自动移出错题本。 */
-  const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const mode=recentChapterMode(recent);
+  // 顶部「最近学习」卡片：只读最近一次章节练习，不受下方书籍/章节浏览影响。
+  const recentBook=scopedBooks.find(item=>item.id===recent?.bookId);
+  const recentDetail=details.find(item=>item.id===recent?.bookId);
+  const recentStudyChapter=recentDetail?.chapters.find(item=>item.id===recent?.chapterId);
+  const recentChapterProgress=progress?.books.find(item=>item.bookId===recent?.bookId)?.chapters
+    .find(item=>item.chapterId===recent?.chapterId)?.masteryProgress;
+  const recentAction=mode==="active"&&recent?.activeSessionId?()=>go(practicePath(recent.activeSessionId!,"/study")):again;
+  const recentProgress=Math.min(100,Math.max(0,recentChapterProgress??0));
+  // 进度浮块位置：夹在轨道内（左右各留 22px），0% 与 100% 都不会被裁切。
+  const chipLeft=`clamp(22px, ${recentProgress}%, calc(100% - 22px))`;
+
+  // 下方章节浏览：只使用用户主动点击产生的状态，不从 recent / 第一本文集 fallback。
+  const browseBook=scopedBooks.find(item=>item.id===bookId);
+  const browseDetail=details.find(item=>item.id===bookId);
+  const visibleChapters=bookId&&browseDetail?flattenChapters(browseDetail.chapters):[];
+  const chapterPageCount=Math.max(1,Math.ceil(visibleChapters.length/CHAPTER_PAGE_SIZE));
+  const pagedChapters=visibleChapters.slice(chapterPage*CHAPTER_PAGE_SIZE,(chapterPage+1)*CHAPTER_PAGE_SIZE);
+  const chapter=browseDetail?.chapters.find(item=>item.id===chapterId);
+  const startBookId=browseBook?.id;
+  /** 翻页：清空已选章节，避免上一页的不可见章节仍显示「开始章节练习」。 */
+  const goChapterPage=(nextPage:number)=>{setChapterPage(nextPage);setChapterId("")};
+
+  const status=[{key:"started",value:progress?.summary.startedKnowledgePoints,label:"已开始知识点"},{key:"ready",value:progress?.summary.readyKnowledgePoints,label:"熟练掌握及以上"},{key:"wrong",value:progress?.summary.wrongQuestions,label:"错题本题目"},{key:"today",value:progress?.activity.metrics.todayEffectiveAttempts,label:"今日答题"}];
   return <Shell data={data}><main className="hub-main study-page">
     <section className="learning-focus-grid">
-      <article className="continue-card">
-        {mode==="active"&&recent?<><h2>{recent.bookName||"章节练习"}</h2><div className="continue-mastery"><span>{recent.chapterName||"章节练习"}</span><span>{chapterProgressText(recent)}</span></div><button className="hub-primary" onClick={()=>go(practicePath(recent.activeSessionId!,"/study"))}>继续章节练习 →</button></>:
-         mode==="last"&&recent?<><p className="section-kicker">最近练习章节</p><h2>{recent.bookName||"章节练习"}</h2><div className="continue-meta"><span>{recent.chapterName||"章节练习"}</span><small className="continue-time">{recent.updatedAt?`最近练习 ${recentTime(recent.updatedAt)}`:"最近练习时间未知"}</small></div><button className="hub-primary" onClick={again}>再次练习 →</button></>:
-         <><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}
+      <article className="continue-card study-hero">
+        <div className={studyCoreReady?"study-hero-body":"study-hero-body loading"}>
+          {studyCoreReady&&<>
+            <h2 className="study-hero-book">{recentBook?.name||recent?.bookName||"章节知识练习"}</h2>
+            {recentStudyChapter&&<p className="study-hero-chapter">{recentStudyChapter.name}</p>}
+            {recentChapterProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(recentProgress)}%`}><span style={{width:filledWidth(recentProgress)}} /><em style={{left:chipLeft}}>{Math.round(recentProgress)}%</em></div>}
+            {recentStudyChapter&&<button className="hub-primary" onClick={recentAction}>再次练习</button>}
+          </>}
+        </div>
+        <StudyHeroArt />
       </article>
-      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
-    <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
-      <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
-      {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
-      {chapter && <div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
+      <article className="today-card"><div className="section-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg></span>学习状态</h2></div>{progress?<div className="today-metrics">{status.map(item=><p key={item.key}><StudyStatusIcon kind={item.key}/><span>{item.label}</span><b>{item.value}</b></p>)}</div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
+    <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg></span>章节知识练习</h2></div>
+      <div className="book-cards">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("");setChapterPage(0)}}>
+        <span className="book-cover-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6.4C10.4 4.9 7.8 4.3 4 4.3v12.4c3.8 0 6.4.6 8 2.1 1.6-1.5 4.2-2.1 8-2.1V4.3c-3.8 0-6.4.6-8 2.1Z"/><path d="M12 6.4v12.4"/></svg></span>
+        <b>{item.name}</b>
+        <small>{item.knowledgePointCount} 个知识点</small>
+        {!trainable?<em>暂无已发布正式题</em>:null}
+      </button>})}</div>
+      {bookId&&visibleChapters.length>0&&(visibleChapters.length>CHAPTER_PAGE_SIZE
+        ? <div className="chapter-browser">
+            <button type="button" className="chapter-page-arrow previous" aria-label="上一页章节" disabled={chapterPage===0} onClick={()=>goChapterPage(chapterPage-1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+            <ChapterCards chapters={pagedChapters} offset={chapterPage*CHAPTER_PAGE_SIZE} bookId={bookId} progress={progress} chapterId={chapterId} onSelect={setChapterId} />
+            <button type="button" className="chapter-page-arrow next" aria-label="下一页章节" disabled={chapterPage>=chapterPageCount-1} onClick={()=>goChapterPage(chapterPage+1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
+          </div>
+        : <ChapterCards chapters={pagedChapters} offset={0} bookId={bookId} progress={progress} chapterId={chapterId} onSelect={setChapterId} />)}
+      {bookId&&chapterId&&chapter&&<div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
       <section className="hub-panel wrong-entry"><div><h2>错题本</h2><p>已保留 {wrongCount} 道错题</p></div><div className="wrong-entry-actions"><button className="hub-primary" disabled={wrongCount===0} onClick={quickWrong}>快速练习错题</button><HubLink href="/wrong-questions">进入错题本</HubLink></div></section>
     <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
     {message&&<p className="hub-message">{message}</p>}
   </main></Shell>;
+}
+
+/**
+ * 章节卡片网格（纯展示）。
+ *
+ * <p>{@code offset} 是该页在整本书章节里的起始序号，仅用于让图标配色在翻页时保持稳定。</p>
+ */
+function ChapterCards({ chapters, offset, bookId, progress, chapterId, onSelect }: {
+  chapters: BookDetail["chapters"]; offset: number; bookId: string;
+  progress?: LearnerProgress | null; chapterId: string; onSelect: (id: string) => void;
+}) {
+  return <div className="chapter-cards">{chapters.map((item,index)=>{
+    const value=progress?.books.find(entry=>entry.bookId===bookId)?.chapters
+      .find(entry=>entry.chapterId===item.id)?.masteryProgress??0;
+    const tint=CHAPTER_TINTS[(offset+index)%CHAPTER_TINTS.length];
+    return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filledWidth(value)} as CSSProperties} key={item.id} onClick={()=>onSelect(item.id)}><span className="chapter-number" aria-hidden="true"><StudyChapterIcon index={offset+index}/></span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>;
+  })}</div>;
+}
+
+/**
+ * 顶部主学习卡片的轻量背景插画（纯装饰）。
+ *
+ * <p>只保留一本柔和蓝紫色的书与极淡的椭圆背景：没有文字、没有公式，也不含 π / 积分号 /
+ * 三角尺等数学符号拼贴。不承载业务信息、不参与交互、不引入依赖，窄屏隐藏。</p>
+ */
+function StudyHeroArt() {
+  return <svg className="study-hero-art" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
+    <ellipse cx="186" cy="172" rx="126" ry="34" fill="#eef1fd" />
+    <ellipse cx="164" cy="166" rx="74" ry="21" fill="#f3f5fd" />
+    {/* 书身：左侧书脊 + 封面 + 书页，全部为纯图形，封面无任何文字。 */}
+    <g transform="translate(120 44) rotate(-4)">
+      <rect x="82" y="8" width="10" height="118" rx="5" fill="#dfe4fb" />
+      <rect x="0" y="0" width="92" height="126" rx="10" fill="#7b83eb" />
+      <rect x="6" y="6" width="80" height="114" rx="7" fill="#5b64d9" />
+      <rect x="6" y="6" width="16" height="114" rx="7" fill="#4951c2" />
+      <rect x="34" y="34" width="42" height="6" rx="3" fill="#8f97f0" opacity=".55" />
+      <rect x="34" y="52" width="34" height="6" rx="3" fill="#8f97f0" opacity=".38" />
+      <rect x="34" y="70" width="40" height="6" rx="3" fill="#8f97f0" opacity=".26" />
+    </g>
+    <circle cx="86" cy="96" r="12" fill="#eef1fd" />
+    <circle cx="286" cy="62" r="9" fill="#eef1fd" />
+  </svg>;
+}
+
+/**
+ * 章节卡片的轻量教育类图标（6 种，按位置循环）。
+ *
+ * <p>项目没有图标库，这里用内联 SVG 覆盖书、铅笔、毕业帽、书签、灯泡、目标等通用学习语义，
+ * 不做数学符号拼贴，也不承载业务信息。</p>
+ */
+function StudyChapterIcon({ index }: { index: number }) {
+  const paths = [
+    // 打开的书
+    "M12 7.2C10.4 5.6 7.8 5 4 5v11c3.8 0 6.4.6 8 2.2 1.6-1.6 4.2-2.2 8-2.2V5c-3.8 0-6.4.6-8 2.2Zm0 0V18",
+    // 铅笔
+    "M4 20l1-4 10-10 3 3-10 10-4 1Zm11-11 2-2a1.5 1.5 0 0 1 2 0l1 1a1.5 1.5 0 0 1 0 2l-2 2",
+    // 毕业帽
+    "M3 9.5 12 5l9 4.5-9 4.5-9-4.5Zm3 2.6V16c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4v-3.9",
+    // 书签
+    "M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15l-6.5-3.6L5.5 20V5A1.5 1.5 0 0 1 7 3.5Z",
+    // 灯泡
+    "M12 3.5c2.7 0 4.8 2.1 4.8 4.7 0 1.7-.9 2.8-1.7 3.8-.6.7-1 1.3-1 2.2h-4.2c0-.9-.4-1.5-1-2.2-.8-1-1.7-2.1-1.7-3.8C7.2 5.6 9.3 3.5 12 3.5Zm-2.1 13h4.2M10.5 20h3",
+    // 目标
+    "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Zm0 4.2a4.3 4.3 0 1 0 0 8.6 4.3 4.3 0 0 0 0-8.6Zm0 3.1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z",
+  ];
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" focusable="false"><path d={paths[index%paths.length]} /></svg>;
+}
+
+/** 学习状态四项的小图标：柔和浅色圆底，不改变整体紫蓝中性主色。 */
+function StudyStatusIcon({ kind }: { kind: string }) {
+  const paths: Record<string,string> = {
+    started: "M3 9.5 12 4l9 5.5-9 5.5-9-5.5Zm3 3.2V17c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4.3",
+    ready: "M12 3.5c2.6 3 4 5.4 4 7.6a4 4 0 0 1-8 0c0-2.2 1.4-4.6 4-7.6Zm0 14.9v2.1",
+    wrong: "M5 4.5h9l5 3-5 3H5v-6Zm0 6v9h2.6v-3.2h3.4V19.5H17",
+    today: "M4.5 6.5h15v13h-15v-13Zm0 4h15M8.5 4v3.4M15.5 4v3.4",
+  };
+  return <span className={`study-status-icon ${kind}`} aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d={paths[kind]} /></svg>
+  </span>;
 }
 
 function BooksPage({ data }: { data: HubBootstrap }) {
@@ -204,28 +478,16 @@ function BooksPage({ data }: { data: HubBootstrap }) {
   </main></Shell>;
 }
 
-function ActivityBarChart({ title, days, values, unit }: { title: string; days: number; values: { date: string; value: number }[]; unit: string }) {
-  const max = Math.max(1, ...values.map(item => item.value));
-  const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
-  const ticks = [ceiling, Math.round(ceiling / 2), 0];
-  const every = days === 7 ? 1 : days === 30 ? 5 : 14;
-  const empty = values.every(item => item.value === 0);
-  return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
-    <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
-    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=><div className="chart-column" title={`${item.date}：${item.value} ${unit}`} key={item.date}><i style={{height:`${item.value/ceiling*100}%`}}/><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>)}</div><div className="chart-x-title">日期</div></div>
-  </div></section>;
-}
-
-function StatisticsPage({ data }: { data: HubBootstrap }) {
-  const [days,setDays]=useState<7|30|90>(7); const [stats,setStats]=useState<LearnerStatistics>(); const [error,setError]=useState("");
-  useEffect(()=>{setStats(undefined);platformApi.statistics(days).then(setStats).catch(reason=>setError((reason as Error).message))},[days]);
-  const outcomeTotal=(stats?.summary.correct||0)+(stats?.summary.partial||0)+(stats?.summary.wrong||0)||1;
-  return <Shell data={data}><main className="hub-main statistics-page"><div className="panel-heading"><h1>学习统计</h1><div className="segmented">{([7,30,90] as const).map(value=><button className={days===value?"active":""} onClick={()=>setDays(value)} key={value}>近 {value} 天</button>)}</div></div>{error&&<p className="hub-error">{error}</p>}{!stats&&!error&&<p>正在整理统计…</p>}{stats&&<>
-    <section className="statistics-summary"><article><b>{stats.summary.gradedAttempts}</b><span>正式作答</span></article><article><b>{stats.summary.activeStudyDays}</b><span>活跃学习日</span></article><article><b>{stats.summary.distinctKnowledgePoints}</b><span>接触知识点</span></article><article><b>{stats.summary.knowledgeDrillAttempts}</b><span>专项作答</span></article><article><b>{stats.summary.wrongReviewAttempts}</b><span>错题作答</span></article><article><b>{stats.summary.worldAttempts}</b><span>世界作答</span></article></section>
-    <ActivityBarChart title="每日正式作答" days={days} unit="题" values={stats.daily.map(day=>({date:day.date,value:day.gradedAttempts}))}/>
-    <ActivityBarChart title="每日接触知识点" days={days} unit="个" values={stats.daily.map(day=>({date:day.date,value:day.distinctKnowledgePoints}))}/>
-    <section className="statistics-grid"><article className="hub-panel"><h2>正式作答结果分布</h2>{[["正确",stats.summary.correct],["部分正确",stats.summary.partial],["需巩固",stats.summary.wrong]].map(([label,value])=><div className="horizontal-stat" key={String(label)}><span>{label}</span><i><b style={{width:`${Number(value)/outcomeTotal*100}%`}}/></i><strong>{value}</strong></div>)}</article><article className="hub-panel"><h2>文集掌握进度</h2>{stats.books.map(book=><div className="horizontal-stat" key={book.bookId}><span>{book.name}</span><i><b style={{width:`${book.masteryProgress}%`}}/></i><strong>{Math.round(book.masteryProgress)}%</strong></div>)}</article></section>
-  </>}</main></Shell>;
+/**
+ * `/statistics` 的兼容重定向。
+ *
+ * <p>PR7 起进度与统计是同一个模块：顶栏只保留「进度」。旧链接与书签仍可访问，这里用
+ * `replaceState` 替换 URL，避免留下会在返回时再次触发的历史条目，也不会渲染第二套页面
+ * 或发起重复请求。</p>
+ */
+function StatisticsRedirect({ data }: { data: HubBootstrap }) {
+  useEffect(() => { history.replaceState(null, "", "/progress"); }, []);
+  return <ProgressPage data={data} />;
 }
 
 const bandLabel: Record<KnowledgeState["band"], string> = progressBandLabels;
@@ -264,7 +526,7 @@ function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
   const context=point?.books.find(item=>item.id===requestedBook&&item.chapterId===requestedChapter)||point?.books[0];
   useEffect(()=>{if(context)platformApi.knowledgeNeighbors(id,context.id,context.chapterId).then(setNeighbors).catch(()=>setNeighbors(undefined))},[id,context?.id,context?.chapterId]);
   const contextQuery=context?`?bookId=${encodeURIComponent(context.id)}&chapterId=${encodeURIComponent(context.chapterId)}`:"";
-  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
+  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);invalidateLearnerDynamicData();go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
   const openGuide=async()=>{setGuideOpen(true);try{setGuide(await platformApi.knowledgeGuide(id))}catch(reason){setError((reason as Error).message)}};
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回知识</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{context?`${context.name} · ${context.chapterName}`:"知识点"}</p><h1>{point.name}</h1><div className="knowledge-actions"><button className="hub-primary" onClick={start}>开始知识点练习</button><button onClick={openGuide}>知识讲解</button>{neighbors?.next?<HubLink href={`/knowledge/${neighbors.next.id}?bookId=${encodeURIComponent(context!.id)}&chapterId=${encodeURIComponent(neighbors.next.chapterId)}`}>下一个知识点 →</HubLink>:<span className="muted">已到文集末尾</span>}</div>{state&&<section className={`hub-panel mastery-summary ${state.band==="proficient"?"mastery-perfect":""}`}><h2>当前状态</h2><p className="mastery-score"><b>{state.band==="proficient"?"✦ ":""}{bandLabel[state.band]}</b> · {state.effectiveMastery.toFixed(1)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<h2>相关正式真题</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} linkKnowledgePoints key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}{guideOpen&&<Modal title={`${point.name} · 知识讲解`} wide close={()=>setGuideOpen(false)}>{guide===undefined?<p>正在载入知识讲解…</p>:guide.contentMarkdown?<div className="rich"><RichText>{guide.contentMarkdown}</RichText></div>:<div className="empty-state"><h3>知识讲解尚未录入</h3></div>}</Modal>}</>}</main></Shell>;
 }
@@ -273,10 +535,10 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   const [items, setItems] = useState<WrongQuestion[]>([]); const [error, setError] = useState("");
   const load=()=>platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, []);
-  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(practicePath(session.id,"/wrong-questions")); } catch (reason) { setError((reason as Error).message); } };
+  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); invalidateLearnerDynamicData(); go(practicePath(session.id,"/wrong-questions")); } catch (reason) { setError((reason as Error).message); } };
   const remove = async (questionId: string) => {
     if (!window.confirm("确认已经掌握这道题并将它移出错题本吗？\n如果以后再次做错，它会自动重新加入。")) return;
-    try { await platformApi.removeWrongQuestion(questionId); await load(); } catch (reason) { setError((reason as Error).message); }
+    try { await platformApi.removeWrongQuestion(questionId); invalidateLearnerDynamicData(); await load(); } catch (reason) { setError((reason as Error).message); }
   };
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
     {error && <p className="hub-error">{error}</p>}
@@ -296,6 +558,16 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
     }
     reportAttemptId.current=nextAttemptId; setSession(value); setSelected([]); setError("");
   };
+  /**
+   * 所有写路径的统一出口：先把学习类缓存标脏，再套用新的 Session。
+   *
+   * <p>答题 / 揭示 / 自评 / 下一题 / 结束都会改变 progress、recent 与 Study Core，
+   * 集中在这里失效，避免每个按钮各写一遍。</p>
+   */
+  const applyMutatedSession = (value: PracticeSession) => {
+    invalidateLearnerDynamicData();
+    applySession(value);
+  };
   const load = () => platformApi.practice(id).then(applySession).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, [id]);
   if (!session) return <Shell data={data}><main className="hub-main narrow"><p>{error || "正在恢复专项练习…"}</p></main></Shell>;
@@ -306,10 +578,10 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const toggle = (key: string) => setSelected(values => multiple ? (values.includes(key) ? values.filter(value => value !== key) : [...values, key]) : [key]);
   const submit = async () => { try {
     const answer = question.presentationType === "true_false" ? selected[0] === "true" : multiple ? selected : selected[0];
-    applySession(await platformApi.answerPractice(session, answer));
+    applyMutatedSession(await platformApi.answerPractice(session, answer));
   } catch (reason) { setError((reason as Error).message); } };
-  const update = (action: Promise<PracticeSession>) => action.then(applySession).catch(reason => setError((reason as Error).message));
-  const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
+  const update = (action: Promise<PracticeSession>) => action.then(applyMutatedSession).catch(reason => setError((reason as Error).message));
+  const finish = async () => { try { await platformApi.endPractice(id); invalidateLearnerDynamicData(); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
   const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer">{question.gradingMode === "self_assessment" ? <><h2>参考解析</h2><RichText>{attempt.explanation || ""}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</>}</section>;
   const assessment = attempt.assessment || "wrong";
   const title = examTitle(attempt);
@@ -356,7 +628,6 @@ export function QuestionDirectoryPage({ data }: { data: HubBootstrap }) {
   const chapters=facets?.books.find(book=>book.id===bookId)?.chapters||[];
   const reset=()=>{setQuery("");setSourceId("");setExamYear("");setQuestionType("");setDifficulty("");setBookId("");setChapterId("");setKnowledge("");setPage(0)};
   return <Shell data={data}><main className="hub-main question-bank-page">
-    <header className="page-title"><div><h1>题库</h1><p>全平台已发布正式题目，共 {totalElements} 道</p></div></header>
     {error&&<p className="hub-error" role="alert">{error}</p>}
     <div className="bank-filters question-directory-filters">
       <input aria-label="关键词" placeholder="搜索题干 / 来源 / 题号（支持 2020-7）" value={query} onChange={e=>change(setQuery)(e.target.value)}/>
@@ -383,12 +654,12 @@ export function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/questions">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">全平台题库 · 只读题目浏览</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich practice-answer">{solution ? <><h2>参考解析</h2><RichText>{question.analysisMarkdown}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={question.correctAnswer} presentationType={question.presentationType} options={Object.fromEntries((question.options || []).map(option => [option.key, option.text]))}/><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></>}</section>}</>}</main></Shell>;
 }
 
-function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
+function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); invalidateLearnerAllData(); go("/login"); }}>退出登录</button></section></main></Shell>; }
 
-function AuthenticatedPlatform() {
+export function AuthenticatedPlatform() {
   const path = useCurrentLocation().split(/[?#]/)[0];
   const [data, setData] = useState<HubBootstrap>(); const [error, setError] = useState("");
-  const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
+  const load = async () => { try { const next = await platformApi.bootstrap(); setData(next); scheduleHubPrefetch(next); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
   useEffect(() => { void load(); }, []);
   if (!data) return <main className="hub-loading">{error || "正在载入万境中枢…"}</main>;
   if (path === "/worlds/ancient-official") return <div className="world-shell"><App /></div>;
@@ -396,7 +667,7 @@ function AuthenticatedPlatform() {
   if (path.startsWith("/progress/books/") && path.includes("/chapters/")) { const parts=path.split("/"); return <ProgressChapterPage data={data} bookId={parts[3]} chapterId={parts[5]} />; }
   if (path.startsWith("/progress/books/")) return <ProgressBookPage data={data} bookId={path.split("/")[3]} />;
   if (path === "/progress") return <ProgressPage data={data} />;
-  if (path === "/statistics") return <StatisticsPage data={data} />;
+  if (path === "/statistics") return <StatisticsRedirect data={data} />;
   if (path === "/reviews") { history.replaceState(null, "", "/study"); return <StudyPage data={data} reload={load} />; }
   if (path === "/wrong-questions") return <WrongQuestionsPage data={data} />;
   if (path.startsWith("/practice/")) return <PracticePage data={data} id={idAfter("/practice/")} />;

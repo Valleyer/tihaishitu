@@ -60,6 +60,51 @@ export interface ProgressBook {
   started: number; ready: number; proficient: number; masteryProgress: number; reviewDueOrSoon: number;
   chapters: ProgressChapter[];
 }
+/**
+ * 统一「有效答题」口径下的六个核心指标（PR7）。
+ * 累计类字段是当前学习范围内的全历史事实，`activeStudyDays7d` 固定为近 7 个上海业务日。
+ */
+export interface ActivityMetrics {
+  activeStudyDays7d: number; todayEffectiveAttempts: number; totalKnowledgePoints: number;
+  touchedKnowledgePoints: number; totalEffectiveAttempts: number; totalCorrectAttempts: number;
+}
+/** 四类结果之和等于 `totalEffectiveAttempts`；`revealedOnly` 是仅查看答案，不是错误。 */
+export interface ActivityOutcomes { correct: number; partial: number; wrong: number; revealedOnly: number }
+export interface ActivityDaily {
+  date: string; effectiveAttempts: number; distinctKnowledgePoints: number;
+  correct: number; partial: number; wrong: number; revealedOnly: number;
+}
+export interface LearnerActivity {
+  windowDays: number; generatedAt: string;
+  metrics: ActivityMetrics; outcomes: ActivityOutcomes; daily: ActivityDaily[];
+}
+/** 兼容旧契约的 graded-only 七日足迹；字段名与语义与 PR7 之前一致。 */
+export interface RecentGradedProgress {
+  gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
+  daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
+  /** Mastery Evidence 投影列表，按 lastEvidenceAt 倒序，最多 10 条；仅查看答案不出现在这里。 */
+  knowledgePoints: {
+    knowledgePointId: string; name: string; bookName: string; chapterName: string;
+    band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
+  }[];
+}
+/**
+ * 最近接触的一个知识点（PR7 合并前复核修复）。
+ *
+ * `lastEffectiveContactAt` 是有效接触时间（reveal 或 graded 的首次有效行动）；
+ * `lastEvidenceAt` 只在真实评分后存在。
+ *
+ * 行为标签必须看 `lastOutcomeRevealedOnly` / `lastGraded`，**不能**用 `evidenceCount === 0`
+ * 反推：真实评分但暂无掌握证据时 `lastGraded` 为 true、`lastOutcomeRevealedOnly` 为 false。
+ */
+export interface RecentContact {
+  knowledgePointId: string; name: string; bookName: string; chapterName: string;
+  band: MasteryBand; effectiveMastery: number; stabilityDays: number;
+  evidenceCount: number; lastEvidenceAt?: string | null;
+  lastEffectiveContactAt: string;
+  lastOutcomeRevealedOnly: boolean; lastGraded: boolean;
+  assessment?: string | null;
+}
 export interface LearnerProgress {
   generatedAt: string;
   summary: {
@@ -69,14 +114,12 @@ export interface LearnerProgress {
   };
   bands: Record<MasteryBand, number>;
   books: ProgressBook[];
-  recent: {
-    gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
-    daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
-    knowledgePoints: {
-      knowledgePointId: string; name: string; bookName: string; chapterName: string;
-      band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
-    }[];
-  };
+  /** 保留的旧兼容契约，graded-only；进度页不再用它展示学习足迹。 */
+  recent: RecentGradedProgress;
+  /** 最近接触知识点：来源是有效 Attempt（含仅查看答案），按首次有效行动时间倒序。 */
+  recentContacts: RecentContact[];
+  /** 进度与统计共用的一份事实；进度页从这里读取指标、分布与近 7 日曲线。 */
+  activity: LearnerActivity;
 }
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
@@ -140,12 +183,19 @@ export interface QuestionDirectoryFacets {
   books: { id: string; name: string; chapters: { id: string; name: string }[] }[];
 }
 export interface PageResult<T> { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
+/**
+ * 旧 `/learner/statistics` 兼容接口的响应。
+ *
+ * <p>PR7 起 `summary` 与 `/learner/progress.activity.metrics` 同源，数值必然一致；
+ * `days` 只影响 `daily` 曲线长度。进度页不再展示 7/30/90 切换，也不再调用本接口，
+ * 仅保留类型与客户端方法供旧书签与兼容需求使用。</p>
+ */
 export interface LearnerStatistics {
   days: 7 | 30 | 90; generatedAt: string;
   summary: {
     gradedAttempts: number; activeStudyDays: number; distinctKnowledgePoints: number;
     knowledgeDrillAttempts: number; wrongReviewAttempts: number; worldAttempts: number;
-    correct: number; partial: number; wrong: number;
+    correct: number; partial: number; wrong: number; revealedOnly: number;
   };
   daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
   books: { bookId: string; name: string; masteryProgress: number; knowledgePointCount: number }[];
@@ -161,8 +211,7 @@ export const platformApi = {
     request<Learner>("/learner/auth/login", "POST", { username, password }),
   logout: () => request<void>("/learner/auth/logout", "POST"),
   me: () => request<Learner>("/learner/me"),
-  bootstrap: () => request<HubBootstrap>("/bootstrap"),
-  books: () => request<BookSummary[]>("/learning/books"),
+  bootstrap: () => request<HubBootstrap>("/bootstrap"),  books: () => request<BookSummary[]>("/learning/books"),
   book: (id: string) => request<BookDetail>("/learning/books/" + encodeURIComponent(id)),
   knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string; chapterId: string; chapterName: string }[] }>(
     "/learning/knowledge-points/" + encodeURIComponent(id)),
@@ -197,7 +246,14 @@ export const platformApi = {
   knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
     "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
   reviewQueue: () => request<ReviewQueue>("/learner/review-queue"),
-  progress: () => request<LearnerProgress>("/learner/progress"),
+  /**
+   * 统一进度总览。
+   *
+   * `days` 只控制 `activity.daily` 与 `activity.windowDays` 的活动趋势窗口（7/30/90，缺省 7）；
+   * `activity.metrics`、`activity.outcomes`、`recent` 与 `recentContacts` 口径固定不变。
+   */
+  progress: (days?: 7 | 30 | 90) =>
+    request<LearnerProgress>(days === undefined ? "/learner/progress" : `/learner/progress?days=${days}`),
   statistics: (days: 7 | 30 | 90) => request<LearnerStatistics>(`/learner/statistics?days=${days}`),
   wrongQuestions: () => request<WrongQuestion[]>("/learner/wrong-questions"),
   removeWrongQuestion: (questionId: string) => request<void>(

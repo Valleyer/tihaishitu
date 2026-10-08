@@ -49,6 +49,31 @@ class StoreSqlShapeTest {
         assertThat(source).doesNotContain("QuestionNumberSort.naturalKey(\"q.question_number\")");
     }
 
+    /**
+     * PR7 进度统计 V3 的单一事实来源守卫。
+     *
+     * <p>「有效 Attempt」投影只能有一份 SQL。历史问题是 Progress 与 Statistics 各自聚合一次，
+     * 导致同一指标出现两个答案；这里直接断言 reveal 过滤条件只存在于
+     * {@link LearnerActivityStore}，防止以后有人再往 Service 里塞第二套 SQL。</p>
+     */
+    @Test
+    void effectiveAttemptProjectionLivesOnlyInTheActivityStore() throws IOException {
+        Path learningDir = Path.of("src/main/java/cn/tihaishitu/learning");
+        try (var files = Files.list(learningDir)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                if (file.getFileName().toString().equals("LearnerActivityStore.java")) {
+                    assertThat(source).contains("answer_revealed_at");
+                    continue;
+                }
+                // 其他学习类不得自带「有效 Attempt」的 reveal / 状态过滤投影。
+                assertThat(source)
+                        .as("%s 不应再写一套有效 Attempt SQL", file.getFileName())
+                        .doesNotContain("answer_revealed_at");
+            }
+        }
+    }
+
     private static String read(Path path) throws IOException {
         return Files.readString(path, StandardCharsets.UTF_8);
     }

@@ -1130,6 +1130,179 @@ Review 业务日
 
 ---
 
+## 14.1 进度统计 V3
+
+「进度」与「统计」是**同一个模块**，名字统一为「进度」，入口统一为 `/progress`。顶栏不再提供
+独立的「统计」入口；`/statistics` 只保留为兼容重定向到 `/progress`，用于旧链接与书签。
+
+### 14.1.1 有效 Attempt
+
+计数单位是 `study_attempt.id`：**不是** question_id、KnowledgePoint 数，也不是 answer_record 数。
+
+有效：
+
+```text
+status = graded 且 assessment ∈ {correct, wrong, partial}  → 结果用真实 assessment
+status = revealed 且 answer_revealed_at IS NOT NULL        → 归类 revealed_only（仅查看答案）
+```
+
+无效：
+
+```text
+status = active（打开后直接退出）
+Legacy /games/** 无 Learner 身份
+Remedial 子题（parent_question_id 非空）
+非 published 或非单/多选、判断、综合的题目
+全平台题库 /questions/{id} 的只读浏览（不生成 Attempt）
+```
+
+约束：
+
+- 同一道题的不同有效 Attempt **各计 1 次**；
+- 一次 Attempt 即使先 `reveal` 再自评也只计 **1 次**，并采用自评后的真实 assessment；
+- 正式「我没思路」判 `wrong`，计 1 次；
+- 覆盖全部正式场景：现代 World 随机、章节练习、知识点专项、错题重做、错题快练；
+- 并发重试同一 Attempt 不双计。
+
+「仅查看答案」与「真正答错」必须区分：不允许为了统计把 `reveal` 改写成 `graded wrong`，也不
+允许把 `revealed_only` 当成已掌握。本规则不改变 grading、Mastery V3 与永久错题本行为。
+
+### 14.1.2 有效事件日期
+
+一次 Attempt 只产生**一次**有效事件，日期取「首次有效行动」：
+
+```text
+status = revealed                                  → answer_revealed_at
+status = graded 且已有更早的合法 answer_revealed_at → answer_revealed_at
+其他 status = graded                               → answered_at
+```
+
+因此跨天 `reveal → 自评` 不会把记录改到第二天。按 `Asia/Shanghai` 自然日计算今日、近 7 天与
+活跃学习日。历史脏数据（`graded` 缺 assessment、缺合法时间等）**明确排除**，不虚构日期或结果。
+
+### 14.1.2.1 两个时间概念必须分开
+
+```text
+有效接触时间 lastEffectiveContactAt  = 首次有效行动（reveal 或 graded），reveal-only 也有
+Mastery 证据时间 lastEvidenceAt      = 只有真实 graded 才产生，来自 Mastery / Evidence
+```
+
+「最近接触知识点」按**有效接触时间**排序与展示，因此仅查看参考解析也正确出现；掌握度展示
+仍来自 Mastery 事实。严禁为了展示足迹把 reveal 写成 `graded`、制造 Evidence 或 Mastery。
+
+**行为标签的判据是最近一条 Attempt 的真实状态，不是 `evidenceCount`。**
+`LearnerKnowledgeStateService.apply()` 在 `!mastery.effective() && !migrated` 时会提前返回，
+所以「已真实评分」但「暂无 Mastery Evidence」是合法且真实存在的状态：
+
+```text
+lastOutcomeRevealedOnly = true                  → 「仅查看答案 · 未自评」，不展示百分比
+lastGraded = true 且 evidenceCount = 0          → 「已作答 · 暂无掌握证据」，不展示百分比
+evidenceCount > 0                               → 按 Mastery 真值展示掌握度
+既有掌握度又有 reveal-only 接触时，两者都要保留：接触时间单独显示，掌握度另算
+```
+
+### 14.1.2.2 评分日与首次有效行动日并存
+
+同一个跨天 `reveal → 自评` Attempt 在两个契约里属于**不同字段的不同含义**，这不是重复计数：
+
+```text
+activity / recentContacts  → 首次有效行动日（review 那天），永久保持
+recent（graded-only 兼容）  → answered_at 评分日，沿用 PR7 之前的旧契约
+```
+
+旧 `recent.gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily` 因此按
+`answered_at` 归属上海业务日，只统计真实评分的 Attempt（reveal-only 绝不填入带 `graded` 的
+字段），窗口同时检查起点与终点（未来时间记录不混入）。`assessment` 非标准取值的历史记录既
+不算有效 Attempt、也不算任何结果分类，避免编造结果。
+
+### 14.1.3 当前学习范围
+
+统计与进度共用同一份范围事实：当前 Learner Selected Books 中仍 `enabled`、按正式关系
+`question_bank → question_bank_chapter → question_bank_knowledge` 关联、且 active 且可学习
+的**去重** KnowledgePoint 集合。不使用 Legacy Subject / Section。
+
+- 已创建 Attempt 的历史归因保持其冻结 `target_knowledge_point_id`；一道题另外绑定若干
+  KnowledgePoint 也不会让一次 Attempt 同时在多处记账；
+- 多本文集共享同一 KnowledgePoint 时知识点数与 Attempt 数都不得翻倍（用去重集合或
+  `EXISTS`，禁止让多对多 JOIN 放大行数）；
+- 取消勾选文集只**隐藏**历史统计，不删除 Attempt / Mastery / Evidence / 错题本；重新勾选立即
+  恢复既有历史；
+- 历史 target 当前失效或不在 scope 内时该 Attempt 暂不纳入当前范围统计，永久事实仍保留。
+
+永久错题本的跨 KnowledgePoint 可见/可练规则与此处的历史归因分属不同需求，不得为统计改写
+PR6 的错题本或 Mastery 归因。
+
+### 14.1.4 六个核心指标
+
+| 字段 | UI 标签 | 口径 |
+| --- | --- | --- |
+| `activeStudyDays7d` | 活跃学习日 | 近 7 个上海业务日内有效 Attempt 所在去重日期数，0–7 |
+| `todayEffectiveAttempts` | 今日答题 | 当前上海业务日的有效 Attempt 次数 |
+| `totalKnowledgePoints` | 当前范围知识点 | 当前可学习 KnowledgePoint 去重数 |
+| `touchedKnowledgePoints` | 接触知识点 | 当前范围内曾发生有效 Attempt 的冻结 target KP 去重数（全历史） |
+| `totalEffectiveAttempts` | 累计答题 | 当前范围内全历史有效 Attempt 次数 |
+| `totalCorrectAttempts` | 累计正确 | 当前范围内全历史 `graded + correct` 次数 |
+
+累计类指标永远是**全历史**，不因页面只展示近 7 天而被裁剪。结果分布
+`correct / partial / wrong / revealedOnly` 四类之和必须等于 `totalEffectiveAttempts`。
+
+### 14.1.5 单一事实来源与 API
+
+有效 Attempt 的唯一 SQL 来源是 `LearnerActivityStore`；`LearnerActivityStatsService` 是唯一口径
+实现（范围解析 + 一次只读派生），`LearnerProgressService` 组装进度视图，`LearnerStatisticsService`
+只作为旧接口兼容层。禁止在 Progress 与 Statistics 各自写一套聚合 SQL。
+
+**一个 `GET /learner/progress` 请求只允许读取一次全历史有效 Attempt。** `activity`、
+`recent`（兼容）与 `recentContacts` 必须由 `LearnerActivityStatsService.views()` 的同一次
+派生结果提供；Controller 不得再调用一次 `current()`，否则既重复全表扫描，也可能在同一响应内
+读到不同时间点的快照。
+
+```text
+GET /api/v1/learner/progress     统一总览（summary / bands / books / recent / recentContacts / activity）
+GET /api/v1/learner/statistics   兼容接口，summary 与 progress.activity 同源；days 只影响 daily 长度
+```
+
+`/learner/progress` 支持**可选** `days=7|30|90`（缺省 7），只允许改变 `activity.windowDays` 与
+`activity.daily`——进度页顶部「近 7 / 30 / 90 天」分段选择器用它驱动两张活动趋势图的真实窗口。
+非法值返回 400，不得静默返回其它天数。以下口径**不随该参数变化**：
+
+```text
+activity.metrics / activity.outcomes  → 固定口径；activeStudyDays7d 永远反映近 7 天
+recent（兼容）                        → 永远 graded-only 且按 answered_at 归属近 7 个上海业务日
+recentContacts                        → 最近接触列表，窗口固定
+```
+
+一个请求仍然只读一次全历史有效 Attempt：`activity`、`recent` 与 `recentContacts` 都由
+`LearnerActivityStatsService.views()` 的同一次派生结果提供，Controller 不得再单独调用一次统计。
+
+进度页 UI 契约（不得改动）：顶部沿用旧统计页的标题区（左侧「学习进度」+ 右侧 7/30/90 分段
+选择器），六项指标一行六列的旧版样式且**只显示数字与指标名称**（不加单位、说明、副标题），
+两张趋势图沿用旧版 `ActivityBarChart` 单系列组件与 `.statistics-activity-chart` / `.chart-*`
+原样式，只更换标题（「每日答题次数」「每日接触知识点」）、单位（次 / 个）与数据来源
+（`activity.daily[].effectiveAttempts` / `distinctKnowledgePoints`）。
+
+`recent` 是**保留的旧契约**，字段名、类型与近 7 个上海业务日语义都不得改动：
+
+```text
+gradedAttempts7d / distinctKnowledgePoints7d / activeStudyDays7d / daily
+    graded-only，日期取 answered_at（评分日），reveal-only 绝不填入
+knowledgePoints
+    Mastery Evidence 投影列表，按 lastEvidenceAt DESC + knowledgePointId 稳定排序、至多 10 条、
+    限当前学习范围；仅查看答案不出现在这里。不得只保留字段名而永远返回空数组。
+```
+
+`recentContacts` 与 `activity` 是 PR7 的完整口径（含 reveal-only），日期取首次有效行动。
+旧 `/learner/statistics` 的 `knowledgeDrillAttempts` / `wrongReviewAttempts` / `worldAttempts`
+是 **graded-only 出场分布**，不含 reveal-only；其 `gradedAttempts` / `activeStudyDays` /
+`distinctKnowledgePoints` / `correct` / `partial` / `wrong` / `revealedOnly` 与
+`progress.activity` 同源。
+
+时间范围：**进度页可切换近 7 / 30 / 90 天，只作用于两张活动趋势图**；全历史累计指标与
+`activeStudyDays7d`（固定近 7 天）不受影响。所有接口按登录 Learner 隔离，跨 Learner 不可读。
+进度页与统计兼容接口不得对同一指标给出不同数字。
+
+---
+
 ## 15. 分页规则
 
 正式分页列表统一：
@@ -1455,6 +1628,51 @@ Agent 最终报告必须写明实际跑了哪些最小测试、哪些 full tests
   受环境限制无法检查时必须注明，不以测试或构建通过代替视觉检查。
 
 具体 Agent 操作清单见 [`AGENTS.md`](../AGENTS.md) 的“前端视觉设计要求”。
+
+### 23.1 克制与留白
+
+**少即是多，留白是设计的一部分。** 能不写的字就不写，不为了填满页面堆叠副标题、说明、
+单位、标签、卡片和装饰内容。
+
+- 信息优先靠**层级、字号、间距、颜色、图标**表达，不用解释文字代替设计。
+- 不为了「显得丰富」增加无意义模块；卡片右侧、列表末尾的空白不是缺陷，禁止补
+  「推荐 / 学习建议 / 排行榜 / 今日提示 / 励志文案 / 额外统计」等填充物。
+- 同一信息只出现一次，不在多处重复（例如百分比不要既画在进度条里又在右侧再写一遍）。
+- **必要**的功能提示、错误反馈、空态引导与无障碍信息必须保留，不受本条约束。
+
+### 23.2 先确认视觉方案再编码
+
+以下任务属于「明显 UI 新设计或较大改版」，必须先出效果图、再编码：
+
+```text
+新页面视觉设计
+现有页面较大视觉改版
+布局重构
+品牌风格调整
+明显影响 UI 的组件体系变化
+```
+
+流程固定为：
+
+```text
+1. 读取现有页面与设计规范
+2. 检查可用 frontend-design / ui-ux-pro-max
+3. 先制作 mockup / 静态效果图 / 可视化预览
+4. 提交用户确认
+5. 确认后才正式编码
+```
+
+不得在用户只说「优化一下 UI」时直接大范围改版。小范围修复（4px 间距、明显错位、文案
+修正等）可以直接执行，不必机械要求效果图。
+
+### 23.3 保护已确认 UI
+
+- 已经由用户确认的页面：后续修改不得随意改变整体色调，不得擅自新增统计模块，
+  不得擅自增加文案。
+- **Skill 是辅助，不是视觉决策者**：用户已确认的效果图优先于任何 Skill 的配色、动效、
+  比例或布局建议；冲突时一律以用户确认的方案为准。
+- 布局调整默认不改变既有交互语义（例如点击某卡片原本只切换本页浏览，不得顺手改成
+  修改用户设置或调用保存接口）。
 
 ---
 

@@ -22,4 +22,11 @@ describe("hub navigation", () => {
     expect(isHubPath("/worlds/ancient-official")).toBe(false);
     expect(isHubPath("/manage")).toBe(false);
   });
+
+  // PR7：进度与统计合并，/statistics 只是 /progress 的兼容入口，仍在 Hub 内。
+  it("keeps the legacy statistics entry inside the hub for compatibility", () => {
+    expect(isHubPath("/statistics")).toBe(true);
+    expect(isHubPath("/progress")).toBe(true);
+    expect(isHubPath("/progress/books/math")).toBe(true);
+  });
 });

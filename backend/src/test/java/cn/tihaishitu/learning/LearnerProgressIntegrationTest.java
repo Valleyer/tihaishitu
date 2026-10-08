@@ -65,31 +65,60 @@ class LearnerProgressIntegrationTest {
     }
 
     @Test
-    void countsOnlyRecentGradedLearnerAttemptsAcrossHubAndWorld() {
-        String learner = learner(), firstPoint = knowledge("近期甲"), secondPoint = knowledge("近期乙");
-        BookFixture book = book("近期文集");
-        member(book.id(), book.root(), firstPoint, 0); member(book.id(), book.root(), secondPoint, 1);
+    void ordersRecentContactsByEffectiveContactAndKeepsMasteryEvidenceSeparate() {
+        String learner = learner();
+        String revealed = knowledge("仅查看答案"), olderGraded = knowledge("较早评分"), newerGraded = knowledge("最近评分");
+        BookFixture book = book("最近接触文集");
+        member(book.id(), book.root(), revealed, 0);
+        member(book.id(), book.root(), olderGraded, 1);
+        member(book.id(), book.root(), newerGraded, 2);
         select(learner, book.id());
         String question = question();
         String practice = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,status,revision) VALUES (?,?,'knowledge_drill',?,'active',1)",
-                practice, learner, firstPoint);
+                practice, learner, newerGraded);
 
-        attempt(learner, "ancient-official", null, question, firstPoint, "graded", NOW.minusSeconds(3600));
-        attempt(learner, null, practice, question, secondPoint, "graded", NOW.minusSeconds(86_400));
-        attempt(learner, "ancient-official", null, question, firstPoint, "active", null);
-        attempt(learner, "ancient-official", null, question, firstPoint, "revealed", null);
-        attempt(learner, "ancient-official", null, question, firstPoint, "graded", NOW.minusSeconds(8 * 86_400L));
-        legacyAttempt(question, firstPoint, NOW.minusSeconds(1800));
+        // 仅 reveal：产生「有效接触」，但没有 Mastery Evidence。
+        reveal(learner, question, revealed, NOW.minusSeconds(60));
+        // 真实评分：既有 Mastery Evidence，也有有效接触时间。
+        attempt(learner, null, practice, question, olderGraded, "graded",
+                NOW.minusSeconds(3 * 86_400L), "correct");
+        attempt(learner, "ancient-official", null, question, newerGraded, "graded",
+                NOW.minusSeconds(86_400L), "wrong");
+        saveMastery(learner, olderGraded, 40, 10, NOW.minusSeconds(3 * 86_400L));
+        saveMastery(learner, newerGraded, 40, 10, NOW.minusSeconds(86_400L));
 
         LearnerProgressService.ProgressView view = progress.progressAt(learner, NOW);
 
+        // 按「最近有效接触时间」倒序，仅查看答案的知识点同样出现，并且只暴露正式目录路径。
+        assertThat(view.recentContacts())
+                .extracting(LearnerProgressService.RecentContact::knowledgePointId)
+                .containsExactly(revealed, newerGraded, olderGraded);
+        assertThat(view.recentContacts()).allSatisfy(contact ->
+                assertThat(contact.bookName()).isEqualTo("最近接触文集"));
+
+        // 仅 reveal 的知识点：有效接触时间非空，但 Mastery 证据时间与证据数保持为空 / 0。
+        LearnerProgressService.RecentContact revealedOnly = view.recentContacts().get(0);
+        assertThat(revealedOnly.lastOutcomeRevealedOnly()).isTrue();
+        assertThat(revealedOnly.lastGraded()).isFalse();
+        assertThat(revealedOnly.evidenceCount()).isZero();
+        assertThat(revealedOnly.lastEvidenceAt()).isNull();
+        assertThat(revealedOnly.lastEffectiveContactAt()).isEqualTo(NOW.minusSeconds(60));
+        assertThat(revealedOnly.band()).isEqualTo("unstarted");
+
+        // 真实评分的知识点：两个时间概念都存在且互不替代。
+        LearnerProgressService.RecentContact graded = view.recentContacts().get(1);
+        assertThat(graded.lastOutcomeRevealedOnly()).isFalse();
+        assertThat(graded.lastGraded()).isTrue();
+        // evidenceCount 由 Mastery 事实派生，真实评分后必须是有证据的；具体条数不属于本测试关注点。
+        assertThat(graded.evidenceCount()).isPositive();
+        assertThat(graded.lastEffectiveContactAt()).isEqualTo(NOW.minusSeconds(86_400L));
+        assertThat(graded.lastEvidenceAt()).isNotNull();
+
+        // 兼容的 graded-only recent：统计 7 天内的两个真实评分知识点，不包含仅 reveal 的那个。
         assertThat(view.recent().gradedAttempts7d()).isEqualTo(2);
         assertThat(view.recent().distinctKnowledgePoints7d()).isEqualTo(2);
-        assertThat(view.recent().activeStudyDays7d()).isEqualTo(2);
         assertThat(view.recent().daily()).hasSize(7);
-        assertThat(view.recent().daily()).extracting(LearnerProgressService.DailyProgress::gradedAttempts)
-                .containsExactly(0, 0, 0, 0, 0, 1, 1);
     }
 
     @Test
@@ -200,15 +229,16 @@ class LearnerProgressIntegrationTest {
         return attemptId;
     }
 
-    private void legacyAttempt(String question, String point, Instant answeredAt) {
-        String game = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO game_save(id,player_name,player_title,payload_json,revision) VALUES (?,'旧玩家','旧存档','{}',1)", game);
+    /** 自评题先查看参考解析：status=revealed，不写 assessment，也不产生 Mastery / Evidence。 */
+    private String reveal(String learner, String question, String point, Instant revealedAt) {
+        String attemptId = UUID.randomUUID().toString();
         jdbc.update("""
-                INSERT INTO study_attempt(id,game_id,learner_id,question_id,question_snapshot_json,
-                    standard_answer_json,status,grading_mode,grading_source,assessment,
-                    target_knowledge_point_id,evidence_mode,question_difficulty,answered_at)
-                VALUES (?,?,NULL,?,'{}','true','graded','auto','automatic','wrong',?,'normal',2,?)
-                """, UUID.randomUUID().toString(), game, question, point, Timestamp.from(answeredAt));
+                INSERT INTO study_attempt(id,game_id,learner_id,world_id,practice_session_id,question_id,
+                    question_snapshot_json,standard_answer_json,status,grading_mode,assessment,
+                    answer_revealed_at,target_knowledge_point_id,evidence_mode,question_difficulty)
+                VALUES (?,NULL,?,NULL,?,?,'{}','true','revealed','self_assessment',NULL,?,?,'normal',2)
+                """, attemptId, learner, null, question, Timestamp.from(revealedAt), point);
+        return attemptId;
     }
 
     private void saveMastery(String learner, String point, double mastery, double stability, Instant at) {
