@@ -334,4 +334,5 @@ Navicat 完整 SQL 导出成功（结构+数据，0 错误）；**当次因赶�
 
 - `docs/production-release-runbook.md`：**已经上线后的常规升级 / 迁移 / 回滚（优先读）**；
 - `docs/deployment.md`：首次部署及通用配置示例；
+- `docs/automated-release.md` 与 `scripts/deploy/`：Windows `D:\Deploy` → Linux `/usr/local/deploy` 的三步发布脚本及长期维护规则；异常或高风险迁移需回到本手册人工处理；
 - `scripts/predeploy-db-audit.sql`、`scripts/verify-prod-db.sql`：原本为**V18 初次导入**写的只读脚本，内部仍有固定 `V18` 判断。**不要把它们当前的 `OK_V18` 断言用于 V22 或未来版本验收**；需要使用时先更新脚本并以实际 migration 为准。
