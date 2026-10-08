@@ -2,7 +2,6 @@
 import { expect, it } from "vitest";
 import { createLocalApi, STORAGE_KEY } from "./store";
 import type { Game, GameApi, NewGame } from "../../domain/types";
-import { effectiveAttribute } from "../../engine/AdventureEngine";
 const config: NewGame = {
   name: "游历测试",
   gender: "女",
@@ -60,7 +59,7 @@ async function answerEvent(api: GameApi, game: Game) {
     ? api.choose(game.id, game.event.id, game.event.options[0].id)
     : game;
 }
-it("默认探索，读书完成后结算属性银两；结束重试不重复领取", async () => {
+it("潜心读书整轮只结算学识，单题不再改变核心资源", async () => {
   const { api } = setup();
   let game = await api.createGame(config);
   expect(game.attempt).toBeNull();
@@ -70,7 +69,9 @@ it("默认探索，读书完成后结算属性银两；结束重试不重复领�
   game = await play(api, game, 5);
   expect(game.adventure!.run!.score).toBe(100);
   // repeatable 满分仍只发原最低通过档，不再叠加第二档奖励。
-  expect(game.adventure!.attributes.insight).toBe(2);
+  expect(game.player.knowledge).toBe(5);
+  expect(game.player.reputation).toBe(0);
+  expect(game.adventure!.attributes).toEqual({});
   const coins = game.player.coins,
     runId = game.adventure!.run!.id;
   const duplicate = await api.answer(game.id, {
@@ -82,6 +83,17 @@ it("默认探索，读书完成后结算属性银两；结束重试不重复领�
   game = await api.finishActivity(game.id, runId);
   expect(game.player.coins).toBe(coins);
   expect(game.attempt).toBeNull();
+});
+it("抄书谋生整轮只结算银两", async () => {
+  const { api } = setup();
+  let game = await api.createGame(config);
+  const before = { ...game.player };
+  game = await api.beginActivity(game.id, "copy-work");
+  game = await play(api, game, 5);
+  expect(game.player.coins).toBe(before.coins + 4);
+  expect(game.player.knowledge).toBe(before.knowledge);
+  expect(game.player.reputation).toBe(before.reputation);
+  expect(game.adventure!.attributes).toEqual({});
 });
 it("活动结束后触发城中际遇，选择会开启对应人物支线", async () => {
   const { api } = setup();
@@ -108,21 +120,58 @@ it("共读按整轮评分加好感；副本完成后奖励一次并永久结案"
   expect(game.npcs.find((n) => n.id === "lu")!.favorability).toBe(4);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
-  await expect(api.travel(game.id, "library")).rejects.toThrow("悟性");
+  await expect(api.travel(game.id, "library")).rejects.toThrow("学识");
+  const beforeTask = { ...game.player };
   game = await api.beginActivity(game.id, "trial-ink");
   game = await play(api, game, 5);
   game = await api.finishActivity(game.id, game.adventure!.run!.id);
   game = await answerEvent(api, game);
   expect(game.adventure!.inventory.inkstone).toBe(1);
   expect(game.adventure!.clears["trial-ink"]).toBe(1);
+  expect(game.player.knowledge).toBe(beforeTask.knowledge);
+  expect(game.player.coins).toBe(beforeTask.coins);
+  expect(game.player.reputation).toBe(beforeTask.reputation + 2);
   await expect(api.beginActivity(game.id, "trial-ink")).rejects.toThrow(
     "这项任务已经完成",
   );
-  game = await api.useItem(game.id, "inkstone");
-  expect(effectiveAttribute(game, "insight")).toBe(6);
+  await expect(api.useItem(game.id, "inkstone")).rejects.toThrow("纪念信物");
+});
+it("旧 attributes/equipped 存档可读，非装备引用被清理且不绕过学识门槛", async () => {
+  const { api, storage } = setup();
+  let game = await api.createGame(config);
+  const db = JSON.parse(storage.getItem(STORAGE_KEY)!);
+  db.saves[game.id].adventure.attributes = { insight: 99, eloquence: 99, craft: 99 };
+  db.saves[game.id].adventure.inventory.inkstone = 1;
+  db.saves[game.id].adventure.equipped = { desk: "inkstone" };
+  storage.setItem(STORAGE_KEY, JSON.stringify(db));
+  game = await api.getGame(game.id);
+  expect(game.adventure!.attributes.insight).toBe(99);
+  expect(game.adventure!.equipped).toEqual({});
+  await expect(api.travel(game.id, "library")).rejects.toThrow("学识");
+  const updated = JSON.parse(storage.getItem(STORAGE_KEY)!);
+  updated.saves[game.id].player.knowledge = 15;
+  storage.setItem(STORAGE_KEY, JSON.stringify(updated));
   expect((await api.travel(game.id, "library")).adventure!.locationId).toBe(
     "library",
   );
+});
+it("旧存档中的 active run 保留开始时冻结的奖励承诺", async () => {
+  const { api, storage } = setup();
+  let game = await api.createGame(config);
+  game = await api.beginActivity(game.id, "trial-ink");
+  const db = JSON.parse(storage.getItem(STORAGE_KEY)!);
+  db.saves[game.id].adventure.run.definition.completionReward = {
+    reputation: 7,
+    attributes: { insight: 2 },
+  };
+  db.saves[game.id].adventure.run.definition.successDialogue = "旧旅程的承诺";
+  storage.setItem(STORAGE_KEY, JSON.stringify(db));
+  game = await api.getGame(game.id);
+  expect(game.adventure!.run!.definition.completionReward).toEqual({
+    reputation: 7,
+    attributes: { insight: 2 },
+  });
+  expect(game.adventure!.run!.definition.successDialogue).toBe("旧旅程的承诺");
 });
 it("旧人生保留历史与关系并回到世界；探索进度随备份保留", async () => {
   const { api, storage } = setup();
@@ -150,11 +199,6 @@ it("县试未完成可重试，取中后任务永久结案", async () => {
   const db = JSON.parse(storage.getItem(STORAGE_KEY)!);
   db.saves[game.id].player.knowledge = 35;
   db.saves[game.id].player.reputation = 3;
-  db.saves[game.id].adventure.attributes = {
-    insight: 6,
-    eloquence: 4,
-    craft: 4,
-  };
   storage.setItem(STORAGE_KEY, JSON.stringify(db));
   game = await api.getGame(game.id);
   game = await api.travel(game.id, "exam-street");

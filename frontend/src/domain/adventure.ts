@@ -49,7 +49,7 @@ export interface RewardTier {
 }
 export interface Activity {
   id: string;
-  kind: "study" | "companion" | "dungeon" | "story" | "exam";
+  kind: "study" | "work" | "exam-prep" | "companion" | "dungeon" | "story" | "exam";
   /** 主支线标签只影响世界中的任务提示；科举规则仍由 exam 类型决定。 */
   quest?: "main" | "side";
   name: string;
@@ -90,6 +90,8 @@ export interface Exam {
   activityId: string;
   preparationActivityId: string;
   fee: number;
+  /** 科举取中后在 HUD 展示的功名，按配置顺序取最高已通过阶段。 */
+  meritTitle: string;
   requirements: Requirements;
   dialogues: {
     unregistered: string;
@@ -134,6 +136,7 @@ export interface Adventure {
   version: 6;
   locationId: string;
   visited: string[];
+  /** Legacy save compatibility only; canonical gameplay must not read this as progression. */
   attributes: Record<string, number>;
   inventory: Record<string, number>;
   equipped: Record<string, string>;
@@ -154,6 +157,7 @@ export interface Item {
   rarity: string;
   symbol: string;
   slot?: string;
+  /** Legacy frozen item compatibility only; canonical items do not define bonuses/use. */
   bonuses?: Record<string, number>;
   use?: Rewards;
   price?: number;

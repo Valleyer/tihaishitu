@@ -13,29 +13,33 @@
     "mainPassScore": 100
   },
   "favorabilityLevels": [
-    { "min": 0, "max": 9, "name": "初识" },
-    { "min": 10, "max": 29, "name": "熟识" },
-    { "min": 30, "max": 49, "name": "亲近" },
-    { "min": 50, "max": 79, "name": "知己" },
-    { "min": 80, "max": 100, "name": "莫逆" }
-  ],
-  "attributes": [
     {
-      "id": "insight",
-      "name": "悟性",
-      "description": "读书明理，开启古籍与书院试炼"
+      "min": 0,
+      "max": 9,
+      "name": "初识"
     },
     {
-      "id": "eloquence",
-      "name": "辞采",
-      "description": "与人辩论，赢得雅集与故人青睐"
+      "min": 10,
+      "max": 29,
+      "name": "熟识"
     },
     {
-      "id": "craft",
-      "name": "筹算",
-      "description": "查验账册，解锁县衙与商路旧案"
+      "min": 30,
+      "max": 49,
+      "name": "亲近"
+    },
+    {
+      "min": 50,
+      "max": 79,
+      "name": "知己"
+    },
+    {
+      "min": 80,
+      "max": 100,
+      "name": "莫逆"
     }
   ],
+  "attributes": [],
   "hub": {
     "eyebrow": "景和年间 · 青溪一隅",
     "title": "今日，想往何处？",
@@ -46,6 +50,8 @@
     "companion": "故人邀约",
     "dungeon": "秘境试炼",
     "story": "支线任务",
-    "exam": "科举正试"
+    "exam": "科举正试",
+    "work": "抄书谋生",
+    "exam-prep": "科举温卷"
   }
 }

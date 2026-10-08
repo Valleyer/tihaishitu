@@ -1,42 +1,17 @@
 /**
- * 每次正式判题只结算一次成长。答错仍可积累基础学识，不直接终止人生。
- * 晋章同时要求累计课业、学识、全体人物好感度总和达标，不能仅靠题数跳级。
- * 此版止于县试备考；称号来自章节配置，尚未实现正式科举与升官。
+ * Legacy local 路径只保留章节转换。单题不再增加学识或声望；
+ * 四项核心成长一律由整轮 Activity / Exam 结算。
  */
 import type { Change, Game } from "../domain/types";
 import { chapters } from "./StoryEngine";
-import { gameDesign } from "../content";
 export function settleProgress(
   game: Game,
-  correct: boolean,
-  difficulty: number,
-  frequency: number,
+  _correct: boolean,
+  _difficulty: number,
+  _frequency: number,
 ): Change[] {
   // 普通读书不自动结识场景人物，关系只由实际拜访与共读推进。
-  const changes: Change[] = [];
-  const increase = (label: string, before: number, after: number) => {
-    if (before !== after) changes.push({ label, before, after });
-  };
-  const oldKnowledge = game.player.knowledge;
-  const growth = gameDesign.growth;
-  const gain = correct
-    ? Math.min(
-        growth.maxGain,
-        growth.correctBase +
-          Math.ceil(difficulty / growth.difficultyDivisor) +
-          (frequency >= growth.highFrequencyThreshold
-            ? growth.highFrequencyBonus
-            : 0),
-      )
-    : growth.wrongGain;
-  game.player.knowledge += gain;
-  increase("学识", oldKnowledge, game.player.knowledge);
   const total = game.records.length;
-  if (total % growth.reputationEvery === 0 && correct) {
-    const before = game.player.reputation;
-    game.player.reputation++;
-    increase("声望", before, game.player.reputation);
-  }
   const next = chapters[game.chapter + 1];
   const favorability = game.npcs.reduce((sum, n) => sum + n.favorability, 0);
   if (
@@ -55,5 +30,5 @@ export function settleProgress(
       text: "你的课业积累与周围人的认可，使你走到了新的路口。" + next.goal,
     });
   }
-  return changes;
+  return [];
 }

@@ -2,38 +2,26 @@
   {
     "id": "inkstone",
     "name": "青溪砚",
-    "description": "旧书塾试炼的专属墨砚。先生说：磨墨如磨心。装备后悟性 +3。",
-    "kind": "equipment",
+    "description": "旧书塾试炼的专属墨砚。先生说：磨墨如磨心。",
+    "kind": "keepsake",
     "rarity": "精良",
-    "symbol": "砚",
-    "slot": "desk",
-    "bonuses": {
-      "insight": 3
-    }
+    "symbol": "砚"
   },
   {
     "id": "ledger",
     "name": "清账算盘",
-    "description": "漕仓旧账中寻得的算盘，装备后筹算 +4。",
-    "kind": "equipment",
+    "description": "漕仓旧账中寻得的算盘，珠痕仍留着当年的账路。",
+    "kind": "keepsake",
     "rarity": "精良",
-    "symbol": "筹",
-    "slot": "hand",
-    "bonuses": {
-      "craft": 4
-    }
+    "symbol": "筹"
   },
   {
     "id": "jade-flute",
     "name": "听雨玉笛",
-    "description": "听雨阁雅集的专属信物，装备后辞采 +4。",
-    "kind": "equipment",
+    "description": "听雨阁雅集的专属信物，笛身留着一行旧题。",
+    "kind": "keepsake",
     "rarity": "珍品",
-    "symbol": "笛",
-    "slot": "hand",
-    "bonuses": {
-      "eloquence": 4
-    }
+    "symbol": "笛"
   },
   {
     "id": "academy-seal",
@@ -46,26 +34,18 @@
   {
     "id": "lu-notes",
     "name": "陆先生手札",
-    "description": "信任与共读换来的批注，装备后悟性 +5。",
-    "kind": "equipment",
+    "description": "陆先生多年批注汇成的手札，记着旧书塾的问学次第。",
+    "kind": "keepsake",
     "rarity": "珍品",
-    "symbol": "札",
-    "slot": "desk",
-    "bonuses": {
-      "insight": 5
-    }
+    "symbol": "札"
   },
   {
     "id": "gu-knot",
     "name": "同窗结",
-    "description": "顾怀安亲手系的结，装备后辞采 +3。",
-    "kind": "equipment",
+    "description": "顾怀安亲手系的同窗结，是一同读书的纪念。",
+    "kind": "keepsake",
     "rarity": "精良",
-    "symbol": "结",
-    "slot": "charm",
-    "bonuses": {
-      "eloquence": 3
-    }
+    "symbol": "结"
   },
   {
     "id": "shen-pass",
@@ -78,57 +58,34 @@
   {
     "id": "lin-bookmark",
     "name": "兰叶书签",
-    "description": "林知微赠予知音的书签，装备后悟性 +2、辞采 +2。",
-    "kind": "equipment",
+    "description": "林知微所赠的兰叶书签，叶脉间留有淡墨题字。",
+    "kind": "keepsake",
     "rarity": "珍品",
-    "symbol": "兰",
-    "slot": "charm",
-    "bonuses": {
-      "insight": 2,
-      "eloquence": 2
-    }
+    "symbol": "兰"
   },
   {
     "id": "tea",
     "name": "静心茶",
-    "description": "饮用后悟性永久 +1。读书所得银两可在行囊中添置。",
-    "kind": "consumable",
+    "description": "旧纸墨铺留下的静心茶，如今只作故物收藏。",
+    "kind": "keepsake",
     "rarity": "寻常",
-    "symbol": "茶",
-    "price": 12,
-    "use": {
-      "attributes": {
-        "insight": 1
-      }
-    }
+    "symbol": "茶"
   },
   {
     "id": "paper",
     "name": "澄心纸",
-    "description": "练笔后辞采永久 +1。",
-    "kind": "consumable",
+    "description": "旧纸墨铺留下的澄心纸，如今只作故物收藏。",
+    "kind": "keepsake",
     "rarity": "寻常",
-    "symbol": "纸",
-    "price": 12,
-    "use": {
-      "attributes": {
-        "eloquence": 1
-      }
-    }
+    "symbol": "纸"
   },
   {
     "id": "abacus-bead",
     "name": "算筹",
-    "description": "演算后筹算永久 +1。",
-    "kind": "consumable",
+    "description": "旧纸墨铺留下的算筹，如今只作故物收藏。",
+    "kind": "keepsake",
     "rarity": "寻常",
-    "symbol": "算",
-    "price": 12,
-    "use": {
-      "attributes": {
-        "craft": 1
-      }
-    }
+    "symbol": "算"
   },
   {
     "id": "county-token",
@@ -149,15 +106,10 @@
   {
     "id": "river-chart",
     "name": "青溪河防图",
-    "description": "通行帖打开内库，五关读通旧卷后方可得见。装备后筹算 +6、悟性 +2。",
-    "kind": "equipment",
+    "description": "通行帖打开内库后寻得的青溪河防图，卷边尚有历年水痕。",
+    "kind": "keepsake",
     "rarity": "传世",
-    "symbol": "图",
-    "slot": "desk",
-    "bonuses": {
-      "craft": 6,
-      "insight": 2
-    }
+    "symbol": "图"
   },
   {
     "id": "county-pass-note",
@@ -170,14 +122,10 @@
   {
     "id": "red-list-flower",
     "name": "红榜簪花",
-    "description": "县试名列前茅时所得的簪花，装备后辞采 +3、声名自在人心。",
-    "kind": "equipment",
+    "description": "县试名列前茅时所得的簪花，是红榜日的纪念。",
+    "kind": "keepsake",
     "rarity": "珍品",
-    "symbol": "花",
-    "slot": "charm",
-    "bonuses": {
-      "eloquence": 3
-    }
+    "symbol": "花"
   },
   {
     "id": "prefecture-document",

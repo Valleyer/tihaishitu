@@ -69,8 +69,12 @@ export function hydrateAdventure(game: Game) {
   for (const character of characterDesign)
     if (!game.npcs.some((n) => n.id === character.id))
       game.npcs.push(structuredClone(character));
-  for (const attribute of adventureDesign.attributes)
-    game.adventure.attributes[attribute.id] ??= 0;
+  // 旧存档可保留 equipped 引用，但 canonical 已转为非装备的物品必须安全清理。
+  for (const [slot, itemId] of Object.entries(game.adventure.equipped || {})) {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item || item.kind !== "equipment" || item.slot !== slot)
+      delete game.adventure.equipped[slot];
+  }
   for (const [id, count] of Object.entries(game.adventure.clears))
     if (count > 0 && activities.find((activity) => activity.id === id)?.activityMode === "task")
       game.adventure.clears[id] = 1;
@@ -80,18 +84,26 @@ export function hydrateAdventure(game: Game) {
     run.entryCost ??= 0;
     run.costCommitted ??= false;
     run.costRefunded ??= false;
-    if (canonical)
-      run.definition = {
-        ...run.definition,
-        activityMode: canonical.activityMode,
-        completionReward: canonical.completionReward,
-        successDialogue: canonical.successDialogue,
-        failureDialogue: canonical.failureDialogue,
-      };
+    if (canonical) {
+      // An active run is a frozen promise. Only backfill fields absent from an
+      // older snapshot; never replace its requirements, rewards or dialogue.
+      for (const key of [
+        "activityMode",
+        "completionReward",
+        "successDialogue",
+        "failureDialogue",
+      ] as const)
+        if (!(key in run.definition) && canonical[key] !== undefined)
+          Object.assign(run.definition, { [key]: structuredClone(canonical[key]) });
+    }
   }
 }
-export const attributeName = (id: string) =>
-  adventureDesign.attributes.find((a) => a.id === id)?.name || id;
+const legacyAttributeNames: Record<string, string> = {
+  insight: "悟性",
+  eloquence: "辞采",
+  craft: "筹算",
+};
+export const attributeName = (id: string) => legacyAttributeNames[id] || id;
 export const itemName = (id: string) =>
   items.find((item) => item.id === id)?.name || id;
 export function effectiveAttribute(game: Game, id: string) {

@@ -8,7 +8,6 @@ import {
   WorldGoals,
   ExamPanel,
 } from "./components/Exploration";
-import { effectiveAttribute } from "./engine/AdventureEngine";
 /**
  * 页面总入口：协调首页、入章对话、答题主界面与案头弹窗。
  * 所有存档变更经 GameApi 执行；界面只接收已保存的结果，避免显示与存档不同步。
@@ -31,6 +30,7 @@ import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
 import { RichText } from "./components/RichText";
 import { isLearningMastered } from "./engine/SpacedRepetitionEngine";
+import { meritLabel } from "./platform/worldPresentation";
 import "./App.css";
 import "./screen-fit.css";
 import "./adventure.css";
@@ -390,21 +390,9 @@ function App() {
                   </div>
                   <div>
                     <dt>功名</dt>
-                    <dd className="subdued">
-                      {game.adventure!.exams["county-exam"]?.status === "passed"
-                        ? "县试取中"
-                        : "尚未取中"}
-                    </dd>
+                    <dd className="subdued">{meritLabel(game)}</dd>
                   </div>
                 </dl>
-                <div className="player-talents">
-                  {adventureDesign.attributes.map((a) => (
-                    <span key={a.id}>
-                      {a.name}
-                      <b>{effectiveAttribute(game, a.id)}</b>
-                    </span>
-                  ))}
-                </div>
                 <div className="mini-road">
                   {gameDesign.road.map((label, index) => (
                     <span key={label} className={index === 0 ? "current" : ""}>

@@ -64,13 +64,6 @@
     ]
   },
   "growth": {
-    "correctBase": 1,
-    "difficultyDivisor": 2,
-    "highFrequencyThreshold": 4,
-    "highFrequencyBonus": 1,
-    "maxGain": 8,
-    "wrongGain": 1,
-    "reputationEvery": 12,
     "relationshipMax": 100
   },
   "review": {

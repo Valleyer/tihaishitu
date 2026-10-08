@@ -32,7 +32,7 @@ export function WorldMap({
   return (
     <>
       <p className="hint">
-        山河可行，故人可访。点击地点查看风物；带着本领和信物，远处的门会逐一打开。
+        山河可行，故人可访。随着学识、声望与行旅推进，远处的门会逐一打开。
       </p>
       <nav className="map-region-tabs" aria-label="大地图选择">
         {mapDesign.regions.map((item) => {
@@ -106,7 +106,7 @@ export function WorldMap({
           {issues.length > 0 ? (
             <>
               <p>尚需：{issues.join("；")}</p>
-              <button onClick={study}>读书提升本领 →</button>
+              <button onClick={study}>读书提升学识 →</button>
             </>
           ) : (
             <button
