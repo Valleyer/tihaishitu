@@ -104,14 +104,16 @@ class LearnerChapterAvailabilityIntegrationTest {
         assertThat(practice.availableChapterKnowledgePointCount(learner, fixture.book, fixture.chapter)).isEqualTo(2);
         assertBatchMatchesSingleChapter(learner, fixture);
 
-        // 进度最近学习路径必须来自正式目录 Book → Chapter，不得回落 legacy subject/section/chapter_name。
+        // 最近接触路径必须来自正式目录 Book → Chapter，不得回落 legacy subject/section/chapter_name。
+        // PR7 起展示列表是 recentContacts（来源为有效 Attempt），旧 recent.knowledgePoints 只保留字段。
         mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].bookName").value("章节可用性文集"))
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapterName").value(fixture.chapterName))
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].subject").doesNotExist())
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].section").doesNotExist())
-                .andExpect(jsonPath("$.recent.knowledgePoints[0].chapter").doesNotExist());
+                .andExpect(jsonPath("$.recent.knowledgePoints").isArray())
+                .andExpect(jsonPath("$.recentContacts[0].bookName").value("章节可用性文集"))
+                .andExpect(jsonPath("$.recentContacts[0].chapterName").value(fixture.chapterName))
+                .andExpect(jsonPath("$.recentContacts[0].subject").doesNotExist())
+                .andExpect(jsonPath("$.recentContacts[0].section").doesNotExist())
+                .andExpect(jsonPath("$.recentContacts[0].chapter").doesNotExist());
     }
 
     @Test

@@ -25,18 +25,26 @@ public class LearnerProgressController {
     public ProgressOverview get() {
         LearnerProgressService.ProgressView view = progress.current();
         return new ProgressOverview(view.generatedAt(), view.summary(), view.bands(), view.books(),
-                view.recent(), activity.current());
+                view.recent(), view.recentContacts(), activity.current());
     }
 
     /**
      * `/learner/progress` 的统一响应。
      *
-     * <p>保留原有 {@code summary / bands / books / recent} 字段的语义兼容，新增
-     * {@code activity}：进度与统计共用同一份有效答题口径，前端不再调用第二套统计接口。
-     * {@code recent} 只保留最近接触的知识点列表；近 7 日与今日事实见 {@code activity}。</p>
+     * <p>字段兼容（PR7 合并前复核修复）：</p>
+     * <ul>
+     *   <li>{@code summary / bands / books} 语义不变；</li>
+     *   <li>{@code recent} 保留旧契约的全部字段（{@code gradedAttempts7d}、
+     *       {@code distinctKnowledgePoints7d}、{@code activeStudyDays7d}、{@code daily}、
+     *       {@code knowledgePoints}），保持 graded-only 语义，近 7 个上海业务日；</li>
+     *   <li>{@code recentContacts} 是新增的「最近接触」列表，来源是有效 Attempt（含仅查看
+     *       答案），按 {@code lastEffectiveContactAt} 倒序，与 {@code lastEvidenceAt} 区分；</li>
+     *   <li>{@code activity} 是完整的统一有效答题口径，含 reveal-only。</li>
+     * </ul>
      */
     public record ProgressOverview(Instant generatedAt, LearnerProgressService.Summary summary,
                                    Map<String, Integer> bands, List<LearnerProgressService.BookProgress> books,
-                                   LearnerProgressService.RecentProgress recent,
+                                   LearnerActivityStatsService.RecentProgress recent,
+                                   List<LearnerProgressService.RecentContact> recentContacts,
                                    LearnerActivityStatsService.ActivityView activity) {}
 }

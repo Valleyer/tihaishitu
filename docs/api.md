@@ -25,8 +25,11 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 
 ### MVP 学习与管理扩展
 
-- `GET /learner/progress`：**进度与统计的唯一首选读接口**（PR7 进度统计 V3）。保留原有 `summary` / `bands` / `books` / `recent` 字段语义，并新增 `activity`：`windowDays`、`generatedAt`、`metrics`（`activeStudyDays7d` / `todayEffectiveAttempts` / `totalKnowledgePoints` / `touchedKnowledgePoints` / `totalEffectiveAttempts` / `totalCorrectAttempts`）、`outcomes`（`correct` / `partial` / `wrong` / `revealedOnly`，四类之和等于 `totalEffectiveAttempts`）、`daily`（近 7 个上海业务日，从早到晚，零值日期保留）。`recent` 现在只含 `knowledgePoints` 最近接触列表；近 7 日与今日事实改由 `activity` 提供。统一口径见 `PROJECT_RULES.md` §14.1。
-- `GET /learner/statistics?days=7|30|90`：**旧接口兼容层**。`summary` 与 `/learner/progress.activity` 同源，数值必然一致（含新增的 `revealedOnly`）；`days` 只影响 `daily` 曲线长度，不再影响 summary 语义。仍保留旧的 `knowledgeDrillAttempts` / `wrongReviewAttempts`（同时统计 `wrong_review` 与 `wrong_drill`）/ `worldAttempts` 出场分布字段。进度页不再调用本接口，也不展示 7/30/90 切换控件。
+- `GET /learner/progress`：**进度与统计的唯一首选读接口**（PR7 进度统计 V3）。保留原有 `summary` / `bands` / `books` / `recent` 字段语义，并新增 `recentContacts` 与 `activity`。
+  - `recent` 是**保留的旧契约，语义为 graded-only**：`gradedAttempts7d` / `distinctKnowledgePoints7d` / `activeStudyDays7d` / `daily`（近 7 个上海业务日，字段名与类型不变）/ `knowledgePoints`（保留字段，恒为空数组）。这些字段只统计真实 `graded + correct/partial/wrong`，**不含**仅查看答案。
+  - `recentContacts` 是最近接触知识点，来源是有效 Attempt（含仅查看答案），按 `lastEffectiveContactAt`（reveal 或 graded 的首次有效行动）倒序，最多 10 条；`evidenceCount = 0` 表示只有「仅查看答案」，此时 `lastEvidenceAt` 为 null 且不得展示掌握度。`lastEffectiveContactAt` 与 `lastEvidenceAt` 是两个不同概念。
+  - `activity`：`windowDays`、`generatedAt`、`metrics`（`activeStudyDays7d` / `todayEffectiveAttempts` / `totalKnowledgePoints` / `touchedKnowledgePoints` / `totalEffectiveAttempts` / `totalCorrectAttempts`）、`outcomes`（`correct` / `partial` / `wrong` / `revealedOnly`，四类之和等于 `totalEffectiveAttempts`）、`daily`（近 7 个上海业务日，从早到晚，零值日期保留）。这是完整的有效答题口径，含 reveal-only。统一口径见 `PROJECT_RULES.md` §14.1。
+- `GET /learner/statistics?days=7|30|90`：**旧接口兼容层**。`summary` 的 `gradedAttempts` / `activeStudyDays` / `distinctKnowledgePoints` / `correct` / `partial` / `wrong` / `revealedOnly` 与 `/learner/progress.activity` 同源（含 reveal-only）；`days` 只影响 `daily` 曲线长度，不再影响 summary 语义。`knowledgeDrillAttempts` / `wrongReviewAttempts`（同时统计 `wrong_review` 与 `wrong_drill`）/ `worldAttempts` 是**graded-only 出场分布**，不含 reveal-only。进度页不再调用本接口，也不展示 7/30/90 切换控件。
 - `GET /learning/knowledge-points`：按 `query`、`bookId`、`chapterId`、`subject` 浏览 active KnowledgePoint 及 published Question 数量（知识目录，技术 route 与 `/books` 一致，仍是“知识”而不是“题库”）。
 - `GET /learning/questions`：**全平台题库**。分页浏览所有 published Formal Parent Question，与 Learner 当前 selected Books 解耦。参数：`query`、`sourceId`、`examYear`、`questionType`、`difficulty`、`bookId`、`chapterId`、`knowledge`、`page`、`size`（前端正式页面固定 `size=20`，后端上限 100）。只返回 `status='published'` + `parent_question_id IS NULL` + 四个正式题型；`totalElements` 是 `COUNT(DISTINCT q.id)`，多 KP / 多 Book 关联不会让卡片或总数重复。分页 ID 查询只做 `question_resource LEFT JOIN question_source`（一对一），Book / Chapter / Knowledge 都通过 EXISTS 参与，因此使用 `SELECT q.id ... ORDER BY ... LIMIT/OFFSET` 且不用 `DISTINCT`——`DISTINCT` 与“ORDER BY 引用未出现在 SELECT list 的表达式”组合在真实 MySQL 5.7 严格 sql_mode 下有报错风险。`knowledge` 匹配 KnowledgePoint 的 `id` / `code` / `name`。默认排序是“来源 → `exam_year` → `question_number` 自然排序 → `question_id`”，在 DB 级用 MySQL 5.7 安全表达式形成，分页稳定；只有题号确实带“与 `exam_year` 相同的年份前缀”时才剥离该前缀，因此 `2020 + "7"` 与 `2020 + "2020-7"` 得到同一个自然题号 7，而 `A-3` / `21A` / `3(1)` 与年份不一致的前缀题号都归入最后一档，不会被猜成数字。浏览不创建 Attempt、不计 Exposure、不影响 Mastery / Wrong Book / RANDOM 每日额度。
 - `GET /learning/questions/facets`：题库过滤 UI 的只读事实。`sources` 只列实际有 published 正式题的来源，`examYears` 只列实际存在的年份并降序，`books` 是全平台 enabled Books（不受 selected Books 限制）且章节按 `sort_order`。题型与难度由前端固定，不为此增加数据库查询，也不新建表。
@@ -53,7 +56,7 @@ Learner Session 使用 HttpOnly、SameSite=Lax Cookie，因此正式前端始终
 | GET | /learner/knowledge-states/{knowledgePointId} | 无 | 当前 Learner 的 Knowledge State；无证据时返回未开始虚拟状态且不写库 |
 | GET | /learner/knowledge-states?bookId={bookId} | 无 | enabled Book 全部 active KnowledgePoint 的批量状态 |
 | GET | /learner/review-queue | 无 | 当前 Selected Books 范围内动态派生的 7 天复习安排；只读且不写库 |
-| GET | /learner/progress | 无 | 当前 Selected Books 范围内动态派生的掌握分布、文集/章节聚合、最近接触知识点，以及统一的 `activity` 指标 / 结果分布 / 近 7 日曲线 |
+| GET | /learner/progress | 无 | 当前 Selected Books 范围内动态派生的掌握分布、文集/章节聚合、保留的 graded-only `recent`、最近接触 `recentContacts`，以及统一的 `activity` 指标 / 结果分布 / 近 7 日曲线 |
 | GET | /bootstrap | 无 | learner、canManage、studyProfile、worlds、bankManifest、questionCatalog |
 | GET | /learning/books | 无 | 可见文集 |
 | GET | /learning/books/{id} | 无 | Chapter Tree 与 active KnowledgePoints |
@@ -259,7 +262,9 @@ Learning Hub 首页展示“今日巩固”摘要，`/reviews` 展示三个时�
 
 文集响应包含按单层正式章节组织的聚合；每个章节只统计自己的直接 KnowledgePoint membership，并按 KnowledgePoint ID 去重。Review 数量直接复用 Review Queue 的 `due / soon / upcoming` 派生结果，错题数量直接读取永久错题本 `learner_wrong_question` 中该 Learner 的 `active` 记录数（不受该题后来是否答对影响）。
 
-近 7 日足迹与六个核心指标统一由 `LearnerActivityStatsService` 派生（PR7 进度统计 V3），口径见 `PROJECT_RULES.md` §14.1。`graded`（`assessment ∈ {correct, partial, wrong}`）与已 reveal 的 `revealed_only` 都算有效答题；`active`、窗口外记录与 `learner_id IS NULL` 的 Legacy attempts 不算。一次 Attempt 先 `reveal` 再自评只计 1 次，业务日归到首次有效行动所在日。所有指标受当前 Selected Books 范围约束，并按冻结 `target_knowledge_point_id` 归属；取消文集只隐藏历史，不删除任何 Attempt。响应只提供统一指标、四类结果分布、每日活动量和最近产生 Evidence 的知识点，不提供正确率、错误率、失败次数或排名。
+近 7 日足迹与六个核心指标统一由 `LearnerActivityStatsService` 派生（PR7 进度统计 V3），SQL 只在 `LearnerActivityStore`，口径见 `PROJECT_RULES.md` §14.1。`graded`（`assessment ∈ {correct, partial, wrong}`）与已 reveal 的 `revealed_only` 都算有效答题；`active`、窗口外记录与 `learner_id IS NULL` 的 Legacy attempts 不算。一次 Attempt 先 `reveal` 再自评只计 1 次，业务日归到首次有效行动所在日。所有指标受当前 Selected Books 范围约束，并按冻结 `target_knowledge_point_id` 归属；取消文集只隐藏历史，不删除任何 Attempt。
+
+「最近接触知识点」（`recentContacts`）按 `lastEffectiveContactAt`（有效接触时间）排序，因此仅查看参考解析也能正确出现；`lastEvidenceAt`（Mastery 最后证据时间）与 `evidenceCount` 只在真实评分后才有值，`evidenceCount = 0` 时 UI 只说明「仅查看答案」，不展示掌握度。响应不提供正确率、错误率、失败次数或排名。
 
 ## Diagnostic State Machine V1（保留能力，普通正式训练不再自动进入）
 
@@ -474,7 +479,7 @@ V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有�
 
 Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Knowledge drill 与 Wrong drill 都是 Session 内随机且不重复，候选耗尽即本轮完成，新开 Session 重新洗牌。章节练习走固定的确定性题序（Chapter 内 KnowledgePoint `sort_order` → 稳定 Source identity → `exam_year` → `question_number` 自然排序 → `question_id`），跨 Session 持久 cursor，末尾 wrap。三者都只受 published 正式父题 + 上下文范围 + Session 内 seen 约束，今天已答对、Review 未到期或已掌握都不阻止再练，也不会因此返回“当前没有待练题”。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 
-Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded attempt 派生：Formal Parent Question 出现 wrong / partial 即 upsert 为 `active`，之后 correct 不自动移除，只有 Learner 手动移出才置为 `removed`，以后再次 wrong / partial 重新回到 `active`。列表只返回当前 selected Books 范围内、通过至少一个有效 core / auxiliary 关系可练的错题；取消文集只隐藏并同步减少学习页数量，重新选择立即恢复历史。`wrong_review` 的 `sourceQuestionId` 必填：历史 target 当前仍合法时沿用，否则选择当前合法稳定绑定作为新 Attempt target，历史错题归因不改写。`wrong_drill` 按 Session 冻结 KP scope 从相同多 KP 关系事实中随机连续刷 active 错题，Session 内不重复；本轮耗尽后 `POST .../next` 返回 409，0 道可练错题时启动返回 400 友好提示。快速练习中答对不会自动移出错题本。`GET /learner/progress.summary.wrongQuestions`、错题列表、两种错题练习和 RANDOM 错题 KP 池共享上述范围口径；`GET /learner/statistics` 的 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`，且该接口的累计指标与 `/learner/progress.activity` 共用同一份范围与有效 Attempt 口径（`LearnerActivityStatsService`）。
+Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded attempt 派生：Formal Parent Question 出现 wrong / partial 即 upsert 为 `active`，之后 correct 不自动移除，只有 Learner 手动移出才置为 `removed`，以后再次 wrong / partial 重新回到 `active`。列表只返回当前 selected Books 范围内、通过至少一个有效 core / auxiliary 关系可练的错题；取消文集只隐藏并同步减少学习页数量，重新选择立即恢复历史。`wrong_review` 的 `sourceQuestionId` 必填：历史 target 当前仍合法时沿用，否则选择当前合法稳定绑定作为新 Attempt target，历史错题归因不改写。`wrong_drill` 按 Session 冻结 KP scope 从相同多 KP 关系事实中随机连续刷 active 错题，Session 内不重复；本轮耗尽后 `POST .../next` 返回 409，0 道可练错题时启动返回 400 友好提示。快速练习中答对不会自动移出错题本。`GET /learner/progress.summary.wrongQuestions`、错题列表、两种错题练习和 RANDOM 错题 KP 池共享上述范围口径；`GET /learner/statistics` 的 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`，且是 **graded-only 出场分布**；该接口范围判定复用 `LearnerActivityStatsService#scopedKnowledgePointIds`，累计指标与 `/learner/progress.activity` 同源（含 reveal-only），两者语义不同但不会出现两套范围口径。
 
 Hub Practice 与 World 共用同一套 Formal candidate 查询、Question Contract V2、Attempt Variant、grading、Wrong Book 与 Mastery / Evidence 逻辑，但选题与推进由各自独立的 strategy 负责（`KnowledgePracticeSelector` / `ChapterPracticeSelector` / `WrongPracticeSelector` / `RandomPracticeSelector`）。四套策略都不再调用 Diagnosis / Remedial。Hub mutation 校验 learner/session owner，且不写 `learner_world_state`。
 

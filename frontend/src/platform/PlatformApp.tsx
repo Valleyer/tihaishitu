@@ -116,7 +116,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <HubLink className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</HubLink> : <span className="world-unavailable">尚未开放</span>}</div>
       </article> })}</div>
     </section>
-    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recent.knowledgePoints.length ? <div className="recent-home-list">{progress.recent.knowledgePoints.slice(0, 5).map(point => <HubLink href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}><div><b>{point.name}</b><span>{point.bookName} · {point.chapterName}</span></div><div><span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span><small>{Math.round(point.effectiveMastery)}% · {recentTime(point.lastEvidenceAt)}</small></div></HubLink>)}</div> : <div className="empty-state"><h3>还没有学习记录</h3><p>从一个知识点开始，学习记录会出现在这里。</p></div>}</section>
+    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recentContacts.length ? <div className="recent-home-list">{progress.recentContacts.slice(0, 5).map(contact => <HubLink href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}><div><b>{contact.name}</b><span>{contact.bookName} · {contact.chapterName}</span></div><div>{contact.evidenceCount === 0 ? <span className="mastery-band unstarted">仅查看答案</span> : <><span className={`mastery-band ${contact.band}`}>{progressBandLabels[contact.band]}</span><small>{Math.round(contact.effectiveMastery)}% · {recentTime(contact.lastEffectiveContactAt)}</small></>}</div></HubLink>)}</div> : <div className="empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p></div>}</section>
       <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览知识</b><span>按知识点查看完整知识目录</span></HubLink><HubLink href="/questions"><b>浏览题库</b><span>查看全平台已发布题目与解析</span></HubLink></div></section></div>
   </main></Shell>;
 }
@@ -149,15 +149,18 @@ export function ProgressPage({ data }: { data: HubBootstrap }) {
       <OutcomeDistribution outcomes={activity.outcomes} />
       <section className="progress-section">
         <header className="section-heading"><h2>学习足迹</h2><span>最近接触的知识点</span></header>
-        {progress.recent.knowledgePoints.length === 0
-          ? <div className="hub-panel empty-state"><h3>还没有学习记录</h3><p>从一次章节练习或知识点专项开始，足迹会出现在这里。</p><HubLink className="hub-primary" href="/study">开始学习</HubLink></div>
-          : <div className="recent-points">{progress.recent.knowledgePoints.map(point =>
-            <HubLink className="hub-panel" href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}>
-              <div><h3>{point.name}</h3><p>{point.bookName} · {point.chapterName}</p></div>
+        {progress.recentContacts.length === 0
+          ? <div className="hub-panel empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p><HubLink className="hub-primary" href="/study">开始学习</HubLink></div>
+          : <div className="recent-points">{progress.recentContacts.map(contact =>
+            <HubLink className="hub-panel" href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}>
+              <div><h3>{contact.name}</h3><p>{contact.bookName} · {contact.chapterName}</p></div>
               <div className="recent-point-state">
-                <span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span>
-                <b>{Math.round(point.effectiveMastery)}%</b>
-                <small>{recentTime(point.lastEvidenceAt)}</small>
+                {/* 仅有「查看参考解析」、还没有真实评分时，只说明接触方式，不展示掌握度。 */}
+                {contact.evidenceCount === 0
+                  ? <span className="mastery-band unstarted">仅查看答案 · 未自评</span>
+                  : <><span className={`mastery-band ${contact.band}`}>{progressBandLabels[contact.band]}</span>
+                    <b>{Math.round(contact.effectiveMastery)}%</b></>}
+                <small>{recentTime(contact.lastEffectiveContactAt)}</small>
               </div>
             </HubLink>)}</div>}
       </section>

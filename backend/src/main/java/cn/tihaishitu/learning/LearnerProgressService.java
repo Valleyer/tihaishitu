@@ -7,9 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -21,7 +19,11 @@ import static cn.tihaishitu.learning.KnowledgeModelPolicy.READY_THRESHOLD;
 
 @Service
 public class LearnerProgressService {
+    /** 「最近接触」列表的展示上限，沿用原「最近学习」的 10 条。 */
+    private static final int RECENT_CONTACT_LIMIT = 10;
+
     private final LearnerProgressStore progress;
+    private final LearnerActivityStatsService activity;
     private final LearnerKnowledgeStateService states;
     private final ReviewQueueService reviews;
     private final LearnerPracticeStore practices;
@@ -30,10 +32,12 @@ public class LearnerProgressService {
     private final KnowledgeMasteryModel mastery = new KnowledgeMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
-    public LearnerProgressService(LearnerProgressStore progress, LearnerKnowledgeStateService states,
+    public LearnerProgressService(LearnerProgressStore progress, LearnerActivityStatsService activity,
+                                  LearnerKnowledgeStateService states,
                                   ReviewQueueService reviews, LearnerPracticeStore practices,
                                   StudyProfileService profiles, KnowledgeQuestionPoolService questionPool) {
         this.progress = progress;
+        this.activity = activity;
         this.states = states;
         this.reviews = reviews;
         this.practices = practices;
@@ -48,20 +52,21 @@ public class LearnerProgressService {
     /**
      * 当前 Selected Books 范围内可学习的去重 KnowledgePoint ID 集合。
      *
-     * <p>这是「当前学习范围」的单一事实来源：进度聚合与
-     * {@link LearnerActivityStatsService} 的统计范围都必须从这里派生，避免两套范围口径。
-     * 多本文集共享同一 KnowledgePoint 时集合天然去重，不因多对多关系放大。</p>
+     * <p>范围事实由 {@link LearnerActivityStatsService} 统一提供，进度聚合与活动统计必须
+     * 共用同一份集合，避免出现两套范围口径。</p>
      */
     Set<String> scopedKnowledgePointIds(String learnerId, Instant now) {
-        Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
-        progress.selectedMemberships(learnerId).forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
-        return pointById.keySet();
+        return activity.scopedKnowledgePointIds(learnerId);
     }
 
     ProgressView progressAt(String learnerId, Instant now) {
         List<LearnerProgressStore.BookRow> books = progress.selectedBooks(learnerId);
         List<LearnerProgressStore.ChapterRow> chapters = progress.selectedChapters(learnerId);
         List<LearnerProgressStore.MembershipRow> memberships = progress.selectedMemberships(learnerId);
+
+        // 有效 Attempt 事实（含仅查看答案）只读一次，统一 activity 与兼容 recent 从同一份派生。
+        LearnerActivityStatsService.Derived derived =
+                activity.derive(learnerId, now, LearnerActivityStatsService.WINDOW_DAYS);
 
         Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
         memberships.forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
@@ -108,18 +113,26 @@ public class LearnerProgressService {
                 chaptersByBook.getOrDefault(book.id(), List.of()),
                 membershipsByBook.getOrDefault(book.id(), List.of()), points, dueOrSoon)).toList();
 
-        LocalDate today = now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
-        List<RecentKnowledgePoint> recentPoints = points.values().stream()
-                .filter(point -> point.evidenceCount() > 0 && point.lastEvidenceAt() != null)
-                .sorted(Comparator.comparing(PointProgress::lastEvidenceAt).reversed()
-                        .thenComparing(PointProgress::knowledgePointId))
-                .limit(10)
-                .map(point -> new RecentKnowledgePoint(point.knowledgePointId(), point.name(),
-                        point.bookName(), point.chapterName(), point.band(), point.effectiveMastery(),
-                        point.stabilityDays(), point.lastEvidenceAt()))
+        // 最近接触知识点：来源是有效 Attempt（含仅查看答案），而不是 Mastery Evidence。
+        // 展示沿用既有 Mastery 状态与正式目录路径；仅 reveal、暂无 Evidence 时只显示
+        // 「尚未评分」，不编造掌握度。
+        List<RecentContact> recentContacts = derived.contacts().stream()
+                .map(contact -> {
+                    PointProgress point = points.get(contact.knowledgePointId());
+                    return new RecentContact(contact.knowledgePointId(),
+                            point == null ? null : point.name(),
+                            point == null ? null : point.bookName(),
+                            point == null ? null : point.chapterName(),
+                            point == null ? "unstarted" : point.band(),
+                            point == null ? 0 : point.effectiveMastery(),
+                            point == null ? 0 : point.stabilityDays(),
+                            point == null ? 0 : point.evidenceCount(),
+                            point == null ? null : point.lastEvidenceAt(),
+                            contact.lastEffectiveContactAt(), contact.revealedOnly());
+                })
+                .limit(RECENT_CONTACT_LIMIT)
                 .toList();
-        RecentProgress recent = new RecentProgress(List.copyOf(recentPoints));
-        return new ProgressView(now, summary, bands, bookViews, recent);
+        return new ProgressView(now, summary, bands, bookViews, derived.recent(), recentContacts);
     }
 
     private BookProgress bookProgress(LearnerProgressStore.BookRow book,
@@ -166,8 +179,16 @@ public class LearnerProgressService {
                                  double effectiveMastery, double stabilityDays,
                                  int evidenceCount, Instant lastEvidenceAt) {}
     private record Counts(int total, int started, int ready, int proficient, double masteryProgress) {}
+    /**
+     * 进度总览。
+     *
+     * <p>{@code recent} 是保留的旧兼容契约（graded-only，字段名与语义不变）；
+     * {@code recentContacts} 是 PR7 新增的最近接触列表，来源是有效 Attempt（含仅查看答案），
+     * 两者都不改变判题、Mastery V3 与错题本。</p>
+     */
     public record ProgressView(Instant generatedAt, Summary summary, Map<String, Integer> bands,
-                               List<BookProgress> books, RecentProgress recent) {}
+                               List<BookProgress> books, LearnerActivityStatsService.RecentProgress recent,
+                               List<RecentContact> recentContacts) {}
     public record Summary(int selectedBooks, int totalKnowledgePoints, int startedKnowledgePoints,
                           int readyKnowledgePoints, int proficientKnowledgePoints, int reviewDue,
                           int reviewSoon, int reviewUpcoming, int wrongQuestions) {}
@@ -177,15 +198,16 @@ public class LearnerProgressService {
     public record ChapterProgress(String chapterId, String code, String name, int total, int started,
                                   int ready, int proficient, double masteryProgress) {}
     /**
-     * 「最近学习」足迹。PR7 起，近 7 日与今日的活动事实全部由
-     * {@link LearnerActivityStatsService} 统一派生，这里只保留最近接触的知识点列表。
+     * 一个「最近接触」的知识点。
+     *
+     * <p>排序键是 {@code lastEffectiveContactAt}（reveal 或 graded 的首次有效行动），
+     * 与 {@code lastEvidenceAt}（Mastery 最后证据时间，仅 graded 会产生）是两个不同概念。
+     * {@code evidenceCount == 0} 表示该知识点只有「仅查看答案」，UI 不得展示掌握度。</p>
+     *
+     * <p>只暴露正式目录 Book → Chapter 路径，不携带 legacy subject / section /
+     * legacy chapter_name，避免用户界面回落到旧字段。</p>
      */
-    public record RecentProgress(List<RecentKnowledgePoint> knowledgePoints) {}
-    /**
-     * 首页“最近学习”只暴露正式目录 Book → Chapter 路径，不再携带 legacy subject / section /
-     * legacy chapter_name，避免用户界面回落到旧字段。
-     */
-    public record RecentKnowledgePoint(String knowledgePointId, String name, String bookName, String chapterName,
-                                       String band, double effectiveMastery,
-                                       double stabilityDays, Instant lastEvidenceAt) {}
+    public record RecentContact(String knowledgePointId, String name, String bookName, String chapterName,
+                                String band, double effectiveMastery, double stabilityDays, int evidenceCount,
+                                Instant lastEvidenceAt, Instant lastEffectiveContactAt, boolean revealedOnly) {}
 }

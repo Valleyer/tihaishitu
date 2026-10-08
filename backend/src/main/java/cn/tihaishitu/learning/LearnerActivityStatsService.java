@@ -1,27 +1,25 @@
 package cn.tihaishitu.learning;
 
 import cn.tihaishitu.learner.LearnerContext;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
  * 进度与统计的统一「有效答题」事实来源（PR7 进度统计 V3）。
  *
  * <p>长期规则：进度页、统计兼容接口和任何后续统计展示必须共用本类口径，不得再各自写
- * 一套 SQL。口径记录在 {@code docs/PROJECT_RULES.md}「进度统计 V3」一节。</p>
+ * 一套 SQL。SQL 本身在 {@link LearnerActivityStore}；口径记录在
+ * {@code docs/PROJECT_RULES.md}「进度统计 V3」一节。</p>
  *
  * <p>计数单位是 {@code study_attempt.id}：同一道题的不同有效 Attempt 各计 1 次；一次
  * Attempt 先 reveal 再自评仍然只计 1 次；仅打开后直接退出的 {@code active}、Legacy 无
@@ -35,20 +33,28 @@ public class LearnerActivityStatsService {
     /** 活跃学习日与趋势曲线固定的业务日窗口长度。 */
     public static final int WINDOW_DAYS = 7;
 
-    private static final int SCOPE_BATCH = 500;
-
-    private final JdbcTemplate jdbc;
-    private final LearnerProgressService progress;
+    private final LearnerActivityStore store;
+    private final LearnerProgressStore progress;
     private final Clock clock = Clock.systemUTC();
 
-    public LearnerActivityStatsService(JdbcTemplate jdbc, LearnerProgressService progress) {
-        this.jdbc = jdbc;
+    public LearnerActivityStatsService(LearnerActivityStore store, LearnerProgressStore progress) {
+        this.store = store;
         this.progress = progress;
     }
 
     /** 当前登录 Learner 的统一活动统计。 */
     public ActivityView current() {
         return activityAt(LearnerContext.learnerId(), clock.instant(), WINDOW_DAYS);
+    }
+
+    /** 当前登录 Learner 的最近接触知识点（含仅查看答案）。 */
+    public List<RecentContact> recentContacts() {
+        return contactsAt(LearnerContext.learnerId(), clock.instant());
+    }
+
+    /** 指定 Learner 在当前学习范围内的最近接触知识点，按最近有效接触时间倒序。 */
+    public List<RecentContact> contactsAt(String learnerId, Instant now) {
+        return buildContacts(store.effectiveActions(learnerId, scopedKnowledgePointIds(learnerId)));
     }
 
     /**
@@ -58,15 +64,25 @@ public class LearnerActivityStatsService {
      * 截断；{@code windowDays} 只决定 {@code daily} 曲线的长度。</p>
      */
     public ActivityView activityAt(String learnerId, Instant now, int windowDays) {
+        return derive(learnerId, now, windowDays).activity();
+    }
+
+    /**
+     * 当前范围下的完整派生事实。
+     *
+     * <p>只读一次有效 Attempt，同时产出统一 {@code activity} 与兼容的 graded-only
+     * {@code recent}，避免同一份指标出现两套 SQL 或两次语义不同的聚合。</p>
+     */
+    public Derived derive(String learnerId, Instant now, int windowDays) {
         LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
-        Set<String> scope = progress.scopedKnowledgePointIds(learnerId, now);
-        List<EffectiveAction> actions = effectiveActions(learnerId, scope);
+        Set<String> scope = scopedKnowledgePointIds(learnerId);
+        List<LearnerActivityStore.EffectiveAction> actions = store.effectiveActions(learnerId, scope);
 
         int correct = 0, partial = 0, wrong = 0, revealedOnly = 0, todayAttempts = 0;
         Set<String> touchedPoints = new LinkedHashSet<>();
-        Map<LocalDate, List<EffectiveAction>> byDate = new LinkedHashMap<>();
+        Map<LocalDate, List<LearnerActivityStore.EffectiveAction>> byDate = new LinkedHashMap<>();
         LocalDate windowStart = today.minusDays(windowDays - 1L);
-        for (EffectiveAction action : actions) {
+        for (LearnerActivityStore.EffectiveAction action : actions) {
             switch (action.outcome()) {
                 case CORRECT -> correct++;
                 case PARTIAL -> partial++;
@@ -91,13 +107,75 @@ public class LearnerActivityStatsService {
         Metrics metrics = new Metrics(activeStudyDays, todayAttempts, scope.size(), touchedPoints.size(),
                 actions.size(), correct);
         OutcomeSummary outcomes = new OutcomeSummary(correct, partial, wrong, revealedOnly);
-        return new ActivityView(windowDays, now, metrics, outcomes, daily);
+        ActivityView activity = new ActivityView(windowDays, now, metrics, outcomes, daily);
+        RecentProgress recent = gradedRecent(actions, daily, today);
+        return new Derived(activity, recent, buildContacts(actions));
     }
 
-    private static DailyActivity dailyActivity(LocalDate date, List<EffectiveAction> actions) {
+    /** 当前学习范围内、可学习的去重 KnowledgePoint 集合。 */
+    public Set<String> scopedKnowledgePointIds(String learnerId) {
+        Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
+        progress.selectedMemberships(learnerId).forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
+        return pointById.keySet();
+    }
+
+    /**
+     * 兼容旧 {@code recent} 契约的 graded-only 投影。
+     *
+     * <p>字段名带 {@code graded}，因此只统计真实 {@code graded + correct/partial/wrong}：
+     * 仅查看答案（{@code revealed_only}）绝不填入这些字段，避免字段名与历史语义背离。
+     * 完整的有效答题口径（含 reveal-only）由 {@link ActivityView} 负责。</p>
+     */
+    private static RecentProgress gradedRecent(List<LearnerActivityStore.EffectiveAction> actions,
+                                               List<DailyActivity> daily, LocalDate today) {
+        LocalDate windowStart = today.minusDays(WINDOW_DAYS - 1L);
+        Set<String> distinct7d = new LinkedHashSet<>();
+        Map<LocalDate, Set<String>> pointsByDate = new LinkedHashMap<>();
+        int graded7d = 0;
+        for (LearnerActivityStore.EffectiveAction action : actions) {
+            // 仅查看答案不计入任何 graded-only 兼容字段。
+            if (action.outcome() == LearnerActivityStore.Outcome.REVEALED_ONLY) continue;
+            if (action.actionDate().isBefore(windowStart)) continue;
+            graded7d++;
+            distinct7d.add(action.knowledgePointId());
+            pointsByDate.computeIfAbsent(action.actionDate(), ignored -> new LinkedHashSet<>())
+                    .add(action.knowledgePointId());
+        }
+        List<DailyProgress> gradedDaily = daily.stream()
+                .map(day -> new DailyProgress(day.date(), day.correct() + day.partial() + day.wrong(),
+                        pointsByDate.getOrDefault(day.date(), Set.of()).size()))
+                .toList();
+        int activeDays = (int) gradedDaily.stream().filter(day -> day.gradedAttempts() > 0).count();
+        return new RecentProgress(graded7d, distinct7d.size(), activeDays, gradedDaily, List.of());
+    }
+
+    /**
+     * 最近接触知识点：按最近一次「有效接触」时间倒序，包含仅查看答案。
+     *
+     * <p>同一 KnowledgePoint 的多次有效 Attempt 只保留最近一次；{@code revealedOnly} 表示该
+     * 知识点最近一次有效行动是仅查看答案。这里只描述「接触」，掌握度仍由 Mastery 事实决定。</p>
+     */
+    private static List<RecentContact> buildContacts(List<LearnerActivityStore.EffectiveAction> actions) {
+        Map<String, RecentContact> latest = new LinkedHashMap<>();
+        for (LearnerActivityStore.EffectiveAction action : actions) {
+            RecentContact previous = latest.get(action.knowledgePointId());
+            if (previous == null || action.actionAt().isAfter(previous.lastEffectiveContactAt())) {
+                latest.put(action.knowledgePointId(),
+                        new RecentContact(action.knowledgePointId(), action.actionAt(), action.actionDate(),
+                                action.outcome() == LearnerActivityStore.Outcome.REVEALED_ONLY));
+            }
+        }
+        return latest.values().stream()
+                .sorted(Comparator.comparing(RecentContact::lastEffectiveContactAt).reversed()
+                        .thenComparing(RecentContact::knowledgePointId))
+                .toList();
+    }
+
+    private static DailyActivity dailyActivity(LocalDate date,
+                                               List<LearnerActivityStore.EffectiveAction> actions) {
         Set<String> points = new LinkedHashSet<>();
         int correct = 0, partial = 0, wrong = 0, revealedOnly = 0;
-        for (EffectiveAction action : actions) {
+        for (LearnerActivityStore.EffectiveAction action : actions) {
             points.add(action.knowledgePointId());
             switch (action.outcome()) {
                 case CORRECT -> correct++;
@@ -108,104 +186,6 @@ public class LearnerActivityStatsService {
         }
         return new DailyActivity(date, actions.size(), points.size(), correct, partial, wrong, revealedOnly);
     }
-
-    /**
-     * 读取当前范围内全部历史有效答题。
-     *
-     * <p>按冻结的 {@code target_knowledge_point_id} 判定归属：题目另外绑定的 KnowledgePoint
-     * 不会让一次 Attempt 在多处重复记账。多本文集共享同一 KnowledgePoint 时范围集合已经去重，
-     * 因此范围条件只传去重后的 ID，不会因多对多关系放大行数。</p>
-     */
-    private List<EffectiveAction> effectiveActions(String learnerId, Set<String> scope) {
-        if (scope.isEmpty()) return List.of();
-        Map<String, EffectiveAction> actions = new LinkedHashMap<>();
-        for (List<String> batch : batches(scope)) {
-            for (AttemptRow row : attemptRows(learnerId, batch)) {
-                Outcome outcome = outcome(row).orElse(null);
-                if (outcome == null) continue;
-                LocalDate date = actionAt(row).atZone(PracticeBusinessDay.ZONE).toLocalDate();
-                actions.putIfAbsent(row.attemptId(),
-                        new EffectiveAction(row.attemptId(), row.knowledgePointId(), outcome, date));
-            }
-        }
-        return List.copyOf(actions.values());
-    }
-
-    /**
-     * 一次 Attempt 只产生一次有效事件。
-     *
-     * <p>{@code revealed} 取 {@code answer_revealed_at}；已 reveal 过的 {@code graded} 沿用更早的
-     * 首次有效行动时间，之后自评只更新结果分类而不产生第二次有效事件；其他 {@code graded} 取
-     * {@code answered_at}。SQL 已保证被采纳的时间列非空，因此不虚构日期。</p>
-     */
-    private static Instant actionAt(AttemptRow row) {
-        if ("revealed".equals(row.status())) return row.revealedAt();
-        return row.revealedAt() != null && row.revealedAt().isBefore(row.answeredAt())
-                ? row.revealedAt() : row.answeredAt();
-    }
-
-    /**
-     * 结果分类。
-     *
-     * <p>{@code graded} 但 assessment 缺失或非法的历史记录无法判定，明确排除而不是编造结果；
-     * {@code revealed} 只归类为「仅查看答案」，绝不写成 wrong，也不算掌握。</p>
-     */
-    private static Optional<Outcome> outcome(AttemptRow row) {
-        if ("revealed".equals(row.status())) return Optional.of(Outcome.REVEALED_ONLY);
-        return switch (row.assessment() == null ? "" : row.assessment()) {
-            case "correct" -> Optional.of(Outcome.CORRECT);
-            case "partial" -> Optional.of(Outcome.PARTIAL);
-            case "wrong" -> Optional.of(Outcome.WRONG);
-            default -> Optional.empty();
-        };
-    }
-
-    private List<AttemptRow> attemptRows(String learnerId, List<String> scope) {
-        String sql = """
-                SELECT a.id,a.target_knowledge_point_id,a.status,a.assessment,a.answered_at,a.answer_revealed_at
-                  FROM study_attempt a
-                  JOIN question_resource q ON q.id=a.question_id
-                 WHERE a.learner_id=? AND a.status IN ('graded','revealed')
-                   AND a.target_knowledge_point_id IS NOT NULL
-                   AND ((a.status='revealed' AND a.answer_revealed_at IS NOT NULL)
-                        OR (a.status='graded' AND a.answered_at IS NOT NULL))
-                   AND %s
-                   AND a.target_knowledge_point_id IN (%s)
-                """.formatted(FormalQuestionPolicy.published("q"), placeholders(scope.size()));
-        List<Object> args = new ArrayList<>();
-        args.add(learnerId);
-        args.addAll(scope);
-        return jdbc.query(sql, (rs, index) -> new AttemptRow(rs.getString("id"),
-                rs.getString("target_knowledge_point_id"), rs.getString("status"), rs.getString("assessment"),
-                instant(rs.getTimestamp("answered_at")), instant(rs.getTimestamp("answer_revealed_at"))),
-                args.toArray());
-    }
-
-    private static List<List<String>> batches(Set<String> values) {
-        List<String> ordered = List.copyOf(values);
-        List<List<String>> batches = new ArrayList<>();
-        for (int start = 0; start < ordered.size(); start += SCOPE_BATCH) {
-            batches.add(ordered.subList(start, Math.min(ordered.size(), start + SCOPE_BATCH)));
-        }
-        return batches;
-    }
-
-    private static String placeholders(int count) {
-        return String.join(",", Collections.nCopies(count, "?"));
-    }
-
-    private static Instant instant(Timestamp value) {
-        return value == null ? null : value.toInstant();
-    }
-
-    /** 有效答题的结果分类；{@code revealed_only} 表示「仅查看答案」，不可当成错误或掌握。 */
-    public enum Outcome { CORRECT, PARTIAL, WRONG, REVEALED_ONLY }
-
-    /** 一次有效 Attempt；{@code actionDate} 是首次有效行动的上海业务日。 */
-    public record EffectiveAction(String attemptId, String knowledgePointId, Outcome outcome, LocalDate actionDate) {}
-
-    private record AttemptRow(String attemptId, String knowledgePointId, String status, String assessment,
-                              Instant answeredAt, Instant revealedAt) {}
 
     /** 六个核心指标，与前端字段一一对应。 */
     public record Metrics(int activeStudyDays7d, int todayEffectiveAttempts, int totalKnowledgePoints,
@@ -219,4 +199,27 @@ public class LearnerActivityStatsService {
 
     public record ActivityView(int windowDays, Instant generatedAt, Metrics metrics, OutcomeSummary outcomes,
                                List<DailyActivity> daily) {}
+
+    /**
+     * 最近接触的一个 KnowledgePoint。
+     *
+     * <p>{@code lastEffectiveContactAt} 是有效接触时间（reveal 或 graded 的首次有效行动），
+     * 不是 Mastery 证据时间；{@code revealedOnly} 表示当前范围内该知识点最近一次有效行动
+     * 只有「查看参考解析」，尚无任何 Mastery Evidence。</p>
+     */
+    public record RecentContact(String knowledgePointId, Instant lastEffectiveContactAt, LocalDate actionDate,
+                                boolean revealedOnly) {}
+
+    /** 一次只读派生：统一 {@code activity} + 兼容 graded-only {@code recent} + 最近接触。 */
+    public record Derived(ActivityView activity, RecentProgress recent, List<RecentContact> contacts) {}
+
+    /** 旧 {@code recent} 契约（graded-only）；保留字段名、类型与七天业务日语义。 */
+    public record RecentProgress(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
+                                 List<DailyProgress> daily, List<RecentKnowledgePoint> knowledgePoints) {}
+
+    public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
+
+    public record RecentKnowledgePoint(String knowledgePointId, String name, String bookName, String chapterName,
+                                       String band, double effectiveMastery, double stabilityDays,
+                                       Instant lastEvidenceAt) {}
 }

@@ -47,9 +47,23 @@ const progress = (overrides: Partial<LearnerProgress> = {}): LearnerProgress => 
     chapters: [{ chapterId: "chapter-1", code: "A", name: "第一章", total: 20, started: 5,
       ready: 2, proficient: 1, masteryProgress: 22.5 }] }],
   activity: activity(),
-  recent: { knowledgePoints: [{ knowledgePointId: "point-1", name: "函数极限", bookName: "考研数学一",
-    chapterName: "第一章", band: "learning", effectiveMastery: 62.5, stabilityDays: 4,
-    lastEvidenceAt: "2026-10-05T02:00:00Z" }] },
+  recent: {
+    gradedAttempts7d: 8, distinctKnowledgePoints7d: 6, activeStudyDays7d: 3,
+    daily: activity().daily.map(day => ({ date: day.date,
+      gradedAttempts: day.correct + day.partial + day.wrong,
+      distinctKnowledgePoints: day.effectiveAttempts === 0 ? 0 : day.distinctKnowledgePoints })),
+    knowledgePoints: [],
+  },
+  recentContacts: [
+    { knowledgePointId: "point-1", name: "函数极限", bookName: "考研数学一", chapterName: "第一章",
+      band: "learning", effectiveMastery: 62.5, stabilityDays: 4, evidenceCount: 5,
+      lastEvidenceAt: "2026-10-05T02:00:00Z", lastEffectiveContactAt: "2026-10-05T02:00:00Z",
+      revealedOnly: false },
+    { knowledgePointId: "point-2", name: "反常积分的敛散性", bookName: "考研数学一",
+      chapterName: "第三章 一元函数积分学", band: "unstarted", effectiveMastery: 0, stabilityDays: 0,
+      evidenceCount: 0, lastEvidenceAt: null, lastEffectiveContactAt: "2026-10-05T01:00:00Z",
+      revealedOnly: true },
+  ],
   ...overrides,
 });
 
@@ -115,11 +129,11 @@ describe("ProgressPage", () => {
       daily: activity().daily.map(day => ({ ...day, effectiveAttempts: 0, distinctKnowledgePoints: 0,
         correct: 0, partial: 0, wrong: 0, revealedOnly: 0 })),
     });
-    mockPlatform(progress({ activity: empty, books: [], recent: { knowledgePoints: [] } }));
+    mockPlatform(progress({ activity: empty, books: [], recentContacts: [] }));
     render(<ProgressPage data={bootstrap} />);
 
     expect(await screen.findByText(/这 7 天还没有有效答题记录/)).toBeTruthy();
-    expect(screen.getByText("还没有学习记录")).toBeTruthy();
+    expect(screen.getByText("尚无学习足迹")).toBeTruthy();
     expect(screen.getByText("尚未选择学习文集")).toBeTruthy();
   });
 
@@ -148,6 +162,35 @@ describe("ProgressPage", () => {
       .toBe("/progress/books/math");
     expect(screen.getByRole("link", { name: /函数极限/ }).getAttribute("href"))
       .toBe("/knowledge/point-1");
+  });
+
+  it('shows a reveal-only contact in the footprint without faking mastery', async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByText("学习足迹");
+
+    // 仅查看答案的知识点也出现在「最近接触」里，并可进入知识点页。
+    const revealed = screen.getByRole("link", { name: /反常积分的敛散性/ });
+    expect(revealed.getAttribute("href")).toBe("/knowledge/point-2");
+    // 没有真实评分时不展示掌握度，只说明接触方式。
+    expect(screen.getByText("仅查看答案 · 未自评")).toBeTruthy();
+    expect(revealed.textContent).not.toContain("%");
+    // 真实评分的知识点仍然展示掌握度。
+    expect(screen.getByRole("link", { name: /函数极限/ }).textContent).toContain("63%");
+
+    // 足迹顺序沿用后端的有效接触时间倒序，不在前端重排。
+    const order = [...view.container.querySelectorAll(".recent-points > a h3")].map(node => node.textContent);
+    expect(order).toEqual(["函数极限", "反常积分的敛散性"]);
+  });
+
+  it("reads the footprint from effective contacts rather than the legacy graded list", async () => {
+    // 旧 recent.knowledgePoints 故意留空：足迹必须来自 recentContacts。
+    mockPlatform(progress({ recent: { ...progress().recent, knowledgePoints: [] } }));
+    render(<ProgressPage data={bootstrap} />);
+
+    expect(await screen.findByText("学习足迹")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /函数极限/ })).toBeTruthy();
+    expect(screen.queryByText("尚无学习足迹")).toBeNull();
   });
 
   it("stays readable when the progress request fails", async () => {

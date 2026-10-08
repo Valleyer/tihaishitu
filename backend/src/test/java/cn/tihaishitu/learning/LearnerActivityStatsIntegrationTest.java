@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +29,8 @@ class LearnerActivityStatsIntegrationTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired LearnerActivityStatsService activity;
+    @Autowired LearnerKnowledgeStateService states;
+    @Autowired LearnerProgressService progress;
 
     private final Instant now = Instant.now();
     private final java.time.LocalDate today = Instant.now().atZone(ZONE).toLocalDate();
@@ -282,6 +285,173 @@ class LearnerActivityStatsIntegrationTest {
         assertThat(view.daily()).hasSize(7);
         assertThat(view.daily()).allSatisfy(day ->
                 assertThat(day.effectiveAttempts()).isZero());
+    }
+
+    @Test
+    void showsRevealOnlyKnowledgePointsInRecentContactsWithoutCreatingMasteryEvidence() {
+        // 合并前复核必修 1：全新 Learner 只对综合题点击「查看参考解析」时，
+        // 六指标已经计入，学习足迹也必须看到该知识点，且不得产生任何 Mastery / Evidence。
+        String learner = learner();
+        String point = knowledge("仅查看答案知识点");
+        BookFixture book = book("仅查看答案文集");
+        member(book.id(), book.root(), point, 0);
+        select(learner, book.id());
+        String question = question();
+        // 固定落在今天 00:05 上海业务日，避免依赖“当前是当天几点”。
+        Instant revealedAt = today.atTime(0, 5).atZone(ZONE).toInstant();
+        String attemptId = reveal(learner, null, question, point, revealedAt);
+
+        LearnerActivityStatsService.ActivityView view = activity.activityAt(learner, now,
+                LearnerActivityStatsService.WINDOW_DAYS);
+        assertThat(view.metrics().todayEffectiveAttempts()).isEqualTo(1);
+        assertThat(view.metrics().totalEffectiveAttempts()).isEqualTo(1);
+        assertThat(view.metrics().touchedKnowledgePoints()).isEqualTo(1);
+        assertThat(view.outcomes()).isEqualTo(new LearnerActivityStatsService.OutcomeSummary(0, 0, 0, 1));
+
+        List<LearnerActivityStatsService.RecentContact> contacts = activity.contactsAt(learner, now);
+        assertThat(contacts).hasSize(1);
+        assertThat(contacts.get(0).knowledgePointId()).isEqualTo(point);
+        assertThat(contacts.get(0).revealedOnly()).isTrue();
+        assertThat(contacts.get(0).lastEffectiveContactAt()).isEqualTo(revealedAt);
+
+        // 仅查看答案不写 grading、不写 Mastery、不写 Evidence、不进错题本。
+        assertThat(jdbc.queryForObject("SELECT status FROM study_attempt WHERE id=?", String.class, attemptId))
+                .isEqualTo("revealed");
+        assertThat(jdbc.queryForObject("SELECT assessment FROM study_attempt WHERE id=?", String.class, attemptId))
+                .isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_state WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_knowledge_evidence WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_wrong_question WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+
+        // 进度视图的最近接触同样能看到它，且掌握度保持「尚未稳固」。
+        LearnerProgressService.ProgressView progressView = progress.progressAt(learner, now);
+        assertThat(progressView.recentContacts()).hasSize(1);
+        assertThat(progressView.recentContacts().get(0).knowledgePointId()).isEqualTo(point);
+        assertThat(progressView.recentContacts().get(0).evidenceCount()).isZero();
+        assertThat(progressView.recentContacts().get(0).lastEvidenceAt()).isNull();
+        assertThat(progressView.recentContacts().get(0).band()).isEqualTo("unstarted");
+    }
+
+    @Test
+    void derivesGradedOnlyRecentFieldsFromTheSameEffectiveAttemptFacts() {
+        // 合并前复核必修 2：旧 recent 字段必须存在、保持 graded-only，且不与 activity 冲突。
+        String learner = learner();
+        String point = knowledge("兼容字段知识点");
+        BookFixture book = book("兼容字段文集");
+        member(book.id(), book.root(), point, 0);
+        select(learner, book.id());
+        String question = question();
+
+        attempt(learner, null, null, question, point, "graded", at(9, 0), "correct");
+        attempt(learner, null, null, question, point, "graded", at(10, 0), "wrong");
+        reveal(learner, null, question, point, at(11, 0));
+        // 七天窗口外：进入累计，不进入任何七日字段。
+        attempt(learner, null, null, question, point, "graded", today.minusDays(9).atTime(9, 0).atZone(ZONE).toInstant(), "correct");
+
+        LearnerActivityStatsService.Derived derived = activity.derive(learner, now,
+                LearnerActivityStatsService.WINDOW_DAYS);
+        LearnerActivityStatsService.RecentProgress recent = derived.recent();
+
+        // graded-only：仅查看答案不填入带 graded 的字段。
+        assertThat(recent.gradedAttempts7d()).isEqualTo(2);
+        assertThat(recent.activeStudyDays7d()).isEqualTo(1);
+        assertThat(recent.distinctKnowledgePoints7d()).isEqualTo(1);
+        assertThat(recent.daily()).hasSize(7);
+        assertThat(recent.daily()).extracting(LearnerActivityStatsService.DailyProgress::date)
+                .containsExactly(today.minusDays(6), today.minusDays(5), today.minusDays(4), today.minusDays(3),
+                        today.minusDays(2), today.minusDays(1), today);
+        assertThat(recent.daily().stream().mapToInt(LearnerActivityStatsService.DailyProgress::gradedAttempts).sum())
+                .isEqualTo(2);
+        // 旧字段不含 reveal-only，而 activity 含 reveal-only：两者语义不同且都不丢事实。
+        assertThat(derived.activity().metrics().totalEffectiveAttempts()).isEqualTo(4);
+        assertThat(derived.activity().outcomes().revealedOnly()).isEqualTo(1);
+        // knowledgePoints 字段保留（PR7 起由 recentContacts 承担展示），不再删除旧字段。
+        assertThat(recent.knowledgePoints()).isEmpty();
+    }
+
+    @Test
+    void deduplicatesRecentContactsAndUsesTheFirstEffectiveActionTime() {
+        String learner = learner();
+        String point = knowledge("多次作答知识点");
+        String otherPoint = knowledge("另一个接触知识点");
+        BookFixture book = book("去重文集");
+        member(book.id(), book.root(), point, 0);
+        member(book.id(), book.root(), otherPoint, 1);
+        select(learner, book.id());
+        String question = question();
+
+        // 同一知识点三次有效 Attempt：列表只出现一次，时间取最近一次有效接触。
+        attempt(learner, null, null, question, point, "graded", at(8, 0), "wrong");
+        attempt(learner, null, null, question, point, "graded", at(9, 0), "correct");
+        String revealId = reveal(learner, null, question, point, at(10, 0));
+        // 另一次跨界更早的接触，用来确认排序而不是插入顺序。
+        attempt(learner, null, null, question, otherPoint, "graded", at(23, 0), "correct");
+
+        List<LearnerActivityStatsService.RecentContact> contacts = activity.contactsAt(learner, now);
+        assertThat(contacts).extracting(LearnerActivityStatsService.RecentContact::knowledgePointId)
+                .containsExactly(otherPoint, point);
+        assertThat(contacts.get(1).lastEffectiveContactAt()).isEqualTo(at(10, 0));
+        assertThat(contacts.get(1).revealedOnly()).isTrue();
+
+        // 跨天：reveal 在昨天、自评在今天，首次有效行动日仍稳定在昨天，且不新增第二条接触事实。
+        String crossDay = knowledge("跨天自评知识点");
+        member(book.id(), book.root(), crossDay, 2);
+        Instant revealAt = today.minusDays(1).atTime(23, 30).atZone(ZONE).toInstant();
+        String crossAttempt = reveal(learner, null, question, crossDay, revealAt);
+        jdbc.update("""
+                UPDATE study_attempt SET status='graded',answered_at=?,grading_source='self',assessment='correct'
+                 WHERE id=?
+                """, Timestamp.from(revealAt.plusSeconds(3600)), crossAttempt);
+
+        List<LearnerActivityStatsService.RecentContact> afterGrading = activity.contactsAt(learner, now);
+        assertThat(afterGrading).filteredOn(contact -> contact.knowledgePointId().equals(crossDay))
+                .singleElement()
+                .satisfies(contact -> {
+                    assertThat(contact.lastEffectiveContactAt()).isEqualTo(revealAt);
+                    assertThat(contact.actionDate()).isEqualTo(today.minusDays(1));
+                    assertThat(contact.revealedOnly()).isFalse();
+                });
+        assertThat(afterGrading).hasSize(3);
+        assertThat(revealId).isNotBlank();
+    }
+
+    @Test
+    void hidesAndRestoresRecentContactsWhenTheSelectedBooksChange() {
+        String learner = learner();
+        String mathPoint = knowledge("足迹数学知识点");
+        String csPoint = knowledge("足迹计算机知识点");
+        BookFixture math = book("足迹数学文集");
+        BookFixture cs = book("足迹计算机文集");
+        member(math.id(), math.root(), mathPoint, 0);
+        member(cs.id(), cs.root(), csPoint, 0);
+        select(learner, math.id());
+        select(learner, cs.id());
+        String question = question();
+
+        attempt(learner, null, null, question, mathPoint, "graded", at(9, 0), "correct");
+        reveal(learner, null, question, csPoint, at(10, 0));
+
+        assertThat(activity.contactsAt(learner, now)).extracting(
+                LearnerActivityStatsService.RecentContact::knowledgePointId)
+                .containsExactlyInAnyOrder(mathPoint, csPoint);
+
+        // 取消计算机文集：足迹只隐藏，不删除 Attempt。
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=? AND bank_id=?", learner, cs.id());
+        assertThat(activity.contactsAt(learner, now)).extracting(
+                LearnerActivityStatsService.RecentContact::knowledgePointId)
+                .containsExactly(mathPoint);
+
+        // 重新加入：既有历史立即恢复。
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
+                learner, cs.id());
+        assertThat(activity.contactsAt(learner, now)).extracting(
+                LearnerActivityStatsService.RecentContact::knowledgePointId)
+                .containsExactlyInAnyOrder(mathPoint, csPoint);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM study_attempt WHERE learner_id=?",
+                Integer.class, learner)).isEqualTo(2);
     }
 
     private Instant at(int hour, int minute) {

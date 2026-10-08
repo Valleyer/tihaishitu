@@ -78,6 +78,28 @@ export interface LearnerActivity {
   windowDays: number; generatedAt: string;
   metrics: ActivityMetrics; outcomes: ActivityOutcomes; daily: ActivityDaily[];
 }
+/** 兼容旧契约的 graded-only 七日足迹；字段名与语义与 PR7 之前一致。 */
+export interface RecentGradedProgress {
+  gradedAttempts7d: number; distinctKnowledgePoints7d: number; activeStudyDays7d: number;
+  daily: { date: string; gradedAttempts: number; distinctKnowledgePoints: number }[];
+  knowledgePoints: {
+    knowledgePointId: string; name: string; bookName: string; chapterName: string;
+    band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
+  }[];
+}
+/**
+ * 最近接触的一个知识点（PR7 合并前复核修复）。
+ *
+ * `lastEffectiveContactAt` 是有效接触时间（reveal 或 graded 的首次有效行动）；
+ * `lastEvidenceAt` 只在真实评分后存在。`evidenceCount === 0` 表示只有「仅查看答案」，
+ * 此时不得展示掌握度。
+ */
+export interface RecentContact {
+  knowledgePointId: string; name: string; bookName: string; chapterName: string;
+  band: MasteryBand; effectiveMastery: number; stabilityDays: number;
+  evidenceCount: number; lastEvidenceAt?: string | null;
+  lastEffectiveContactAt: string; revealedOnly: boolean;
+}
 export interface LearnerProgress {
   generatedAt: string;
   summary: {
@@ -87,14 +109,12 @@ export interface LearnerProgress {
   };
   bands: Record<MasteryBand, number>;
   books: ProgressBook[];
-  /** 进度与统计共用的一份事实；进度页只从这里读取指标、分布与近 7 日曲线。 */
+  /** 保留的旧兼容契约，graded-only；进度页不再用它展示学习足迹。 */
+  recent: RecentGradedProgress;
+  /** 最近接触知识点：来源是有效 Attempt（含仅查看答案），按首次有效行动时间倒序。 */
+  recentContacts: RecentContact[];
+  /** 进度与统计共用的一份事实；进度页从这里读取指标、分布与近 7 日曲线。 */
   activity: LearnerActivity;
-  recent: {
-    knowledgePoints: {
-      knowledgePointId: string; name: string; bookName: string; chapterName: string;
-      band: MasteryBand; effectiveMastery: number; stabilityDays: number; lastEvidenceAt: string;
-    }[];
-  };
 }
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;

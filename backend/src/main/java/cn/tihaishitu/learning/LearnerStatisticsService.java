@@ -18,12 +18,15 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
  * 旧 `/learner/statistics` 的兼容实现（PR7 进度统计 V3）。
  *
  * <p>统一口径的唯一事实来源是 {@link LearnerActivityStatsService}：指标、结果分布、有效
- * Attempt 规则与当前学习范围全部从那里派生，本类只额外保留旧接口的
- * {@code knowledgeDrillAttempts / wrongReviewAttempts / worldAttempts} 出场分布字段，
- * 且这些字段同样只统计同一个有效 Attempt 集合。</p>
+ * Attempt 规则与当前学习范围全部从那里派生，所以 {@code summary} 与
+ * {@code /learner/progress.activity} 的数值必然一致，绝不出现两套数字。</p>
  *
- * <p>旧契约的 {@code days=7|30|90} 入参继续接受，只影响 {@code daily} 曲线长度；{@code summary}
- * 数值与 `/learner/progress.activity` 完全一致，绝不出现两套数字。UI 只展示近 7 天。</p>
+ * <p><b>出场分布字段是 graded-only。</b> {@code knowledgeDrillAttempts / wrongReviewAttempts /
+ * worldAttempts} 沿用历史含义，只统计真实 {@code graded + correct/partial/wrong} 的正式
+ * Attempt，<b>不含</b>仅查看答案（reveal-only）。范围判定复用
+ * {@link LearnerActivityStatsService#scopedKnowledgePointIds}，不再自带第二套范围 SQL。</p>
+ *
+ * <p>旧契约的 {@code days=7|30|90} 入参继续接受，只影响 {@code daily} 曲线长度；UI 只展示近 7 天。</p>
  */
 @Service
 public class LearnerStatisticsService {
@@ -52,7 +55,7 @@ public class LearnerStatisticsService {
                 LearnerActivityStatsService.WINDOW_DAYS);
         LearnerActivityStatsService.Metrics metrics = unified.metrics();
 
-        Origins origins = origins(learnerId);
+        Origins origins = gradedOrigins(learnerId, activity.scopedKnowledgePointIds(learnerId));
         Summary summary = new Summary(metrics.totalEffectiveAttempts(), metrics.activeStudyDays7d(),
                 metrics.touchedKnowledgePoints(), origins.knowledgeDrill(), origins.wrongReview(),
                 origins.world(), unified.outcomes().correct(), unified.outcomes().partial(),
@@ -66,51 +69,37 @@ public class LearnerStatisticsService {
     }
 
     /**
-     * 旧接口的出场分布字段。
+     * 旧接口的出场分布字段（graded-only）。
      *
-     * <p>只统计与统一统计同一条有效 Attempt 规则下的记录：{@code revealed} 尚未评分，没有
-     * assessment，不能凭空归类到任何出场分布里。</p>
+     * <p>只读取 {@code status='graded'} 且 assessment 合法的正式 Attempt：{@code revealed} 尚未
+     * 评分，没有 assessment，既不能算进结果分布，也不能凭空归类到任何出场分布里。</p>
+     *
+     * <p>范围收敛在 Java 侧按冻结 {@code target_knowledge_point_id} 判定，直接复用统一活动
+     * 统计已经算好的去重范围集合；这样多本文集共享同一 KnowledgePoint 时既不会漏算，也不会
+     * 通过多对多 JOIN 放大行数，更不会出现第二套范围口径。</p>
      */
-    private Origins origins(String learnerId) {
+    private Origins gradedOrigins(String learnerId, Set<String> scope) {
+        if (scope.isEmpty()) return new Origins(0, 0, 0);
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT a.assessment,a.world_id,p.intent
+                SELECT a.target_knowledge_point_id,a.world_id,p.intent
                   FROM study_attempt a
                   JOIN question_resource q ON q.id=a.question_id
                   LEFT JOIN learner_practice_session p ON p.id=a.practice_session_id
                  WHERE a.learner_id=? AND a.status='graded' AND a.answered_at IS NOT NULL
                    AND a.assessment IN ('correct','partial','wrong')
+                   AND a.target_knowledge_point_id IS NOT NULL
                    AND %s
-                   AND %s
-                """.formatted(FormalQuestionPolicy.published("q"), scopedTargetExists()), learnerId);
+                """.formatted(FormalQuestionPolicy.published("q")), learnerId);
         int knowledgeDrill = 0, wrongReview = 0, world = 0;
         for (Map<String, Object> row : rows) {
+            // 冻结 target 不在当前学习范围内：只隐藏历史，不删除记录。
+            if (!scope.contains(String.valueOf(row.get("target_knowledge_point_id")))) continue;
             if ("knowledge_drill".equals(row.get("intent"))) knowledgeDrill++;
             // 错题单题重做与错题快练统一计入错题练习作答统计。
             if ("wrong_review".equals(row.get("intent")) || "wrong_drill".equals(row.get("intent"))) wrongReview++;
             if (row.get("world_id") != null) world++;
         }
         return new Origins(knowledgeDrill, wrongReview, world);
-    }
-
-    /**
-     * 「Attempt 的冻结 target KnowledgePoint 仍在当前 Selected Books 范围内」的 SQL 判定。
-     *
-     * <p>与 {@link LearnerProgressStore#selectedMemberships} 同源，但按 target 单点判定；
-     * 用 EXISTS 而不是 JOIN，避免多本文集共享同一 KnowledgePoint 时把行数放大。</p>
-     */
-    private static String scopedTargetExists() {
-        return """
-                EXISTS (
-                    SELECT 1
-                      FROM learner_selected_book selected
-                      JOIN question_bank b ON b.id=selected.bank_id AND b.enabled=TRUE
-                      JOIN question_bank_knowledge membership ON membership.bank_id=b.id
-                      JOIN global_knowledge_point k ON k.id=membership.knowledge_point_id AND k.status='active'
-                     WHERE selected.learner_id=a.learner_id
-                       AND membership.knowledge_point_id=a.target_knowledge_point_id
-                       AND """ + " " + TrainableKnowledge.exists("k") + """
-                )
-                """.trim();
     }
 
     private List<Daily> daily(String learnerId, Instant now, int days) {
@@ -120,6 +109,11 @@ public class LearnerStatisticsService {
 
     public record StatisticsView(int days, Instant generatedAt, Summary summary,
                                  List<Daily> daily, List<BookMastery> books) {}
+    /**
+     * {@code gradedAttempts / activeStudyDays / distinctKnowledgePoints / correct / partial / wrong /
+     * revealedOnly} 与 {@code /learner/progress.activity} 同源（含 reveal-only）；
+     * {@code knowledgeDrillAttempts / wrongReviewAttempts / worldAttempts} 是 graded-only 出场分布。
+     */
     public record Summary(int gradedAttempts, int activeStudyDays, int distinctKnowledgePoints,
                           int knowledgeDrillAttempts, int wrongReviewAttempts, int worldAttempts,
                           int correct, int partial, int wrong, int revealedOnly) {}

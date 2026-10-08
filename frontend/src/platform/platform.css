@@ -531,6 +531,8 @@
 .learning-hub .recent-points p { margin: 3px 0 0; color: var(--zj-text-tertiary); font-size: 12px; }
 .learning-hub .recent-points > a:hover h3 { color: var(--zj-brand); }
 .learning-hub .recent-point-state { display: grid; gap: 3px; justify-items: end; }
+/* 「仅查看答案 · 未自评」是一个整体状态标签，不要在窄卡片里折行。 */
+.learning-hub .recent-point-state .mastery-band { white-space: nowrap; }
 .learning-hub .recent-point-state b { color: var(--zj-text); }
 .learning-hub .recent-point-state small { color: var(--zj-text-tertiary); }
 .learning-hub .progress-book-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }

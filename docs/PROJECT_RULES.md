@@ -1180,6 +1180,18 @@ status = graded 且已有更早的合法 answer_revealed_at → answer_revealed_
 因此跨天 `reveal → 自评` 不会把记录改到第二天。按 `Asia/Shanghai` 自然日计算今日、近 7 天与
 活跃学习日。历史脏数据（`graded` 缺 assessment、缺合法时间等）**明确排除**，不虚构日期或结果。
 
+### 14.1.2.1 两个时间概念必须分开
+
+```text
+有效接触时间 lastEffectiveContactAt  = 首次有效行动（reveal 或 graded），reveal-only 也有
+Mastery 证据时间 lastEvidenceAt      = 只有真实 graded 才产生，来自 Mastery / Evidence
+```
+
+「最近接触知识点」按**有效接触时间**排序与展示，因此仅查看参考解析也正确出现；掌握度展示
+仍来自 Mastery 事实。`evidenceCount = 0` 表示该知识点只有「仅查看答案」，UI 只能说明接触
+方式，**不得**展示百分比掌握度。严禁为了展示足迹把 reveal 写成 `graded`、制造 Evidence 或
+Mastery。
+
 ### 14.1.3 当前学习范围
 
 统计与进度共用同一份范围事实：当前 Learner Selected Books 中仍 `enabled`、按正式关系
@@ -1213,13 +1225,24 @@ PR6 的错题本或 Mastery 归因。
 
 ### 14.1.5 单一事实来源与 API
 
-后端 `LearnerActivityStatsService` 是唯一口径实现；`LearnerProgressService` 提供范围集合，
-`LearnerStatisticsService` 只作为旧接口兼容层。禁止在 Progress 与 Statistics 各自写一套聚合 SQL。
+有效 Attempt 的唯一 SQL 来源是 `LearnerActivityStore`；`LearnerActivityStatsService` 是唯一口径
+实现（范围解析 + 一次只读派生），`LearnerProgressService` 组装进度视图，`LearnerStatisticsService`
+只作为旧接口兼容层。禁止在 Progress 与 Statistics 各自写一套聚合 SQL。
 
 ```text
-GET /api/v1/learner/progress     统一总览（summary / bands / books / recent / activity）
+GET /api/v1/learner/progress     统一总览（summary / bands / books / recent / recentContacts / activity）
 GET /api/v1/learner/statistics   兼容接口，summary 与 progress.activity 同源；days 只影响 daily 长度
 ```
+
+`recent` 是**保留的旧契约**，字段名、类型与近 7 个上海业务日语义都不得改动，且必须是
+**graded-only**：只统计真实 `graded + correct/partial/wrong`，绝不把 reveal-only 填入
+`gradedAttempts7d` / `daily` / `distinctKnowledgePoints7d` 之类的字段名。`recent.knowledgePoints`
+保留为空数组以维持字段存在性，学习足迹由 `recentContacts` 承担。
+
+`recentContacts` 与 `activity` 是 PR7 新增的完整口径（含 reveal-only）。旧 `/learner/statistics`
+的 `knowledgeDrillAttempts` / `wrongReviewAttempts` / `worldAttempts` 是 **graded-only 出场分布**，
+不含 reveal-only；其 `gradedAttempts` / `activeStudyDays` / `distinctKnowledgePoints` /
+`correct` / `partial` / `wrong` / `revealedOnly` 与 `progress.activity` 同源。
 
 时间范围统一「近 7 天」，不再提供 7 / 30 / 90 天切换控件。所有接口按登录 Learner 隔离，跨
 Learner 不可读。进度页与统计页不得对同一指标给出不同数字。
