@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QuestionPage, QuestionReportsPage, SourcePage, ImportPage } from "./ManagementApp";
+import { QuestionPage, QuestionReportsPage, SourcePage, ImportPage, KnowledgePage } from "./ManagementApp";
 import { manageApi, type ManageUser, type PageResult, type QuestionSourceView, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
@@ -15,6 +15,8 @@ vi.mock("./api", () => ({
     createQuestion: vi.fn(),
     submitQuestion: vi.fn(),
     knowledge: vi.fn(),
+    books: vi.fn(),
+    book: vi.fn(),
     sources: vi.fn(),
     createSource: vi.fn(),
     saveSource: vi.fn(),
@@ -86,7 +88,43 @@ beforeEach(() => {
   vi.mocked(manageApi.saveQuestion).mockReset();
   vi.mocked(manageApi.createQuestion).mockReset();
   vi.mocked(manageApi.knowledge).mockReset();
+  vi.mocked(manageApi.books).mockReset();
+  vi.mocked(manageApi.book).mockReset();
   questionsMock.mockResolvedValue(result(Array.from({ length: 20 }, (_, index) => question(index + 1)), 0, 22, 2));
+});
+
+describe("KnowledgePage filters", () => {
+  it("starts from the global view and prevents unassigned plus book filters", async () => {
+    const knowledgeMock=vi.mocked(manageApi.knowledge);
+    knowledgeMock.mockResolvedValue({content:[],page:0,size:20,totalElements:0,totalPages:0});
+    vi.mocked(manageApi.books).mockResolvedValue([{id:"book-1",name:"考研数学一",description:"",enabled:true,
+      revision:1,membershipCount:1,trainableKnowledgePointCount:1,publishedQuestionCount:1,chapterCount:1,selectedLearnerCount:0}]);
+    vi.mocked(manageApi.book).mockResolvedValue({book:{id:"book-1",name:"考研数学一",description:"",enabled:true,
+      revision:1,membershipCount:1,trainableKnowledgePointCount:1,publishedQuestionCount:1,chapterCount:1,selectedLearnerCount:0},
+      chapters:[{id:"chapter-1",code:"C1",name:"第一章",description:"",sortOrder:0,revision:1}]});
+
+    render(<KnowledgePage user={reviewer} fail={vi.fn()} />);
+    await waitFor(()=>expect(knowledgeMock).toHaveBeenCalledWith(expect.objectContaining({
+      membership:"all",bookId:"",chapterId:"",page:0,
+    })));
+
+    fireEvent.change(await screen.findByLabelText("文集"),{target:{value:"book-1"}});
+    await screen.findByRole("option",{name:"第一章"});
+    fireEvent.change(screen.getByLabelText("章节"),{target:{value:"chapter-1"}});
+    fireEvent.change(screen.getByLabelText("归属"),{target:{value:"unassigned"}});
+
+    expect(screen.getByLabelText("文集")).toHaveProperty("value","");
+    expect(screen.getByLabelText("章节")).toHaveProperty("value","");
+    expect(screen.getByLabelText("文集").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByLabelText("章节").hasAttribute("disabled")).toBe(true);
+    await waitFor(()=>expect(knowledgeMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      membership:"unassigned",bookId:"",chapterId:"",
+    })));
+
+    fireEvent.change(screen.getByLabelText("归属"),{target:{value:"all"}});
+    expect(screen.getByLabelText("文集").hasAttribute("disabled")).toBe(false);
+    expect(screen.getByLabelText("章节").hasAttribute("disabled")).toBe(true);
+  });
 });
 
 describe("QuestionReportsPage", () => {
@@ -299,14 +337,13 @@ describe("QuestionPage pagination", () => {
     fireEvent.change(screen.getByLabelText(/题干（Markdown/), { target: { value: "新建题干" } });
     fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
 
-    // 成功提示同时出现在列表页与抽屉内，都是 role="status"；关键是它必须留得住。
-    await waitFor(() => expect(screen.getAllByRole("status").length).toBeGreaterThan(0));
-    const notices = screen.getAllByRole("status").map(node => node.textContent).join("|");
-    expect(notices).toContain("草稿已创建");
+    await waitFor(() => expect(screen.getAllByRole("status")).toHaveLength(1));
+    expect(screen.getByRole("status").textContent).toContain("草稿已创建");
     expect(createMock).toHaveBeenCalledTimes(1);
     // 保存成功后 key 从 "new" 变成题目 ID，提示不能因此消失。
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(screen.getAllByRole("status").map(node => node.textContent).join("|")).toContain("草稿已创建");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status").textContent).toContain("草稿已创建");
   });
 
   it("shows a visible success notice after saving an existing question", async () => {
@@ -320,9 +357,42 @@ describe("QuestionPage pagination", () => {
     fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
     fireEvent.click(await screen.findByRole("button", { name: "保存修改" }));
 
-    await waitFor(() => expect(screen.getAllByRole("status").length).toBeGreaterThan(0));
-    expect(screen.getAllByRole("status").map(node => node.textContent).join("|")).toContain("已保存修改");
+    await waitFor(() => expect(screen.getAllByRole("status")).toHaveLength(1));
+    expect(screen.getByRole("status").textContent).toContain("已保存修改");
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ id: item.id, revision: 1 }));
+  });
+
+  it("replaces the current toast and restarts its three-second dismissal timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const item=question(1,"draft");
+      questionsMock.mockResolvedValue(result([item],0,1,1));
+      questionMock.mockResolvedValue(item);
+      const saveMock=vi.mocked(manageApi.saveQuestion);
+      saveMock.mockResolvedValueOnce({...item,sourceName:"第一次保存",revision:2})
+        .mockResolvedValueOnce({...item,sourceName:"第二次保存",revision:3});
+
+      render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+      await act(async()=>{await Promise.resolve()});
+      fireEvent.click(screen.getByRole("button",{name:"编辑"}));
+      await act(async()=>{await Promise.resolve()});
+      fireEvent.click(screen.getByRole("button",{name:"保存修改"}));
+      await act(async()=>{await Promise.resolve();await Promise.resolve()});
+      expect(screen.getAllByRole("status")).toHaveLength(1);
+      expect(screen.getByRole("status").textContent).toContain("第一次保存");
+
+      act(()=>vi.advanceTimersByTime(2500));
+      fireEvent.click(screen.getByRole("button",{name:"保存修改"}));
+      await act(async()=>{await Promise.resolve();await Promise.resolve()});
+      expect(screen.getAllByRole("status")).toHaveLength(1);
+      expect(screen.getByRole("status").textContent).toContain("第二次保存");
+      act(()=>vi.advanceTimersByTime(2999));
+      expect(screen.getByRole("status")).toBeTruthy();
+      act(()=>vi.advanceTimersByTime(1));
+      expect(screen.queryByRole("status")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the backend-formatted display question number instead of concatenating the raw one", async () => {

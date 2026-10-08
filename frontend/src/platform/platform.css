@@ -412,6 +412,9 @@
 .learning-hub .continue-card .continue-meta .continue-time { color: var(--zj-text-tertiary); font-size: 13px; }
 /* 正式做题页题面来源：真题标签 + 第 N 题。 */
 .learning-hub .practice-exam-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.learning-hub .practice-context-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 10px 0 4px; }
+.learning-hub .practice-context-row .practice-exam-meta,
+.learning-hub .practice-context-row .tag-row { margin: 0; }
 .learning-hub .practice-exam-label { padding: 5px 10px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 13px; font-weight: 700; }
 .learning-hub .practice-question-number { padding: 5px 10px; border-radius: 999px; background: var(--zj-surface-soft); color: var(--zj-text-tertiary); font-size: 13px; }
 
@@ -424,7 +427,8 @@
 .learning-hub .practice-options button:hover:not(:disabled) { border-color: #a5b4fc; background: var(--zj-surface-hover); }
 .learning-hub .practice-options button.selected { border-color: var(--zj-brand); background: var(--zj-brand-soft); color: var(--zj-brand-hover); box-shadow: 0 0 0 1px var(--zj-brand); }
 .learning-hub .practice-assessment,
-.learning-hub .practice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+.learning-hub .practice-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0; }
+.learning-hub .question-report-trigger { margin-left: 2px; }
 
 /* Progress */
 .learning-hub .progress-page > p { color: var(--zj-text-secondary); }
