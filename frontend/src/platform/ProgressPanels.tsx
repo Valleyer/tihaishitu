@@ -2,119 +2,74 @@ import { progressBandLabels, recentContactLabel } from "./progressView";
 import type { ActivityDaily, ActivityMetrics, RecentContact } from "./api";
 
 /**
- * PR7 进度统计 V3：六个核心指标与近 7 日趋势的展示组件。
+ * PR7 进度页的指标投影与活动趋势图。
  *
- * <p>与 `PlatformApp` 分离，避免把统计口径与视觉逻辑堆在路由文件里；这里不做任何
- * 数值推导，只渲染后端 `activity` 已经算好的统一事实。</p>
+ * <p>本文件刻意保持两个「旧版原样」的契约：</p>
+ * <ul>
+ *   <li>六项指标只投影 `label` + `value`，不携带单位或说明文字；</li>
+ *   <li>{@link ActivityBarChart} 是旧 `/statistics` 页的原始单系列柱状图组件（DOM 结构与
+ *       高度换算算法均沿用），本轮只更换标题、单位与数据来源。</li>
+ * </ul>
  */
 
 export interface MetricSpec {
   label: string;
   value: number;
-  hint: string;
-  unit?: string;
 }
 
-/** 六个核心指标的唯一定义处；顺序即产品确认的展示顺序。 */
+/** 六项核心指标的唯一定义处；顺序即产品确认的展示顺序，只含数字与名称。 */
 export function progressMetrics(metrics: ActivityMetrics): MetricSpec[] {
   return [
-    { label: "活跃学习日", value: metrics.activeStudyDays7d, hint: "近 7 天有答题记录的天数", unit: "天" },
-    { label: "今日答题", value: metrics.todayEffectiveAttempts, hint: "今天发生的有效答题", unit: "次" },
-    { label: "当前范围知识点", value: metrics.totalKnowledgePoints, hint: "当前学习范围里可学习的知识点", unit: "个" },
-    { label: "接触知识点", value: metrics.touchedKnowledgePoints, hint: "全历史有效答过的知识点", unit: "个" },
-    { label: "累计答题", value: metrics.totalEffectiveAttempts, hint: "当前范围全历史有效答题", unit: "次" },
-    { label: "累计正确", value: metrics.totalCorrectAttempts, hint: "当前范围全历史答对", unit: "次" },
+    { label: "活跃学习日", value: metrics.activeStudyDays7d },
+    { label: "今日答题", value: metrics.todayEffectiveAttempts },
+    { label: "当前范围知识点", value: metrics.totalKnowledgePoints },
+    { label: "接触知识点", value: metrics.touchedKnowledgePoints },
+    { label: "累计答题", value: metrics.totalEffectiveAttempts },
+    { label: "累计正确", value: metrics.totalCorrectAttempts },
   ];
 }
 
-export function isActivityEmpty(daily: ActivityDaily[]): boolean {
-  return daily.every(day => day.effectiveAttempts === 0 && day.distinctKnowledgePoints === 0);
+/**
+ * 旧版活动趋势图（原 `/statistics` 的 `ActivityBarChart`，单系列柱体）。
+ *
+ * <p>与 PR7 之前完全一致：同样的 DOM 结构、同样的 `ceiling` 取整与百分比柱高算法、同样的
+ * 7/30/90 日期标签密度（`every = 1 / 5 / 14`）、同样的空态位置。改动仅限标题、单位与传入的
+ * 真实数据序列。</p>
+ */
+export function ActivityBarChart({ title, days, values, unit }: {
+  title: string; days: number; values: { date: string; value: number }[]; unit: string;
+}) {
+  const max = Math.max(1, ...values.map(item => item.value));
+  const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
+  const ticks = [ceiling, Math.round(ceiling / 2), 0];
+  const every = days === 7 ? 1 : days === 30 ? 5 : 14;
+  const empty = values.every(item => item.value === 0);
+  return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
+    <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
+    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=><div className="chart-column" title={`${item.date}：${item.value} ${unit}`} key={item.date}><i style={{height:`${item.value/ceiling*100}%`}}/><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>)}</div><div className="chart-x-title">日期</div></div>
+  </div></section>;
+}
+
+/** 两张趋势图共用的数据投影：每日有效答题次数 / 每日接触知识点数。 */
+export function trendSeries(daily: ActivityDaily[]) {
+  return {
+    attempts: daily.map(day => ({ date: day.date, value: day.effectiveAttempts })),
+    knowledgePoints: daily.map(day => ({ date: day.date, value: day.distinctKnowledgePoints })),
+  };
 }
 
 /**
- * 「最近接触」条目的状态展示。
+ * 首页「学习足迹」条目的状态展示（进度页本轮已下线该模块）。
  *
- * <p>判据来自最近一次 Attempt 的真实状态（{@code lastOutcomeRevealedOnly} / {@code lastGraded}），
- * 不是 {@code evidenceCount}：已有真实评分但暂无 Mastery Evidence 时显示
- * 「已作答 · 暂无掌握证据」，绝不说成「仅查看答案」；两种情况都不展示虚构百分比。</p>
+ * <p>判据来自最近一次 Attempt 的真实状态，不是 {@code evidenceCount}：已有真实评分但暂无
+ * Mastery Evidence 时显示「已作答 · 暂无掌握证据」，绝不说成「仅查看答案」。</p>
  */
-export function RecentContactState({ contact }: { contact: RecentContact }) {
+export function RecentContactState({ contact, timestamp }: { contact: RecentContact; timestamp: string }) {
   const label = recentContactLabel(contact);
   if (label.kind === "mastery") {
     return <><span className={`mastery-band ${contact.band}`}>{progressBandLabels[contact.band]}</span>
-      <b>{Math.round(contact.effectiveMastery)}%</b></>;
+      <small>{Math.round(contact.effectiveMastery)}% · {timestamp}</small></>;
   }
-  return <span className={`mastery-band ${label.kind === "reveal_only" ? "unstarted" : "learning"}`}>{label.text}</span>;
-}
-
-/**
- * 近 7 天趋势：每日有效答题数与每日接触知识点数共用一条上海业务日轴。
- *
- * <p>零值日期保留整列，只用真实空态说明没有任何活动，不用虚构记录补位。柱高按显式绘图区
- * 高度换算成像素而不是百分比：网格 / flex 子项里的百分比高度在 `1fr` 轨道中解析不稳定，
- * 容易把柱子压成 0。</p>
- */
-export const ACTIVITY_PLOT_HEIGHT = 200;
-
-export function ActivityChart({ daily }: { daily: ActivityDaily[] }) {
-  const max = Math.max(1, ...daily.flatMap(day => [day.effectiveAttempts, day.distinctKnowledgePoints]));
-  const empty = isActivityEmpty(daily);
-  // 空态不编造刻度：只有一个 0 基线，不给「没有记录」配一个看起来很忙的数轴。
-  const ceiling = empty ? 1 : Math.max(1, Math.ceil(max / 5) * 5);
-  const ticks = empty ? [0] : [ceiling, Math.round(ceiling / 2), 0];
-  const barHeight = (value: number) => Math.round(value / ceiling * ACTIVITY_PLOT_HEIGHT);
-  // 零值不画柱子；有值至少 3px，避免 1 次答题看不见。
-  const barWidth = (value: number) => value === 0 ? 0 : Math.max(3, Math.round(value / max * 18));
-
-  return <section className="hub-panel progress-activity">
-    <header className="activity-chart-heading">
-      <h2>近 7 天趋势</h2>
-      <span>按上海业务日 · 从早到晚</span>
-    </header>
-    <div className="activity-legend">
-      <span><i className="legend-bar attempts" aria-hidden="true" />每日有效答题</span>
-      <span><i className="legend-bar points" aria-hidden="true" />每日接触知识点</span>
-    </div>
-    <div className="activity-chart-body" style={{ gridTemplateRows: `${ACTIVITY_PLOT_HEIGHT}px 24px` }}>
-      <div className="chart-y-title">数量</div>
-      <div className={empty ? "chart-y-axis single" : "chart-y-axis"} aria-hidden="true">
-        {ticks.map(tick => <span key={tick}>{tick}</span>)}
-      </div>
-      <div className="chart-plot" style={{ gridTemplateRows: `${ACTIVITY_PLOT_HEIGHT}px 24px` }}>
-        <div className="chart-bars">
-          {daily.map(day => <div className="chart-column" key={day.date}
-            title={`${day.date}：有效答题 ${day.effectiveAttempts} 次，接触知识点 ${day.distinctKnowledgePoints} 个`}>
-            <div className="chart-bar-stack">
-              <i className="chart-bar attempts" style={{ height: `${barHeight(day.effectiveAttempts)}px`, width: `${barWidth(day.effectiveAttempts)}px` }} />
-              <i className="chart-bar points" style={{ height: `${barHeight(day.distinctKnowledgePoints)}px`, width: `${barWidth(day.distinctKnowledgePoints)}px` }} />
-            </div>
-            <span className="chart-date">{day.date.slice(5)}</span>
-          </div>)}
-        </div>
-      </div>
-    </div>
-    {empty && <p className="chart-empty">这 7 天还没有有效答题记录。开始一次练习后，趋势会显示在这里。</p>}
-  </section>;
-}
-
-/** 答题结果分布。四类之和与「累计答题」一致，仅查看答案不并入错误。 */
-export function OutcomeDistribution({ outcomes }: { outcomes: { correct: number; partial: number; wrong: number; revealedOnly: number } }) {
-  const total = outcomes.correct + outcomes.partial + outcomes.wrong + outcomes.revealedOnly;
-  const rows: [string, number, string][] = [
-    ["正确", outcomes.correct, "correct"],
-    ["部分正确", outcomes.partial, "partial"],
-    ["错误", outcomes.wrong, "wrong"],
-    ["仅查看答案", outcomes.revealedOnly, "revealed"],
-  ];
-  return <section className="hub-panel progress-outcomes">
-    <header className="section-heading"><h2>答题结果分布</h2><span>累计 {total} 次有效答题</span></header>
-    <div className="outcome-rows">
-      {rows.map(([label, value, tone]) => <div className="horizontal-stat" key={label}>
-        <span>{label}</span>
-        <i><b className={tone} style={{ width: `${total === 0 ? 0 : value / total * 100}%` }} /></i>
-        <strong>{value}</strong>
-      </div>)}
-    </div>
-    <p className="outcome-note">「仅查看答案」是尚未自评的参考解析阅读，不算错误，也不算掌握。</p>
-  </section>;
+  return <><span className={`mastery-band ${label.kind === "reveal_only" ? "unstarted" : "learning"}`}>{label.text}</span>
+    <small>{timestamp}</small></>;
 }

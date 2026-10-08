@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { platformApi, type HubBootstrap, type LearnerActivity, type LearnerProgress } from "./api";
+import { platformApi, type ActivityDaily, type HubBootstrap, type LearnerActivity, type LearnerProgress } from "./api";
 import { AuthenticatedPlatform, ProgressPage } from "./PlatformApp";
 import { progressMetrics } from "./ProgressPanels";
 import { isHubPath } from "./navigation";
@@ -17,26 +17,33 @@ const bootstrap = {
     knowledgePointCount: 267, totalKnowledgePointCount: 469, questionCount: 100 }],
 } as HubBootstrap;
 
-const activity = (overrides: Partial<LearnerActivity> = {}): LearnerActivity => ({
-  windowDays: 7, generatedAt: "2026-10-05T12:00:00Z",
-  metrics: {
-    activeStudyDays7d: 3, todayEffectiveAttempts: 5, totalKnowledgePoints: 267,
-    touchedKnowledgePoints: 42, totalEffectiveAttempts: 128, totalCorrectAttempts: 90,
-  },
-  outcomes: { correct: 90, partial: 12, wrong: 20, revealedOnly: 6 },
-  daily: [
-    { date: "2026-09-29", effectiveAttempts: 0, distinctKnowledgePoints: 0, correct: 0, partial: 0, wrong: 0, revealedOnly: 0 },
-    { date: "2026-09-30", effectiveAttempts: 2, distinctKnowledgePoints: 2, correct: 2, partial: 0, wrong: 0, revealedOnly: 0 },
-    { date: "2026-10-01", effectiveAttempts: 0, distinctKnowledgePoints: 0, correct: 0, partial: 0, wrong: 0, revealedOnly: 0 },
-    { date: "2026-10-02", effectiveAttempts: 4, distinctKnowledgePoints: 3, correct: 3, partial: 0, wrong: 1, revealedOnly: 0 },
-    { date: "2026-10-03", effectiveAttempts: 0, distinctKnowledgePoints: 0, correct: 0, partial: 0, wrong: 0, revealedOnly: 0 },
-    { date: "2026-10-04", effectiveAttempts: 1, distinctKnowledgePoints: 1, correct: 0, partial: 0, wrong: 0, revealedOnly: 1 },
-    { date: "2026-10-05", effectiveAttempts: 5, distinctKnowledgePoints: 4, correct: 4, partial: 0, wrong: 1, revealedOnly: 0 },
-  ],
-  ...overrides,
-});
+/** 生成恰好 n 条连续上海业务日曲线，含零值日；值随窗口长度变化以便断言真实切换。 */
+function dailySeries(days: number, perDay: (index: number) => { attempts: number; points: number }): ActivityDaily[] {
+  const start = Date.UTC(2026, 8, 29);
+  return Array.from({ length: days }, (_, index) => {
+    const { attempts, points } = perDay(index);
+    const date = new Date(start + index * 86_400_000).toISOString().slice(0, 10);
+    return { date, effectiveAttempts: attempts, distinctKnowledgePoints: points,
+      correct: 0, partial: 0, wrong: 0, revealedOnly: 0 };
+  });
+}
 
-const progress = (overrides: Partial<LearnerProgress> = {}): LearnerProgress => ({
+const metrics = { activeStudyDays7d: 3, todayEffectiveAttempts: 5, totalKnowledgePoints: 267,
+  touchedKnowledgePoints: 42, totalEffectiveAttempts: 128, totalCorrectAttempts: 90 };
+
+const outcomes = { correct: 90, partial: 12, wrong: 20, revealedOnly: 6 };
+
+function activityFor(days: 7 | 30 | 90): LearnerActivity {
+  // 默认 7 天有 3 个非零日；30/90 天窗口更长但值不同，可用来证明切换真的重新取数。
+  const series = days === 7
+    ? dailySeries(7, index => index % 2 === 0 ? { attempts: index + 1, points: index } : { attempts: 0, points: 0 })
+    : days === 30
+      ? dailySeries(30, index => index === 0 ? { attempts: 11, points: 4 } : { attempts: 0, points: 0 })
+      : dailySeries(90, index => index === 89 ? { attempts: 22, points: 9 } : { attempts: 0, points: 0 });
+  return { windowDays: days, generatedAt: "2026-10-05T12:00:00Z", metrics, outcomes, daily: series };
+}
+
+const progress = (days: 7 | 30 | 90 = 7): LearnerProgress => ({
   generatedAt: "2026-10-05T12:00:00Z",
   summary: { selectedBooks: 1, totalKnowledgePoints: 267, startedKnowledgePoints: 42,
     readyKnowledgePoints: 10, proficientKnowledgePoints: 3, reviewDue: 2, reviewSoon: 1,
@@ -46,12 +53,11 @@ const progress = (overrides: Partial<LearnerProgress> = {}): LearnerProgress => 
     started: 42, ready: 10, proficient: 3, masteryProgress: 37.4, reviewDueOrSoon: 3,
     chapters: [{ chapterId: "chapter-1", code: "A", name: "第一章", total: 20, started: 5,
       ready: 2, proficient: 1, masteryProgress: 22.5 }] }],
-  activity: activity(),
+  activity: activityFor(days),
   recent: {
     gradedAttempts7d: 8, distinctKnowledgePoints7d: 6, activeStudyDays7d: 3,
-    daily: activity().daily.map(day => ({ date: day.date,
-      gradedAttempts: day.correct + day.partial + day.wrong,
-      distinctKnowledgePoints: day.effectiveAttempts === 0 ? 0 : day.distinctKnowledgePoints })),
+    daily: activityFor(7).daily.map(day => ({ date: day.date,
+      gradedAttempts: day.effectiveAttempts, distinctKnowledgePoints: day.distinctKnowledgePoints })),
     knowledgePoints: [],
   },
   recentContacts: [
@@ -59,23 +65,15 @@ const progress = (overrides: Partial<LearnerProgress> = {}): LearnerProgress => 
       band: "learning", effectiveMastery: 62.5, stabilityDays: 4, evidenceCount: 5,
       lastEvidenceAt: "2026-10-05T02:00:00Z", lastEffectiveContactAt: "2026-10-05T02:00:00Z",
       lastOutcomeRevealedOnly: false, lastGraded: true, assessment: "correct" },
-    { knowledgePointId: "point-2", name: "反常积分的敛散性", bookName: "考研数学一",
-      chapterName: "第三章 一元函数积分学", band: "unstarted", effectiveMastery: 0, stabilityDays: 0,
-      evidenceCount: 0, lastEvidenceAt: null, lastEffectiveContactAt: "2026-10-05T01:00:00Z",
-      lastOutcomeRevealedOnly: true, lastGraded: false, assessment: null },
-    { knowledgePointId: "point-3", name: "定积分的换元法", bookName: "考研数学一",
-      chapterName: "第三章 一元函数积分学", band: "unstarted", effectiveMastery: 0, stabilityDays: 0,
-      evidenceCount: 0, lastEvidenceAt: null, lastEffectiveContactAt: "2026-10-05T00:30:00Z",
-      lastOutcomeRevealedOnly: false, lastGraded: true, assessment: "wrong" },
   ],
-  ...overrides,
 });
 
-function mockPlatform(data: LearnerProgress = progress()) {
-  const load = vi.spyOn(platformApi, "progress").mockResolvedValue(data);
+/** 每次按 days 返回对应窗口的响应，模拟后端真实行为。 */
+function mockPlatform(load?: (days?: 7 | 30 | 90) => LearnerProgress) {
+  const progressSpy = vi.spyOn(platformApi, "progress").mockImplementation(async days => load ? load(days) : progress(days ?? 7));
   vi.spyOn(platformApi, "bootstrap").mockResolvedValue(bootstrap);
   const statistics = vi.spyOn(platformApi, "statistics");
-  return { load, statistics };
+  return { progressSpy, statistics };
 }
 
 beforeEach(() => {
@@ -86,148 +84,154 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("progress metrics contract", () => {
-  it("maps the six unified metrics to their product labels in order", () => {
-    const metrics = progressMetrics(activity().metrics);
-    expect(metrics.map(metric => metric.label)).toEqual(
+  it("projects only a label and a value for the six unified metrics in order", () => {
+    const projected = progressMetrics(metrics);
+    expect(projected.map(metric => metric.label)).toEqual(
       ["活跃学习日", "今日答题", "当前范围知识点", "接触知识点", "累计答题", "累计正确"]);
-    expect(metrics.map(metric => metric.value)).toEqual([3, 5, 267, 42, 128, 90]);
+    expect(projected.map(metric => metric.value)).toEqual([3, 5, 267, 42, 128, 90]);
+    // 只允许 label / value：不得再出现单位或 hint 字段。
+    expect(projected.every(metric => Object.keys(metric).sort().join() === "label,value")).toBe(true);
   });
 });
 
-describe("ProgressPage", () => {
-  it("renders the six unified metrics from the single progress response", async () => {
-    const { load, statistics } = mockPlatform();
-    render(<ProgressPage data={bootstrap} />);
+describe("ProgressPage header and time range", () => {
+  it("restores the old title block with only the title and the 7/30/90 selector", async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
 
-    expect(await screen.findByText("活跃学习日")).toBeTruthy();
-    for (const label of ["今日答题", "当前范围知识点", "接触知识点", "累计答题", "累计正确"]) {
-      expect(screen.getByText(label)).toBeTruthy();
-    }
-    // 进度与统计共用一份事实：进度页只请求一次 /learner/progress，不再请求第二套统计。
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("heading", { name: "学习进度" })).toBeTruthy();
+    const heading = view.container.querySelector(".panel-heading")!;
+    const buttons = [...heading.querySelectorAll("button")];
+    expect(buttons.map(button => button.textContent)).toEqual(["近 7 天", "近 30 天", "近 90 天"]);
+    // 标题区只含标题与选择器：没有 eyebrow、范围徽标或介绍文字。
+    expect(heading.querySelectorAll("h1")).toHaveLength(1);
+    expect(heading.textContent?.replace(/近 \d+ 天/g, "").trim()).toBe("学习进度");
+    expect(screen.queryByText("当前学习范围")).toBeNull();
+    expect(screen.queryByText(/可学习知识点/)).toBeNull();
+  });
+
+  it("defaults to 7 days and requests the default window", async () => {
+    const { progressSpy } = mockPlatform();
+    render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+
+    expect(progressSpy).toHaveBeenCalledWith(7);
+    expect(screen.getByRole("button", { name: "近 7 天" }).className).toBe("active");
+  });
+
+  it("switches both charts to the real 30 and 90 day windows", async () => {
+    const { progressSpy } = mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+    const columns = () => view.container.querySelectorAll(".statistics-activity-chart .chart-column");
+    // 两张图各 7 列。
+    expect(columns()).toHaveLength(14);
+
+    fireEvent.click(screen.getByRole("button", { name: "近 30 天" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "近 30 天" }).className).toBe("active"));
+    expect(progressSpy).toHaveBeenLastCalledWith(30);
+    // 两张图同步切到 30 条，标题角标同步。
+    await waitFor(() => expect(columns()).toHaveLength(60));
+    expect(screen.getAllByText("近 30 天 · 单位：次")).toHaveLength(1);
+    expect(screen.getAllByText("近 30 天 · 单位：个")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "近 90 天" }));
+    expect(progressSpy).toHaveBeenLastCalledWith(90);
+    await waitFor(() => expect(columns()).toHaveLength(180));
+    expect(screen.getAllByText("近 90 天 · 单位：次")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "近 7 天" }));
+    expect(progressSpy).toHaveBeenLastCalledWith(7);
+    await waitFor(() => expect(columns()).toHaveLength(14));
+  });
+
+  it("never falls back to the legacy graded-only statistics endpoint", async () => {
+    const { statistics } = mockPlatform();
+    render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+    fireEvent.click(screen.getByRole("button", { name: "近 90 天" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "近 90 天" }).className).toBe("active"));
     expect(statistics).not.toHaveBeenCalled();
   });
 
-  it("renders seven daily bars including zero-value days and never a 30/90 day switch", async () => {
-    mockPlatform();
-    const view = render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("近 7 天趋势");
-
-    const columns = view.container.querySelectorAll(".chart-column");
-    expect(columns).toHaveLength(7);
-    // 零值日期不隐藏：0 活动的 3 天仍然占列。
-    expect(view.container.querySelectorAll(".chart-bar.attempts")).toHaveLength(7);
-    expect(view.container.querySelectorAll(".chart-bar.points")).toHaveLength(7);
-    expect(view.container.querySelector(".chart-column")!.getAttribute("title"))
-      .toContain("有效答题 0 次");
-    // 7/30/90 天切换控件已移除。
-    expect(screen.queryByRole("button", { name: /近 (30|90) 天/ })).toBeNull();
-    expect(screen.queryByText("学习统计")).toBeNull();
-  });
-
-  it("shows a real empty state without fabricating records", async () => {
-    const empty = activity({
-      metrics: { activeStudyDays7d: 0, todayEffectiveAttempts: 0, totalKnowledgePoints: 0,
-        touchedKnowledgePoints: 0, totalEffectiveAttempts: 0, totalCorrectAttempts: 0 },
-      outcomes: { correct: 0, partial: 0, wrong: 0, revealedOnly: 0 },
-      daily: activity().daily.map(day => ({ ...day, effectiveAttempts: 0, distinctKnowledgePoints: 0,
-        correct: 0, partial: 0, wrong: 0, revealedOnly: 0 })),
-    });
-    mockPlatform(progress({ activity: empty, books: [], recentContacts: [] }));
-    render(<ProgressPage data={bootstrap} />);
-
-    expect(await screen.findByText(/这 7 天还没有有效答题记录/)).toBeTruthy();
-    expect(screen.getByText("尚无学习足迹")).toBeTruthy();
-    expect(screen.getByText("尚未选择学习文集")).toBeTruthy();
-  });
-
-  it("separates revealed-only from wrong in the outcome distribution", async () => {
-    mockPlatform();
-    const view = render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("答题结果分布");
-
-    // 「仅查看答案」是独立一类，不并入错误，也不计入掌握。
-    expect(screen.getByText("仅查看答案")).toBeTruthy();
-    expect(screen.getByText("错误")).toBeTruthy();
-    const rows = view.container.querySelectorAll(".outcome-rows .horizontal-stat");
-    expect(rows).toHaveLength(4);
-    expect(rows[3].textContent).toContain("仅查看答案");
-    expect(rows[3].querySelector("b")!.className).toBe("revealed");
-    // 四类之和与累计答题一致。
-    expect(screen.getByText("累计 128 次有效答题")).toBeTruthy();
-  });
-
-  it("keeps book and chapter progress entry points reachable", async () => {
+  it("keeps the full-history metrics and the fixed seven-day active day metric", async () => {
     mockPlatform();
     render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("考研数学一");
+    await screen.findByRole("heading", { name: "学习进度" });
 
+    const values = () => [...document.querySelectorAll(".statistics-summary b")].map(node => node.textContent);
+    expect(values()).toEqual(["3", "5", "267", "42", "128", "90"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "近 90 天" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "近 90 天" }).className).toBe("active"));
+    // 切换只影响趋势曲线，不改动任何指标（活跃学习日仍为近 7 天定义）。
+    await waitFor(() => expect(values()).toEqual(["3", "5", "267", "42", "128", "90"]));
+  });
+});
+
+describe("ProgressPage layout and content", () => {
+  it("renders the six metrics without units or explanations in the DOM", async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+
+    const summary = view.container.querySelector(".statistics-summary")!;
+    expect(summary.querySelectorAll("article")).toHaveLength(6);
+    expect(summary.textContent).not.toMatch(/[天次个]/);
+    expect(summary.textContent).not.toContain("近 7 天有答题记录的天数");
+    expect(summary.textContent).not.toContain("今天发生的有效答题");
+    expect(summary.textContent).not.toContain("全历史");
+  });
+
+  it("restores the two legacy charts with the new titles, units and data sources", async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+
+    const headings = [...view.container.querySelectorAll(".statistics-activity-chart h2")].map(node => node.textContent);
+    expect(headings).toEqual(["每日答题次数", "每日接触知识点"]);
+    expect(screen.getByText("近 7 天 · 单位：次")).toBeTruthy();
+    expect(screen.getByText("近 7 天 · 单位：个")).toBeTruthy();
+    expect(screen.getByText("数量（次）")).toBeTruthy();
+    expect(screen.getByText("数量（个）")).toBeTruthy();
+    // 单系列旧结构：每个日期一列一根柱，保留零值日。
+    const charts = view.container.querySelectorAll(".statistics-activity-chart");
+    expect(charts).toHaveLength(2);
+    expect(charts[0].querySelectorAll(".chart-column")).toHaveLength(7);
+    expect(charts[0].querySelectorAll(".chart-column i")).toHaveLength(7);
+    expect(charts[0].querySelector(".chart-column")!.getAttribute("title")).toContain("1 次");
+    expect(charts[1].querySelector(".chart-column")!.getAttribute("title")).toContain("0 个");
+  });
+
+  it("removes the outcome distribution and the study footprint modules", async () => {
+    mockPlatform();
+    const view = render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+
+    expect(screen.queryByText("答题结果分布")).toBeNull();
+    expect(screen.queryByText("学习足迹")).toBeNull();
+    // 后端字段仍在，只是本页不再渲染。
+    expect(view.container.querySelector(".recent-points")).toBeNull();
+  });
+
+  it("keeps the book cards and their deep links without a separate title block", async () => {
+    mockPlatform();
+    render(<ProgressPage data={bootstrap} />);
+    await screen.findByRole("heading", { name: "学习进度" });
+
+    expect(screen.getByText("考研数学一")).toBeTruthy();
+    expect(screen.queryByText("文集掌握进度")).toBeNull();
+    expect(screen.queryByText(/有效掌握平均值/)).toBeNull();
     expect(screen.getByRole("link", { name: "查看章节进度 →" }).getAttribute("href"))
       .toBe("/progress/books/math");
-    expect(screen.getByRole("link", { name: /函数极限/ }).getAttribute("href"))
-      .toBe("/knowledge/point-1");
   });
 
-  it('shows a reveal-only contact in the footprint without faking mastery', async () => {
-    mockPlatform();
-    const view = render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("学习足迹");
-
-    // 仅查看答案的知识点也出现在「最近接触」里，并可进入知识点页。
-    const revealed = screen.getByRole("link", { name: /反常积分的敛散性/ });
-    expect(revealed.getAttribute("href")).toBe("/knowledge/point-2");
-    // 没有真实评分时不展示掌握度。
-    expect(screen.getByText("仅查看答案 · 未自评")).toBeTruthy();
-    expect(revealed.textContent).not.toContain("%");
-    // 真实评分的知识点仍然展示掌握度。
-    expect(screen.getByRole("link", { name: /函数极限/ }).textContent).toContain("63%");
-
-    // 足迹顺序沿用后端的有效接触时间倒序，不在前端重排。
-    const order = [...view.container.querySelectorAll(".recent-points > a h3")].map(node => node.textContent);
-    expect(order).toEqual(["函数极限", "反常积分的敛散性", "定积分的换元法"]);
-  });
-
-  it("labels each contact from its last attempt instead of from evidenceCount", async () => {
-    mockPlatform();
-    const view = render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("学习足迹");
-
-    const labelOf = (href: string) =>
-      view.container.querySelector(`.recent-points > a[href="${href}"] .recent-point-state`)!.textContent ?? "";
-    // evidenceCount>0：展示真实掌握度。
-    expect(labelOf("/knowledge/point-1")).toContain("基本掌握");
-    expect(labelOf("/knowledge/point-1")).toContain("63%");
-    // 最近一次是仅查看答案：说明接触方式，不展示百分比。
-    expect(labelOf("/knowledge/point-2")).toContain("仅查看答案 · 未自评");
-    expect(labelOf("/knowledge/point-2")).not.toContain("%");
-    // 真实评分但暂无 Mastery Evidence：绝不能显示为「仅查看答案」。
-    expect(labelOf("/knowledge/point-3")).toContain("已作答 · 暂无掌握证据");
-    expect(labelOf("/knowledge/point-3")).not.toContain("仅查看答案");
-    expect(labelOf("/knowledge/point-3")).not.toContain("%");
-  });
-
-  it("never calls a graded but evidence-less contact reveal-only", async () => {
-    // 足迹里只有「真实评分但无 Evidence」一个知识点时必须给出诚实的标签。
-    const gradedOnly = progress();
-    mockPlatform(progress({ recentContacts: gradedOnly.recentContacts.filter(
-      contact => contact.knowledgePointId === "point-3") }));
-    const view = render(<ProgressPage data={bootstrap} />);
-    await screen.findByText("学习足迹");
-
-    const footprint = view.container.querySelector(".recent-points")!;
-    expect(footprint.textContent).toContain("已作答 · 暂无掌握证据");
-    expect(footprint.textContent).not.toContain("仅查看答案");
-    expect(view.container.querySelectorAll(".recent-points > a")).toHaveLength(1);
-  });
-
-  it("reads the footprint from effective contacts rather than the legacy graded list", async () => {
-    // 旧 recent.knowledgePoints 故意留空：足迹必须来自 recentContacts。
-    mockPlatform(progress({ recent: { ...progress().recent, knowledgePoints: [] } }));
+  it("keeps the empty learning scope state and its entry point", async () => {
+    mockPlatform(days => ({ ...progress(days ?? 7), books: [] }));
     render(<ProgressPage data={bootstrap} />);
 
-    expect(await screen.findByText("学习足迹")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /函数极限/ })).toBeTruthy();
-    expect(screen.queryByText("尚无学习足迹")).toBeNull();
+    expect(await screen.findByText("尚未选择学习文集")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "设置学习范围" }).getAttribute("href")).toBe("/study");
   });
 
   it("stays readable when the progress request fails", async () => {
@@ -252,15 +256,14 @@ describe("unified progress navigation", () => {
   });
 
   it("redirects /statistics to /progress with a single progress request", async () => {
-    const { load } = mockPlatform();
+    const { progressSpy } = mockPlatform();
     history.replaceState(null, "", "/statistics");
     render(<AuthenticatedPlatform />);
 
-    expect(await screen.findByText("今日答题")).toBeTruthy();
-    // URL 被替换（而不是 push），返回链不会再次落到 /statistics。
+    expect(await screen.findByRole("heading", { name: "学习进度" })).toBeTruthy();
     expect(location.pathname).toBe("/progress");
     expect(isHubPath("/statistics")).toBe(true);
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(progressSpy).toHaveBeenCalledTimes(1);
   });
 
   it("serves the progress sub pages directly", async () => {
@@ -270,11 +273,5 @@ describe("unified progress navigation", () => {
 
     expect(await screen.findByRole("heading", { name: "考研数学一" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "← 返回文集进度" }).getAttribute("href")).toBe("/progress");
-  });
-
-  it("waits for the bootstrap response before rendering the scope", async () => {
-    mockPlatform();
-    render(<AuthenticatedPlatform />);
-    await waitFor(() => expect(screen.getByText("考研数学一")).toBeTruthy());
   });
 });

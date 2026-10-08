@@ -1262,6 +1262,25 @@ GET /api/v1/learner/progress     统一总览（summary / bands / books / recent
 GET /api/v1/learner/statistics   兼容接口，summary 与 progress.activity 同源；days 只影响 daily 长度
 ```
 
+`/learner/progress` 支持**可选** `days=7|30|90`（缺省 7），只允许改变 `activity.windowDays` 与
+`activity.daily`——进度页顶部「近 7 / 30 / 90 天」分段选择器用它驱动两张活动趋势图的真实窗口。
+非法值返回 400，不得静默返回其它天数。以下口径**不随该参数变化**：
+
+```text
+activity.metrics / activity.outcomes  → 固定口径；activeStudyDays7d 永远反映近 7 天
+recent（兼容）                        → 永远 graded-only 且按 answered_at 归属近 7 个上海业务日
+recentContacts                        → 最近接触列表，窗口固定
+```
+
+一个请求仍然只读一次全历史有效 Attempt：`activity`、`recent` 与 `recentContacts` 都由
+`LearnerActivityStatsService.views()` 的同一次派生结果提供，Controller 不得再单独调用一次统计。
+
+进度页 UI 契约（不得改动）：顶部沿用旧统计页的标题区（左侧「学习进度」+ 右侧 7/30/90 分段
+选择器），六项指标一行六列的旧版样式且**只显示数字与指标名称**（不加单位、说明、副标题），
+两张趋势图沿用旧版 `ActivityBarChart` 单系列组件与 `.statistics-activity-chart` / `.chart-*`
+原样式，只更换标题（「每日答题次数」「每日接触知识点」）、单位（次 / 个）与数据来源
+（`activity.daily[].effectiveAttempts` / `distinctKnowledgePoints`）。
+
 `recent` 是**保留的旧契约**，字段名、类型与近 7 个上海业务日语义都不得改动：
 
 ```text
@@ -1278,8 +1297,9 @@ knowledgePoints
 `distinctKnowledgePoints` / `correct` / `partial` / `wrong` / `revealedOnly` 与
 `progress.activity` 同源。
 
-时间范围统一「近 7 天」，不再提供 7 / 30 / 90 天切换控件。所有接口按登录 Learner 隔离，跨
-Learner 不可读。进度页与统计页不得对同一指标给出不同数字。
+时间范围：**进度页可切换近 7 / 30 / 90 天，只作用于两张活动趋势图**；全历史累计指标与
+`activeStudyDays7d`（固定近 7 天）不受影响。所有接口按登录 Learner 隔离，跨 Learner 不可读。
+进度页与统计兼容接口不得对同一指标给出不同数字。
 
 ---
 

@@ -351,7 +351,7 @@ class LearnerActivityStatsIntegrationTest {
         // 七天窗口外：进入累计，不进入任何七日字段。
         attempt(learner, null, null, question, point, "graded", today.minusDays(9).atTime(9, 0).atZone(ZONE).toInstant(), "correct");
 
-        LearnerActivityStatsService.Views derived = activity.views(learner, now);
+        LearnerActivityStatsService.Views derived = activity.views(learner, now, WINDOW_DAYS);
         LearnerActivityStatsService.GradedRecentView recent = derived.recent();
 
         // graded-only：仅查看答案不填入带 graded 的字段。
@@ -470,7 +470,7 @@ class LearnerActivityStatsIntegrationTest {
                  WHERE id=?
                 """, Timestamp.from(gradedAt), attemptId);
 
-        LearnerActivityStatsService.Views derived = activity.views(learner, now);
+        LearnerActivityStatsService.Views derived = activity.views(learner, now, WINDOW_DAYS);
 
         // activity：首次有效行动日 = 昨天，今天为 0。
         LearnerActivityStatsService.DailyActivity yesterday = derived.activity().daily().stream()
@@ -516,7 +516,7 @@ class LearnerActivityStatsIntegrationTest {
         attempt(learner, null, null, question, point, "graded",
                 today.minusDays(WINDOW_DAYS - 1L).atStartOfDay(ZONE).toInstant(), "correct");
 
-        LearnerActivityStatsService.GradedRecentView recent = activity.views(learner, now).recent();
+        LearnerActivityStatsService.GradedRecentView recent = activity.views(learner, now, WINDOW_DAYS).recent();
 
         assertThat(recent.daily()).hasSize(WINDOW_DAYS);
         assertThat(recent.gradedAttempts7d()).isEqualTo(1);

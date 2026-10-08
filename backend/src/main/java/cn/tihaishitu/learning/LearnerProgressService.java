@@ -47,7 +47,14 @@ public class LearnerProgressService {
     }
 
     public ProgressView current() {
-        return progressAt(LearnerContext.learnerId(), clock.instant());
+        return current(LearnerActivityStatsService.WINDOW_DAYS);
+    }
+
+    /**
+     * @param trendDays 活动趋势曲线的窗口天数（进度页 7 / 30 / 90）；指标与旧 {@code recent} 口径不变。
+     */
+    public ProgressView current(int trendDays) {
+        return progressAt(LearnerContext.learnerId(), clock.instant(), trendDays);
     }
 
     /**
@@ -61,13 +68,17 @@ public class LearnerProgressService {
     }
 
     ProgressView progressAt(String learnerId, Instant now) {
+        return progressAt(learnerId, now, LearnerActivityStatsService.WINDOW_DAYS);
+    }
+
+    ProgressView progressAt(String learnerId, Instant now, int trendDays) {
         List<LearnerProgressStore.BookRow> books = progress.selectedBooks(learnerId);
         List<LearnerProgressStore.ChapterRow> chapters = progress.selectedChapters(learnerId);
         List<LearnerProgressStore.MembershipRow> memberships = progress.selectedMemberships(learnerId);
 
         // 有效 Attempt 事实（含仅查看答案）只读一次：统一 activity、旧 recent 兼容投影与最近接触
         // 都从同一份快照派生，避免同一请求重复扫描全历史，也避免读到不同时间点。
-        LearnerActivityStatsService.Views derived = activity.views(learnerId, now);
+        LearnerActivityStatsService.Views derived = activity.views(learnerId, now, trendDays);
 
         Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
         memberships.forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));

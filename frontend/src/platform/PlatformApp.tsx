@@ -7,7 +7,7 @@ import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
 import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
-import { ActivityChart, OutcomeDistribution, RecentContactState, progressMetrics } from "./ProgressPanels";
+import { ActivityBarChart, RecentContactState, progressMetrics, trendSeries } from "./ProgressPanels";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
 import { AnswerDisplay } from "./practiceView";
@@ -116,7 +116,7 @@ function HubHome({ data }: { data: HubBootstrap }) {
         <div className="world-card-body"><h3>{world.name}</h3><p>{world.description}</p>{presentation.tags.length > 0 && <div className="world-tags">{presentation.tags.map(tag => <span key={tag}>{tag}</span>)}</div>}{world.enabled ? <HubLink className="world-entry" href={world.entryPath}>{world.initialized ? "继续旅程" : "初入此世"} →</HubLink> : <span className="world-unavailable">尚未开放</span>}</div>
       </article> })}</div>
     </section>
-    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recentContacts.length ? <div className="recent-home-list">{progress.recentContacts.slice(0, 5).map(contact => <HubLink href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}><div><b>{contact.name}</b><span>{contact.bookName} · {contact.chapterName}</span></div><div><RecentContactState contact={contact} /></div></HubLink>)}</div> : <div className="empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p></div>}</section>
+    <div className="home-lower-grid"><section className="recent-home"><div className="home-module-action"><HubLink href="/progress">全部记录 →</HubLink></div>{progress?.recentContacts.length ? <div className="recent-home-list">{progress.recentContacts.slice(0, 5).map(contact => <HubLink href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}><div><b>{contact.name}</b><span>{contact.bookName} · {contact.chapterName}</span></div><div><RecentContactState contact={contact} timestamp={recentTime(contact.lastEffectiveContactAt)} /></div></HubLink>)}</div> : <div className="empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p></div>}</section>
       <section className="quick-links"><div><HubLink href="/study"><b>章节知识练习</b><span>按文集和章节系统推进</span></HubLink><HubLink href="/wrong-questions"><b>错题本</b><span>长期保留并反复训练历史错题</span></HubLink><HubLink href="/books"><b>浏览知识</b><span>按知识点查看完整知识目录</span></HubLink><HubLink href="/questions"><b>浏览题库</b><span>查看全平台已发布题目与解析</span></HubLink></div></section></div>
   </main></Shell>;
 }
@@ -127,51 +127,42 @@ function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bo
 }
 
 export function ProgressPage({ data }: { data: HubBootstrap }) {
+  // 活动趋势窗口：默认近 7 天，切换后按真实 days 重新取数（不走旧 graded-only 统计接口）。
+  const [days, setDays] = useState<7 | 30 | 90>(7);
   const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
+  useEffect(() => {
+    setProgress(undefined);
+    platformApi.progress(days).then(setProgress).catch(reason => setError((reason as Error).message));
+  }, [days]);
   const activity = progress?.activity; const metrics = activity && progressMetrics(activity.metrics);
-  return <Shell data={data}><main className="hub-main progress-page">
-    <header className="progress-head">
-      <div><p className="eyebrow">进度</p><h1>学习进度</h1></div>
-      <div className="progress-scope">{progress && <><span className="scope-badge">{progress.summary.selectedBooks} 本文集</span><span>当前学习范围</span><small>{progress.summary.totalKnowledgePoints} 个可学习知识点</small></>}</div>
-    </header>
+  const series = activity && trendSeries(activity.daily);
+  return <Shell data={data}><main className="hub-main statistics-page">
+    <div className="panel-heading">
+      <h1>学习进度</h1>
+      <div className="segmented">{([7, 30, 90] as const).map(value =>
+        <button className={days === value ? "active" : ""} onClick={() => setDays(value)} key={value}>近 {value} 天</button>)}
+      </div>
+    </div>
     {error && <p className="hub-error" role="alert">{error}</p>}
-    {!progress && !error && <p className="muted">正在整理学习进度…</p>}
-    {progress && activity && metrics && <>
-      <section className="progress-metrics" aria-label="六个核心指标">
+    {!progress && !error && <p>正在整理学习进度…</p>}
+    {progress && activity && metrics && series && <>
+      <section className="statistics-summary" aria-label="六个核心指标">
         {metrics.map(metric => <article key={metric.label}>
-          <span className="metric-label">{metric.label}</span>
-          <b>{metric.value}<small>{metric.unit}</small></b>
-          <em>{metric.hint}</em>
+          <b>{metric.value}</b><span>{metric.label}</span>
         </article>)}
       </section>
-      <ActivityChart daily={activity.daily} />
-      <OutcomeDistribution outcomes={activity.outcomes} />
-      <section className="progress-section">
-        <header className="section-heading"><h2>学习足迹</h2><span>最近接触的知识点</span></header>
-        {progress.recentContacts.length === 0
-          ? <div className="hub-panel empty-state"><h3>尚无学习足迹</h3><p>答一次题或查看参考解析后，最近接触的知识点会出现在这里。</p><HubLink className="hub-primary" href="/study">开始学习</HubLink></div>
-          : <div className="recent-points">{progress.recentContacts.map(contact =>
-            <HubLink className="hub-panel" href={`/knowledge/${contact.knowledgePointId}`} key={contact.knowledgePointId}>
-              <div><h3>{contact.name}</h3><p>{contact.bookName} · {contact.chapterName}</p></div>
-              <div className="recent-point-state">
-                <RecentContactState contact={contact} />
-                <small>{recentTime(contact.lastEffectiveContactAt)}</small>
-              </div>
-            </HubLink>)}</div>}
-      </section>
-      <section className="progress-section">
-        <header className="section-heading"><h2>文集掌握进度</h2><span>掌握度按范围内知识点的有效掌握平均值</span></header>
-        <div className="progress-books">
-          {progress.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}>
-            <div className="progress-book-head"><h3>{book.name}</h3><b>{Math.round(book.masteryProgress)}%</b></div>
-            <div className="mastery-progress"><span style={{ width: `${book.masteryProgress}%` }} /></div>
-            <small>{book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small>
-            <HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink>
-          </article>)}
-        </div>
-        {progress.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围，进度与统计会立即按新范围重新派生。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
-      </section>
+      <ActivityBarChart title="每日答题次数" days={activity.windowDays} unit="次" values={series.attempts} />
+      <ActivityBarChart title="每日接触知识点" days={activity.windowDays} unit="个" values={series.knowledgePoints} />
+      <div className="progress-books">
+        {progress.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}>
+          <h2>{book.name}</h2>
+          <div className="mastery-progress"><span style={{ width: `${book.masteryProgress}%` }} /></div>
+          <b>{Math.round(book.masteryProgress)}%</b>
+          <small>掌握进度 · {book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small>
+          <HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink>
+        </article>)}
+      </div>
+      {progress.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
     </>}
   </main></Shell>;
 }

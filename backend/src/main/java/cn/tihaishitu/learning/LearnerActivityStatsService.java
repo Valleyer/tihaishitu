@@ -59,11 +59,6 @@ public class LearnerActivityStatsService {
         this.progress = progress;
     }
 
-    /** 当前登录 Learner 的统一活动统计。 */
-    public ActivityView current() {
-        return activityAt(LearnerContext.learnerId(), clock.instant(), WINDOW_DAYS);
-    }
-
     /** 当前登录 Learner 的最近接触知识点（含仅查看答案）。 */
     public List<RecentContact> recentContacts() {
         return contactsAt(LearnerContext.learnerId(), clock.instant());
@@ -90,11 +85,15 @@ public class LearnerActivityStatsService {
      *
      * <p>调用方必须复用这里的结果，不要为了拿 {@code activity} 再单独调用一次统计接口，
      * 否则同一个请求会重复扫描全历史 Attempt，并可能在两个时间点读到不同快照。</p>
+     *
+     * <p>{@code trendDays} 只影响 {@code activity.daily} 的曲线窗口长度（进度页 7/30/90 天切换）；
+     * {@code activity.metrics}、{@code activity.outcomes} 与旧 {@code recent} 的 graded-only 七日
+     * 字段始终保持固定口径，不随切换静默改变语义。</p>
      */
-    public Views views(String learnerId, Instant now) {
+    public Views views(String learnerId, Instant now, int trendDays) {
         Set<String> scope = scopedKnowledgePointIds(learnerId);
         List<LearnerActivityStore.EffectiveAction> actions = store.effectiveActions(learnerId, scope);
-        return new Views(activityView(actions, scope, now, WINDOW_DAYS),
+        return new Views(activityView(actions, scope, now, trendDays),
                 gradedRecentView(actions, now), buildContacts(actions));
     }
 
@@ -110,14 +109,21 @@ public class LearnerActivityStatsService {
      *
      * <p>日期取<b>首次有效行动</b>（reveal 或 graded），因此跨天 reveal→自评仍归在 reveal 那天。
      * 结果分布只统计合法 assessment，reveal-only 单独一类。</p>
+     *
+     * <p>指标与结果分布固定按 {@link #WINDOW_DAYS} 结算（`activeStudyDays7d` 永远反映近 7 天），
+     * 只有 {@code daily} 曲线按 {@code trendDays} 展开；唯一一次遍历同时产出两者，避免为不同窗口
+     * 重复扫描历史。</p>
      */
     private ActivityView activityView(List<LearnerActivityStore.EffectiveAction> actions, Set<String> scope,
-                                      Instant now, int windowDays) {
+                                      Instant now, int trendDays) {
         LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
-        LocalDate windowStart = today.minusDays(windowDays - 1L);
+        LocalDate metricStart = today.minusDays(WINDOW_DAYS - 1L);
+        LocalDate trendStart = today.minusDays(trendDays - 1L);
 
         int correct = 0, partial = 0, wrong = 0, revealedOnly = 0, todayAttempts = 0, effective = 0;
         Set<String> touchedPoints = new LinkedHashSet<>();
+        // 活跃学习日固定按近 7 天结算，不随趋势窗口切换。
+        Set<LocalDate> activeStudyDaysDate = new LinkedHashSet<>();
         Map<LocalDate, List<LearnerActivityStore.Outcome>> byDate = new LinkedHashMap<>();
         for (LearnerActivityStore.EffectiveAction action : actions) {
             LearnerActivityStore.Outcome outcome = action.outcome();
@@ -133,23 +139,24 @@ public class LearnerActivityStatsService {
             }
             touchedPoints.add(action.knowledgePointId());
             if (action.actionDate().equals(today)) todayAttempts++;
-            if (!action.actionDate().isBefore(windowStart) && !action.actionDate().isAfter(today)) {
+            // 指标固定看近 7 天；趋势曲线看当前选择的窗口。
+            if (!action.actionDate().isBefore(metricStart) && !action.actionDate().isAfter(today)) {
+                activeStudyDaysDate.add(action.actionDate());
+            }
+            if (!action.actionDate().isBefore(trendStart) && !action.actionDate().isAfter(today)) {
                 byDate.computeIfAbsent(action.actionDate(), ignored -> new ArrayList<>()).add(outcome);
             }
         }
 
         List<DailyActivity> daily = new ArrayList<>();
-        int activeStudyDays = 0;
-        for (LocalDate date = windowStart; !date.isAfter(today); date = date.plusDays(1)) {
-            DailyActivity day = dailyActivity(date, actions, byDate.getOrDefault(date, List.of()));
-            if (day.effectiveAttempts() > 0) activeStudyDays++;
-            daily.add(day);
+        for (LocalDate date = trendStart; !date.isAfter(today); date = date.plusDays(1)) {
+            daily.add(dailyActivity(date, actions, byDate.getOrDefault(date, List.of())));
         }
 
-        Metrics metrics = new Metrics(activeStudyDays, todayAttempts, scope.size(), touchedPoints.size(),
+        Metrics metrics = new Metrics(activeStudyDaysDate.size(), todayAttempts, scope.size(), touchedPoints.size(),
                 effective, correct);
         OutcomeSummary outcomes = new OutcomeSummary(correct, partial, wrong, revealedOnly);
-        return new ActivityView(windowDays, now, metrics, outcomes, daily);
+        return new ActivityView(trendDays, now, metrics, outcomes, daily);
     }
 
     private static DailyActivity dailyActivity(LocalDate date,

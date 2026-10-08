@@ -151,6 +151,92 @@ class LearnerProgressApiCompatibilityIntegrationTest {
     }
 
     /**
+     * 活动趋势窗口：`days` 只影响 `activity.windowDays` 与 `activity.daily` 长度。
+     *
+     * <p>缺省与 `days=7` 等价；30/90 精确返回对应条数、首尾是正确的上海业务日、零值日保留；
+     * 全历史指标与固定七日定义不变；旧 {@code recent} 始终保持七日 graded-only。</p>
+     */
+    @Test
+    void derivesTheActivityTrendWindowFromTheOptionalDaysParameter() throws Exception {
+        Cookie cookie = mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
+                        .contentType("application/json")
+                        .content("{\"username\":\"pr7-window\",\"displayName\":\"窗口学习者\",\"password\":\"password-123\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+        String learner = jdbc.queryForObject("SELECT id FROM learner_account WHERE username='pr7-window'",
+                String.class);
+        String point = knowledge("窗口知识点");
+        BookFixture book = book();
+        member(book, point);
+        select(learner, book.id());
+        String question = question(point);
+
+        var zone = PracticeBusinessDay.ZONE;
+        var today = Instant.now().atZone(zone).toLocalDate();
+        // 今天 1 条、第 20 天前 1 条（只在 30/90 窗口内）、第 60 天前 1 条（只在 90 窗口内）。
+        attempt(learner, question, point, "graded", today.atTime(9, 0).atZone(zone).toInstant(), "correct");
+        attempt(learner, question, point, "graded", today.minusDays(19).atTime(9, 0).atZone(zone).toInstant(), "correct");
+        attempt(learner, question, point, "graded", today.minusDays(59).atTime(9, 0).atZone(zone).toInstant(), "correct");
+
+        // 缺省等价于 days=7。
+        mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activity.windowDays").value(7))
+                .andExpect(jsonPath("$.activity.daily.length()").value(7));
+        mvc.perform(get("/api/v1/learner/progress?days=7").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activity.windowDays").value(7))
+                .andExpect(jsonPath("$.activity.daily.length()").value(7))
+                .andExpect(jsonPath("$.activity.daily[6].date").value(today.toString()))
+                .andExpect(jsonPath("$.activity.daily[6].effectiveAttempts").value(1))
+                // 全历史累计与固定七日指标不随窗口变化。
+                .andExpect(jsonPath("$.activity.metrics.totalEffectiveAttempts").value(3))
+                .andExpect(jsonPath("$.activity.metrics.activeStudyDays7d").value(1))
+                .andExpect(jsonPath("$.activity.metrics.touchedKnowledgePoints").value(1));
+
+        mvc.perform(get("/api/v1/learner/progress?days=30").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activity.windowDays").value(30))
+                .andExpect(jsonPath("$.activity.daily.length()").value(30))
+                .andExpect(jsonPath("$.activity.daily[0].date").value(today.minusDays(29).toString()))
+                .andExpect(jsonPath("$.activity.daily[29].date").value(today.toString()))
+                .andExpect(jsonPath("$.activity.daily[10].effectiveAttempts").value(1))
+                // 零值日保留。
+                .andExpect(jsonPath("$.activity.daily[0].effectiveAttempts").value(0))
+                // 指标与旧 recent 七日字段不随窗口变化。
+                .andExpect(jsonPath("$.activity.metrics.totalEffectiveAttempts").value(3))
+                .andExpect(jsonPath("$.activity.metrics.activeStudyDays7d").value(1))
+                .andExpect(jsonPath("$.recent.daily.length()").value(7))
+                .andExpect(jsonPath("$.recent.gradedAttempts7d").value(1));
+
+        mvc.perform(get("/api/v1/learner/progress?days=90").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activity.windowDays").value(90))
+                .andExpect(jsonPath("$.activity.daily.length()").value(90))
+                .andExpect(jsonPath("$.activity.daily[30].effectiveAttempts").value(1))
+                .andExpect(jsonPath("$.activity.daily[89].effectiveAttempts").value(1))
+                .andExpect(jsonPath("$.activity.metrics.totalEffectiveAttempts").value(3))
+                .andExpect(jsonPath("$.activity.metrics.activeStudyDays7d").value(1))
+                .andExpect(jsonPath("$.recent.gradedAttempts7d").value(1));
+    }
+
+    @Test
+    void rejectsUnsupportedActivityTrendWindowsWithoutChangingData() throws Exception {
+        Cookie cookie = mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
+                        .contentType("application/json")
+                        .content("{\"username\":\"pr7-bad-window\",\"displayName\":\"非法窗口学习者\",\"password\":\"password-123\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+
+        mvc.perform(get("/api/v1/learner/progress?days=14").cookie(cookie))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/learner/progress?days=0").cookie(cookie))
+                .andExpect(status().isBadRequest());
+        // 非法参数不破坏合法请求。
+        mvc.perform(get("/api/v1/learner/progress?days=7").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activity.windowDays").value(7));
+    }
+
+    /**
      * 直接写 Mastery 投影，模拟该知识点确实产生过 Mastery Evidence。
      *
      * <p>{@code settle()} 会用 {@code learner_question_mastery} 覆盖 evidenceCount 与

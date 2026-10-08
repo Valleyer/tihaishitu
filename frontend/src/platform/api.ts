@@ -211,8 +211,7 @@ export const platformApi = {
     request<Learner>("/learner/auth/login", "POST", { username, password }),
   logout: () => request<void>("/learner/auth/logout", "POST"),
   me: () => request<Learner>("/learner/me"),
-  bootstrap: () => request<HubBootstrap>("/bootstrap"),
-  books: () => request<BookSummary[]>("/learning/books"),
+  bootstrap: () => request<HubBootstrap>("/bootstrap"),  books: () => request<BookSummary[]>("/learning/books"),
   book: (id: string) => request<BookDetail>("/learning/books/" + encodeURIComponent(id)),
   knowledge: (id: string) => request<KnowledgePoint & { books: { id: string; name: string; chapterId: string; chapterName: string }[] }>(
     "/learning/knowledge-points/" + encodeURIComponent(id)),
@@ -247,7 +246,14 @@ export const platformApi = {
   knowledgeStatesForBook: (bookId: string) => request<KnowledgeState[]>(
     "/learner/knowledge-states?bookId=" + encodeURIComponent(bookId)),
   reviewQueue: () => request<ReviewQueue>("/learner/review-queue"),
-  progress: () => request<LearnerProgress>("/learner/progress"),
+  /**
+   * 统一进度总览。
+   *
+   * `days` 只控制 `activity.daily` 与 `activity.windowDays` 的活动趋势窗口（7/30/90，缺省 7）；
+   * `activity.metrics`、`activity.outcomes`、`recent` 与 `recentContacts` 口径固定不变。
+   */
+  progress: (days?: 7 | 30 | 90) =>
+    request<LearnerProgress>(days === undefined ? "/learner/progress" : `/learner/progress?days=${days}`),
   statistics: (days: 7 | 30 | 90) => request<LearnerStatistics>(`/learner/statistics?days=${days}`),
   wrongQuestions: () => request<WrongQuestion[]>("/learner/wrong-questions"),
   removeWrongQuestion: (questionId: string) => request<void>(
