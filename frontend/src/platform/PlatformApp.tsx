@@ -11,7 +11,7 @@ import { ActivityBarChart, RecentContactState, progressMetrics, trendSeries } fr
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
 import { AnswerDisplay } from "./practiceView";
-import { attemptKnowledgeTags, chapterProgressText, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
+import { attemptKnowledgeTags, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
 import "./platform.css";
 
 const go = navigate;
@@ -29,8 +29,7 @@ const wrongQuestionUnavailableLabel = (reason?: string | null) =>
   reason === "out_of_scope" ? "当前不在学习范围"
     : reason === "knowledge_unavailable" ? "该题所属知识点当前不可练习"
       : "该题当前不可练习";
-const greeting = () => {
-  const hour = new Date().getHours();
+const greeting = () => {  const hour = new Date().getHours();
   if (hour < 6) return "夜深了";
   if (hour < 12) return "上午好";
   if (hour < 18) return "下午好";
@@ -39,6 +38,22 @@ const greeting = () => {
 const recentTime = (value: string) => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const questionTypeLabel: Record<string, string> = { single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题", solution: "综合题" };
 const sourceTypeLabel: Record<string, string> = { real_exam: "真题", mock: "模拟题", custom: "自建题" };
+/** 章节编号色块的循环配色（[底色, 字色]）：低饱和，只用于辅助辨识。 */
+const CHAPTER_TINTS: [string, string][] = [
+  ["#e8efff", "#2f5bd0"], ["#efeaff", "#5b3fd0"], ["#e4f6ec", "#17794a"],
+  ["#fdf3dd", "#9a6a06"], ["#fdeaf1", "#b03a68"],
+];
+/** 章节编号块内的数学字形，纯装饰、按章节序号循环，不承载业务含义。 */
+const CHAPTER_GLYPHS = ["∑", "∫", "π", "∞", "f(x)", "dx"];
+
+/**
+ * 进度条已完成宽度：夹在 0–100%。
+ *
+ * <p>0% 时刻意保持 0 宽度，让百分比浮块在 0% / 1% / 5% 这类小值下也不会溢出轨道。</p>
+ */
+function filledWidth(percent: number): string {
+  return `${Math.min(100, Math.max(0, percent))}%`;
+}
 /**
  * 只读题目标题取自来源与显示题号，不再使用 legacy subject_name 作为用户可见路径。
  * 年份已经由 ReadonlyQuestion 的 question-meta 展示，这里不重复。
@@ -193,26 +208,48 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   const [recent,setRecent]=useState<RecentChapter|null>();
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
   useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.recentChapter().then(setRecent).catch(()=>setRecent(null)); }, [data.studyProfile.selectedBookIds]);
-  const book=details.find(item=>item.id===bookId); const chapters=book ? flattenChapters(book.chapters) : []; const chapter=chapters.find(item=>item.id===chapterId);
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
-  const start=async()=>{if(!book||!chapter)return;try{const session=await platformApi.startChapterPractice(book.id,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
+  const start=async()=>{if(!startBookId||!chapter)return;try{const session=await platformApi.startChapterPractice(startBookId,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 再次练习：用最近一次章节练习的 Book + Chapter 新建 chapter_drill，不恢复已结束的 Session。 */
   const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 快速练习错题：随机连续刷 active 错题，答对不会自动移出错题本。 */
   const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const mode=recentChapterMode(recent);
+  // 当前书籍：显式选择优先，否则回落到最近练习书籍 / 首本可练书籍，使章节卡片无需先点击即可浏览。
+  const focusBook=scopedBooks.find(item=>item.id===bookId)||scopedBooks.find(item=>item.id===recent?.bookId)||scopedBooks.find(item=>item.knowledgePointCount>0);
+  const focusDetail=details.find(item=>item.id===focusBook?.id);
+  const visibleChapters=focusDetail?flattenChapters(focusDetail.chapters):[];
+  const focusChapter=focusDetail?.chapters.find(item=>item.id===chapterId)
+    || focusDetail?.chapters.find(item=>item.id===recent?.chapterId)
+    || (bookId?undefined:visibleChapters[0]);
+  // 章节练习动作与顶部卡片使用同一个「当前书籍 + 当前章节」，避免两处各自解析出不同结果。
+  const chapter=focusChapter;
+  const startBookId=focusBook?.id;
+  const focusProgress=progress?.books.find(item=>item.bookId===focusBook?.id)?.chapters
+    .find(item=>item.chapterId===focusChapter?.id)?.masteryProgress;
+  const focusAction=mode==="active"&&recent?.activeSessionId?()=>go(practicePath(recent.activeSessionId!,"/study")):again;
+  const status=[{key:"started",value:progress?.summary.startedKnowledgePoints,label:"已开始知识点"},{key:"ready",value:progress?.summary.readyKnowledgePoints,label:"熟练掌握及以上"},{key:"wrong",value:progress?.summary.wrongQuestions,label:"错题本题目"},{key:"today",value:progress?.activity.metrics.todayEffectiveAttempts,label:"今日答题"}];
   return <Shell data={data}><main className="hub-main study-page">
     <section className="learning-focus-grid">
-      <article className="continue-card">
-        {mode==="active"&&recent?<><h2>{recent.bookName||"章节练习"}</h2><div className="continue-mastery"><span>{recent.chapterName||"章节练习"}</span><span>{chapterProgressText(recent)}</span></div><button className="hub-primary" onClick={()=>go(practicePath(recent.activeSessionId!,"/study"))}>继续章节练习 →</button></>:
-         mode==="last"&&recent?<><p className="section-kicker">最近练习章节</p><h2>{recent.bookName||"章节练习"}</h2><div className="continue-meta"><span>{recent.chapterName||"章节练习"}</span><small className="continue-time">{recent.updatedAt?`最近练习 ${recentTime(recent.updatedAt)}`:"最近练习时间未知"}</small></div><button className="hub-primary" onClick={again}>再次练习 →</button></>:
-         <><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}
+      <article className="continue-card study-hero">
+        <div className="study-hero-body">
+          <h2 className="study-hero-book">{focusBook?.name||recent?.bookName||"章节知识练习"}</h2>
+          {focusChapter&&<p className="study-hero-chapter">{focusChapter.name}</p>}
+          {focusProgress!==undefined&&<div className="study-progress" role="img" aria-label={`章节掌握进度 ${Math.round(focusProgress)}%`}><span style={{width:filledWidth(focusProgress)}} /><em style={{left:filledWidth(focusProgress)}}>{Math.round(focusProgress)}%</em></div>}
+          {focusChapter&&<button className="hub-primary" onClick={focusAction}>再次练习</button>}
+        </div>
+        <StudyHeroArt />
       </article>
-      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.activity.metrics.todayEffectiveAttempts}</b><span>今日答题</span></p><p><b>{progress.activity.metrics.activeStudyDays7d}</b><span>近 7 天活跃学习日</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
-    <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
-      <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
-      {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
+      <article className="today-card"><div className="section-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg></span>学习状态</h2></div>{progress?<div className="today-metrics">{status.map(item=><p key={item.key}><StudyStatusIcon kind={item.key}/><span>{item.label}</span><b>{item.value}</b></p>)}</div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
+    <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg></span>章节知识练习</h2></div>
+      <div className="book-cards">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}>
+        <span className="book-cover-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6.4C10.4 4.9 7.8 4.3 4 4.3v12.4c3.8 0 6.4.6 8 2.1 1.6-1.5 4.2-2.1 8-2.1V4.3c-3.8 0-6.4.6-8 2.1Z"/><path d="M12 6.4v12.4"/></svg></span>
+        <b>{item.name}</b>
+        <small>{item.knowledgePointCount} 个知识点</small>
+        {!trainable?<em>暂无已发布正式题</em>:null}
+      </button>})}</div>
+      {visibleChapters.length>0 && <div className="chapter-cards">{visibleChapters.map((item,index)=>{const value=progress?.books.find(entry=>entry.bookId===focusBook?.id)?.chapters.find(entry=>entry.chapterId===item.id)?.masteryProgress??0;const tint=CHAPTER_TINTS[index%CHAPTER_TINTS.length];const glyph=CHAPTER_GLYPHS[index%CHAPTER_GLYPHS.length];const filled=`${Math.min(100,Math.max(0,value))}%`;return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filled} as CSSProperties} key={item.id} onClick={()=>setChapterId(item.id)}><span className="chapter-number" aria-hidden="true">{glyph}</span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>})}</div>}
       {chapter && <div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
@@ -220,6 +257,45 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
     <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
     {message&&<p className="hub-message">{message}</p>}
   </main></Shell>;
+}
+
+/**
+ * 顶部主学习卡片的轻量数学插画（纯装饰）。
+ *
+ * <p>只用内联 SVG：蓝紫书本、积分号、π、三角尺与柔和抽象背景，不承载业务信息、不引入依赖，
+ * 在窄屏隐藏以免压正文。</p>
+ */
+function StudyHeroArt() {
+  return <svg className="study-hero-art" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
+    <ellipse cx="196" cy="176" rx="118" ry="34" fill="#e8ecff" />
+    <ellipse cx="150" cy="164" rx="72" ry="22" fill="#eef2fb" />
+    <path d="M168 44c-22 0-34 12-34 30v64c0 18-12 30-34 30" stroke="#c7cffb" strokeWidth="5" fill="none" strokeLinecap="round" />
+    <path d="M120 44h20M104 168h20" stroke="#c7cffb" strokeWidth="5" strokeLinecap="round" />
+    <text x="252" y="70" fill="#b9c2f5" fontSize="34" fontFamily="Georgia, 'Times New Roman', serif">π</text>
+    <g transform="translate(206 62) rotate(-4)">
+      <rect x="0" y="0" width="86" height="112" rx="9" fill="#7b83eb" />
+      <rect x="6" y="6" width="80" height="106" rx="7" fill="#5b64d9" />
+      <rect x="6" y="6" width="14" height="106" rx="7" fill="#4a52c4" />
+      <text x="42" y="66" fill="#e8ebff" fontSize="15" textAnchor="middle">数学一</text>
+    </g>
+    <path d="M96 122 128 176H64Z" fill="none" stroke="#d3daf7" strokeWidth="5" strokeLinejoin="round" />
+    <path d="M272 116v34M255 133h34" stroke="#dbe1fa" strokeWidth="4" strokeLinecap="round" />
+    <circle cx="86" cy="72" r="13" fill="#eef1fd" />
+    <circle cx="286" cy="42" r="8" fill="#eef1fd" />
+  </svg>;
+}
+
+/** 学习状态四项的小图标：柔和浅色圆底，不改变整体紫蓝中性主色。 */
+function StudyStatusIcon({ kind }: { kind: string }) {
+  const paths: Record<string,string> = {
+    started: "M3 9.5 12 4l9 5.5-9 5.5-9-5.5Zm3 3.2V17c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4.3",
+    ready: "M12 3.5c2.6 3 4 5.4 4 7.6a4 4 0 0 1-8 0c0-2.2 1.4-4.6 4-7.6Zm0 14.9v2.1",
+    wrong: "M5 4.5h9l5 3-5 3H5v-6Zm0 6v9h2.6v-3.2h3.4V19.5H17",
+    today: "M4.5 6.5h15v13h-15v-13Zm0 4h15M8.5 4v3.4M15.5 4v3.4",
+  };
+  return <span className={`study-status-icon ${kind}`} aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d={paths[kind]} /></svg>
+  </span>;
 }
 
 function BooksPage({ data }: { data: HubBootstrap }) {

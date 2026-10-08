@@ -43,7 +43,12 @@ export function recentChapterMode(recent?: RecentChapter | null): "active" | "la
   return "none";
 }
 
-/** 章节练习进度显示：`当前进度：2 / 7`，缺少数据时显示占位符。 */
+/**
+ * 章节练习进度显示：`当前进度：2 / 7`，缺少数据时显示占位符。
+ *
+ * <p>学习页在 PR7 UI 精修中改为「细进度条 + 内嵌百分比」，不再展示 `2 / 7` 这类分式文字，
+ * 因此本函数当前无 UI 调用点；保留是因为它是已确认的展示口径，供后续按需复用。</p>
+ */
 export function chapterProgressText(recent?: RecentChapter | null): string {
   const index = recent?.currentKnowledgePointIndex;
   const total = recent?.knowledgePointCount;

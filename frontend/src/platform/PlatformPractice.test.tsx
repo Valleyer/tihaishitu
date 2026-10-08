@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { platformApi, type BrowseQuestion, type HubBootstrap, type PracticeSession } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type PracticeSession } from "./api";
 import { PracticePage, QuestionPage, QuestionPreviewCard, safePracticeReturnTo, StudyPage, WrongQuestionsPage } from "./PlatformApp";
 import { AnswerDisplay } from "./practiceView";
 
@@ -18,8 +18,7 @@ const data = {
   ],
 } as HubBootstrap;
 
-const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRepeat = true): PracticeSession => ({
-  id: "session", intent: "knowledge_drill", targetKnowledgePointId: "point", status: "active", revision: 1,
+const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRepeat = true): PracticeSession => ({  id: "session", intent: "knowledge_drill", targetKnowledgePointId: "point", status: "active", revision: 1,
   flowComplete: true, canRepeat,
   currentAttempt: {
     id: "attempt", status: "graded", targetKnowledgePointId: "point", targetKnowledgePointName: "函数",
@@ -30,6 +29,15 @@ const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRep
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+/** 学习页顶部卡片需要一个真实存在于书籍目录里的最近章节，才能解析出当前章节与可练知识点。 */
+const bookWithChapter = (): BookDetail => ({
+  ...data.bankManifest[0], chapters: [{
+    id: "chapter", code: "CH1", name: "函数章", description: "", sortOrder: 0,
+    knowledgePointCount: 2, trainableKnowledgePointCount: 2, publishedQuestionCount: 2,
+    availableKnowledgePointCount: 0, knowledgePoints: [],
+  }],
+});
 
 const browseQuestion = (overrides: Partial<BrowseQuestion> = {}): BrowseQuestion => ({
   id: "question", subject: "数学一", sourceType: "real_exam", sourceName: "2020年考研数学一真题",
@@ -320,7 +328,7 @@ describe("practice interaction closure", () => {
   });
 
   it("offers quick wrong-question practice and the recent chapter entry on Study", async () => {
-    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [] });
+    vi.spyOn(platformApi, "book").mockResolvedValue(bookWithChapter());
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([
       { questionId: "q1", targetKnowledgePointId: "k", knowledgePointName: "函数",
         contentMarkdown: "错题", lastGradedAt: "2026-10-06T00:00:00Z", available: true },
@@ -337,10 +345,19 @@ describe("practice interaction closure", () => {
     Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
     render(<StudyPage data={data} reload={vi.fn()} />);
 
-    // 没有 active Session 但有最近一次章节练习：显示“最近练习章节”与“再次练习”。
-    expect(await screen.findByText("最近练习章节")).toBeTruthy();
-    expect(screen.getByText("函数章")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "再次练习 →" }));
+    // 没有 active Session 但有最近一次章节练习：顶部卡片显示当前书籍与章节，按钮为“再次练习”。
+    // PR7 UI 精修后不再显示“最近练习章节”标签、时间戳、分式进度或按钮箭头。
+    const hero = await waitFor(() => {
+      const node = document.querySelector(".study-hero")!;
+      expect(node.querySelector(".study-hero-chapter")?.textContent).toBe("函数章");
+      return node;
+    });
+    expect(hero.textContent).not.toContain("最近练习章节");
+    expect(hero.textContent).not.toContain("最近练习 ");
+    expect(hero.textContent).not.toContain("2 / 52");
+    const again = screen.getByRole("button", { name: "再次练习" });
+    expect(again.textContent).toBe("再次练习");
+    fireEvent.click(again);
     await waitFor(() => expect(startChapter).toHaveBeenCalledWith("math", "chapter"));
 
     // 错题区域：primary 快速练习错题 + secondary 进入错题本。
@@ -352,7 +369,7 @@ describe("practice interaction closure", () => {
   });
 
   it("shows the continue entry only for an active chapter session", async () => {
-    vi.spyOn(platformApi, "book").mockResolvedValue({ ...data.bankManifest[0], chapters: [] });
+    vi.spyOn(platformApi, "book").mockResolvedValue(bookWithChapter());
     vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
     vi.spyOn(platformApi, "progress").mockRejectedValue(new Error("not needed"));
     vi.spyOn(platformApi, "recentChapter").mockResolvedValue({
@@ -363,8 +380,11 @@ describe("practice interaction closure", () => {
     Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
     render(<StudyPage data={data} reload={vi.fn()} />);
 
-    expect(await screen.findByRole("button", { name: "继续章节练习 →" })).toBeTruthy();
-    expect(screen.getByText("当前进度：2 / 7")).toBeTruthy();
+    // active Session：同一个按钮继续该 Session，且不再显示分式进度或箭头。
+    const resume = await screen.findByRole("button", { name: "再次练习" });
+    expect(resume.textContent).toBe("再次练习");
+    expect(screen.queryByText("当前进度：2 / 7")).toBeNull();
+    expect(screen.queryByText(/2 \/ 7/)).toBeNull();
     // 0 道错题时快练按钮禁用，避免点击后才报错。
     const quick = screen.getByRole("button", { name: "快速练习错题" });
     expect(quick.hasAttribute("disabled")).toBe(true);
