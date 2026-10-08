@@ -195,6 +195,8 @@ describe("practice interaction closure", () => {
     const answerPanel = view.container.querySelector(".practice-answer")!;
     expect(resultPanel.classList.contains("correct")).toBe(true);
     expect(screen.getByRole("button", { name: "下一道题" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "题目有误？" }).closest(".practice-actions")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "题目有误？" })).toHaveLength(1);
     expect(resultPanel.compareDocumentPosition(answerPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     cleanup();
@@ -309,7 +311,50 @@ describe("practice interaction closure", () => {
     // core / auxiliary 都显示，并用不同角色类区分。
     expect(screen.getByText("数列极限计算").classList.contains("core")).toBe(true);
     expect(screen.getByText("函数奇偶性、周期性与单调性").classList.contains("auxiliary")).toBe(true);
+    const contextRow=view.container.querySelector(".practice-context-row")!;
+    expect(contextRow).toBeTruthy();
+    expect(contextRow.contains(screen.getByText("2022年考研数学一真题"))).toBe(true);
+    expect(contextRow.contains(screen.getByText("第3题"))).toBe(true);
+    expect(contextRow.contains(screen.getByText("数列极限计算"))).toBe(true);
+    expect(contextRow.contains(screen.getByText("函数奇偶性、周期性与单调性"))).toBe(true);
+    expect(view.container.querySelector(".tag-row")!.textContent).not.toContain("2022年考研数学一真题");
     expect(view.container.querySelectorAll(".practice-exam-meta .practice-exam-label")).toHaveLength(1);
+  });
+
+  it("keeps the report trigger in the single action row for active and revealed states", async () => {
+    const base=session();
+    const activeAuto={...base,currentAttempt:{...base.currentAttempt,status:"active" as const,assessment:undefined,
+      gradingSource:undefined,answerRevealed:false,standard:undefined,explanation:undefined}};
+    vi.spyOn(platformApi,"practice").mockResolvedValue(activeAuto);
+    const auto=render(<PracticePage data={data} id="session"/>);
+    await screen.findByRole("button",{name:"提交答案"});
+    const autoActions=auto.container.querySelector(".practice-actions")!;
+    expect(["我没思路","提交答案","题目有误？"].every(label=>
+      Array.from(autoActions.querySelectorAll("button")).some(button=>button.textContent===label))).toBe(true);
+    expect(screen.getAllByRole("button",{name:"题目有误？"})).toHaveLength(1);
+    cleanup();
+
+    vi.mocked(platformApi.practice).mockResolvedValue({...activeAuto,currentAttempt:{...activeAuto.currentAttempt,
+      question:{...activeAuto.currentAttempt.question,presentationType:"self_assessment",gradingMode:"self_assessment",options:{}},
+    }});
+    const self=render(<PracticePage data={data} id="session"/>);
+    await screen.findByRole("button",{name:"查看参考解析并自评"});
+    const selfActions=self.container.querySelector(".practice-actions")!;
+    expect(["我没思路","查看参考解析并自评","题目有误？"].every(label=>
+      Array.from(selfActions.querySelectorAll("button")).some(button=>button.textContent===label))).toBe(true);
+    expect(screen.getAllByRole("button",{name:"题目有误？"})).toHaveLength(1);
+    cleanup();
+
+    vi.mocked(platformApi.practice).mockResolvedValue({...activeAuto,currentAttempt:{...activeAuto.currentAttempt,
+      status:"revealed",answerRevealed:true,explanation:"参考解析",
+      question:{...activeAuto.currentAttempt.question,presentationType:"self_assessment",gradingMode:"self_assessment",options:{}},
+    }});
+    const revealed=render(<PracticePage data={data} id="session"/>);
+    await screen.findByRole("button",{name:"完全正确"});
+    const revealedActions=revealed.container.querySelector(".practice-assessment")!;
+    expect(["我没思路","完全正确","部分正确","需要重学","题目有误？"].every(label=>
+      Array.from(revealedActions.querySelectorAll("button")).some(button=>button.textContent===label))).toBe(true);
+    expect(screen.getAllByRole("button",{name:"题目有误？"})).toHaveLength(1);
   });
 
   it("keeps the two wrong-question buttons spaced and readable", async () => {
