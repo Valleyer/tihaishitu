@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetLearnerDataCache } from "./learnerDataCache";
 import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type PracticeSession } from "./api";
 import { PracticePage, QuestionPage, QuestionPreviewCard, safePracticeReturnTo, StudyPage, WrongQuestionsPage } from "./PlatformApp";
 import { AnswerDisplay } from "./practiceView";
@@ -28,7 +29,7 @@ const session = (assessment: "correct" | "partial" | "wrong" = "correct", canRep
   },
 });
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); resetLearnerDataCache(); });
 
 /** 学习页顶部卡片需要一个真实存在于书籍目录里的最近章节，才能解析出当前章节与可练知识点。 */
 const bookWithChapter = (): BookDetail => ({

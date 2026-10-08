@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadProgress, resetLearnerDataCache } from "./learnerDataCache";
 import { platformApi, type ActivityDaily, type HubBootstrap, type LearnerActivity, type LearnerProgress } from "./api";
 import { AuthenticatedPlatform, ProgressPage } from "./PlatformApp";
 import { progressMetrics } from "./ProgressPanels";
@@ -81,7 +82,7 @@ beforeEach(() => {
   history.replaceState(null, "", "/progress");
 });
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); resetLearnerDataCache(); });
 
 describe("progress metrics contract", () => {
   it("projects only a label and a value for the six unified metrics in order", () => {
@@ -263,7 +264,9 @@ describe("unified progress navigation", () => {
     expect(await screen.findByRole("heading", { name: "学习进度" })).toBeTruthy();
     expect(location.pathname).toBe("/progress");
     expect(isHubPath("/statistics")).toBe(true);
+    // 同一 scope + 同一窗口只允许一次有效请求：预热与页面挂载必须 dedupe。
     expect(progressSpy).toHaveBeenCalledTimes(1);
+    expect(progressSpy).toHaveBeenCalledWith(7);
   });
 
   it("serves the progress sub pages directly", async () => {
@@ -273,5 +276,126 @@ describe("unified progress navigation", () => {
 
     expect(await screen.findByRole("heading", { name: "考研数学一" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "← 返回文集进度" }).getAttribute("href")).toBe("/progress");
+  });
+});
+
+describe("ProgressPage cache behaviour", () => {
+  it("renders real content on the first frame when progress:7 is already cached", async () => {
+    const { progressSpy } = mockPlatform();
+    await loadProgress(bootstrap, 7);
+    progressSpy.mockClear();
+
+    const view = render(<ProgressPage data={bootstrap} />);
+
+    // 首个可观察 render 就必须是真实内容，而不是「正在整理学习进度…」。
+    expect(view.container.querySelectorAll(".statistics-summary article")).toHaveLength(6);
+    expect(view.container.querySelector(".statistics-activity-chart")).toBeTruthy();
+    expect(view.container.querySelector(".progress-books")).toBeTruthy();
+    expect(screen.queryByText("正在整理学习进度…")).toBeNull();
+    // TTL 内不重复取数。
+    expect(progressSpy).not.toHaveBeenCalled();
+  });
+
+  it("switches to 30 days atomically when that window is cached", async () => {
+    const { progressSpy } = mockPlatform();
+    await loadProgress(bootstrap, 7);
+    await loadProgress(bootstrap, 30);
+    progressSpy.mockClear();
+
+    const view = render(<ProgressPage data={bootstrap} />);
+    const thirty = screen.getByRole("button", { name: "近 30 天" });
+    fireEvent.click(thirty);
+
+    // cache hit：按钮 active 与图表窗口同时切到 30，且页面从未被清空。
+    expect(thirty.className).toBe("active");
+    expect(view.container.querySelector("section.statistics-activity-chart .activity-chart-heading span")!.textContent).toContain("30");
+    expect(view.container.querySelectorAll(".statistics-summary article")).toHaveLength(6);
+    expect(screen.queryByText("正在整理学习进度…")).toBeNull();
+  });
+
+  it("keeps the current page fully rendered while a cache-miss window loads", async () => {
+    // 30 天故意慢：切换期间必须继续显示完整的 7 天页面。
+    let releaseThirty!: (value: LearnerProgress) => void;
+    const { progressSpy } = mockPlatform();
+    progressSpy.mockClear();
+    await loadProgress(bootstrap, 7);
+    progressSpy.mockImplementation(days => days === 30
+      ? new Promise<LearnerProgress>(resolve => { releaseThirty = resolve; })
+      : Promise.resolve(progress(days ?? 7)));
+    progressSpy.mockClear();
+
+    const view = render(<ProgressPage data={bootstrap} />);
+    fireEvent.click(screen.getByRole("button", { name: "近 30 天" }));
+
+    // 目标数据未到：仍是完整 7 天页面，按钮也还没切 active。
+    expect(view.container.querySelectorAll(".statistics-summary article")).toHaveLength(6);
+    expect(view.container.querySelector("section.statistics-activity-chart .activity-chart-heading span")!.textContent).toContain("7");
+    expect(screen.getByRole("button", { name: "近 7 天" }).className).toBe("active");
+    expect(screen.getByRole("button", { name: "近 30 天" }).className).toBe("");
+    expect(screen.queryByText("正在整理学习进度…")).toBeNull();
+
+    releaseThirty(progress(30));
+    await waitFor(() => expect(screen.getByRole("button", { name: "近 30 天" }).className).toBe("active"));
+    expect(view.container.querySelector("section.statistics-activity-chart .activity-chart-heading span")!.textContent).toContain("30");
+    expect(view.container.querySelectorAll(".statistics-summary article")).toHaveLength(6);
+  });
+
+  it("ignores an older window response when 30 → 90 are clicked quickly", async () => {
+    let releaseThirty!: (value: LearnerProgress) => void;
+    let releaseNinety!: (value: LearnerProgress) => void;
+    const { progressSpy } = mockPlatform();
+    await loadProgress(bootstrap, 7);
+    progressSpy.mockImplementation(days => days === 30
+      ? new Promise<LearnerProgress>(resolve => { releaseThirty = resolve; })
+      : days === 90
+        ? new Promise<LearnerProgress>(resolve => { releaseNinety = resolve; })
+        : Promise.resolve(progress(days ?? 7)));
+
+    const view = render(<ProgressPage data={bootstrap} />);
+    fireEvent.click(screen.getByRole("button", { name: "近 30 天" }));
+    fireEvent.click(screen.getByRole("button", { name: "近 90 天" }));
+
+    // 90 先回来：切换到 90。
+    releaseNinety(progress(90));
+    await waitFor(() => expect(screen.getByRole("button", { name: "近 90 天" }).className).toBe("active"));
+    expect(view.container.querySelector("section.statistics-activity-chart .activity-chart-heading span")!.textContent).toContain("90");
+
+    // 过期的 30 后回来：不得覆盖 90。
+    releaseThirty(progress(30));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.getByRole("button", { name: "近 90 天" }).className).toBe("active");
+    expect(screen.getByRole("button", { name: "近 30 天" }).className).toBe("");
+    expect(view.container.querySelector("section.statistics-activity-chart .activity-chart-heading span")!.textContent).toContain("90");
+  });
+
+  it("reuses the cached progress on the book sub page without a second request", async () => {
+    const { progressSpy } = mockPlatform();
+    await loadProgress(bootstrap, 7);
+    progressSpy.mockClear();
+
+    history.replaceState(null, "", "/progress/books/math");
+    render(<AuthenticatedPlatform />);
+
+    expect(await screen.findByRole("heading", { name: "考研数学一" })).toBeTruthy();
+    expect(progressSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not re-request a fresh cached window when re-entering the page", async () => {
+    const { progressSpy } = mockPlatform();
+    await loadProgress(bootstrap, 7);
+    progressSpy.mockClear();
+    /** 只关心 7 天窗口：挂载后的空闲预热会另行取 30 / 90，不属于重复请求。 */
+    const sevenDayCalls = () => progressSpy.mock.calls.filter(call => call[0] === 7 || call[0] === undefined).length;
+
+    const first = render(<ProgressPage data={bootstrap} />);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sevenDayCalls()).toBe(0);
+
+    // 二次进入（模拟 进度 → 题库 → 进度）：TTL 内仍然直接命中内存。
+    first.unmount();
+    render(<ProgressPage data={bootstrap} />);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(sevenDayCalls()).toBe(0);
+    expect(screen.queryByText("正在整理学习进度…")).toBeNull();
   });
 });

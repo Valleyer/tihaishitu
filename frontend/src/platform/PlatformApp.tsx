@@ -5,11 +5,16 @@ import { RichText } from "../components/RichText";
 import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
 import { ActivityBarChart, RecentContactState, progressMetrics, trendSeries } from "./ProgressPanels";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
+import {
+  invalidateLearnerAllData, invalidateLearnerDynamicData, learnerScopeKey, loadBook, loadProgress,
+  loadStudyCore, peekProgress, peekStudyCore, prefetchProgress, prefetchStudyCore,
+  scheduleHubPrefetch, scheduleProgressWindowPrefetch, type ProgressDays, type StudyCoreSnapshot,
+} from "./learnerDataCache";
 import { AnswerDisplay } from "./practiceView";
 import { attemptKnowledgeTags, examTitle, practiceLabel, recentChapterMode } from "./practiceMeta";
 import "./platform.css";
@@ -110,9 +115,17 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
     ["知识", "/books"], ["题库", "/questions"],
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+  /**
+   * 顶部导航意图预取：只针对 /study 与 /progress，不改 HubLink 的全局语义。
+   * 依赖缓存 in-flight dedupe，鼠标来回移动不会重复发请求。
+   */
+  const intentPrefetch = (href: string) => () => {
+    if (href === "/study") prefetchStudyCore(data);
+    else if (href === "/progress") prefetchProgress(data, 7);
+  };
   return <div className="learning-hub">
     <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><img src="/brand-logo.png" alt="" />万境书院</HubLink>
-      <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href}>{label}</HubLink>)}</nav>
+      <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href} onPointerEnter={intentPrefetch(href)} onFocus={intentPrefetch(href)} onTouchStart={intentPrefetch(href)}>{label}</HubLink>)}</nav>
       <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account"><span className="hub-account-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8.6" r="3.6" /><path d="M5 20c0-3.4 3.1-5.4 7-5.4s7 2 7 5.4" /></svg></span><span>{data.learner.displayName}</span></HubLink></div></div>
     </header>
     {children}
@@ -120,9 +133,16 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
 }
 
 function HubHome({ data }: { data: HubBootstrap }) {
-  const [progress, setProgress] = useState<LearnerProgress | null>();
+  // 与 Study / Progress 共享同一份 progress:7 缓存（含 in-flight dedupe）。
+  const [progress, setProgress] = useState<LearnerProgress | null | undefined>(() => peekProgress(data, 7));
   const [homeError, setHomeError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(() => { setProgress(null); setHomeError("学习数据暂时未能载入，可以稍后再试。"); }); }, []);
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => {
+    let cancelled = false;
+    loadProgress(data, 7).then(value => { if (!cancelled) setProgress(value); })
+      .catch(() => { if (!cancelled) { setProgress(current => current ?? null); setHomeError("学习数据暂时未能载入，可以稍后再试。"); } });
+    return () => { cancelled = true; };
+  }, [scopeKey, data]);
   return <Shell data={data}><main className="hub-main hub-home">
     <section className="hub-greeting"><h1>{greeting()}，{data.learner.displayName}</h1></section>
     {homeError && <p className="hub-error" role="alert">{homeError}</p>}
@@ -141,21 +161,73 @@ function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bo
   </li>;
 }
 
+/** 进度页初始窗口：固定 7 天，与 Bootstrap 预取、首页、Study Core 共用同一 cache key。 */
+const INITIAL_PROGRESS_DAYS: ProgressDays = 7;
+
 export function ProgressPage({ data }: { data: HubBootstrap }) {
-  // 活动趋势窗口：默认近 7 天，切换后按真实 days 重新取数（不走旧 graded-only 统计接口）。
-  const [days, setDays] = useState<7 | 30 | 90>(7);
-  const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
+  // 活动趋势窗口：默认近 7 天。days 代表「当前实际展示的数据窗口」，而不是尚未完成的目标请求。
+  const [days, setDays] = useState<ProgressDays>(INITIAL_PROGRESS_DAYS);
+  const [progress, setProgress] = useState<LearnerProgress | undefined>(() => peekProgress(data, INITIAL_PROGRESS_DAYS));
+  const [error, setError] = useState("");
+  /** 最后一次切换请求的目标窗口：快速 30→90 时只有最新的请求允许 commit。 */
+  const requestedDaysRef = useRef<ProgressDays>(INITIAL_PROGRESS_DAYS);
+  const scopeKey = learnerScopeKey(data);
+
+  // 初次进入 / scope 变化：stale-while-revalidate。
+  // 命中且仍在 TTL 内时不重复请求（否则会在 Bootstrap 预热刚结束的瞬间又打一份同样的 progress）；
+  // 只有过期或从未加载才会重新取数，且失败时绝不清空已有内容。
   useEffect(() => {
-    setProgress(undefined);
-    platformApi.progress(days).then(setProgress).catch(reason => setError((reason as Error).message));
-  }, [days]);
+    let cancelled = false;
+    requestedDaysRef.current = INITIAL_PROGRESS_DAYS;
+    const cached = peekProgress(data, INITIAL_PROGRESS_DAYS);
+    if (cached) setProgress(cached);
+    setDays(INITIAL_PROGRESS_DAYS);
+    loadProgress(data, INITIAL_PROGRESS_DAYS)
+      .then(value => {
+        if (cancelled || requestedDaysRef.current !== INITIAL_PROGRESS_DAYS) return;
+        setProgress(value);
+        setError("");
+      })
+      .catch((reason: Error) => { if (!cancelled && !cached) setError(reason.message); });
+    return () => { cancelled = true; };
+  }, [scopeKey, data]);
+
+  // 7 天稳定渲染后再空闲预热 30 / 90，不阻塞首屏（prefetch 幂等，重复触发不会重复请求）。
+  useEffect(() => { if (progress) scheduleProgressWindowPrefetch(data); }, [progress, data]);
+
+  /**
+   * 切换窗口：
+   * - cache hit：立即原子切换（按钮 active 与数据同时变），再后台刷新目标窗口；
+   * - cache miss：**保持当前完整页面**，目标数据到位后一次性提交 days + progress；
+   * - 两种情况都用 requestedDaysRef 做竞态保护，旧 response 不得覆盖新窗口。
+   */
+  const switchDays = (nextDays: ProgressDays) => {
+    if (nextDays === days) return;
+    requestedDaysRef.current = nextDays;
+    const cached = peekProgress(data, nextDays);
+    if (cached) {
+      setDays(nextDays); setProgress(cached); setError("");
+      void loadProgress(data, nextDays, { force: true })
+        .then(next => { if (requestedDaysRef.current === nextDays) setProgress(next); })
+        .catch(() => undefined);
+      return;
+    }
+    loadProgress(data, nextDays)
+      .then(next => {
+        if (requestedDaysRef.current !== nextDays) return;
+        setDays(nextDays); setProgress(next); setError("");
+      })
+      .catch((reason: Error) => { if (requestedDaysRef.current === nextDays) setError(reason.message); });
+  };
+  /** 7/30/90 按钮意图预取：鼠标移向按钮时即开始取数。 */
+  const windowIntent = (value: ProgressDays) => () => prefetchProgress(data, value);
   const activity = progress?.activity; const metrics = activity && progressMetrics(activity.metrics);
   const series = activity && trendSeries(activity.daily);
   return <Shell data={data}><main className="hub-main statistics-page">
     <div className="panel-heading">
       <h1>学习进度</h1>
       <div className="segmented">{([7, 30, 90] as const).map(value =>
-        <button className={days === value ? "active" : ""} onClick={() => setDays(value)} key={value}>近 {value} 天</button>)}
+        <button className={days === value ? "active" : ""} onClick={() => switchDays(value)} onPointerEnter={windowIntent(value)} onFocus={windowIntent(value)} onTouchStart={windowIntent(value)} key={value}>近 {value} 天</button>)}
       </div>
     </div>
     {error && <p className="hub-error" role="alert">{error}</p>}
@@ -183,8 +255,19 @@ export function ProgressPage({ data }: { data: HubBootstrap }) {
 }
 
 function ProgressBookPage({ data, bookId }: { data: HubBootstrap; bookId: string }) {
-  const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
-  useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, [bookId]);
+  // 复用 progress(7) 缓存：/progress → /progress/books/:id 不再重新请求。
+  const [progress, setProgress] = useState<LearnerProgress | undefined>(() => peekProgress(data, INITIAL_PROGRESS_DAYS));
+  const [error, setError] = useState("");
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => {
+    let cancelled = false;
+    const cached = peekProgress(data, INITIAL_PROGRESS_DAYS);
+    if (cached) setProgress(cached);
+    loadProgress(data, INITIAL_PROGRESS_DAYS)
+      .then(value => { if (!cancelled) { setProgress(value); setError(""); } })
+      .catch((reason: Error) => { if (!cancelled && !cached) setError(reason.message); });
+    return () => { cancelled = true; };
+  }, [bookId, scopeKey, data]);
   const book = progress?.books.find(item => item.bookId === bookId);
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/progress">← 返回文集进度</HubLink>{error && <p className="hub-error">{error}</p>}{book && <><p className="eyebrow">文集进度</p><h1>{book.name}</h1><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(book.masteryProgress)}% · {book.totalKnowledgePoints} 个知识点</p><ul className="chapter-progress-tree">{book.chapters.map(chapter => <ProgressChapterTree chapter={chapter} bookId={bookId} key={chapter.chapterId} />)}</ul></>}</main></Shell>;
 }
@@ -195,55 +278,53 @@ function chapterPoints(chapter: BookDetail["chapters"][number]): KnowledgePoint[
 
 function ProgressChapterPage({ data, bookId, chapterId }: { data: HubBootstrap; bookId: string; chapterId: string }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [book, setBook] = useState<BookDetail>(); const [states, setStates] = useState(new Map<string, KnowledgeState>()); const [error, setError] = useState("");
-  useEffect(() => { Promise.all([platformApi.progress(), platformApi.book(bookId), platformApi.knowledgeStatesForBook(bookId)]).then(([p,b,s]) => { setProgress(p); setBook(b); setStates(new Map(s.map(item => [item.knowledgePointId,item]))); }).catch(reason => setError((reason as Error).message)); }, [bookId, chapterId]);
+  const scopeKey = learnerScopeKey(data);
+  useEffect(() => { Promise.all([loadProgress(data, INITIAL_PROGRESS_DAYS), loadBook(data, bookId), platformApi.knowledgeStatesForBook(bookId)]).then(([p,b,s]) => { setProgress(p); setBook(b); setStates(new Map(s.map(item => [item.knowledgePointId,item]))); }).catch(reason => setError((reason as Error).message)); }, [bookId, chapterId, scopeKey, data]);
   const aggregate = progress?.books.find(item => item.bookId === bookId); const chapterProgress = aggregate && findProgressChapter(aggregate.chapters, chapterId); const chapter = book && findBookChapter(book.chapters, chapterId);
-  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); go(practicePath(session.id, `/progress/books/${bookId}/chapters/${chapterId}`)); } catch(reason){ setError((reason as Error).message); } };
+  const start = async (id: string) => { try { const session=await platformApi.startKnowledgePractice(id); invalidateLearnerDynamicData(); go(practicePath(session.id, `/progress/books/${bookId}/chapters/${chapterId}`)); } catch(reason){ setError((reason as Error).message); } };
   return <Shell data={data}><main className="hub-main narrow"><HubLink href={`/progress/books/${bookId}`}>← 返回章节进度</HubLink>{error && <p className="hub-error">{error}</p>}{chapter && chapterProgress && <><p className="eyebrow">章节进度</p><h1>{chapter.name}</h1><div className="mastery-progress"><span style={{width:`${chapterProgress.masteryProgress}%`}} /></div><p>掌握进度 {Math.round(chapterProgress.masteryProgress)}% · {chapterProgress.total} 个知识点</p><div className="progress-point-list">{chapterPoints(chapter).map(point => { const state=states.get(point.id); return <article className="hub-panel" key={point.id}><div><h2><HubLink href={`/knowledge/${point.id}`}>{point.name}</HubLink></h2><p>{state?.lastEvidenceAt ? `最近学习 ${new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN")}` : "未开始"}</p></div><div><span className={`mastery-band ${state?.band || "unstarted"}`}>{progressBandLabels[state?.band || "unstarted"]}</span><b>{Math.round(state?.effectiveMastery || 0)}%</b><button onClick={() => start(point.id)}>开始专项</button></div></article> })}</div></>}</main></Shell>;
 }
 
 export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => Promise<void> }) {
   const [profile, setProfile] = useState<StudyProfile>(data.studyProfile); const [selected, setSelected] = useState(data.studyProfile.selectedBookIds);
-  const [details, setDetails] = useState<BookDetail[]>([]); const [wrongCount, setWrongCount] = useState(0);
-  const [progress,setProgress]=useState<LearnerProgress|null>();
-  const [recent,setRecent]=useState<RecentChapter|null>();
+  const [wrongCount, setWrongCount] = useState(0);
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
   /** 章节本地分页：只对已加载的 visibleChapters 做 slice，不新增请求、不写 URL、不持久化。 */
   const [chapterPage, setChapterPage] = useState(0);
   /**
-   * 顶部 hero 依赖 details + progress + recent 三者。
+   * 顶部 hero 的完整快照。
    *
-   * <p>这三者必须**在同一个 Promise continuation 里一次性提交**：否则 recent 先到会出现
-   * 章节与按钮、progress 后到再把进度条插到按钮前面，导致按钮被顶下去的 layout shift。
-   * wrongCount 不影响 hero 结构，可以独立加载。</p>
+   * <p>cache hit 时同步初始化，首帧就渲染真实内容；cache miss 时保持 undefined，
+   * 由 loadStudyCore 把 details + progress + recent **一次性**提交，避免
+   * 「章节与按钮先到、进度条后到把按钮顶下去」的 layout shift。</p>
    */
-  const [studyCoreReady, setStudyCoreReady] = useState(false);
+  const [studyCore, setStudyCore] = useState<StudyCoreSnapshot | undefined>(() => peekStudyCore(data));
+  const scopeKey = learnerScopeKey(data);
   useEffect(() => {
     let cancelled = false;
-    const detailsPromise = Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id)))
-      .then(value => ({ value, error: "" }))
-      .catch((reason: Error) => ({ value: [] as BookDetail[], error: reason.message }));
-    const progressPromise = platformApi.progress().catch(() => null);
-    const recentPromise = platformApi.recentChapter().catch(() => null);
-    Promise.all([detailsPromise, progressPromise, recentPromise]).then(([detailsResult, progressResult, recentResult]) => {
-      if (cancelled) return;
-      // 同一个 continuation 内提交，React 会合并为一次渲染。
-      setDetails(detailsResult.value);
-      setProgress(progressResult);
-      setRecent(recentResult);
-      if (detailsResult.error) setMessage(detailsResult.error);
-      setStudyCoreReady(true);
-    });
+    const cached = peekStudyCore(data);
+    if (cached) setStudyCore(cached);
+    // 缓存仍然新鲜时直接复用（不再重复请求）；只有缺失或过期才取数。
+    // 无论哪条路径，三者都由 loadStudyCore 一次性组合提交，因此不会恢复 layout shift；
+    // 请求失败且有旧快照时保留旧内容，不清空页面。
+    loadStudyCore(data)
+      .then(value => { if (!cancelled) setStudyCore(value); })
+      .catch((reason: Error) => { if (!cancelled && !cached) setMessage(reason.message); });
     platformApi.wrongQuestions().then(items => { if (!cancelled) setWrongCount(items.length); })
       .catch(() => { if (!cancelled) setWrongCount(0); });
     return () => { cancelled = true; };
-  }, [data.studyProfile.selectedBookIds]);
+  }, [scopeKey, data]);
+  const details = studyCore?.details ?? [];
+  const progress = studyCore?.progress;
+  const recent = studyCore?.recent;
+  const studyCoreReady = studyCore !== undefined;
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
-  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
-  const start=async()=>{if(!startBookId||!chapter)return;try{const session=await platformApi.startChapterPractice(startBookId,chapter.id);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);invalidateLearnerAllData();setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
+  const start=async()=>{if(!startBookId||!chapter)return;try{const session=await platformApi.startChapterPractice(startBookId,chapter.id);invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 再次练习：用最近一次章节练习的 Book + Chapter 新建 chapter_drill，不恢复已结束的 Session。 */
-  const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const again=async()=>{if(!recent?.bookId||!recent?.chapterId)return;try{const session=await platformApi.startChapterPractice(recent.bookId,recent.chapterId);invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   /** 快速练习错题：随机连续刷 active 错题，答对不会自动移出错题本。 */
-  const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
+  const quickWrong=async()=>{try{const session=await platformApi.startWrongDrill();invalidateLearnerDynamicData();go(practicePath(session.id,"/study"))}catch(reason){setMessage((reason as Error).message)}};
   const mode=recentChapterMode(recent);
   // 顶部「最近学习」卡片：只读最近一次章节练习，不受下方书籍/章节浏览影响。
   const recentBook=scopedBooks.find(item=>item.id===recent?.bookId);
@@ -445,7 +526,7 @@ function KnowledgePage({ data, id }: { data: HubBootstrap; id: string }) {
   const context=point?.books.find(item=>item.id===requestedBook&&item.chapterId===requestedChapter)||point?.books[0];
   useEffect(()=>{if(context)platformApi.knowledgeNeighbors(id,context.id,context.chapterId).then(setNeighbors).catch(()=>setNeighbors(undefined))},[id,context?.id,context?.chapterId]);
   const contextQuery=context?`?bookId=${encodeURIComponent(context.id)}&chapterId=${encodeURIComponent(context.chapterId)}`:"";
-  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
+  const start=async()=>{try{const session=await platformApi.startKnowledgePractice(id);invalidateLearnerDynamicData();go(practicePath(session.id,`/knowledge/${id}${contextQuery}`))}catch(reason){setError((reason as Error).message)}};
   const openGuide=async()=>{setGuideOpen(true);try{setGuide(await platformApi.knowledgeGuide(id))}catch(reason){setError((reason as Error).message)}};
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/books">← 返回知识</HubLink>{error&&<p className="hub-error">{error}</p>}{point&&<><p className="eyebrow">{context?`${context.name} · ${context.chapterName}`:"知识点"}</p><h1>{point.name}</h1><div className="knowledge-actions"><button className="hub-primary" onClick={start}>开始知识点练习</button><button onClick={openGuide}>知识讲解</button>{neighbors?.next?<HubLink href={`/knowledge/${neighbors.next.id}?bookId=${encodeURIComponent(context!.id)}&chapterId=${encodeURIComponent(neighbors.next.chapterId)}`}>下一个知识点 →</HubLink>:<span className="muted">已到文集末尾</span>}</div>{state&&<section className={`hub-panel mastery-summary ${state.band==="proficient"?"mastery-perfect":""}`}><h2>当前状态</h2><p className="mastery-score"><b>{state.band==="proficient"?"✦ ":""}{bandLabel[state.band]}</b> · {state.effectiveMastery.toFixed(1)}%</p><p>{state.evidenceCount?`最近练习：${state.lastEvidenceAt?new Date(state.lastEvidenceAt).toLocaleDateString("zh-CN"):"—"}`:"尚未开始正式训练"}</p></section>}<h2>相关正式真题</h2><div className="question-preview-list">{questions.map(question=><QuestionPreviewCard summary={question} linkKnowledgePoints key={question.id}/>)}</div>{questions.length===0&&<p className="empty-state">当前没有已发布题目。</p>}{guideOpen&&<Modal title={`${point.name} · 知识讲解`} wide close={()=>setGuideOpen(false)}>{guide===undefined?<p>正在载入知识讲解…</p>:guide.contentMarkdown?<div className="rich"><RichText>{guide.contentMarkdown}</RichText></div>:<div className="empty-state"><h3>知识讲解尚未录入</h3></div>}</Modal>}</>}</main></Shell>;
 }
@@ -454,10 +535,10 @@ export function WrongQuestionsPage({ data }: { data: HubBootstrap }) {
   const [items, setItems] = useState<WrongQuestion[]>([]); const [error, setError] = useState("");
   const load=()=>platformApi.wrongQuestions().then(setItems).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, []);
-  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); go(practicePath(session.id,"/wrong-questions")); } catch (reason) { setError((reason as Error).message); } };
+  const start = async (questionId: string) => { try { const session = await platformApi.startWrongPractice(questionId); invalidateLearnerDynamicData(); go(practicePath(session.id,"/wrong-questions")); } catch (reason) { setError((reason as Error).message); } };
   const remove = async (questionId: string) => {
     if (!window.confirm("确认已经掌握这道题并将它移出错题本吗？\n如果以后再次做错，它会自动重新加入。")) return;
-    try { await platformApi.removeWrongQuestion(questionId); await load(); } catch (reason) { setError((reason as Error).message); }
+    try { await platformApi.removeWrongQuestion(questionId); invalidateLearnerDynamicData(); await load(); } catch (reason) { setError((reason as Error).message); }
   };
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/study">← 返回学习</HubLink><h1>错题本</h1>
     {error && <p className="hub-error">{error}</p>}
@@ -477,6 +558,16 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
     }
     reportAttemptId.current=nextAttemptId; setSession(value); setSelected([]); setError("");
   };
+  /**
+   * 所有写路径的统一出口：先把学习类缓存标脏，再套用新的 Session。
+   *
+   * <p>答题 / 揭示 / 自评 / 下一题 / 结束都会改变 progress、recent 与 Study Core，
+   * 集中在这里失效，避免每个按钮各写一遍。</p>
+   */
+  const applyMutatedSession = (value: PracticeSession) => {
+    invalidateLearnerDynamicData();
+    applySession(value);
+  };
   const load = () => platformApi.practice(id).then(applySession).catch(reason => setError((reason as Error).message));
   useEffect(() => { void load(); }, [id]);
   if (!session) return <Shell data={data}><main className="hub-main narrow"><p>{error || "正在恢复专项练习…"}</p></main></Shell>;
@@ -487,10 +578,10 @@ export function PracticePage({ data, id }: { data: HubBootstrap; id: string }) {
   const toggle = (key: string) => setSelected(values => multiple ? (values.includes(key) ? values.filter(value => value !== key) : [...values, key]) : [key]);
   const submit = async () => { try {
     const answer = question.presentationType === "true_false" ? selected[0] === "true" : multiple ? selected : selected[0];
-    applySession(await platformApi.answerPractice(session, answer));
+    applyMutatedSession(await platformApi.answerPractice(session, answer));
   } catch (reason) { setError((reason as Error).message); } };
-  const update = (action: Promise<PracticeSession>) => action.then(applySession).catch(reason => setError((reason as Error).message));
-  const finish = async () => { try { await platformApi.endPractice(id); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
+  const update = (action: Promise<PracticeSession>) => action.then(applyMutatedSession).catch(reason => setError((reason as Error).message));
+  const finish = async () => { try { await platformApi.endPractice(id); invalidateLearnerDynamicData(); go(safePracticeReturnTo(session.intent)); } catch (reason) { setError((reason as Error).message); } };
   const answerDetails = attempt.answerRevealed && <section className="hub-panel rich practice-answer">{question.gradingMode === "self_assessment" ? <><h2>参考解析</h2><RichText>{attempt.explanation || ""}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={attempt.standard} presentationType={question.presentationType} options={practiceOptions}/>{attempt.explanation && <><h2>解析</h2><RichText>{attempt.explanation}</RichText></>}</>}</section>;
   const assessment = attempt.assessment || "wrong";
   const title = examTitle(attempt);
@@ -563,12 +654,12 @@ export function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
   return <Shell data={data}><main className="hub-main narrow"><HubLink href="/questions">← 返回题库</HubLink>{error && <p className="hub-error">{error}</p>}{question && <><p className="eyebrow">全平台题库 · 只读题目浏览</p><h1>{questionTitle(question)}</h1><ReadonlyQuestion question={question}/><button className="hub-primary" onClick={() => setShowAnswer(v => !v)}>{showAnswer ? "收起答案与解析" : "查看答案与解析"}</button>{showAnswer && <section className="hub-panel rich practice-answer">{solution ? <><h2>参考解析</h2><RichText>{question.analysisMarkdown}</RichText></> : <><h2>参考答案</h2><AnswerDisplay standard={question.correctAnswer} presentationType={question.presentationType} options={Object.fromEntries((question.options || []).map(option => [option.key, option.text]))}/><h2>解析</h2><RichText>{question.analysisMarkdown}</RichText></>}</section>}</>}</main></Shell>;
 }
 
-function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
+function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); invalidateLearnerAllData(); go("/login"); }}>退出登录</button></section></main></Shell>; }
 
 export function AuthenticatedPlatform() {
   const path = useCurrentLocation().split(/[?#]/)[0];
   const [data, setData] = useState<HubBootstrap>(); const [error, setError] = useState("");
-  const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
+  const load = async () => { try { const next = await platformApi.bootstrap(); setData(next); scheduleHubPrefetch(next); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
   useEffect(() => { void load(); }, []);
   if (!data) return <main className="hub-loading">{error || "正在载入万境中枢…"}</main>;
   if (path === "/worlds/ancient-official") return <div className="world-shell"><App /></div>;

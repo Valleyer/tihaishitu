@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadStudyCore, resetLearnerDataCache } from "./learnerDataCache";
 import { platformApi, type BookDetail, type HubBootstrap, type LearnerProgress, type RecentChapter } from "./api";
 import { StudyPage } from "./PlatformApp";
 
@@ -88,7 +89,7 @@ const bookCards = (view: { container: HTMLElement }) => view.container.querySele
 const chapterNames = (view: { container: HTMLElement }) =>
   [...chapterCards(view)].map(card => card.querySelector("b")!.textContent);
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); resetLearnerDataCache(); });
 
 describe("Study page default state", () => {
   it("starts with no book selected and no chapters rendered", async () => {
@@ -375,6 +376,46 @@ describe("Study page hero render stability", () => {
     const heroChildren = [...view.container.querySelector(".study-hero-body")!.children].map(node => node.className);
     expect(heroChildren).toEqual(["study-hero-book", "study-hero-chapter", "study-progress", "hub-primary"]);
     expect(screen.getByRole("button", { name: "再次练习" }).textContent).toBe("再次练习");
+  });
+
+  it("renders the real hero on the first frame when the Study Core is already cached", async () => {
+    const spies = mockStudy();
+    // 预热：缓存命中时首帧就必须是真实内容，而不是 .loading 占位。
+    await loadStudyCore(data);
+    const progressCalls = vi.mocked(platformApi.progress).mock.calls.length;
+    const recentCalls = vi.mocked(platformApi.recentChapter).mock.calls.length;
+    const bookCalls = spies.book.mock.calls.length;
+
+    const view = render(<StudyPage data={data} reload={vi.fn()} />);
+
+    const body = view.container.querySelector(".study-hero-body")!;
+    expect(body.classList.contains("loading")).toBe(false);
+    expect(view.container.querySelector(".study-hero-book")!.textContent).toBe("考研数学一");
+    expect(view.container.querySelector(".study-hero-chapter")!.textContent).toBe("第 3 章");
+    expect(view.container.querySelector(".study-progress")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "再次练习" })).toBeTruthy();
+    // 缓存仍然新鲜：挂载不得再打一份 progress / recent / book。
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(vi.mocked(platformApi.progress).mock.calls.length).toBe(progressCalls);
+    expect(vi.mocked(platformApi.recentChapter).mock.calls.length).toBe(recentCalls);
+    expect(spies.book.mock.calls.length).toBe(bookCalls);
+  });
+
+  it("prefetches the Study Core from the nav intent handlers without navigating", async () => {
+    const { view } = await renderStudy();
+    const studyNav = [...view.container.querySelectorAll("nav[aria-label='主要导航'] a")]
+      .find(link => link.textContent === "学习")!;
+
+    // 意图预取只挂事件，不改变 HubLink 的 href 或点击语义。
+    expect(studyNav.getAttribute("href")).toBe("/study");
+    const before = vi.mocked(platformApi.progress).mock.calls.length;
+    fireEvent.pointerEnter(studyNav);
+    fireEvent.focus(studyNav);
+    fireEvent.touchStart(studyNav);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    // 依赖 in-flight dedupe：连续三种事件不会各打一份 progress。
+    expect(vi.mocked(platformApi.progress).mock.calls.length - before).toBeLessThanOrEqual(0);
+    expect(location.pathname).toBe("/study");
   });
 });
 
