@@ -1130,6 +1130,102 @@ Review 业务日
 
 ---
 
+## 14.1 进度统计 V3
+
+「进度」与「统计」是**同一个模块**，名字统一为「进度」，入口统一为 `/progress`。顶栏不再提供
+独立的「统计」入口；`/statistics` 只保留为兼容重定向到 `/progress`，用于旧链接与书签。
+
+### 14.1.1 有效 Attempt
+
+计数单位是 `study_attempt.id`：**不是** question_id、KnowledgePoint 数，也不是 answer_record 数。
+
+有效：
+
+```text
+status = graded 且 assessment ∈ {correct, wrong, partial}  → 结果用真实 assessment
+status = revealed 且 answer_revealed_at IS NOT NULL        → 归类 revealed_only（仅查看答案）
+```
+
+无效：
+
+```text
+status = active（打开后直接退出）
+Legacy /games/** 无 Learner 身份
+Remedial 子题（parent_question_id 非空）
+非 published 或非单/多选、判断、综合的题目
+全平台题库 /questions/{id} 的只读浏览（不生成 Attempt）
+```
+
+约束：
+
+- 同一道题的不同有效 Attempt **各计 1 次**；
+- 一次 Attempt 即使先 `reveal` 再自评也只计 **1 次**，并采用自评后的真实 assessment；
+- 正式「我没思路」判 `wrong`，计 1 次；
+- 覆盖全部正式场景：现代 World 随机、章节练习、知识点专项、错题重做、错题快练；
+- 并发重试同一 Attempt 不双计。
+
+「仅查看答案」与「真正答错」必须区分：不允许为了统计把 `reveal` 改写成 `graded wrong`，也不
+允许把 `revealed_only` 当成已掌握。本规则不改变 grading、Mastery V3 与永久错题本行为。
+
+### 14.1.2 有效事件日期
+
+一次 Attempt 只产生**一次**有效事件，日期取「首次有效行动」：
+
+```text
+status = revealed                                  → answer_revealed_at
+status = graded 且已有更早的合法 answer_revealed_at → answer_revealed_at
+其他 status = graded                               → answered_at
+```
+
+因此跨天 `reveal → 自评` 不会把记录改到第二天。按 `Asia/Shanghai` 自然日计算今日、近 7 天与
+活跃学习日。历史脏数据（`graded` 缺 assessment、缺合法时间等）**明确排除**，不虚构日期或结果。
+
+### 14.1.3 当前学习范围
+
+统计与进度共用同一份范围事实：当前 Learner Selected Books 中仍 `enabled`、按正式关系
+`question_bank → question_bank_chapter → question_bank_knowledge` 关联、且 active 且可学习
+的**去重** KnowledgePoint 集合。不使用 Legacy Subject / Section。
+
+- 已创建 Attempt 的历史归因保持其冻结 `target_knowledge_point_id`；一道题另外绑定若干
+  KnowledgePoint 也不会让一次 Attempt 同时在多处记账；
+- 多本文集共享同一 KnowledgePoint 时知识点数与 Attempt 数都不得翻倍（用去重集合或
+  `EXISTS`，禁止让多对多 JOIN 放大行数）；
+- 取消勾选文集只**隐藏**历史统计，不删除 Attempt / Mastery / Evidence / 错题本；重新勾选立即
+  恢复既有历史；
+- 历史 target 当前失效或不在 scope 内时该 Attempt 暂不纳入当前范围统计，永久事实仍保留。
+
+永久错题本的跨 KnowledgePoint 可见/可练规则与此处的历史归因分属不同需求，不得为统计改写
+PR6 的错题本或 Mastery 归因。
+
+### 14.1.4 六个核心指标
+
+| 字段 | UI 标签 | 口径 |
+| --- | --- | --- |
+| `activeStudyDays7d` | 活跃学习日 | 近 7 个上海业务日内有效 Attempt 所在去重日期数，0–7 |
+| `todayEffectiveAttempts` | 今日答题 | 当前上海业务日的有效 Attempt 次数 |
+| `totalKnowledgePoints` | 当前范围知识点 | 当前可学习 KnowledgePoint 去重数 |
+| `touchedKnowledgePoints` | 接触知识点 | 当前范围内曾发生有效 Attempt 的冻结 target KP 去重数（全历史） |
+| `totalEffectiveAttempts` | 累计答题 | 当前范围内全历史有效 Attempt 次数 |
+| `totalCorrectAttempts` | 累计正确 | 当前范围内全历史 `graded + correct` 次数 |
+
+累计类指标永远是**全历史**，不因页面只展示近 7 天而被裁剪。结果分布
+`correct / partial / wrong / revealedOnly` 四类之和必须等于 `totalEffectiveAttempts`。
+
+### 14.1.5 单一事实来源与 API
+
+后端 `LearnerActivityStatsService` 是唯一口径实现；`LearnerProgressService` 提供范围集合，
+`LearnerStatisticsService` 只作为旧接口兼容层。禁止在 Progress 与 Statistics 各自写一套聚合 SQL。
+
+```text
+GET /api/v1/learner/progress     统一总览（summary / bands / books / recent / activity）
+GET /api/v1/learner/statistics   兼容接口，summary 与 progress.activity 同源；days 只影响 daily 长度
+```
+
+时间范围统一「近 7 天」，不再提供 7 / 30 / 90 天切换控件。所有接口按登录 Learner 隔离，跨
+Learner 不可读。进度页与统计页不得对同一指标给出不同数字。
+
+---
+
 ## 15. 分页规则
 
 正式分页列表统一：

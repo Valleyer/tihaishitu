@@ -65,31 +65,24 @@ class LearnerProgressIntegrationTest {
     }
 
     @Test
-    void countsOnlyRecentGradedLearnerAttemptsAcrossHubAndWorld() {
-        String learner = learner(), firstPoint = knowledge("近期甲"), secondPoint = knowledge("近期乙");
-        BookFixture book = book("近期文集");
-        member(book.id(), book.root(), firstPoint, 0); member(book.id(), book.root(), secondPoint, 1);
+    void keepsRecentKnowledgePointsOrderedByLatestMasteryEvidence() {
+        String learner = learner(), older = knowledge("较早接触"), newer = knowledge("最近接触");
+        BookFixture book = book("最近学习文集");
+        member(book.id(), book.root(), older, 0); member(book.id(), book.root(), newer, 1);
         select(learner, book.id());
-        String question = question();
-        String practice = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO learner_practice_session(id,learner_id,intent,target_knowledge_point_id,status,revision) VALUES (?,?,'knowledge_drill',?,'active',1)",
-                practice, learner, firstPoint);
 
-        attempt(learner, "ancient-official", null, question, firstPoint, "graded", NOW.minusSeconds(3600));
-        attempt(learner, null, practice, question, secondPoint, "graded", NOW.minusSeconds(86_400));
-        attempt(learner, "ancient-official", null, question, firstPoint, "active", null);
-        attempt(learner, "ancient-official", null, question, firstPoint, "revealed", null);
-        attempt(learner, "ancient-official", null, question, firstPoint, "graded", NOW.minusSeconds(8 * 86_400L));
-        legacyAttempt(question, firstPoint, NOW.minusSeconds(1800));
+        // 「最近学习」只暴露正式目录路径，并按最近一次 Mastery Evidence 倒序。
+        saveMastery(learner, older, 40, 10, NOW.minusSeconds(3 * 86_400L));
+        saveMastery(learner, newer, 40, 10, NOW.minusSeconds(3600));
 
         LearnerProgressService.ProgressView view = progress.progressAt(learner, NOW);
 
-        assertThat(view.recent().gradedAttempts7d()).isEqualTo(2);
-        assertThat(view.recent().distinctKnowledgePoints7d()).isEqualTo(2);
-        assertThat(view.recent().activeStudyDays7d()).isEqualTo(2);
-        assertThat(view.recent().daily()).hasSize(7);
-        assertThat(view.recent().daily()).extracting(LearnerProgressService.DailyProgress::gradedAttempts)
-                .containsExactly(0, 0, 0, 0, 0, 1, 1);
+        assertThat(view.recent().knowledgePoints())
+                .extracting(LearnerProgressService.RecentKnowledgePoint::knowledgePointId)
+                .containsExactly(newer, older);
+        assertThat(view.recent().knowledgePoints())
+                .extracting(LearnerProgressService.RecentKnowledgePoint::bookName)
+                .containsOnly("最近学习文集");
     }
 
     @Test
@@ -198,17 +191,6 @@ class LearnerProgressIntegrationTest {
                 "graded".equals(status) ? assessment : null, point,
                 answeredAt == null ? null : Timestamp.from(answeredAt));
         return attemptId;
-    }
-
-    private void legacyAttempt(String question, String point, Instant answeredAt) {
-        String game = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO game_save(id,player_name,player_title,payload_json,revision) VALUES (?,'旧玩家','旧存档','{}',1)", game);
-        jdbc.update("""
-                INSERT INTO study_attempt(id,game_id,learner_id,question_id,question_snapshot_json,
-                    standard_answer_json,status,grading_mode,grading_source,assessment,
-                    target_knowledge_point_id,evidence_mode,question_difficulty,answered_at)
-                VALUES (?,?,NULL,?,'{}','true','graded','auto','automatic','wrong',?,'normal',2,?)
-                """, UUID.randomUUID().toString(), game, question, point, Timestamp.from(answeredAt));
     }
 
     private void saveMastery(String learner, String point, double mastery, double stability, Instant at) {

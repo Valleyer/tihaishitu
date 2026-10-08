@@ -5,8 +5,9 @@ import { RichText } from "../components/RichText";
 import { Modal } from "../components/Modal";
 import { HttpError } from "../api/http";
 import { PAGE_SIZE } from "../pagination";
-import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type LearnerStatistics, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
+import { platformApi, type BookDetail, type BrowseQuestion, type HubBootstrap, type KnowledgeDirectoryItem, type KnowledgePoint, type KnowledgeState, type LearnerProgress, type PracticeSession, type ProgressChapter, type QuestionDirectoryFacets, type RecentChapter, type StudyProfile, type WrongQuestion } from "./api";
 import { progressBandLabels } from "./progressView";
+import { ActivityChart, OutcomeDistribution, progressMetrics } from "./ProgressPanels";
 import { worldPresentation } from "./worldPresentation";
 import { HubLink, navigate, useCurrentLocation } from "./navigation";
 import { AnswerDisplay } from "./practiceView";
@@ -90,7 +91,7 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   const location = useCurrentLocation();
   const path = location.split(/[?#]/)[0];
   const nav = [
-    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"], ["统计", "/statistics"],
+    ["首页", "/"], ["学习", "/study"], ["进度", "/progress"],
     ["知识", "/books"], ["题库", "/questions"],
   ];
   const active = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
@@ -125,14 +126,54 @@ function ProgressChapterTree({ chapter, bookId }: { chapter: ProgressChapter; bo
   </li>;
 }
 
-function ProgressPage({ data }: { data: HubBootstrap }) {
+export function ProgressPage({ data }: { data: HubBootstrap }) {
   const [progress, setProgress] = useState<LearnerProgress>(); const [error, setError] = useState("");
   useEffect(() => { platformApi.progress().then(setProgress).catch(reason => setError((reason as Error).message)); }, []);
+  const activity = progress?.activity; const metrics = activity && progressMetrics(activity.metrics);
   return <Shell data={data}><main className="hub-main progress-page">
-    {error && <p className="hub-error">{error}</p>}{!progress && !error && <p>正在整理学习进度…</p>}
-    {progress&&<section className="overview-card"><div className="section-heading"><h2>当前学习范围</h2></div><div className="overview-metrics"><p><b>{progress.summary.totalKnowledgePoints}</b><span>知识点</span></p><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.proficientKnowledgePoints}</b><span>彻底掌握</span></p></div></section>}
-    <div className="progress-books">{progress?.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}><h2>{book.name}</h2><div className="mastery-progress"><span style={{width:`${book.masteryProgress}%`}} /></div><b>{Math.round(book.masteryProgress)}%</b><small>掌握进度 · {book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small><HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink></article>)}</div>
-    {progress?.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
+    <header className="progress-head">
+      <div><p className="eyebrow">进度</p><h1>学习进度</h1></div>
+      <div className="progress-scope">{progress && <><span className="scope-badge">{progress.summary.selectedBooks} 本文集</span><span>当前学习范围</span><small>{progress.summary.totalKnowledgePoints} 个可学习知识点</small></>}</div>
+    </header>
+    {error && <p className="hub-error" role="alert">{error}</p>}
+    {!progress && !error && <p className="muted">正在整理学习进度…</p>}
+    {progress && activity && metrics && <>
+      <section className="progress-metrics" aria-label="六个核心指标">
+        {metrics.map(metric => <article key={metric.label}>
+          <span className="metric-label">{metric.label}</span>
+          <b>{metric.value}<small>{metric.unit}</small></b>
+          <em>{metric.hint}</em>
+        </article>)}
+      </section>
+      <ActivityChart daily={activity.daily} />
+      <OutcomeDistribution outcomes={activity.outcomes} />
+      <section className="progress-section">
+        <header className="section-heading"><h2>学习足迹</h2><span>最近接触的知识点</span></header>
+        {progress.recent.knowledgePoints.length === 0
+          ? <div className="hub-panel empty-state"><h3>还没有学习记录</h3><p>从一次章节练习或知识点专项开始，足迹会出现在这里。</p><HubLink className="hub-primary" href="/study">开始学习</HubLink></div>
+          : <div className="recent-points">{progress.recent.knowledgePoints.map(point =>
+            <HubLink className="hub-panel" href={`/knowledge/${point.knowledgePointId}`} key={point.knowledgePointId}>
+              <div><h3>{point.name}</h3><p>{point.bookName} · {point.chapterName}</p></div>
+              <div className="recent-point-state">
+                <span className={`mastery-band ${point.band}`}>{progressBandLabels[point.band]}</span>
+                <b>{Math.round(point.effectiveMastery)}%</b>
+                <small>{recentTime(point.lastEvidenceAt)}</small>
+              </div>
+            </HubLink>)}</div>}
+      </section>
+      <section className="progress-section">
+        <header className="section-heading"><h2>文集掌握进度</h2><span>掌握度按范围内知识点的有效掌握平均值</span></header>
+        <div className="progress-books">
+          {progress.books.map(book => <article className="hub-panel progress-book-card" key={book.bookId}>
+            <div className="progress-book-head"><h3>{book.name}</h3><b>{Math.round(book.masteryProgress)}%</b></div>
+            <div className="mastery-progress"><span style={{ width: `${book.masteryProgress}%` }} /></div>
+            <small>{book.totalKnowledgePoints} 个知识点 · 已开始 {book.started} · 熟练掌握及以上 {book.ready} · 彻底掌握 {book.proficient}</small>
+            <HubLink href={`/progress/books/${book.bookId}`}>查看章节进度 →</HubLink>
+          </article>)}
+        </div>
+        {progress.books.length === 0 && <section className="hub-panel"><h2>尚未选择学习文集</h2><p>先到学习页设置学习范围，进度与统计会立即按新范围重新派生。</p><HubLink className="hub-primary" href="/study">设置学习范围</HubLink></section>}
+      </section>
+    </>}
   </main></Shell>;
 }
 
@@ -178,7 +219,7 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
          mode==="last"&&recent?<><p className="section-kicker">最近练习章节</p><h2>{recent.bookName||"章节练习"}</h2><div className="continue-meta"><span>{recent.chapterName||"章节练习"}</span><small className="continue-time">{recent.updatedAt?`最近练习 ${recentTime(recent.updatedAt)}`:"最近练习时间未知"}</small></div><button className="hub-primary" onClick={again}>再次练习 →</button></>:
          <><h2>开始章节学习</h2><p>从下方选择文集与章节。</p></>}
       </article>
-      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.recent.gradedAttempts7d}</b><span>近 7 日正式作答</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
+      <article className="today-card"><div className="section-heading"><h2>学习状态</h2></div>{progress?<div className="today-metrics"><p><b>{progress.summary.startedKnowledgePoints}</b><span>已开始知识点</span></p><p><b>{progress.summary.readyKnowledgePoints}</b><span>熟练掌握及以上</span></p><p><b>{progress.summary.wrongQuestions}</b><span>错题本题目</span></p><p><b>{progress.activity.metrics.todayEffectiveAttempts}</b><span>今日答题</span></p><p><b>{progress.activity.metrics.activeStudyDays7d}</b><span>近 7 天活跃学习日</span></p></div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
     <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2>章节知识练习</h2></div>
       <div className="study-book-grid">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}><span className="book-cover-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v16H7.5A2.5 2.5 0 0 0 5 20.5v-16Z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H20v4H7.5A2.5 2.5 0 0 1 5 19.5V4"/><path d="M9 6h7"/></svg></span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small>{!trainable?<em>暂无已发布正式题</em>:null}</button>})}</div>
       {book && <><h3>选择章节</h3><div className="study-chapters">{chapters.map(item=><button className={chapterId===item.id?"selected":""} onClick={()=>setChapterId(item.id)} key={item.id}>{item.name}</button>)}</div></>}
@@ -204,28 +245,16 @@ function BooksPage({ data }: { data: HubBootstrap }) {
   </main></Shell>;
 }
 
-function ActivityBarChart({ title, days, values, unit }: { title: string; days: number; values: { date: string; value: number }[]; unit: string }) {
-  const max = Math.max(1, ...values.map(item => item.value));
-  const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
-  const ticks = [ceiling, Math.round(ceiling / 2), 0];
-  const every = days === 7 ? 1 : days === 30 ? 5 : 14;
-  const empty = values.every(item => item.value === 0);
-  return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
-    <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
-    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=><div className="chart-column" title={`${item.date}：${item.value} ${unit}`} key={item.date}><i style={{height:`${item.value/ceiling*100}%`}}/><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>)}</div><div className="chart-x-title">日期</div></div>
-  </div></section>;
-}
-
-function StatisticsPage({ data }: { data: HubBootstrap }) {
-  const [days,setDays]=useState<7|30|90>(7); const [stats,setStats]=useState<LearnerStatistics>(); const [error,setError]=useState("");
-  useEffect(()=>{setStats(undefined);platformApi.statistics(days).then(setStats).catch(reason=>setError((reason as Error).message))},[days]);
-  const outcomeTotal=(stats?.summary.correct||0)+(stats?.summary.partial||0)+(stats?.summary.wrong||0)||1;
-  return <Shell data={data}><main className="hub-main statistics-page"><div className="panel-heading"><h1>学习统计</h1><div className="segmented">{([7,30,90] as const).map(value=><button className={days===value?"active":""} onClick={()=>setDays(value)} key={value}>近 {value} 天</button>)}</div></div>{error&&<p className="hub-error">{error}</p>}{!stats&&!error&&<p>正在整理统计…</p>}{stats&&<>
-    <section className="statistics-summary"><article><b>{stats.summary.gradedAttempts}</b><span>正式作答</span></article><article><b>{stats.summary.activeStudyDays}</b><span>活跃学习日</span></article><article><b>{stats.summary.distinctKnowledgePoints}</b><span>接触知识点</span></article><article><b>{stats.summary.knowledgeDrillAttempts}</b><span>专项作答</span></article><article><b>{stats.summary.wrongReviewAttempts}</b><span>错题作答</span></article><article><b>{stats.summary.worldAttempts}</b><span>世界作答</span></article></section>
-    <ActivityBarChart title="每日正式作答" days={days} unit="题" values={stats.daily.map(day=>({date:day.date,value:day.gradedAttempts}))}/>
-    <ActivityBarChart title="每日接触知识点" days={days} unit="个" values={stats.daily.map(day=>({date:day.date,value:day.distinctKnowledgePoints}))}/>
-    <section className="statistics-grid"><article className="hub-panel"><h2>正式作答结果分布</h2>{[["正确",stats.summary.correct],["部分正确",stats.summary.partial],["需巩固",stats.summary.wrong]].map(([label,value])=><div className="horizontal-stat" key={String(label)}><span>{label}</span><i><b style={{width:`${Number(value)/outcomeTotal*100}%`}}/></i><strong>{value}</strong></div>)}</article><article className="hub-panel"><h2>文集掌握进度</h2>{stats.books.map(book=><div className="horizontal-stat" key={book.bookId}><span>{book.name}</span><i><b style={{width:`${book.masteryProgress}%`}}/></i><strong>{Math.round(book.masteryProgress)}%</strong></div>)}</article></section>
-  </>}</main></Shell>;
+/**
+ * `/statistics` 的兼容重定向。
+ *
+ * <p>PR7 起进度与统计是同一个模块：顶栏只保留「进度」。旧链接与书签仍可访问，这里用
+ * `replaceState` 替换 URL，避免留下会在返回时再次触发的历史条目，也不会渲染第二套页面
+ * 或发起重复请求。</p>
+ */
+function StatisticsRedirect({ data }: { data: HubBootstrap }) {
+  useEffect(() => { history.replaceState(null, "", "/progress"); }, []);
+  return <ProgressPage data={data} />;
 }
 
 const bandLabel: Record<KnowledgeState["band"], string> = progressBandLabels;
@@ -385,7 +414,7 @@ export function QuestionPage({ data, id }: { data: HubBootstrap; id: string }) {
 
 function AccountPage({ data }: { data: HubBootstrap }) { return <Shell data={data}><main className="hub-main narrow"><HubLink href="/">← 返回万境中枢</HubLink><h1>学习账号</h1><section className="hub-panel"><p>显示名称：{data.learner.displayName}</p><p>用户名：{data.learner.username}</p><button onClick={async () => { await platformApi.logout(); go("/login"); }}>退出登录</button></section></main></Shell>; }
 
-function AuthenticatedPlatform() {
+export function AuthenticatedPlatform() {
   const path = useCurrentLocation().split(/[?#]/)[0];
   const [data, setData] = useState<HubBootstrap>(); const [error, setError] = useState("");
   const load = async () => { try { setData(await platformApi.bootstrap()); } catch (reason) { if (reason instanceof HttpError && reason.status === 401) go("/login"); else setError((reason as Error).message); } };
@@ -396,7 +425,7 @@ function AuthenticatedPlatform() {
   if (path.startsWith("/progress/books/") && path.includes("/chapters/")) { const parts=path.split("/"); return <ProgressChapterPage data={data} bookId={parts[3]} chapterId={parts[5]} />; }
   if (path.startsWith("/progress/books/")) return <ProgressBookPage data={data} bookId={path.split("/")[3]} />;
   if (path === "/progress") return <ProgressPage data={data} />;
-  if (path === "/statistics") return <StatisticsPage data={data} />;
+  if (path === "/statistics") return <StatisticsRedirect data={data} />;
   if (path === "/reviews") { history.replaceState(null, "", "/study"); return <StudyPage data={data} reload={load} />; }
   if (path === "/wrong-questions") return <WrongQuestionsPage data={data} />;
   if (path.startsWith("/practice/")) return <PracticePage data={data} id={idAfter("/practice/")} />;

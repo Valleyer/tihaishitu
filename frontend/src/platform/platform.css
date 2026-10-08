@@ -477,6 +477,66 @@
 .learning-hub .recent-knowledge-grid p { color: var(--zj-text-secondary); }
 .learning-hub .recent-knowledge-grid .hub-primary { margin-top: 8px; }
 
+/* Progress V3：进度与统计合并后的统一总览 */
+.learning-hub .progress-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 26px; }
+.learning-hub .progress-head h1 { margin: 4px 0 0; font-size: 30px; letter-spacing: -.02em; }
+.learning-hub .progress-head .eyebrow { margin: 0; color: var(--zj-brand); font-size: 12px; font-weight: 700; letter-spacing: .1em; }
+.learning-hub .progress-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--zj-text-secondary); font-size: 13px; }
+.learning-hub .progress-scope small { color: var(--zj-text-tertiary); }
+.learning-hub .scope-badge { border: 1px solid var(--zj-border-strong); border-radius: 999px; background: var(--zj-surface); padding: 3px 11px; color: var(--zj-text); font-weight: 650; }
+
+.learning-hub .progress-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; border: 1px solid var(--zj-border); border-radius: var(--zj-radius-md); background: var(--zj-border); }
+.learning-hub .progress-metrics article { display: grid; gap: 6px; align-content: start; background: var(--zj-surface); padding: 20px 22px; }
+.learning-hub .progress-metrics .metric-label { color: var(--zj-text-secondary); font-size: 13px; font-weight: 650; }
+.learning-hub .progress-metrics b { display: flex; align-items: baseline; gap: 5px; color: var(--zj-text); font-size: 32px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+.learning-hub .progress-metrics b small { color: var(--zj-text-tertiary); font-size: 13px; font-weight: 500; }
+.learning-hub .progress-metrics em { color: var(--zj-text-tertiary); font-size: 12px; font-style: normal; }
+
+.learning-hub .progress-activity { display: grid; gap: 16px; margin-top: 20px; }
+.learning-hub .activity-legend { display: flex; flex-wrap: wrap; gap: 18px; color: var(--zj-text-secondary); font-size: 12px; }
+.learning-hub .activity-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.learning-hub .legend-bar { width: 12px; height: 12px; border-radius: 3px; }
+.learning-hub .legend-bar.attempts,
+.learning-hub .chart-bar.attempts { background: var(--zj-brand); }
+.learning-hub .legend-bar.points,
+.learning-hub .chart-bar.points { background: #a5b4fc; }
+.learning-hub .chart-scroll { min-width: 0; overflow-x: auto; }
+/* 双柱：flex + align-items:flex-end，柱高用 height 百分比，容器不设 align-self 以免网格轨道塌陷。 */
+.learning-hub .chart-bar-stack { display: flex; align-items: flex-end; justify-content: center; gap: 4px; width: 100%; height: 100%; }
+.learning-hub .chart-bar { display: block; flex: none; width: min(30%, 14px); min-height: 0; border-radius: 4px 4px 0 0; }
+.learning-hub .chart-date { color: var(--zj-text-tertiary); font-size: 10px; white-space: nowrap; }
+.learning-hub .chart-empty { margin: 0; border-radius: var(--zj-radius-sm); background: var(--zj-surface-soft); padding: 12px 14px; color: var(--zj-text-secondary); font-size: 13px; }
+
+.learning-hub .progress-outcomes { display: grid; gap: 14px; margin-top: 20px; }
+/* 标题与说明紧邻，不要被 section-heading 的 space-between 推到两端。 */
+.learning-hub .progress-section > .section-heading,
+.learning-hub .progress-outcomes > .section-heading { justify-content: flex-start; align-items: baseline; gap: 12px; }
+.learning-hub .progress-section > .section-heading span,
+.learning-hub .progress-outcomes > .section-heading span { color: var(--zj-text-tertiary); font-size: 13px; }
+.learning-hub .outcome-rows { display: grid; gap: 12px; }
+.learning-hub .horizontal-stat { display: grid; grid-template-columns: 96px minmax(80px, 1fr) 52px; align-items: center; gap: 12px; }
+.learning-hub .horizontal-stat > span { color: var(--zj-text-secondary); font-size: 13px; }
+.learning-hub .horizontal-stat > i { display: block; height: 9px; overflow: hidden; border-radius: 999px; background: var(--zj-surface-soft); }
+.learning-hub .horizontal-stat > i > b { display: block; height: 100%; border-radius: inherit; background: var(--zj-brand); }
+.learning-hub .horizontal-stat > i > b.correct { background: var(--zj-success); }
+.learning-hub .horizontal-stat > i > b.partial { background: var(--zj-warning); }
+.learning-hub .horizontal-stat > i > b.wrong { background: var(--zj-danger); }
+.learning-hub .horizontal-stat > i > b.revealed { background: #a5b4fc; }
+.learning-hub .horizontal-stat > strong { color: var(--zj-text); text-align: right; }
+.learning-hub .outcome-note { margin: 0; color: var(--zj-text-tertiary); font-size: 12px; }
+
+.learning-hub .recent-points { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 18px; }
+.learning-hub .recent-points > a { display: flex; align-items: center; justify-content: space-between; gap: 16px; text-decoration: none; }
+.learning-hub .recent-points h3 { margin: 0; color: var(--zj-text); font-size: 16px; }
+.learning-hub .recent-points p { margin: 3px 0 0; color: var(--zj-text-tertiary); font-size: 12px; }
+.learning-hub .recent-points > a:hover h3 { color: var(--zj-brand); }
+.learning-hub .recent-point-state { display: grid; gap: 3px; justify-items: end; }
+.learning-hub .recent-point-state b { color: var(--zj-text); }
+.learning-hub .recent-point-state small { color: var(--zj-text-tertiary); }
+.learning-hub .progress-book-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.learning-hub .progress-book-head h3 { margin: 0; color: var(--zj-text); font-size: 18px; }
+.learning-hub .progress-book-head b { color: var(--zj-text); font-size: 20px; }
+
 /* Auth and loading */
 .auth-page,
 .hub-loading { min-height: 100vh; display: grid; place-items: center; background: var(--zj-bg); padding: 24px; }
@@ -534,6 +594,8 @@
   .learning-hub .review-metrics { grid-template-columns: repeat(2, 1fr); }
   .learning-hub .progress-hero-grid,
   .learning-hub .book-progress-metrics { grid-template-columns: repeat(2, 1fr); }
+  .learning-hub .progress-metrics { grid-template-columns: repeat(2, 1fr); }
+  .learning-hub .recent-points { grid-template-columns: 1fr; }
   .learning-hub .recent-knowledge-grid { grid-template-columns: 1fr; }
   .learning-hub .chapter-progress-tree a { display: grid; }
   .learning-hub .chapter-progress-tree small { text-align: left; }
@@ -547,6 +609,9 @@
   .learning-hub .book-progress-metrics,
   .learning-hub .progress-review-windows,
   .learning-hub .recent-metrics { grid-template-columns: 1fr; }
+  .learning-hub .progress-metrics { grid-template-columns: 1fr; }
+  .learning-hub .progress-head h1 { font-size: 26px; }
+  .learning-hub .horizontal-stat { grid-template-columns: 76px minmax(56px, 1fr) 44px; }
   .learning-hub .overview-metrics p,
   .learning-hub .overview-metrics p:nth-child(odd) { padding: 10px 0; border-top: 1px solid var(--zj-border); border-left: 0; }
   .learning-hub .overview-metrics p:first-child { border-top: 0; }
@@ -624,18 +689,21 @@
 .learning-hub .chapter-drill-action { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; border-top: 1px solid var(--zj-border); padding-top: 18px; }
 .learning-hub .knowledge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0; }
 .learning-hub .knowledge-actions a { border: 1px solid var(--zj-border); border-radius: var(--zj-radius-sm); padding: 10px 14px; text-decoration: none; }
-.learning-hub .statistics-activity-chart { display: grid; gap: 14px; min-height: 280px; }
 .learning-hub .activity-chart-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .learning-hub .activity-chart-heading h2 { margin: 0; }
 .learning-hub .activity-chart-heading span { color: var(--zj-text-tertiary); font-size: 13px; }
-.learning-hub .activity-chart-body { display: grid; grid-template-columns: 24px 38px 1fr; min-height: 205px; }
-.learning-hub .chart-y-title { align-self: center; color: var(--zj-text-tertiary); font-size: 12px; writing-mode: vertical-rl; transform: rotate(180deg); }
-.learning-hub .chart-y-axis { display: flex; flex-direction: column; justify-content: space-between; padding: 0 8px 28px 0; color: var(--zj-text-tertiary); font-size: 11px; text-align: right; }
-.learning-hub .chart-plot { position: relative; display: grid; grid-template-rows: 1fr 24px; min-width: 0; border-left: 1px solid var(--zj-border); border-bottom: 1px solid var(--zj-border); background: linear-gradient(to bottom, transparent 49.5%, var(--zj-border) 50%, transparent 50.5%); }
-.learning-hub .chart-bars { display: flex; align-items: end; gap: 3px; min-width: 0; padding: 8px 6px 0; }
-.learning-hub .chart-column { display: grid; flex: 1; height: 100%; min-width: 2px; grid-template-rows: 1fr 20px; align-items: end; justify-items: center; }
-.learning-hub .chart-column i { width: min(70%, 26px); min-height: 0; border-radius: 4px 4px 0 0; background: var(--zj-brand); }
+.learning-hub .activity-chart-body { display: grid; grid-template-columns: 24px 38px 1fr; }
+.learning-hub .chart-y-title { grid-row: 1 / -1; grid-column: 1; align-self: center; color: var(--zj-text-tertiary); font-size: 12px; writing-mode: vertical-rl; transform: rotate(180deg); }
+/* 刻度与柱区共用同一组网格行，保证 0 / 中值 / 顶值和基线严格对齐。 */
+.learning-hub .chart-y-axis { grid-column: 2; display: flex; flex-direction: column; justify-content: space-between; padding: 0 8px 0 0; color: var(--zj-text-tertiary); font-size: 11px; text-align: right; }
+/* 空态只有一个 0 基线：不要被 space-between 推到顶部。 */
+.learning-hub .chart-y-axis.single { justify-content: flex-end; }
+.learning-hub .chart-plot { display: grid; min-width: 0; border-left: 1px solid var(--zj-border); background: linear-gradient(to bottom, transparent 49.5%, var(--zj-border) 50%, transparent 50.5%); }
+.learning-hub .chart-bars { display: flex; align-items: stretch; gap: 4px; min-width: 0; padding: 0 6px; }
+/* 列内两行：柱区（1fr，靠底对齐）与日期。柱区不能被压成 0，否则柱高无法解析。 */
+.learning-hub .chart-column { display: grid; flex: 1; min-width: 2px; grid-template-rows: 1fr 24px; }
 .learning-hub .chart-column span { color: var(--zj-text-tertiary); font-size: 10px; white-space: nowrap; }
-.learning-hub .chart-empty { position: absolute; z-index: 1; inset: 42% 0 auto; color: var(--zj-text-tertiary); text-align: center; }
-.learning-hub .chart-x-title { color: var(--zj-text-tertiary); font-size: 12px; text-align: center; }
+.learning-hub .chart-bar-stack { display: flex; align-items: flex-end; justify-content: center; gap: 4px; width: 100%; height: 100%; }
+/* 柱高由组件按显式绘图区高度算成像素；零值不渲染高度，不画假柱子。 */
+.learning-hub .chart-bar { display: block; flex: none; min-height: 0; border-radius: 4px 4px 0 0; }
 @media(max-width:700px){.learning-hub .chapter-drill-action{align-items:stretch;flex-direction:column}.learning-hub .activity-chart-body{grid-template-columns:18px 30px 1fr}.learning-hub .chart-column span{font-size:9px}}

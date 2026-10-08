@@ -45,6 +45,19 @@ public class LearnerProgressService {
         return progressAt(LearnerContext.learnerId(), clock.instant());
     }
 
+    /**
+     * 当前 Selected Books 范围内可学习的去重 KnowledgePoint ID 集合。
+     *
+     * <p>这是「当前学习范围」的单一事实来源：进度聚合与
+     * {@link LearnerActivityStatsService} 的统计范围都必须从这里派生，避免两套范围口径。
+     * 多本文集共享同一 KnowledgePoint 时集合天然去重，不因多对多关系放大。</p>
+     */
+    Set<String> scopedKnowledgePointIds(String learnerId, Instant now) {
+        Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
+        progress.selectedMemberships(learnerId).forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
+        return pointById.keySet();
+    }
+
     ProgressView progressAt(String learnerId, Instant now) {
         List<LearnerProgressStore.BookRow> books = progress.selectedBooks(learnerId);
         List<LearnerProgressStore.ChapterRow> chapters = progress.selectedChapters(learnerId);
@@ -96,24 +109,6 @@ public class LearnerProgressService {
                 membershipsByBook.getOrDefault(book.id(), List.of()), points, dueOrSoon)).toList();
 
         LocalDate today = now.atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
-        Instant from = today.minusDays(6).atStartOfDay(LearnerQuestionMasteryStore.BUSINESS_ZONE).toInstant();
-        LearnerProgressStore.RecentTotals recentTotals = progress.recentTotals(learnerId, from, now);
-        Map<LocalDate, LearnerProgressStore.DailyRow> dailyRows = new HashMap<>();
-        progress.recentAttempts(learnerId, from, now).forEach(row -> {
-            LocalDate date = row.answeredAt().atZone(LearnerQuestionMasteryStore.BUSINESS_ZONE).toLocalDate();
-            LearnerProgressStore.DailyRow previous = dailyRows.get(date);
-            Set<String> distinct = previous == null ? new LinkedHashSet<>() : new LinkedHashSet<>(previous.knowledgePointIds());
-            distinct.add(row.knowledgePointId());
-            dailyRows.put(date, new LearnerProgressStore.DailyRow(date,
-                    previous == null ? 1 : previous.gradedAttempts() + 1, distinct));
-        });
-        List<DailyProgress> daily = new ArrayList<>();
-        for (int offset = 6; offset >= 0; offset--) {
-            LocalDate date = today.minusDays(offset);
-            LearnerProgressStore.DailyRow row = dailyRows.get(date);
-            daily.add(new DailyProgress(date, row == null ? 0 : row.gradedAttempts(),
-                    row == null ? 0 : row.knowledgePointIds().size()));
-        }
         List<RecentKnowledgePoint> recentPoints = points.values().stream()
                 .filter(point -> point.evidenceCount() > 0 && point.lastEvidenceAt() != null)
                 .sorted(Comparator.comparing(PointProgress::lastEvidenceAt).reversed()
@@ -123,9 +118,7 @@ public class LearnerProgressService {
                         point.bookName(), point.chapterName(), point.band(), point.effectiveMastery(),
                         point.stabilityDays(), point.lastEvidenceAt()))
                 .toList();
-        int activeDays = (int) daily.stream().filter(day -> day.gradedAttempts() > 0).count();
-        RecentProgress recent = new RecentProgress(recentTotals.gradedAttempts(),
-                recentTotals.distinctKnowledgePoints(), activeDays, List.copyOf(daily), recentPoints);
+        RecentProgress recent = new RecentProgress(List.copyOf(recentPoints));
         return new ProgressView(now, summary, bands, bookViews, recent);
     }
 
@@ -183,9 +176,11 @@ public class LearnerProgressService {
                                List<ChapterProgress> chapters) {}
     public record ChapterProgress(String chapterId, String code, String name, int total, int started,
                                   int ready, int proficient, double masteryProgress) {}
-    public record RecentProgress(int gradedAttempts7d, int distinctKnowledgePoints7d, int activeStudyDays7d,
-                                 List<DailyProgress> daily, List<RecentKnowledgePoint> knowledgePoints) {}
-    public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
+    /**
+     * 「最近学习」足迹。PR7 起，近 7 日与今日的活动事实全部由
+     * {@link LearnerActivityStatsService} 统一派生，这里只保留最近接触的知识点列表。
+     */
+    public record RecentProgress(List<RecentKnowledgePoint> knowledgePoints) {}
     /**
      * 首页“最近学习”只暴露正式目录 Book → Chapter 路径，不再携带 legacy subject / section /
      * legacy chapter_name，避免用户界面回落到旧字段。
