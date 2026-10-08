@@ -97,7 +97,10 @@ class LearnerProgressIntegrationTest {
         String learner = learner(), point = knowledge("需要巩固");
         BookFixture book = book("正向进度"); member(book.id(), book.root(), point, 0); select(learner, book.id());
         saveMastery(learner, point, 90, 10, NOW.minusSeconds(4 * 86_400L));
-        String question = question();
+        String question = jdbc.queryForObject("""
+                SELECT question_id FROM question_resource_knowledge
+                 WHERE knowledge_point_id=? ORDER BY question_id LIMIT 1
+                """, String.class, point);
         String wrongAttempt = attempt(learner, "ancient-official", null, question, point,
                 "graded", NOW.minusSeconds(600), "wrong");
         jdbc.update("""

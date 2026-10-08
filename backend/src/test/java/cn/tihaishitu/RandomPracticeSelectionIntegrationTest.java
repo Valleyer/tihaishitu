@@ -1,6 +1,7 @@
 package cn.tihaishitu;
 
 import cn.tihaishitu.learner.LearnerAuthService;
+import cn.tihaishitu.learner.LearnerStore;
 import cn.tihaishitu.learning.PracticeBusinessDay;
 import cn.tihaishitu.learning.PracticeDrawReason;
 import cn.tihaishitu.learning.PracticeSelectionStore;
@@ -16,6 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -24,8 +27,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -60,6 +66,7 @@ class RandomPracticeSelectionIntegrationTest {
 
     @Autowired JdbcTemplate jdbc; @Autowired RandomPracticeSelector selector;
     @Autowired PracticeSelectionStore selections;
+    @Autowired LearnerStore learners; @Autowired PlatformTransactionManager transactions;
     @Autowired MockMvc mvc; @Autowired ObjectMapper mapper;
 
     // ---------------------------------------------------------------- KP transition
@@ -153,6 +160,217 @@ class RandomPracticeSelectionIntegrationTest {
                 .isEqualTo(k2);
     }
 
+    @Test void persistedCursorDeterminesLatestAttemptWhenTimestampTiesAndUuidOrderIsReversed() {
+        String book = book("RANDOM-LATEST-CURSOR");
+        String k1 = point(book, "LATEST-K1", 0), k2 = point(book, "LATEST-K2", 1);
+        String oldQuestion = question(k1, "old"), latestQuestion = question(k2, "latest");
+        question(k1, "remaining-k1");
+        question(k2, "remaining-k2");
+        String learner = learner("random-latest-cursor");
+        String oldId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+        String latestId = "00000000-0000-0000-0000-000000000001";
+
+        // 同一秒先写 A 后写 B，但 A.id 字典序更大；UUID 顺序与真实发题顺序故意相反。
+        attempt(oldId, learner, k1, oldQuestion, "graded", "wrong",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt(latestId, learner, k2, latestQuestion, "graded", "correct",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        selections.recordLastRandomAttempt(learner, latestId);
+
+        assertThat(selections.lastRandomAttempt(learner)).contains(
+                new PracticeSelectionStore.LastRandomAttempt(k2, "correct"));
+        // 最新 B=correct，所以必须排除 B 的 K2、切到 K1，并消费一次池轮换；
+        // 旧 UUID 排序会误读 A=wrong，虽然也留在 K1，却不会消费轮换。
+        var next = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(next.targetKnowledgePointId()).isEqualTo(k1);
+        assertThat(next.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.ALL);
+    }
+
+    @Test void activeLatestAttemptWithTiedTimestampDoesNotFallBackToOlderAssessment() {
+        assertTiedUngradedLatestAttemptWins("active");
+    }
+
+    @Test void revealedLatestAttemptWithTiedTimestampDoesNotFallBackToOlderAssessment() {
+        assertTiedUngradedLatestAttemptWins("revealed");
+    }
+
+    private void assertTiedUngradedLatestAttemptWins(String status) {
+        String book = book("RANDOM-LATEST-" + status);
+        String k1 = point(book, "LATEST-NULL-K1", 0), k2 = point(book, "LATEST-NULL-K2", 1);
+        String oldQuestion = question(k1, "old"), latestQuestion = question(k2, "latest");
+        question(k1, "remaining-k1");
+        question(k2, "remaining-k2");
+        String learner = learner("random-latest-" + status);
+        String oldId = "active".equals(status)
+                ? "ffffffff-ffff-ffff-ffff-fffffffffff0"
+                : "ffffffff-ffff-ffff-ffff-fffffffffff1";
+        String latestId = "active".equals(status)
+                ? "00000000-0000-0000-0000-000000000002"
+                : "00000000-0000-0000-0000-000000000004";
+        attempt(oldId, learner, k1, oldQuestion, "graded", "correct",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt(latestId, learner, k2, latestQuestion, status, null,
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        selections.recordLastRandomAttempt(learner, latestId);
+
+        assertThat(selections.lastRandomAttempt(learner)).contains(
+                new PracticeSelectionStore.LastRandomAttempt(k2, null));
+        // assessment=null 必须走未判分分支，不能回退读取旧 A=correct，也不消费新池轮换。
+        assertThat(selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow().requestedPool()).isNull();
+    }
+
+    @Test void ambiguousLegacyTimestampTieIsNotGuessedFromUuidOrder() {
+        String book = book("RANDOM-LEGACY-TIE");
+        String k1 = point(book, "LEGACY-TIE-K1", 0), k2 = point(book, "LEGACY-TIE-K2", 1);
+        String learner = learner("random-legacy-tie");
+        attempt("ffffffff-ffff-ffff-ffff-ffffffffffe0", learner, k1, question(k1, "old"),
+                "graded", "wrong", "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt("00000000-0000-0000-0000-000000000003", learner, k2, question(k2, "latest"),
+                "graded", "correct", "random", PracticeDrawReason.OLDEST, TODAY);
+
+        // 升级前 schema 没有真实先后事实；安全地返回未知，不再让随机 UUID 替系统作决定。
+        assertThat(selections.lastRandomAttempt(learner)).isEmpty();
+    }
+
+    @Test void poolRotationStartsWithAllThenWrongAndWrongOrPartialDoesNotConsume() {
+        String book = book("RANDOM-POOL-ROTATION");
+        String k1 = point(book, "POOL-K1", 0), k2 = point(book, "POOL-K2", 1);
+        String k1Wrong = question(k1, "wrong"), k1Pad = question(k1, "pad");
+        question(k1, "remain");
+        String k2First = question(k2, "first"), k2Pad = question(k2, "pad");
+        String learner = learner("random-pool-rotation");
+        wrongBook(learner, k1, k1Wrong, "active");
+        // 模拟升级前已经存在的 RANDOM 历史；没有 V23 row 时仍从 ALL 开始。
+        attempt(learner, k1, k1Pad, "graded", "correct", "random", PracticeDrawReason.OLDEST, TODAY);
+
+        var all = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(all.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.ALL);
+        assertThat(all.targetKnowledgePointId()).isEqualTo(k2);
+        selector.recordPoolRotation(learner, all);
+        attempt(learner, k2, all.questionId(), "graded", "correct", "random", all.drawReason(), TODAY.plusSeconds(1));
+
+        var wrong = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(wrong.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.WRONG);
+        assertThat(wrong.targetKnowledgePointId()).isEqualTo(k1);
+        selector.recordPoolRotation(learner, wrong);
+        attempt(learner, k1, wrong.questionId(), "graded", "partial", "random", wrong.drawReason(), TODAY.plusSeconds(2));
+
+        var stays = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(stays.requestedPool()).isNull();
+        assertThat(stays.targetKnowledgePointId()).isEqualTo(k1);
+        selector.recordPoolRotation(learner, stays);
+        assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
+                Long.class, learner)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT last_requested_pool FROM learner_random_kp_rotation WHERE learner_id=?",
+                String.class, learner)).isEqualTo("wrong");
+    }
+
+    @Test void firstRandomOfANewBusinessDayContinuesThePersistedRotation() {
+        String book = book("RANDOM-CROSS-DAY-ROTATION");
+        String k1 = point(book, "CROSS-DAY-K1", 0), k2 = point(book, "CROSS-DAY-K2", 1);
+        String old = question(k1, "old");
+        String wrongQuestion = question(k2, "wrong");
+        String learner = learner("random-cross-day-rotation");
+        wrongBook(learner, k2, wrongQuestion, "active");
+        attempt(learner, k1, old, "graded", "wrong", "random", PracticeDrawReason.OLDEST, YESTERDAY);
+        jdbc.update("INSERT INTO learner_random_kp_rotation(learner_id,last_requested_pool,selection_count) VALUES (?,'all',1)", learner);
+
+        // 重建 Store / Selector 模拟服务重启：轮换事实只能来自数据库，不能依赖 JVM 内存。
+        var restartedSelector = new RandomPracticeSelector(new PracticeSelectionStore(jdbc));
+        var selection = restartedSelector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(selection.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.WRONG);
+        assertThat(selection.targetKnowledgePointId()).isEqualTo(k2);
+    }
+
+    @Test void wrongPoolFallbackStillConsumesItsSlotAndKeepsCorrectSwitchPriority() {
+        String book = book("RANDOM-WRONG-POOL-FALLBACK");
+        String k1 = point(book, "POOL-FALLBACK-K1", 0), k2 = point(book, "POOL-FALLBACK-K2", 1);
+        String previous = question(k1, "previous");
+        String wrongOnlyOnPrevious = question(k1, "wrong");
+        question(k2, "other");
+        String learner = learner("random-wrong-pool-fallback");
+        wrongBook(learner, k1, wrongOnlyOnPrevious, "active");
+        attempt(learner, k1, previous, "graded", "correct", "random", PracticeDrawReason.OLDEST, TODAY);
+        jdbc.update("INSERT INTO learner_random_kp_rotation(learner_id,last_requested_pool,selection_count) VALUES (?,'all',1)", learner);
+
+        var selection = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(selection.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.WRONG);
+        assertThat(selection.targetKnowledgePointId()).isEqualTo(k2);
+        selector.recordPoolRotation(learner, selection);
+        assertThat(selections.nextRequestedKnowledgePool(learner))
+                .isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.ALL);
+    }
+
+    @Test void rotationStateIsIsolatedPerLearner() {
+        String first = learner("random-pool-user-a"), second = learner("random-pool-user-b");
+        selections.recordRequestedKnowledgePool(first, PracticeSelectionStore.RequestedKnowledgePool.ALL);
+        assertThat(selections.nextRequestedKnowledgePool(first))
+                .isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.WRONG);
+        assertThat(selections.nextRequestedKnowledgePool(second))
+                .isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.ALL);
+    }
+
+    @Test void wrongKnowledgePoolIsDistinctAtKnowledgePointLevelNotWeightedByWrongQuestionCount() {
+        String book = book("RANDOM-WRONG-KP-UNIFORM");
+        String many = point(book, "WRONG-MANY", 0), one = point(book, "WRONG-ONE", 1);
+        String learner = learner("random-wrong-kp-uniform");
+        for (int index = 0; index < 5; index++) {
+            String question = question(many, "many-" + index);
+            wrongBook(learner, many, question, "active");
+        }
+        String oneQuestion = question(one, "one");
+        wrongBook(learner, one, oneQuestion, "active");
+
+        assertThat(selections.activeWrongKnowledgePointIds(learner, Set.of(many, one)))
+                .containsExactlyInAnyOrder(many, one);
+    }
+
+    @Test void learnerLockSerializesConcurrentRotationConsumption() throws Exception {
+        String learner = learner("random-pool-concurrent");
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var tasks = List.of(0, 1).stream().map(ignored -> executor.submit(() -> {
+                start.await();
+                return new TransactionTemplate(transactions).execute(status -> {
+                    learners.lockForUpdate(learner);
+                    var requested = selections.nextRequestedKnowledgePool(learner);
+                    selections.recordRequestedKnowledgePool(learner, requested);
+                    return requested;
+                });
+            })).toList();
+            start.countDown();
+            assertThat(List.of(tasks.get(0).get(), tasks.get(1).get()))
+                    .containsExactlyInAnyOrder(PracticeSelectionStore.RequestedKnowledgePool.ALL,
+                            PracticeSelectionStore.RequestedKnowledgePool.WRONG);
+            assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
+                    Long.class, learner)).isEqualTo(2L);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test void failedTransactionRollsBackRotationConsumption() {
+        String learner = learner("random-pool-rollback");
+        String book = book("RANDOM-CURSOR-ROLLBACK");
+        String point = point(book, "ROLLBACK-KP", 0);
+        String question = question(point, "rollback");
+        String attemptId = UUID.randomUUID().toString();
+        attempt(attemptId, learner, point, question, "active", null,
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        var selection = new RandomPracticeSelector.Selection(question, point,
+                PracticeDrawReason.OLDEST, PracticeSelectionStore.RequestedKnowledgePool.ALL);
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            learners.lockForUpdate(learner);
+            selector.recordPersistedAttempt(learner, attemptId, selection);
+            throw new IllegalStateException("simulate world persistence failure");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_random_attempt_cursor WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+    }
+
     // ---------------------------------------------------------------- daily quota
 
     @Test void sameQuestionIsOnlyDrawnOncePerBusinessDayAndActiveOrRevealedAlsoCounts() {
@@ -220,10 +438,13 @@ class RandomPracticeSelectionIntegrationTest {
             var selection = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
             // 当天 quota 已经被占用：这道题今天不能再出。
             assertThat(selection.questionId()).isNotEqualTo(drawn);
+            assertThat(selection.requestedPool()).isNull();
             drawnPoints.add(selection.targetKnowledgePointId());
         }
         // 没有 grading 结果时不偏向任何 KP，仍然是在 eligible 集合里纯随机。
         assertThat(drawnPoints).containsExactlyInAnyOrder(k1, k2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation WHERE learner_id=?",
+                Integer.class, learner)).isZero();
     }
 
     // ---------------------------------------------------------------- wrong lane
@@ -377,6 +598,10 @@ class RandomPracticeSelectionIntegrationTest {
                 .isEqualTo("random");
         assertThat(jdbc.queryForObject("SELECT draw_reason FROM study_attempt WHERE id=?", String.class, firstAttempt))
                 .isEqualTo(PracticeDrawReason.OLDEST);
+        assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
+                Long.class, learner)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT last_random_attempt_id FROM learner_random_attempt_cursor WHERE learner_id=?",
+                String.class, learner)).isEqualTo(firstAttempt);
 
         // 答错也推进一个正式题 slot：不再 training、不再 retry 父题、不再建诊断会话。
         game = answer(cookie, game, false);
@@ -395,12 +620,21 @@ class RandomPracticeSelectionIntegrationTest {
         // 上一题 wrong → 留在同一 KP；但该 KP 的错题今天已经出过，所以 wrong lane 空转 oldest。
         assertThat(jdbc.queryForObject("SELECT draw_reason FROM study_attempt WHERE id=?", String.class, secondAttempt))
                 .isEqualTo(PracticeDrawReason.WRONG_FALLBACK);
+        assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
+                Long.class, learner)).isEqualTo(1L);
         game = answer(cookie, game, true);
         assertThat(game.path("adventure").path("run").path("knowledgePointIndex").asInt()).isEqualTo(2);
 
         game = next(cookie, game);
         String thirdQuestion = game.path("attempt").path("question").path("id").asText();
+        String thirdAttempt = game.path("attempt").path("id").asText();
         assertThat(Set.of(firstQuestion, secondQuestion, thirdQuestion)).isEqualTo(questions);
+        assertThat(jdbc.queryForObject("SELECT last_requested_pool FROM learner_random_kp_rotation WHERE learner_id=?",
+                String.class, learner)).isEqualTo("wrong");
+        assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
+                Long.class, learner)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT last_random_attempt_id FROM learner_random_attempt_cursor WHERE learner_id=?",
+                String.class, learner)).isEqualTo(thirdAttempt);
         game = answer(cookie, game, true);
 
         run = game.path("adventure").path("run");
@@ -608,12 +842,19 @@ class RandomPracticeSelectionIntegrationTest {
 
     private void attempt(String learner, String point, String question, String status, String assessment,
                          String drawMode, String drawReason, Instant createdAt) {
+        attempt(UUID.randomUUID().toString(), learner, point, question, status, assessment,
+                drawMode, drawReason, createdAt);
+    }
+
+    private void attempt(String attemptId, String learner, String point, String question,
+                         String status, String assessment, String drawMode, String drawReason,
+                         Instant createdAt) {
         jdbc.update("""
                 INSERT INTO study_attempt(id,learner_id,world_id,question_id,question_snapshot_json,standard_answer_json,
                     status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,
                     question_difficulty,answered_at,draw_mode,draw_reason,created_at)
                 VALUES (?,?,'ancient-official',?,'{}','true',?,'auto',?,?,?,'normal',2,?,?,?,?)
-                """, UUID.randomUUID().toString(), learner, question, status,
+                """, attemptId, learner, question, status,
                 "graded".equals(status) ? ("self".equals(assessment) ? "self" : "automatic") : null,
                 assessment, point,
                 "graded".equals(status) ? java.sql.Timestamp.from(createdAt) : null,

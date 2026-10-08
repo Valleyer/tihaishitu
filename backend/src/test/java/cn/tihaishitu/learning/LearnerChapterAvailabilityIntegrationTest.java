@@ -115,7 +115,7 @@ class LearnerChapterAvailabilityIntegrationTest {
     }
 
     @Test
-    void leavingTheLearningScopeMarksWrongQuestionOutOfScope() throws Exception {
+    void leavingTheLearningScopeHidesWrongQuestionAndSelectingItAgainRestoresHistory() throws Exception {
         Cookie cookie = register("scope-user");
         String learner = jdbc.queryForObject(
                 "SELECT id FROM learner_account WHERE username='scope-user'", String.class);
@@ -127,21 +127,39 @@ class LearnerChapterAvailabilityIntegrationTest {
                 .andExpect(jsonPath("$[0].available").value(true))
                 .andExpect(jsonPath("$[0].unavailableReason").doesNotExist());
 
-        // 移出学习范围后，错题卡应提前变为不可练并给出 out_of_scope；错题记录本身永久保留。
+        // 移出学习范围后，错题卡与学习页计数都隐藏；错题记录本身永久保留 active。
         String otherBook = book();
         jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
         jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
                 learner, otherBook);
         mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].available").value(false))
-                .andExpect(jsonPath("$[0].unavailableReason").value("out_of_scope"))
-                .andExpect(jsonPath("$[0].questionId").value(fixture.firstQuestion));
+                .andExpect(jsonPath("$").isEmpty());
+        mvc.perform(get("/api/v1/learner/progress").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.wrongQuestions").value(0));
+        assertThat(jdbc.queryForObject("SELECT status FROM learner_wrong_question WHERE learner_id=? AND question_id=?",
+                String.class, learner, fixture.firstQuestion)).isEqualTo("active");
         mvc.perform(post("/api/v1/learner/practice-sessions").with(csrf()).cookie(cookie)
                         .contentType("application/json")
                         .content("{\"intent\":\"wrong_review\",\"sourceQuestionId\":\"%s\"}"
                                 .formatted(fixture.firstQuestion)))
                 .andExpect(status().isBadRequest());
+
+        // 重新选择原文集立即恢复同一条历史，归因与时间不被改写。
+        Instant lastWrongAt = jdbc.queryForObject(
+                "SELECT last_wrong_at FROM learner_wrong_question WHERE learner_id=? AND question_id=?",
+                java.sql.Timestamp.class, learner, fixture.firstQuestion).toInstant();
+        jdbc.update("DELETE FROM learner_selected_book WHERE learner_id=?", learner);
+        jdbc.update("INSERT INTO learner_selected_book(learner_id,bank_id,weight_value) VALUES (?,?,100)",
+                learner, fixture.book);
+        mvc.perform(get("/api/v1/learner/wrong-questions").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].questionId").value(fixture.firstQuestion))
+                .andExpect(jsonPath("$[0].available").value(true));
+        assertThat(jdbc.queryForObject(
+                "SELECT last_wrong_at FROM learner_wrong_question WHERE learner_id=? AND question_id=?",
+                java.sql.Timestamp.class, learner, fixture.firstQuestion).toInstant()).isEqualTo(lastWrongAt);
     }
 
     /** 只保留本测试自建文集，避免注册时默认选中全部启用文集导致范围不确定。 */

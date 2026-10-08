@@ -1,6 +1,8 @@
 package cn.tihaishitu.learning;
 
+import cn.tihaishitu.game.KnowledgeQuestionPoolService;
 import cn.tihaishitu.learner.LearnerContext;
+import cn.tihaishitu.learner.StudyProfileService;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -23,15 +25,20 @@ public class LearnerProgressService {
     private final LearnerKnowledgeStateService states;
     private final ReviewQueueService reviews;
     private final LearnerPracticeStore practices;
+    private final StudyProfileService profiles;
+    private final KnowledgeQuestionPoolService questionPool;
     private final KnowledgeMasteryModel mastery = new KnowledgeMasteryModel();
     private final Clock clock = Clock.systemUTC();
 
     public LearnerProgressService(LearnerProgressStore progress, LearnerKnowledgeStateService states,
-                                  ReviewQueueService reviews, LearnerPracticeStore practices) {
+                                  ReviewQueueService reviews, LearnerPracticeStore practices,
+                                  StudyProfileService profiles, KnowledgeQuestionPoolService questionPool) {
         this.progress = progress;
         this.states = states;
         this.reviews = reviews;
         this.practices = practices;
+        this.profiles = profiles;
+        this.questionPool = questionPool;
     }
 
     public ProgressView current() {
@@ -69,9 +76,11 @@ public class LearnerProgressService {
         int reviewUpcoming = (int) scopedReviewItems.stream().filter(item -> "upcoming".equals(item.status())).count();
 
         Counts overall = counts(points.keySet(), points);
+        Set<String> wrongScope = questionPool.allowedKnowledgePointIds(new LinkedHashSet<>(
+                profiles.rawCurrent(learnerId).selectedBookIds()));
         Summary summary = new Summary(books.size(), overall.total(), overall.started(), overall.ready(),
                 overall.proficient(), reviewDue, reviewSoon, reviewUpcoming,
-                practices.wrongQuestions(learnerId).size());
+                practices.wrongQuestions(learnerId, wrongScope).size());
 
         Map<String, Integer> bands = new LinkedHashMap<>();
         for (String band : List.of("unstarted", "unmastered", "learning", "ready", "proficient")) {

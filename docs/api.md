@@ -220,7 +220,7 @@ selected Book(s)
 
 RANDOM 是 KP-first：先选 target KnowledgePoint，再在该 KP 内按 oldest / wrong lane 选题；该 KP 就是本次 attempt 冻结的 target，不再重新解析。仍然保留的按题目 ID 发题路径（Book-level 题池 API、`wrong_review` 等）继续按“scope 内 core 优先、其次 auxiliary”稳定解析 target。一次 attempt 不会给该题的全部 core + auxiliary 同时加分。
 
-正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除；RANDOM 另加“同一 Asia/Shanghai 业务日同一 Question 最多出一次”（`study_attempt.draw_mode='random'` 为事实来源，`active` / `revealed` / `graded` 都占额度）。普通正式题答错后**不再**补救训练、不再 retry 同一道题，也不再创建诊断会话。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
+正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除；RANDOM 另加“同一 Asia/Shanghai 业务日同一 Question 最多出一次”（`study_attempt.draw_mode='random'` 为事实来源，`active` / `revealed` / `graded` 都占额度）。当天首次 RANDOM 发题与上一 RANDOM 正确后的 KP 切换，按 Learner 跨天持久交替使用 ALL / active 错题关联 KP 池；WRONG 池回退 ALL 仍消费该槽，wrong / partial、assessment=null 与非 RANDOM 模式不消费。上一 RANDOM Attempt 由服务端持久指针确定，不用秒级 `created_at` 并列后的 UUID 排序；升级前最大秒并列且无指针时按上一题未知处理。普通正式题答错后**不再**补救训练、不再 retry 同一道题，也不再创建诊断会话。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 
 难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有保留的 TRAINING 模式（Remedial / 诊断补强流程，普通正式训练已不再进入）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
 
@@ -385,8 +385,8 @@ solution → 只有 analysis_markdown，显示为“参考解析”
 ## 后端实现应保持的行为
 
 - 每次发卷生成新 attemptId，保存题目与答案快照；重新读取同一课卷不再洗牌。
-- 普通活动开始时冻结 5 个互不相同的知识点，主线活动冻结 10 个；一轮内不能用同一知识点重复占分。
-- 每个知识点首题决定该点得分。首题答错后继续返回该知识点的低难度题，答对后才推进；训练题不补回首题失分。
+- 普通活动以配置的 rounds 为上限，并按当天剩余 RANDOM Question 数收敛 `plannedRounds`；运行时逐题选择 target KP，不预先冻结一组互不相同的知识点。
+- 每道正式题只占一个进度 slot；correct / wrong / partial 都推进。wrong / partial 后尽量留在原 KP，correct 后切换 KP，不再自动追加低难训练题。
 - ActivityRun 返回 knowledgePointIds、knowledgePointIndex、plannedRounds、training、trainingAnswered、diagnosticAnswered、diagnosisSessionId 与 seenQuestionIds，客户端只负责展示，不自行推断进度。现代 Learner World 的 `training` / `trainingAnswered` / `diagnosticAnswered` / `diagnosisSessionId` 只作为 Legacy 状态兼容存在，始终是 `false` / `0` / `0` / `null`；进度分母使用 `plannedRounds`。
 - 同一 attemptId 重复提交不重复奖励。已换题时旧答题请求返回明确错误。
 - next 的旧 attemptId 重试返回当前进度，不连续跳题。
@@ -447,7 +447,7 @@ HTTP 后端必须自行校验这些状态，不能只依赖前端隐藏按钮。
 
 | Method | Path | Request | Response / 语义 |
 |---|---|---|---|
-| GET | /learner/wrong-questions | 无 | 永久错题本列表：每项 `questionId`、`targetKnowledgePointId`、`knowledgePointName`、`contentMarkdown`、`subjectName`、`examYear`、`questionNumber`（原始）、`displayQuestionNumber`（UI）、`examLabel`、`knowledgePoints[{id,name,role}]`、`lastGradedAt`、`available`、`unavailableReason` |
+| GET | /learner/wrong-questions | 无 | 当前学习范围内可练的永久错题列表：每项仍返回 `questionId`、历史 `targetKnowledgePointId`、`knowledgePointName`、`contentMarkdown`、`subjectName`、`examYear`、`questionNumber`（原始）、`displayQuestionNumber`（UI）、`examLabel`、`knowledgePoints[{id,name,role}]`、`lastGradedAt`、兼容字段 `available=true`、`unavailableReason=null` |
 | DELETE | /learner/wrong-questions/{questionId} | 无 | 204；Learner 手动移出错题本 |
 | POST | /learner/practice-sessions | intent, targetKnowledgePointId/sourceQuestionId/targetBookId/targetChapterId | 开始练习；intent 允许 `knowledge_drill` / `chapter_drill` / `wrong_review` / `wrong_drill` |
 | GET | /learner/practice-sessions/active-chapter | 无 | 当前 active 章节 Session；没有时 204 |
@@ -469,11 +469,11 @@ Learner + Attempt 重复提交返回 409。`GET /manage/question-reports` 与
 World 对应动作是 `POST /worlds/ancient-official/answers/no-idea`，请求只含
 `attemptId` / `questionId`，语义与 Hub 完全一致。
 
-V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。V21 为 `study_attempt` 增加 `draw_mode` / `draw_reason` 与索引 `(learner_id, draw_mode, created_at, question_id)`。
+V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。V21 为 `study_attempt` 增加 `draw_mode` / `draw_reason` 与索引 `(learner_id, draw_mode, created_at, question_id)`。V23 新增 `learner_random_kp_rotation`，按 Learner 事务性保存 RANDOM 第一层请求池与消费次数；V24 新增 `learner_random_attempt_cursor`，保存严格的最近 RANDOM Attempt 指针。两者都不回填旧 Attempt，已执行 V23 的开发库按正常 Flyway 顺序升级 V24。
 
 Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Knowledge drill 与 Wrong drill 都是 Session 内随机且不重复，候选耗尽即本轮完成，新开 Session 重新洗牌。章节练习走固定的确定性题序（Chapter 内 KnowledgePoint `sort_order` → 稳定 Source identity → `exam_year` → `question_number` 自然排序 → `question_id`），跨 Session 持久 cursor，末尾 wrap。三者都只受 published 正式父题 + 上下文范围 + Session 内 seen 约束，今天已答对、Review 未到期或已掌握都不阻止再练，也不会因此返回“当前没有待练题”。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 
-Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded attempt 派生：Formal Parent Question 出现 wrong / partial 即 upsert 为 `active`，之后 correct 不自动移除，只有 Learner 手动移出才置为 `removed`，以后再次 wrong / partial 重新回到 `active`。`wrong_review` 是用户从错题本点选某一题，只重做这一题，`sourceQuestionId` 必填，graded 后流程完成。`wrong_drill` 随机连续刷当前 Learner 的 `learner_wrong_question.status='active'` 错题：排除下架题与非 Formal 题，限制在当前 selected Books 覆盖范围内，Session 内不重复；本轮错题全部做完后 `POST .../next` 返回 409“本轮错题快练已经完成”，0 道可练 active 错题时启动返回 400 友好提示。快速练习中答对不会自动移出错题本。`GET /learner/statistics` 的 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`。
+Wrong Book 使用 `learner_wrong_question` 持久化，不按 latest graded attempt 派生：Formal Parent Question 出现 wrong / partial 即 upsert 为 `active`，之后 correct 不自动移除，只有 Learner 手动移出才置为 `removed`，以后再次 wrong / partial 重新回到 `active`。列表只返回当前 selected Books 范围内、通过至少一个有效 core / auxiliary 关系可练的错题；取消文集只隐藏并同步减少学习页数量，重新选择立即恢复历史。`wrong_review` 的 `sourceQuestionId` 必填：历史 target 当前仍合法时沿用，否则选择当前合法稳定绑定作为新 Attempt target，历史错题归因不改写。`wrong_drill` 按 Session 冻结 KP scope 从相同多 KP 关系事实中随机连续刷 active 错题，Session 内不重复；本轮耗尽后 `POST .../next` 返回 409，0 道可练错题时启动返回 400 友好提示。快速练习中答对不会自动移出错题本。`GET /learner/progress.summary.wrongQuestions`、错题列表、两种错题练习和 RANDOM 错题 KP 池共享上述范围口径；`GET /learner/statistics` 的 `wrongReviewAttempts` 同时统计 `wrong_review` 与 `wrong_drill`。
 
 Hub Practice 与 World 共用同一套 Formal candidate 查询、Question Contract V2、Attempt Variant、grading、Wrong Book 与 Mastery / Evidence 逻辑，但选题与推进由各自独立的 strategy 负责（`KnowledgePracticeSelector` / `ChapterPracticeSelector` / `WrongPracticeSelector` / `RandomPracticeSelector`）。四套策略都不再调用 Diagnosis / Remedial。Hub mutation 校验 learner/session owner，且不写 `learner_world_state`。
 

@@ -21,7 +21,7 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 - **Learning Hub**：统一管理学习范围与重点知识点，查看学习进度和复习安排，并进行知识点专项练习与错题练习。
 - **知识 / 题库分工**：顶栏的**知识**（技术 route 仍是 `/books`）展示 `Book → Chapter → KnowledgePoint` 目录与知识讲解；**题库**（`/questions`）展示全平台所有已发布正式题目，支持关键词、来源、年份、题型、难度、文集、章节、知识点筛选与固定每页 20 条的分页，可 inline 预览并进入完整题目详情查看答案与解析。题库是全局只读浏览，与当前学习范围解耦：浏览题目不创建 Attempt、不影响掌握度与错题本、也不消耗随机题每日额度。
 - **长期掌握状态**：正式作答只归因到当次目标知识点；Learning Hub 展示有效掌握度、记忆稳定度与目标难度，所有 World 共用同一份 Learner + KnowledgePoint 状态。
-- **正式训练选题 V2**：正式训练固定为四套**互相独立**的选题策略。RANDOM（寒门仕途普通随机正式题）改为 KP-first：先随机选目标知识点，再在该知识点内按 oldest / wrong 交替 lane 选题；同一学习者同一 `Asia/Shanghai` 业务日内同一道题最多随机出现一次，题目一经发出就占用当天额度。CHAPTER（章节练习）改成一条确定的题序并跨 Session 记住进度。KNOWLEDGE（知识点专项）与 WRONG（错题快练）都是 Session 内随机且不重复。章节 / 知识点 / 错题练过的题不消耗 RANDOM 额度。详见 [正式训练选题策略](docs/question-practice-policy.md)。
+- **正式训练选题 V3**：正式训练固定为四套**互相独立**的选题策略。RANDOM（寒门仕途普通随机正式题）采用 KP-first；当天首次发题与上一 RANDOM 正确后的切换事件，按 Learner 跨天持久交替使用全局 KP 池 / active 错题关联 KP 池，再在目标 KP 内保持 oldest / wrong 交替 lane。同一学习者同一 `Asia/Shanghai` 业务日内同一道题最多随机出现一次，题目一经发出就占用当天额度。CHAPTER 是跨 Session 的确定题序；KNOWLEDGE 与 WRONG 都是 Session 内随机且不重复。章节 / 知识点 / 错题练过的题不消耗 RANDOM 额度。详见 [正式训练选题策略](docs/question-practice-policy.md)。
 - **普通训练单层化**：RANDOM / CHAPTER / KNOWLEDGE / WRONG 做完一题就直接判题、记录掌握度与错题本，然后进入下一道普通正式题或结束流程；不再自动进入诊断 / 补救嵌套，也不再答错后原地重做同一道父题。诊断与补救相关表、服务与管理端能力仍然保留，供未来重新设计。
 - **我没思路与题目反馈**：Hub 和寒门仕途都提供正式“我没思路”动作，直接判错并正常写入错题本、掌握度和证据；当前正式 Attempt 还可提交题目反馈，由 REVIEWER / ADMIN 在管理后台处理。
 - **遗忘感知复习 V1**：Learning Hub 的“今日巩固”和“复习安排”从现有掌握度与记忆稳定度动态推导，并可直接进入相应知识点的专项练习。
@@ -35,11 +35,11 @@ React + TypeScript 前端与 Java 17 / Spring Boot 后端已经完成联机 Lear
 
 能不能练与能不能获得 Mastery 奖励已经分离：今天已经答对过的题仍然可以再练，只是同一业务日后续正确不再增加熟练度。KnowledgePoint 的 `relation_role`（core / auxiliary）只用于标签主次显示与诊断解释，既不影响题目能不能做，也不影响它是否进入 Mastery 分母。正式题发题条件只剩 `status=published`、`parent_question_id IS NULL`、正式题型与当前训练上下文范围，加上当前 Session / run 的 `seenQuestionIds` 排除。
 
-Adaptive Scheduling V1 仍然按惰性遗忘后的有效掌握度计算“软提示难度”（未开始或有效掌握度低于 40 为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 取目标难度与掌握上限的较小值，`gentle` 再下调一级但不低于 1），但难度只作为保留的 Remedial / training 能力的软提示，普通四模式的正式题选题一律不看它。World / 副本的普通正式题走 RANDOM：先选目标知识点，再在该知识点内按 oldest / wrong lane 选题并把该知识点冻结为本次 target；`plannedRounds = min(activity rounds, 当天剩余可出的随机题数)`，题目不够就自然提前完成，当天全部出过时开始活动直接给出明确提示。旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
+Adaptive Scheduling V1 仍然按惰性遗忘后的有效掌握度计算“软提示难度”（未开始或有效掌握度低于 40 为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 取目标难度与掌握上限的较小值，`gentle` 再下调一级但不低于 1），但难度只作为保留的 Remedial / training 能力的软提示，普通四模式的正式题选题一律不看它。World / 副本的普通正式题走 RANDOM：仅在当天首次发题或上一题正确后需要切换 KP 时，按持久化顺序在全局可学习 KP 池与当前 active 错题关联 KP 池之间交替请求，再在目标 KP 内按 oldest / wrong lane 选题并冻结 target；错题池无候选时安全回退全局池且仍消耗该轮换槽，wrong / partial 留在原 KP 时不推进池轮换。`plannedRounds = min(activity rounds, 当天剩余可出的随机题数)`，题目不够就自然提前完成，当天全部出过时开始活动直接给出明确提示。旧 `/games/**` 继续使用兼容的 scope-only 随机选题规则。
 
 Forgetting-aware Review Queue V1 不保存 `nextReviewAt` 或第二套复习状态。它根据 `reviewDueAt = lastEvidenceAt + stabilityDays × log2(masteryScore / 70)` 在读取时生成当前 Selected Books 范围内的待巩固、24 小时内和未来 7 天安排；多本文集共享的知识点只出现一次。Learning Hub 展示与解释计划，并可进入共享 Question Engine 的正式专项练习；Review 与 Focus 不改变 World target 的随机选择。
 
-Permanent Wrong Book V1 把“错题”定义为长期学习资产而不是临时待办：正式父题出现 wrong 或 partial 即写入 `learner_wrong_question`，此后的正确答案不会删除该记录，只有学习者在错题本中手动移出才置为 `removed`，再次做错会自动重新激活。错题卡返回 `available` 与 `unavailableReason`（`out_of_scope` / `question_unavailable` / `knowledge_unavailable`），离开学习范围的错题会提前标记为不可练并禁用入口，避免点击后才报错；错题记录本身仍然永久保留。子题只用于父题拆解教学，永远不进入错题本、Mastery、复习队列或正式题数量。
+Permanent Wrong Book V3 把“错题”定义为长期学习资产而不是临时待办：正式父题出现 wrong 或 partial 即写入 `learner_wrong_question`，此后的正确答案不会删除该记录，只有学习者在错题本中手动移出才置为 `removed`，再次做错会自动重新激活。页面、学习页数量、单题重做、错题快练与 RANDOM 错题 KP 池统一限定当前学习范围；多知识点题按当前任一有效 core / auxiliary 绑定判断，不只看历史 target。取消文集只隐藏，重新选择立即恢复原历史。子题永远不进入错题本、Mastery、复习队列或正式题数量。
 
 Study 页的错题区域提供**快速练习错题**（intent `wrong_drill`）：从当前 selected Books 覆盖范围内的 active 错题中随机连续出题，Session 内不重复，全部做完后本轮结束；0 道错题时按钮禁用。错题本中单题“重做这道题”仍是 `wrong_review`，做完这一题即流程完成。两者都计入学习统计的错题练习作答，并且**快速练习中答对不会自动移出错题本**。
 
@@ -141,4 +141,4 @@ build 包含配置引用、图片路径、题目知识点数量检查与类型�
 
 Learning Hub 提供 KnowledgePoint 专项练习与错题练习。专项没有固定题数、checkpoint、score 或 pass/fail；每道正式题判题结束后，学习者可以再来一道同 KnowledgePoint 或结束。KnowledgePoint 专项候选包含 core 与 auxiliary 关联的全部正式父题，Session 内随机不重复，不再因为其他知识点未 ready 而卡住。错题本为**永久错题本**：正式父题一旦 wrong 或 partial 即进入错题本，之后即使重做正确也**不会自动移出**，只有学习者确认掌握并手动移出才消失；以后再次做错会自动重新加入。错题本与 Mastery 相互独立，允许 KnowledgePoint 掌握度 100% 的同时仍保留历史错题。Wrong Practice 首题固定为原 Question，做完即完成；快速练习错题则在 active 错题中随机连续出题，Session 内不重复。
 
-World / 副本的普通正式题走 RANDOM KP-first：先选目标知识点，再在该知识点内按 oldest / wrong lane 选题，不使用 Review、Mastery 或 Manual Focus 排序，也按 `Asia/Shanghai` 业务日对同一道题硬去重；`plannedRounds = min(本轮题数上限, 当天剩余可出的随机题数)`，题目不足时自然提前完成。target 确定后，Hub 与 World 共用 Question Contract V2、Question Pool、选项排列、grading、Wrong Book 与 Mastery / Evidence 更新；普通正式训练不再有 dependency readiness gating，也不再自动进入诊断 / 补救。KnowledgePoint 专项、Chapter Practice 与 Wrong Drill 仍保持各自的范围与策略。
+World / 副本的普通正式题走 RANDOM KP-first：当天首次发题和上一题正确后的 KP 切换在全局可学习池与 active 错题关联池之间持久化交替，然后在选中 KP 内按 oldest / wrong lane 选题；错题池为空或无法切换时回退全局池，wrong / partial 留在原 KP 时不消费轮换。它不使用 Review、Mastery 或 Manual Focus 排序，也按 `Asia/Shanghai` 业务日对同一道题硬去重；`plannedRounds = min(本轮题数上限, 当天剩余可出的随机题数)`，题目不足时自然提前完成。target 确定后，Hub 与 World 共用 Question Contract V2、Question Pool、选项排列、grading、Wrong Book 与 Mastery / Evidence 更新；普通正式训练不再有 dependency readiness gating，也不再自动进入诊断 / 补救。KnowledgePoint 专项、Chapter Practice 与 Wrong Drill 仍保持各自的范围与策略。

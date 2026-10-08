@@ -523,18 +523,24 @@ Wrong Book 中仍有该题的历史错题
 
 只有用户自己确认“已经掌握”才手动移除。不得实现“Mastery 达标自动清错题”。
 
-### 8.3 题目下架
+### 8.3 当前学习范围可见性与历史保留
 
-Question 被 archive / unavailable 时：
+错题本页面只返回当前可练错题：Question 必须是 published Formal Parent，且通过
+core / auxiliary 任一当前有效绑定落入 Learner 的当前 selected Books 范围。多知识点题
+不能只看历史 `target_knowledge_point_id`；历史 target 已离开范围、但另一有效绑定仍在范围内时，
+该题仍显示且可练。
+
+取消文集、Question 下架、知识点失效或实际绑定消失时：
 
 ```text
 错题历史不能自动删除
-只需标记“当前不可练”
+learner_wrong_question.status 不能自动改为 removed
+只从当前列表、学习页计数、错题快练与 RANDOM 错题 KP 池隐藏
+重新选择文集后立即恢复原 last_wrong_at 与历史归因
 ```
 
-错题卡返回 `available` 与 `unavailableReason`（`out_of_scope` /
-`question_unavailable` / `knowledge_unavailable`），离开学习范围时提前禁用入口，
-但记录永久保留，用户仍可手动移出。
+`GET /learner/wrong-questions` 保留既有响应字段兼容；返回集合中的题均为当前可练项。
+通过旧链接请求范围外 `wrong_review` 时返回可读 400，不删除错题历史。
 
 ### 8.4 后台删除题目
 
@@ -559,6 +565,10 @@ Session 内不重复
 全部做完后本轮结束
 0 道 active 错题时入口禁用并给出友好提示，不返回 500
 ```
+
+`wrong_review` 与 `wrong_drill` 的 target 选择规则：历史错题 target 仍在冻结 scope 且题目
+确实绑定该 KP 时优先沿用；否则从当前合法绑定中按 core、关系 sort_order、KP ID 稳定选择。
+这只决定新 Attempt 的 target，绝不改写 `learner_wrong_question.target_knowledge_point_id`。
 
 永久错题规则在快练中不变：
 
@@ -720,6 +730,7 @@ WRONG      单题错题重做 / 错题快练（Session 内随机不重复）
 
 ```text
 RANDOM 先选 target KnowledgePoint 再在该 KP 内选题，不再对整书题池直接 uniform random
+RANDOM 仅在当天首次发题或上一 RANDOM 正确时，跨天持久地按触发次数交替使用 ALL / WRONG KP 池
 RANDOM 同一 Learner × 同一 Asia/Shanghai 业务日同一 Question 最多出一次（发出即占额度）
 CHAPTER / KNOWLEDGE / WRONG 做过的题不消耗 RANDOM quota，RANDOM 也不阻止它们练到同一题
 四模式都不再根据 Mastery / readiness / Review due / preferred difficulty / dependency 筛题
@@ -753,8 +764,15 @@ RANDOM 策略则由 KP-first 直接冻结它选中的那个 KP，不重新解析
 ```text
 KnowledgePoint 专项：当前 KnowledgePoint → 该 KP 关联的全部 Formal Question（core + auxiliary）→ Session 内未见 → 随机
 Chapter Practice：限定当前 Book + Chapter，走固定确定性题序 + 持久 cursor + 末尾 wrap
-Wrong Drill：active Wrong Book → 当前 selected Book scope → Session 内未见 → 随机
+Wrong Drill：active Wrong Book × Session 冻结 KP scope 的当前有效题目绑定 → Session 内未见 → 随机
 ```
+
+RANDOM 的第一层 KP 池轮换：第一次新规则触发为 ALL，之后 WRONG / ALL / WRONG 持久交替，
+不按业务日、World 活动或服务器进程重置。触发只包括“当天首次 RANDOM 发题”和“上一
+RANDOM 正确后需要随机切换 KP”；wrong / partial 留原 KP、原 KP 无题时的旧兜底、
+assessment=null 与非 RANDOM 模式都不消费。WRONG 池是 active 永久错题通过当前有效
+core / auxiliary 关系覆盖到的 eligible KP；池为空或无法满足 correct 后切换时回退 ALL，
+但仍消费本次 WRONG 槽。KP 内 oldest / wrong lane 完全独立并保持原规则。
 
 KNOWLEDGE 与 WRONG 都是 Session 内随机且不重复，候选耗尽即本轮完成，
 新开 Session 重新洗牌。CHAPTER 的题序、跨 KP 去重、target KP 归属与 cursor 规则见
@@ -1265,6 +1283,18 @@ study_attempt.draw_reason VARCHAR(24) NULL
 `Learner × Attempt` 最多一条反馈。REVIEWER / ADMIN 可分页查看并标记 `resolved` 或
 `dismissed`；反馈不改变 Attempt、Mastery、Wrong Book 或选题状态。Learner / Attempt
 删除时反馈级联清理，Question 仍按全局资产规则禁止被反馈记录级联删除。
+
+`V23__random_knowledge_pool_rotation.sql` 新增 `learner_random_kp_rotation`，按 Learner 保存
+`last_requested_pool`、`selection_count` 与更新时间。旧 Learner 不回填，首次升级后触发从
+ALL 开始；轮到 WRONG 即使实际回退 ALL 仍记录 WRONG。现代 World 发题先锁 Learner，
+Attempt 创建与轮换更新处于同一事务，失败一并回滚；Learner 删除时状态级联删除。
+
+`V24__random_attempt_cursor.sql` 新增 `learner_random_attempt_cursor`，明确保存每个 Learner
+最近一次现代 RANDOM Attempt ID。`study_attempt.created_at` 历史上只有秒级精度，UUID 又不代表
+插入顺序，因此不得用 `ORDER BY created_at, id` 推断上一题。Attempt、最近指针、轮换状态与
+World 状态在同一 Learner 行锁和事务内更新。V24 不回填：升级前历史只有唯一最大时间记录时
+兼容使用；最大秒内并列时视为顺序未知。V23 已执行的开发库直接顺序升级 V24，不修改 V23
+checksum；Learner 或所指 Attempt 删除时指针级联清理。
 
 正式训练支持独立服务端动作“我没思路”：objective 与 solution 都直接 graded wrong，
 submitted answer 保存 JSON `null`，正常写 Wrong Book、Question Mastery 与 Evidence，并推进
