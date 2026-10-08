@@ -83,7 +83,16 @@ public class RandomPracticeSelector {
                 draw.drawReason(), choice.requestedPool()));
     }
 
-    /** Attempt 已成功写入后，由调用方在同一事务内消费本次轮换槽。 */
+    /**
+     * Attempt 已成功写入后，由调用方在同一事务内先记录严格的最近指针，
+     * 再按本次 selection 是否属于触发事件决定是否消费池轮换槽。
+     */
+    public void recordPersistedAttempt(String learnerId, String attemptId, Selection selection) {
+        store.recordLastRandomAttempt(learnerId, attemptId);
+        recordPoolRotation(learnerId, selection);
+    }
+
+    /** 只更新 ALL / WRONG 池槽；供不创建真实 Attempt 的 selector 单元集成测试使用。 */
     public void recordPoolRotation(String learnerId, Selection selection) {
         if (selection != null && selection.consumesPoolRotation()) {
             store.recordRequestedKnowledgePool(learnerId, selection.requestedPool());

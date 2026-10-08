@@ -584,9 +584,11 @@ public class GameActionService {
                 full.path("gradingMode").asText("auto"), target.id(),
                 remediation ? "training" : "normal", question.difficulty(),
                 null, null, drawMode, drawReason);
-        // 只有 first-of-day / previous-correct 的完全随机 KP 触发带 requestedPool。
-        // Attempt 成功后才写轮换；后续任何异常会由外层事务将两者一起回滚。
-        if (world != null) randomSelector.recordPoolRotation(world.learnerId(), randomSelection);
+        // Attempt 成功后记录严格的最近 RANDOM 指针；只有 first-of-day / previous-correct
+        // 的完全随机 KP 触发才额外消费 requestedPool。后续异常由外层事务将三者一起回滚。
+        if (world != null) {
+            randomSelector.recordPersistedAttempt(world.learnerId(), attemptId, randomSelection);
+        }
     }
 
     /**

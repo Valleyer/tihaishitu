@@ -28,8 +28,8 @@ import java.util.Set;
  * WRONG     复用 LearnerPracticeStore 的 active 错题口径
  * </pre>
  *
- * <p>KP 内 lane 与 Chapter cursor 仍从既有事实推导；PR6 仅为 RANDOM 第一层
- * ALL / WRONG KP 池轮换持久化每个 Learner 的最小状态。</p>
+ * <p>KP 内 lane 与 Chapter cursor 仍从既有事实推导；PR6 为 RANDOM 第一层
+ * ALL / WRONG KP 池轮换和最近一次 RANDOM Attempt 指针持久化每个 Learner 的最小状态。</p>
  */
 @Repository
 public class PracticeSelectionStore {
@@ -101,16 +101,51 @@ public class PracticeSelectionStore {
 
     /**
      * Learner 最近一次 RANDOM 正式 Attempt 的 target KP 与 assessment。
-     * 旧 Attempt 没有 draw_mode，不会被读成 RANDOM。
+     * V24 指针是升级后唯一的严格顺序事实；旧 Attempt 没有指针时，只兼容读取
+     * created_at 最大且唯一的一条。最大时间同秒并列时顺序不可恢复，返回空而不按 UUID 猜测。
      */
     public Optional<LastRandomAttempt> lastRandomAttempt(String learnerId) {
         if (learnerId == null) return Optional.empty();
-        return jdbc.query("""
-                SELECT target_knowledge_point_id, assessment FROM study_attempt
-                 WHERE learner_id = ? AND draw_mode = 'random'
-                 ORDER BY created_at DESC, id DESC LIMIT 1
-                """, (row, index) -> new LastRandomAttempt(row.getString(1), row.getString(2)), learnerId)
-                .stream().findFirst();
+        List<LastRandomAttempt> current = jdbc.query("""
+                SELECT attempt.target_knowledge_point_id, attempt.assessment
+                  FROM learner_random_attempt_cursor cursor
+                  JOIN study_attempt attempt ON attempt.id = cursor.last_random_attempt_id
+                 WHERE cursor.learner_id = ? AND attempt.learner_id = cursor.learner_id
+                   AND attempt.draw_mode = 'random'
+                """, (row, index) -> new LastRandomAttempt(row.getString(1), row.getString(2)), learnerId);
+        if (!current.isEmpty()) return Optional.of(current.get(0));
+
+        List<LastRandomAttempt> legacy = jdbc.query("""
+                SELECT attempt.target_knowledge_point_id, attempt.assessment
+                  FROM study_attempt attempt
+                 WHERE attempt.learner_id = ? AND attempt.draw_mode = 'random'
+                   AND attempt.created_at = (
+                       SELECT MAX(candidate.created_at)
+                         FROM study_attempt candidate
+                        WHERE candidate.learner_id = ? AND candidate.draw_mode = 'random'
+                   )
+                """, (row, index) -> new LastRandomAttempt(row.getString(1), row.getString(2)),
+                learnerId, learnerId);
+        return legacy.size() == 1 ? Optional.of(legacy.get(0)) : Optional.empty();
+    }
+
+    /**
+     * Attempt 创建成功后记录严格的最近 RANDOM 指针。调用方必须持有 Learner 行锁，
+     * 并与 Attempt、池轮换及 World 状态写入处于同一事务。
+     */
+    public void recordLastRandomAttempt(String learnerId, String attemptId) {
+        int changed = jdbc.update("""
+                UPDATE learner_random_attempt_cursor
+                   SET last_random_attempt_id = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE learner_id = ?
+                """, attemptId, learnerId);
+        if (changed == 0) {
+            jdbc.update("""
+                    INSERT INTO learner_random_attempt_cursor(
+                        learner_id, last_random_attempt_id, updated_at)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    """, learnerId, attemptId);
+        }
     }
 
     /** 没有 V23 状态行的既有 Learner 从 ALL 开始；旧 Attempt 不参与猜测或回填。 */

@@ -1289,6 +1289,13 @@ study_attempt.draw_reason VARCHAR(24) NULL
 ALL 开始；轮到 WRONG 即使实际回退 ALL 仍记录 WRONG。现代 World 发题先锁 Learner，
 Attempt 创建与轮换更新处于同一事务，失败一并回滚；Learner 删除时状态级联删除。
 
+`V24__random_attempt_cursor.sql` 新增 `learner_random_attempt_cursor`，明确保存每个 Learner
+最近一次现代 RANDOM Attempt ID。`study_attempt.created_at` 历史上只有秒级精度，UUID 又不代表
+插入顺序，因此不得用 `ORDER BY created_at, id` 推断上一题。Attempt、最近指针、轮换状态与
+World 状态在同一 Learner 行锁和事务内更新。V24 不回填：升级前历史只有唯一最大时间记录时
+兼容使用；最大秒内并列时视为顺序未知。V23 已执行的开发库直接顺序升级 V24，不修改 V23
+checksum；Learner 或所指 Attempt 删除时指针级联清理。
+
 正式训练支持独立服务端动作“我没思路”：objective 与 solution 都直接 graded wrong，
 submitted answer 保存 JSON `null`，正常写 Wrong Book、Question Mastery 与 Evidence，并推进
 一个正式题 slot；不得伪造选项，也不得进入 Diagnosis / Remedial。

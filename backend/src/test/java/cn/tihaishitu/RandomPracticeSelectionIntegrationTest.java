@@ -160,6 +160,78 @@ class RandomPracticeSelectionIntegrationTest {
                 .isEqualTo(k2);
     }
 
+    @Test void persistedCursorDeterminesLatestAttemptWhenTimestampTiesAndUuidOrderIsReversed() {
+        String book = book("RANDOM-LATEST-CURSOR");
+        String k1 = point(book, "LATEST-K1", 0), k2 = point(book, "LATEST-K2", 1);
+        String oldQuestion = question(k1, "old"), latestQuestion = question(k2, "latest");
+        question(k1, "remaining-k1");
+        question(k2, "remaining-k2");
+        String learner = learner("random-latest-cursor");
+        String oldId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+        String latestId = "00000000-0000-0000-0000-000000000001";
+
+        // 同一秒先写 A 后写 B，但 A.id 字典序更大；UUID 顺序与真实发题顺序故意相反。
+        attempt(oldId, learner, k1, oldQuestion, "graded", "wrong",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt(latestId, learner, k2, latestQuestion, "graded", "correct",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        selections.recordLastRandomAttempt(learner, latestId);
+
+        assertThat(selections.lastRandomAttempt(learner)).contains(
+                new PracticeSelectionStore.LastRandomAttempt(k2, "correct"));
+        // 最新 B=correct，所以必须排除 B 的 K2、切到 K1，并消费一次池轮换；
+        // 旧 UUID 排序会误读 A=wrong，虽然也留在 K1，却不会消费轮换。
+        var next = selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow();
+        assertThat(next.targetKnowledgePointId()).isEqualTo(k1);
+        assertThat(next.requestedPool()).isEqualTo(PracticeSelectionStore.RequestedKnowledgePool.ALL);
+    }
+
+    @Test void activeLatestAttemptWithTiedTimestampDoesNotFallBackToOlderAssessment() {
+        assertTiedUngradedLatestAttemptWins("active");
+    }
+
+    @Test void revealedLatestAttemptWithTiedTimestampDoesNotFallBackToOlderAssessment() {
+        assertTiedUngradedLatestAttemptWins("revealed");
+    }
+
+    private void assertTiedUngradedLatestAttemptWins(String status) {
+        String book = book("RANDOM-LATEST-" + status);
+        String k1 = point(book, "LATEST-NULL-K1", 0), k2 = point(book, "LATEST-NULL-K2", 1);
+        String oldQuestion = question(k1, "old"), latestQuestion = question(k2, "latest");
+        question(k1, "remaining-k1");
+        question(k2, "remaining-k2");
+        String learner = learner("random-latest-" + status);
+        String oldId = "active".equals(status)
+                ? "ffffffff-ffff-ffff-ffff-fffffffffff0"
+                : "ffffffff-ffff-ffff-ffff-fffffffffff1";
+        String latestId = "active".equals(status)
+                ? "00000000-0000-0000-0000-000000000002"
+                : "00000000-0000-0000-0000-000000000004";
+        attempt(oldId, learner, k1, oldQuestion, "graded", "correct",
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt(latestId, learner, k2, latestQuestion, status, null,
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        selections.recordLastRandomAttempt(learner, latestId);
+
+        assertThat(selections.lastRandomAttempt(learner)).contains(
+                new PracticeSelectionStore.LastRandomAttempt(k2, null));
+        // assessment=null 必须走未判分分支，不能回退读取旧 A=correct，也不消费新池轮换。
+        assertThat(selector.select(learner, Set.of(k1, k2), Set.of()).orElseThrow().requestedPool()).isNull();
+    }
+
+    @Test void ambiguousLegacyTimestampTieIsNotGuessedFromUuidOrder() {
+        String book = book("RANDOM-LEGACY-TIE");
+        String k1 = point(book, "LEGACY-TIE-K1", 0), k2 = point(book, "LEGACY-TIE-K2", 1);
+        String learner = learner("random-legacy-tie");
+        attempt("ffffffff-ffff-ffff-ffff-ffffffffffe0", learner, k1, question(k1, "old"),
+                "graded", "wrong", "random", PracticeDrawReason.OLDEST, TODAY);
+        attempt("00000000-0000-0000-0000-000000000003", learner, k2, question(k2, "latest"),
+                "graded", "correct", "random", PracticeDrawReason.OLDEST, TODAY);
+
+        // 升级前 schema 没有真实先后事实；安全地返回未知，不再让随机 UUID 替系统作决定。
+        assertThat(selections.lastRandomAttempt(learner)).isEmpty();
+    }
+
     @Test void poolRotationStartsWithAllThenWrongAndWrongOrPartialDoesNotConsume() {
         String book = book("RANDOM-POOL-ROTATION");
         String k1 = point(book, "POOL-K1", 0), k2 = point(book, "POOL-K2", 1);
@@ -280,12 +352,22 @@ class RandomPracticeSelectionIntegrationTest {
 
     @Test void failedTransactionRollsBackRotationConsumption() {
         String learner = learner("random-pool-rollback");
+        String book = book("RANDOM-CURSOR-ROLLBACK");
+        String point = point(book, "ROLLBACK-KP", 0);
+        String question = question(point, "rollback");
+        String attemptId = UUID.randomUUID().toString();
+        attempt(attemptId, learner, point, question, "active", null,
+                "random", PracticeDrawReason.OLDEST, TODAY);
+        var selection = new RandomPracticeSelector.Selection(question, point,
+                PracticeDrawReason.OLDEST, PracticeSelectionStore.RequestedKnowledgePool.ALL);
         assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
             learners.lockForUpdate(learner);
-            selections.recordRequestedKnowledgePool(learner, PracticeSelectionStore.RequestedKnowledgePool.ALL);
-            throw new IllegalStateException("simulate attempt persistence failure");
+            selector.recordPersistedAttempt(learner, attemptId, selection);
+            throw new IllegalStateException("simulate world persistence failure");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation WHERE learner_id=?",
+                Integer.class, learner)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learner_random_attempt_cursor WHERE learner_id=?",
                 Integer.class, learner)).isZero();
     }
 
@@ -518,6 +600,8 @@ class RandomPracticeSelectionIntegrationTest {
                 .isEqualTo(PracticeDrawReason.OLDEST);
         assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
                 Long.class, learner)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT last_random_attempt_id FROM learner_random_attempt_cursor WHERE learner_id=?",
+                String.class, learner)).isEqualTo(firstAttempt);
 
         // 答错也推进一个正式题 slot：不再 training、不再 retry 父题、不再建诊断会话。
         game = answer(cookie, game, false);
@@ -543,11 +627,14 @@ class RandomPracticeSelectionIntegrationTest {
 
         game = next(cookie, game);
         String thirdQuestion = game.path("attempt").path("question").path("id").asText();
+        String thirdAttempt = game.path("attempt").path("id").asText();
         assertThat(Set.of(firstQuestion, secondQuestion, thirdQuestion)).isEqualTo(questions);
         assertThat(jdbc.queryForObject("SELECT last_requested_pool FROM learner_random_kp_rotation WHERE learner_id=?",
                 String.class, learner)).isEqualTo("wrong");
         assertThat(jdbc.queryForObject("SELECT selection_count FROM learner_random_kp_rotation WHERE learner_id=?",
                 Long.class, learner)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT last_random_attempt_id FROM learner_random_attempt_cursor WHERE learner_id=?",
+                String.class, learner)).isEqualTo(thirdAttempt);
         game = answer(cookie, game, true);
 
         run = game.path("adventure").path("run");
@@ -755,12 +842,19 @@ class RandomPracticeSelectionIntegrationTest {
 
     private void attempt(String learner, String point, String question, String status, String assessment,
                          String drawMode, String drawReason, Instant createdAt) {
+        attempt(UUID.randomUUID().toString(), learner, point, question, status, assessment,
+                drawMode, drawReason, createdAt);
+    }
+
+    private void attempt(String attemptId, String learner, String point, String question,
+                         String status, String assessment, String drawMode, String drawReason,
+                         Instant createdAt) {
         jdbc.update("""
                 INSERT INTO study_attempt(id,learner_id,world_id,question_id,question_snapshot_json,standard_answer_json,
                     status,grading_mode,grading_source,assessment,target_knowledge_point_id,evidence_mode,
                     question_difficulty,answered_at,draw_mode,draw_reason,created_at)
                 VALUES (?,?,'ancient-official',?,'{}','true',?,'auto',?,?,?,'normal',2,?,?,?,?)
-                """, UUID.randomUUID().toString(), learner, question, status,
+                """, attemptId, learner, question, status,
                 "graded".equals(status) ? ("self".equals(assessment) ? "self" : "automatic") : null,
                 assessment, point,
                 "graded".equals(status) ? java.sql.Timestamp.from(createdAt) : null,

@@ -302,6 +302,22 @@ class FlywayMigrationIntegrationTest {
         assertThat(old.queryForObject("SELECT COUNT(*) FROM learner_random_kp_rotation", Integer.class)).isZero();
     }
 
+    @Test
+    void v24AddsRandomAttemptCursorWithoutChangingAlreadyAppliedV23() {
+        String url = migrationUrl("v23-random-attempt-cursor");
+        Flyway.configure().dataSource(url, "sa", "")
+                .target(MigrationVersion.fromVersion("23")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        assertThat(tableExists(old, "learner_random_kp_rotation")).isTrue();
+        assertThat(tableExists(old, "learner_random_attempt_cursor")).isFalse();
+
+        Flyway.configure().dataSource(url, "sa", "").load().migrate();
+
+        assertThat(tableExists(old, "learner_random_kp_rotation")).isTrue();
+        assertThat(tableExists(old, "learner_random_attempt_cursor")).isTrue();
+        assertThat(old.queryForObject("SELECT COUNT(*) FROM learner_random_attempt_cursor", Integer.class)).isZero();
+    }
+
     private String migrationUrl(String name) {
         return "jdbc:h2:mem:" + name + "-" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
@@ -343,7 +359,11 @@ class FlywayMigrationIntegrationTest {
     }
 
     private boolean tableExists(String name) {
-        Integer count = jdbc.queryForObject(
+        return tableExists(jdbc, name);
+    }
+
+    private boolean tableExists(JdbcTemplate template, String name) {
+        Integer count = template.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = ?",
                 Integer.class,
                 name.toLowerCase());

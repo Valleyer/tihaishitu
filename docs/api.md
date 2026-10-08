@@ -220,7 +220,7 @@ selected Book(s)
 
 RANDOM 是 KP-first：先选 target KnowledgePoint，再在该 KP 内按 oldest / wrong lane 选题；该 KP 就是本次 attempt 冻结的 target，不再重新解析。仍然保留的按题目 ID 发题路径（Book-level 题池 API、`wrong_review` 等）继续按“scope 内 core 优先、其次 auxiliary”稳定解析 target。一次 attempt 不会给该题的全部 core + auxiliary 同时加分。
 
-正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除；RANDOM 另加“同一 Asia/Shanghai 业务日同一 Question 最多出一次”（`study_attempt.draw_mode='random'` 为事实来源，`active` / `revealed` / `graded` 都占额度）。当天首次 RANDOM 发题与上一 RANDOM 正确后的 KP 切换，按 Learner 跨天持久交替使用 ALL / active 错题关联 KP 池；WRONG 池回退 ALL 仍消费该槽，wrong / partial、assessment=null 与非 RANDOM 模式不消费。普通正式题答错后**不再**补救训练、不再 retry 同一道题，也不再创建诊断会话。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
+正式题发题条件只有：published + `parent_question_id IS NULL` + 四个正式题型 + 当前上下文范围 + 本 run `seenQuestionIds` 排除；RANDOM 另加“同一 Asia/Shanghai 业务日同一 Question 最多出一次”（`study_attempt.draw_mode='random'` 为事实来源，`active` / `revealed` / `graded` 都占额度）。当天首次 RANDOM 发题与上一 RANDOM 正确后的 KP 切换，按 Learner 跨天持久交替使用 ALL / active 错题关联 KP 池；WRONG 池回退 ALL 仍消费该槽，wrong / partial、assessment=null 与非 RANDOM 模式不消费。上一 RANDOM Attempt 由服务端持久指针确定，不用秒级 `created_at` 并列后的 UUID 排序；升级前最大秒并列且无指针时按上一题未知处理。普通正式题答错后**不再**补救训练、不再 retry 同一道题，也不再创建诊断会话。KnowledgePoint 专项仍限定当前 KP，Chapter Practice 仍限定当前 Book + Chapter，Wrong Drill 仍限定 active 错题。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 
 难度仍作为软提示保留并随 `QuestionContext.preferredDifficulty` 传递：未开始或有效掌握度低于 40 时为 2，40–70 为 3，70–100 为 4，100 为 5；`standard` 使用 `min(targetDifficulty, cap)`，`gentle` 再下调一级但不低于 1。它不阻止任何正式题被抽中。只有保留的 TRAINING 模式（Remedial / 诊断补强流程，普通正式训练已不再进入）仍优先 `difficulty <= 2` 的低难候选，没有低难题时取合法候选中的最低难度。
 
@@ -469,7 +469,7 @@ Learner + Attempt 重复提交返回 409。`GET /manage/question-reports` 与
 World 对应动作是 `POST /worlds/ancient-official/answers/no-idea`，请求只含
 `attemptId` / `questionId`，语义与 Hub 完全一致。
 
-V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。V21 为 `study_attempt` 增加 `draw_mode` / `draw_reason` 与索引 `(learner_id, draw_mode, created_at, question_id)`。V23 新增 `learner_random_kp_rotation`，按 Learner 事务性保存 RANDOM 第一层请求池与消费次数；旧数据不回填。
+V11 新增 `learner_account_role`，把旧 `app_user` 按 username 并入已有或新建 Learner，并为历史 audit/merge 增加 additive `actor_learner_id`。V12 新增 `learner_practice_session`、冻结范围的 `learner_practice_scope`、`study_attempt.practice_session_id`，并使 Diagnosis 支持 world 或 practice 两种互斥上下文。V21 为 `study_attempt` 增加 `draw_mode` / `draw_reason` 与索引 `(learner_id, draw_mode, created_at, question_id)`。V23 新增 `learner_random_kp_rotation`，按 Learner 事务性保存 RANDOM 第一层请求池与消费次数；V24 新增 `learner_random_attempt_cursor`，保存严格的最近 RANDOM Attempt 指针。两者都不回填旧 Attempt，已执行 V23 的开发库按正常 Flyway 顺序升级 V24。
 
 Knowledge drill 不保存 checkpoint、固定题数、score、pass 或 fail。Knowledge drill 与 Wrong drill 都是 Session 内随机且不重复，候选耗尽即本轮完成，新开 Session 重新洗牌。章节练习走固定的确定性题序（Chapter 内 KnowledgePoint `sort_order` → 稳定 Source identity → `exam_year` → `question_number` 自然排序 → `question_id`），跨 Session 持久 cursor，末尾 wrap。三者都只受 published 正式父题 + 上下文范围 + Session 内 seen 约束，今天已答对、Review 未到期或已掌握都不阻止再练，也不会因此返回“当前没有待练题”。完整策略见 [`question-practice-policy.md`](./question-practice-policy.md)。
 

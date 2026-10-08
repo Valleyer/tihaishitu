@@ -160,6 +160,12 @@ targetKnowledgePointId
 assessment
 ```
 
+“上一个”由 `learner_random_attempt_cursor.last_random_attempt_id` 明确保存，不按秒级
+`study_attempt.created_at` 并列后的随机 UUID 字典序推断。现代 World 在 Attempt 创建成功后、
+同一 Learner 行锁与事务内更新指针，因此跨活动、跨业务日和服务重启均稳定。升级前没有指针的
+历史数据仅在最大 `created_at` 唯一时兼容读取；若最大秒内存在多条 RANDOM Attempt，真实先后
+已不可恢复，按“上一题未知”处理，不擅自套用其中任一条 assessment。
+
 ```text
 上一题 correct
 → 优先从“除上一 target KP 外”的 eligible KP 中纯随机选一个
@@ -177,8 +183,8 @@ assessment
 
 wrong / partial 留原 KP、原 KP 无题后的旧兜底、assessment=null、CHAPTER / KNOWLEDGE /
 WRONG 与 Legacy `/games/**` 都不消费第一层池轮换。一次发题最多消费一次；Attempt 未成功
-创建或事务回滚不消费。现代 World 先锁 Learner，并在同一事务内创建 Attempt、更新轮换状态
-和保存 World 状态，因此同 Learner 并发不会双重消费，不同 Learner 互不影响。
+创建或事务回滚不消费。现代 World 先锁 Learner，并在同一事务内创建 Attempt、更新最近指针、
+更新轮换状态和保存 World 状态，因此同 Learner 并发不会双重消费，不同 Learner 互不影响。
 
 未作答的上一题仍然占用当天 Question quota，它不是“上一题的 grading 结果”，
 因此**不得**用更早一天或更早一题的结果替代它。
