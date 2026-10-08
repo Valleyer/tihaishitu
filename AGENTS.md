@@ -176,7 +176,7 @@ Agent 最终报告必须写清：
 2. `/docs/PROJECT_RULES.md`（跨 PR 长期规则的唯一主入口）
 3. `/README.md`（项目现状与上手方式）
 4. `/docs/api.md`（接口契约）
-5. 与当前任务直接相关的专题文档（如 `docs/development.md`、`docs/configuration-guide.md`、`docs/adventure-guide.md`、`docs/deployment.md`；**已有生产站点上线/迁移/回滚时必须优先读 `docs/production-release-runbook.md`**）
+5. 与当前任务直接相关的专题文档（如 `docs/development.md`、`docs/configuration-guide.md`、`docs/adventure-guide.md`、`docs/deployment.md`；**已有生产站点上线/迁移/回滚时必须优先读 `docs/production-release-runbook.md` 与 `docs/automated-release.md` 及 `scripts/deploy/` 中的正式脚本**）
 6. 当前代码实现
 
 `/docs/HANDOFF.md` 已不再是规则来源，只是指向归档材料的短说明。

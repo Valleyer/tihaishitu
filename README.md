@@ -102,6 +102,7 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 | 代码分工、状态流 | [开发说明](docs/development.md) |
 | Java 接口与低流量缓存 | [接口契约](docs/api.md) |
 | 后端实施进度 | [后端开发记录](docs/后端开发记录.md) |
+| **三步一键部署工具：Windows 构建 + Linux 部署** | [自动发布工具手册](docs/automated-release.md) / [批处理源码](scripts/deploy/build-release.bat) / [Linux 脚本源码](scripts/deploy/deploy-release.sh) |
 | **已上线京东云的日常升级 / 数据库迁移 / 回滚（先读）** | [生产发布与迁移操作手册](docs/production-release-runbook.md) |
 | 生产部署、数据库迁移、发布与回滚 | [生产部署说明](docs/deployment.md) |
 | 本地背景与立绘 | [素材说明](docs/art-assets.md) |

@@ -1398,4 +1398,6 @@ Agent 最终报告必须写明实际跑了哪些最小测试、哪些 full tests
 
 生产站点**已有真实数据**时，版本升级首先阅读 [`production-release-runbook.md`](./production-release-runbook.md)，不能采用首次空库导入的“本地整库覆盖生产”流程。上线必须保留生产库的 `flyway_schema_history`，先做可恢复的结构+数据备份，依据最新代码中的 migration 顺序增量迁移；已冻结的 V1–V22 不得改写，新增 schema 只用 V23+；迁移失败应核查 MySQL 5.7 部分 DDL、失败 history 和原始日志，不能盲目 Flyway repair / 删除迁移记录。**数据库迁移后旧 JAR 可能不兼容新表结构，回滚必须同时评估数据库兼容性。**
 
+常规三步自动发布工具的长期来源为 [`automated-release.md`](./automated-release.md) 与仓库内 [Windows 构建脚本](../scripts/deploy/build-release.bat)、[Linux 部署脚本](../scripts/deploy/deploy-release.sh)。脚本更新必须与使用文档、风险/失败处理同步；合并代码不会自动更新已经复制到 `D:\Deploy` 或 `/usr/local/deploy` 的运行副本；不得将数据库密码、环境文件、数据库导出文件或发布二进制入库。自动发布仍需人工完成数据库备份与产物上传；有异常的 Flyway 状态必须停止并人工评估，不自动修复历史记录或回滚结构。
+
 首次空库安装与通用配置示例另见 [`deployment.md`](./deployment.md)。
