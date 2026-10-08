@@ -77,6 +77,20 @@ function mockPlatform(load?: (days?: 7 | 30 | 90) => LearnerProgress) {
   return { progressSpy, statistics };
 }
 
+/**
+ * 只取出某个窗口的 progress 请求。
+ *
+ * <p>`progress()` 与 `progress(7)` 在契约上同为 7 天窗口，因此按 `days ?? 7` 归一化。
+ * 断言窗口请求次数时必须用它，而不是 `toHaveBeenCalledTimes`：进度页空闲预取 30 / 90
+ * 是合法行为，其执行时机取决于测试调度，直接断言总调用数会 flaky。</p>
+ */
+function progressCallsFor(
+  spy: ReturnType<typeof mockPlatform>["progressSpy"],
+  days: 7 | 30 | 90,
+) {
+  return spy.mock.calls.filter(([requested]) => (requested ?? 7) === days);
+}
+
 beforeEach(() => {
   Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
   history.replaceState(null, "", "/progress");
@@ -256,7 +270,7 @@ describe("unified progress navigation", () => {
     expect(labels).not.toContain("统计");
   });
 
-  it("redirects /statistics to /progress with a single progress request", async () => {
+  it("redirects /statistics to /progress without duplicating the 7-day progress request", async () => {
     const { progressSpy } = mockPlatform();
     history.replaceState(null, "", "/statistics");
     render(<AuthenticatedPlatform />);
@@ -264,8 +278,10 @@ describe("unified progress navigation", () => {
     expect(await screen.findByRole("heading", { name: "学习进度" })).toBeTruthy();
     expect(location.pathname).toBe("/progress");
     expect(isHubPath("/statistics")).toBe(true);
-    // 同一 scope + 同一窗口只允许一次有效请求：预热与页面挂载必须 dedupe。
-    expect(progressSpy).toHaveBeenCalledTimes(1);
+    // 只约束 7 天窗口：同一 scope 下 7 天请求必须恰好 1 次。
+    // 进度页空闲预取 30 / 90 是合法行为，其执行时机取决于测试调度时序，
+    // 因此不能断言 progress() 的总调用数（否则会 flaky）。
+    expect(progressCallsFor(progressSpy, 7)).toHaveLength(1);
     expect(progressSpy).toHaveBeenCalledWith(7);
   });
 
@@ -384,8 +400,8 @@ describe("ProgressPage cache behaviour", () => {
     const { progressSpy } = mockPlatform();
     await loadProgress(bootstrap, 7);
     progressSpy.mockClear();
-    /** 只关心 7 天窗口：挂载后的空闲预热会另行取 30 / 90，不属于重复请求。 */
-    const sevenDayCalls = () => progressSpy.mock.calls.filter(call => call[0] === 7 || call[0] === undefined).length;
+    // 只关心 7 天窗口：挂载后的空闲预热会另行取 30 / 90，不属于重复请求。
+    const sevenDayCalls = () => progressCallsFor(progressSpy, 7).length;
 
     const first = render(<ProgressPage data={bootstrap} />);
     await new Promise(resolve => setTimeout(resolve, 0));
