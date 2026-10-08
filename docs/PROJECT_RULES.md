@@ -1396,4 +1396,6 @@ GitHub Actions 承担；除非用户明确要求 full test，否则默认采用�
 Agent 最终报告必须写明实际跑了哪些最小测试、哪些 full tests 未运行，以及
 为什么本次最小验证足以覆盖改动范围。
 
-生产部署、数据库迁移与发布 / 回滚流程见 [`docs/deployment.md`](./deployment.md)。
+生产站点**已有真实数据**时，版本升级首先阅读 [`production-release-runbook.md`](./production-release-runbook.md)，不能采用首次空库导入的“本地整库覆盖生产”流程。上线必须保留生产库的 `flyway_schema_history`，先做可恢复的结构+数据备份，依据最新代码中的 migration 顺序增量迁移；已冻结的 V1–V22 不得改写，新增 schema 只用 V23+；迁移失败应核查 MySQL 5.7 部分 DDL、失败 history 和原始日志，不能盲目 Flyway repair / 删除迁移记录。**数据库迁移后旧 JAR 可能不兼容新表结构，回滚必须同时评估数据库兼容性。**
+
+首次空库安装与通用配置示例另见 [`deployment.md`](./deployment.md)。

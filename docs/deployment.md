@@ -1,5 +1,6 @@
 # 万境书院 · 生产部署说明
 
+> ⚠️ **已有线上站点的版本升级**：请先阅读 **[京东云现役生产发布与迁移操作手册](./production-release-runbook.md)**。本文主要保留“首次空库部署”和通用配置模板；其中 `/opt/wanjingqiuzhi`、`127.0.0.1:12345` 属于示例值，**2026-10-08 实际生产环境是 `/usr/local/wanjingqiuzhi`、Nginx Docker → `172.17.0.1:12345`**。已有生产数据时**禁止按首次部署章节重新整库导入**；审计脚本中部分 `V18` 检查已过时。\n\n
 本文件描述把万境书院部署到 Linux 服务器的完整流程：Nginx 托管前端静态文件，
 `/api` 反向代理到本机 Spring Boot，Spring Boot 连接 MySQL 5.7。
 
@@ -139,6 +140,9 @@ FLUSH PRIVILEGES;
 ---
 
 ## 5. 数据库迁移
+
+> **本节 5.1–5.6 仅用于首次迁往服务器的空库导入。** 已上线生产库从 V18→V22 或以后 V23+ 升级，须按 [生产发布与迁移操作手册](./production-release-runbook.md) 在原库上通过 Flyway 向前迁移，不得覆盖生产库。旧 `scripts/predeploy-db-audit.sql`、`scripts/verify-prod-db.sql` 含固定 V18 验收断言，不能直接作为当前 V22 生产升级验收标准。
+
 
 ### 5.1 推荐方案：整库 dump + 导入
 
@@ -389,68 +393,15 @@ KnowledgePoint 专项
 
 ---
 
-## 10. 发布 / 回滚
+## 10. 发布 / 回滚（已上线环境）
 
-### 发布
+**现役京东云环境的唯一优先操作流程**：参见
+[《京东云生产发布与数据库迁移操作手册》](./production-release-runbook.md)，其中包含当前 Docker / systemd / Nginx 真实路径、Windows 构建、Navicat 备份、`\\cp -a`、Flyway 权限与 V18→V22 故障处理。
 
-```bash
-# 1. 备份当前生产库（每次发布前必做）
-mysqldump -h 127.0.0.1 -P 3306 -u <PROD_USER> -p \
-  --single-transaction --routines --triggers --events \
-  --default-character-set=utf8mb4 --set-gtid-purged=OFF \
-  tihaishitu > /opt/wanjingqiuzhi/backup/tihaishitu-$(date +%F-%H%M).sql
-
-# 2. 上传新 jar 到 releases，切换软链接
-sudo cp tihaishitu-backend-<NEW>.jar /opt/wanjingqiuzhi/releases/
-sudo ln -sfn /opt/wanjingqiuzhi/releases/tihaishitu-backend-<NEW>.jar \
-  /opt/wanjingqiuzhi/backend/tihaishitu-backend.jar
-
-# 3. 发布前端
-sudo rsync -a --delete frontend/dist/ /opt/wanjingqiuzhi/frontend/
-
-# 4. 重启后端
-sudo systemctl restart wanjingqiuzhi
-sudo journalctl -u wanjingqiuzhi -n 100 --no-pager
-
-# 5. 健康检查
-curl -fsS http://127.0.0.1:12345/actuator/health
-```
-
-发布注意：
-
-- 新版本如果带 **V19+** migration，Flyway 会在启动时自动执行；执行前务必已有
-  第 1 步的库备份，且确认 migration 兼容 MySQL 5.7；
-- Flyway 配置为 `validate-on-migrate: true` + `clean-disabled: true`，
-  不会自动清库；hash 不匹配时启动失败，这是预期保护；
-- 前端 `rsync --delete` 会清理旧构建产物，请确认 `frontend/dist` 是本机刚构建的版本。
-
-### 回滚
-
-```bash
-# 1. 切回上一个 jar
-sudo ln -sfn /opt/wanjingqiuzhi/releases/tihaishitu-backend-<OLD>.jar \
-  /opt/wanjingqiuzhi/backend/tihaishitu-backend.jar
-sudo systemctl restart wanjingqiuzhi
-
-# 2. 前端回滚：把上一版 dist 重新 rsync 到 /opt/wanjingqiuzhi/frontend
-```
-
-数据库回滚原则：
-
-- 若本次发布**没有**新 migration：直接回滚 jar + 前端即可，不动数据库；
-- 若本次发布**执行了** V19+ migration：Flyway 没有自动 down migration。
-  回滚需要人工评估，必要时用发布前的 dump 恢复到临时库后比对，**不要**在生产库上
-  手写 `DROP` / `ALTER` 反向脚本；
-- 任何数据库层面的回滚都属于高危操作，必须先在备份副本上演练并取得用户明确批准。
-
-### 备份保留
-
-```text
-/opt/wanjingqiuzhi/backup/
-  tihaishitu-<date>-<time>.sql
-```
-
-建议至少保留最近 7 次发布备份，并定期验证备份可导入到临时库。
+- 常规更新：备份 → 构建 → SHA-256 校验 → 先后端健康后前端 → 人工验收。
+- 有新 Flyway：先核实迁移 SQL/Java、备份及账号 DDL 权限；禁止直接替换为旧 JAR 回滚新 schema。
+- 本文前面以 `/opt` / `127.0.0.1` 为示例的**首次部署配置**，不应直接用于既有京东云生产实例。
+- 线上数据已存在时，绝不执行“把本地整库重新导入生产”的初始化步骤。
 
 ---
 
@@ -461,6 +412,6 @@ sudo systemctl restart wanjingqiuzhi
 | 页面能开，接口 502 | 后端未启动或端口不对 | `systemctl status wanjingqiuzhi`，`ss -lntp \| grep 12345` |
 | 登录后刷新掉登录态 | 前端 API 用了绝对地址导致跨站 | 确认 `VITE_API_BASE_URL=/api/v1` 并重新构建 |
 | `Unknown table 'COLUMN_STATISTICS'` | 8.0 客户端导出到 5.7 | mysqldump 加 `--column-statistics=0` |
-| 启动报 Flyway migration 冲突 | 导入时漏了 `flyway_schema_history` | 重新整库导入，不要只导业务表 |
+| 启动报 Flyway migration 冲突 | 可能是首次导入缺失 history、失败迁移记录、权限不足或半成品 DDL | 按[运维手册](./production-release-runbook.md)读取首次报错并检查 `flyway_schema_history` 与表结构；**已上线库禁止盲目整库重导** |
 | 启动报 legacy 表不存在 | 手工删过 legacy 表 | 从 dump 恢复这些表；本轮不要删表 |
 | `APP_ADMIN_KEY` 未生效 | 未配置或为空格 | 配置至少 24 位随机串并重启 |
