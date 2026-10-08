@@ -43,6 +43,8 @@ const CHAPTER_TINTS: [string, string][] = [
   ["#e8efff", "#2f5bd0"], ["#efeaff", "#5b3fd0"], ["#e4f6ec", "#17794a"],
   ["#fdf3dd", "#9a6a06"], ["#fdeaf1", "#b03a68"],
 ];
+/** 章节一次最多显示 9 个（桌面 3 行 × 3 列）；纯前端本地分页。 */
+const CHAPTER_PAGE_SIZE = 9;
 
 /**
  * 进度条已完成宽度：夹在 0–100%。
@@ -111,7 +113,7 @@ function Shell({ data, children }: { data: HubBootstrap; children: React.ReactNo
   return <div className="learning-hub">
     <header className="hub-header"><div className="hub-header-inner"><HubLink className="hub-brand" href="/"><img src="/brand-logo.png" alt="" />万境书院</HubLink>
       <nav aria-label="主要导航">{nav.map(([label, href]) => <HubLink className={active(href) ? "active" : ""} href={href} key={href}>{label}</HubLink>)}</nav>
-      <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account">{data.learner.displayName}</HubLink></div></div>
+      <div className="hub-user">{data.canManage && <HubLink className="hub-manage-link" href="/manage">管理后台</HubLink>}<HubLink className={active("/account") ? "hub-account active" : "hub-account"} href="/account"><span className="hub-account-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8.6" r="3.6" /><path d="M5 20c0-3.4 3.1-5.4 7-5.4s7 2 7 5.4" /></svg></span><span>{data.learner.displayName}</span></HubLink></div></div>
     </header>
     {children}
   </div>;
@@ -205,6 +207,8 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   const [progress,setProgress]=useState<LearnerProgress|null>();
   const [recent,setRecent]=useState<RecentChapter|null>();
   const [bookId, setBookId] = useState(""); const [chapterId, setChapterId] = useState(""); const [message, setMessage] = useState("");
+  /** 章节本地分页：只对已加载的 visibleChapters 做 slice，不新增请求、不写 URL、不持久化。 */
+  const [chapterPage, setChapterPage] = useState(0);
   useEffect(() => { Promise.all(data.studyProfile.selectedBookIds.map(id => platformApi.book(id))).then(setDetails).catch(e => setMessage(e.message)); platformApi.wrongQuestions().then(items => setWrongCount(items.length)); platformApi.progress().then(setProgress).catch(()=>setProgress(null)); platformApi.recentChapter().then(setRecent).catch(()=>setRecent(null)); }, [data.studyProfile.selectedBookIds]);
   const scopedBooks=data.bankManifest.filter(item=>profile.selectedBookIds.includes(item.id));
   const save=async()=>{try{const updated=await platformApi.updateProfile(profile,selected,profile.focusedKnowledgePointIds);setProfile(updated);setSelected(updated.selectedBookIds);if(bookId&&!updated.selectedBookIds.includes(bookId)){setBookId("");setChapterId("")}setMessage("学习范围已保存");await reload()}catch(reason){setMessage((reason as Error).message)}};
@@ -229,8 +233,12 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
   const browseBook=scopedBooks.find(item=>item.id===bookId);
   const browseDetail=details.find(item=>item.id===bookId);
   const visibleChapters=bookId&&browseDetail?flattenChapters(browseDetail.chapters):[];
+  const chapterPageCount=Math.max(1,Math.ceil(visibleChapters.length/CHAPTER_PAGE_SIZE));
+  const pagedChapters=visibleChapters.slice(chapterPage*CHAPTER_PAGE_SIZE,(chapterPage+1)*CHAPTER_PAGE_SIZE);
   const chapter=browseDetail?.chapters.find(item=>item.id===chapterId);
   const startBookId=browseBook?.id;
+  /** 翻页：清空已选章节，避免上一页的不可见章节仍显示「开始章节练习」。 */
+  const goChapterPage=(nextPage:number)=>{setChapterPage(nextPage);setChapterId("")};
 
   const status=[{key:"started",value:progress?.summary.startedKnowledgePoints,label:"已开始知识点"},{key:"ready",value:progress?.summary.readyKnowledgePoints,label:"熟练掌握及以上"},{key:"wrong",value:progress?.summary.wrongQuestions,label:"错题本题目"},{key:"today",value:progress?.activity.metrics.todayEffectiveAttempts,label:"今日答题"}];
   return <Shell data={data}><main className="hub-main study-page">
@@ -246,13 +254,19 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
       </article>
       <article className="today-card"><div className="section-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg></span>学习状态</h2></div>{progress?<div className="today-metrics">{status.map(item=><p key={item.key}><StudyStatusIcon kind={item.key}/><span>{item.label}</span><b>{item.value}</b></p>)}</div>:<p className="muted">{progress===null?"暂时无法读取学习状态":"正在整理学习状态…"}</p>}</article></section>
     <section className="hub-panel study-drill" id="chapter-drill"><div className="panel-heading"><h2><span className="heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg></span>章节知识练习</h2></div>
-      <div className="book-cards">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("")}}>
+      <div className="book-cards">{scopedBooks.map(item=>{const trainable=item.knowledgePointCount>0;return <button type="button" disabled={!trainable} className={bookId===item.id?"book-cover-card selected":"book-cover-card"} key={item.id} onClick={()=>{setBookId(item.id);setChapterId("");setChapterPage(0)}}>
         <span className="book-cover-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 6.4C10.4 4.9 7.8 4.3 4 4.3v12.4c3.8 0 6.4.6 8 2.1 1.6-1.5 4.2-2.1 8-2.1V4.3c-3.8 0-6.4.6-8 2.1Z"/><path d="M12 6.4v12.4"/></svg></span>
         <b>{item.name}</b>
         <small>{item.knowledgePointCount} 个知识点</small>
         {!trainable?<em>暂无已发布正式题</em>:null}
       </button>})}</div>
-      {bookId&&visibleChapters.length>0&&<div className="chapter-cards">{visibleChapters.map((item,index)=>{const value=progress?.books.find(entry=>entry.bookId===bookId)?.chapters.find(entry=>entry.chapterId===item.id)?.masteryProgress??0;const tint=CHAPTER_TINTS[index%CHAPTER_TINTS.length];return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filledWidth(value)} as CSSProperties} key={item.id} onClick={()=>setChapterId(item.id)}><span className="chapter-number" aria-hidden="true"><StudyChapterIcon index={index}/></span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>})}</div>}
+      {bookId&&visibleChapters.length>0&&(visibleChapters.length>CHAPTER_PAGE_SIZE
+        ? <div className="chapter-browser">
+            <button type="button" className="chapter-page-arrow previous" aria-label="上一页章节" disabled={chapterPage===0} onClick={()=>goChapterPage(chapterPage-1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+            <ChapterCards chapters={pagedChapters} offset={chapterPage*CHAPTER_PAGE_SIZE} bookId={bookId} progress={progress} chapterId={chapterId} onSelect={setChapterId} />
+            <button type="button" className="chapter-page-arrow next" aria-label="下一页章节" disabled={chapterPage>=chapterPageCount-1} onClick={()=>goChapterPage(chapterPage+1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
+          </div>
+        : <ChapterCards chapters={pagedChapters} offset={0} bookId={bookId} progress={progress} chapterId={chapterId} onSelect={setChapterId} />)}
       {bookId&&chapterId&&chapter&&<div className="chapter-drill-action"><p>本章共 {chapter.knowledgePointCount} 个知识点，当前 {availableChapterPoints(chapter)} 个知识点可练。</p><button className="hub-primary" disabled={availableChapterPoints(chapter)===0} onClick={start}>{availableChapterPoints(chapter)>0?"开始章节练习":"暂无可练正式题"}</button></div>}
       {scopedBooks.length===0 && <p className="empty-state">尚未选择学习范围</p>}
     </section>
@@ -260,6 +274,23 @@ export function StudyPage({ data, reload }: { data: HubBootstrap; reload: () => 
     <details className="hub-panel study-settings"><summary>学习范围设置</summary><div className="choice-list">{data.bankManifest.map(item=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected(v=>v.includes(item.id)?v.filter(id=>id!==item.id):[...v,item.id])}/><span><b>{item.name}</b><small>{item.knowledgePointCount} 个知识点</small></span></label>)}</div><button className="hub-primary" onClick={save}>保存学习范围</button></details>
     {message&&<p className="hub-message">{message}</p>}
   </main></Shell>;
+}
+
+/**
+ * 章节卡片网格（纯展示）。
+ *
+ * <p>{@code offset} 是该页在整本书章节里的起始序号，仅用于让图标配色在翻页时保持稳定。</p>
+ */
+function ChapterCards({ chapters, offset, bookId, progress, chapterId, onSelect }: {
+  chapters: BookDetail["chapters"]; offset: number; bookId: string;
+  progress?: LearnerProgress | null; chapterId: string; onSelect: (id: string) => void;
+}) {
+  return <div className="chapter-cards">{chapters.map((item,index)=>{
+    const value=progress?.books.find(entry=>entry.bookId===bookId)?.chapters
+      .find(entry=>entry.chapterId===item.id)?.masteryProgress??0;
+    const tint=CHAPTER_TINTS[(offset+index)%CHAPTER_TINTS.length];
+    return <button className={chapterId===item.id?"chapter-card selected":"chapter-card"} style={{"--chapter-tint":tint[0],"--chapter-ink":tint[1],"--chapter-value":filledWidth(value)} as CSSProperties} key={item.id} onClick={()=>onSelect(item.id)}><span className="chapter-number" aria-hidden="true"><StudyChapterIcon index={offset+index}/></span><b>{item.name}</b><span className="chapter-bar" aria-hidden="true" /><span className="chapter-chevron" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></button>;
+  })}</div>;
 }
 
 /**

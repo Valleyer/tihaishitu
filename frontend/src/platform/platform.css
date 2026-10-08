@@ -159,21 +159,16 @@
 .learning-hub .hub-header nav a:hover,
 .learning-hub .hub-user a:hover { background: var(--zj-brand-soft); color: var(--zj-brand-hover); }
 
-.learning-hub .hub-header nav a.active { color: var(--zj-text); }
-.learning-hub .hub-header nav a.active::after {
-  content: "";
-  position: absolute;
-  left: 11px;
-  right: 11px;
-  bottom: -11px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--zj-brand);
-}
+/* 顶部导航当前模块：浅蓝紫胶囊选中态，不再使用底部横线。 */
+.learning-hub .hub-header nav a.active { background: var(--zj-brand-soft); color: var(--zj-brand-hover); font-weight: 650; border-radius: 9px; }
+.learning-hub .hub-header nav a.active::after { display: none; }
 
 .learning-hub .hub-user { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .learning-hub .hub-manage-link { font-size: 13px; }
-.learning-hub .hub-account { background: var(--zj-surface-soft); color: var(--zj-text) !important; }
+/* 右上角账号入口：浅色胶囊 + 浅紫圆形头像 + 用户名。 */
+.learning-hub .hub-account { display: inline-flex; align-items: center; gap: 7px; border-radius: 11px; background: var(--zj-surface-soft); padding: 5px 10px 5px 7px !important; color: var(--zj-text) !important; font-weight: 650 !important; }
+.learning-hub .hub-account-avatar { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: #ede9fe; color: #8b5cf6; }
+.learning-hub .hub-account-avatar > svg { width: 14px; height: 14px; }
 .learning-hub .hub-account.active { box-shadow: inset 0 0 0 1px var(--zj-brand); }
 
 .learning-hub .hub-main {
@@ -482,14 +477,15 @@
 
 /* 学习页 UI（PR7 精修）：顶部主卡片 + 数学插画、细绿色进度条、四格学习状态、书籍与章节卡片。 */
 .learning-hub .study-hero { position: relative; overflow: hidden; }
-.learning-hub .study-hero-body { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.learning-hub .study-hero-body { position: relative; z-index: 1; width: min(520px, 64%); display: flex; flex-direction: column; align-items: flex-start; }
 .learning-hub .study-hero .study-hero-book { margin: 0; font-size: clamp(24px, 3vw, 30px); }
-.learning-hub .study-hero .study-hero-chapter { margin: 4px 0 0; color: var(--zj-text-secondary); font-size: 15px; font-weight: 500; }
+/* 当前章节名：比主标题低对比、但更粗更大，靠颜色与字重表达柔和（不使用 blur）。 */
+.learning-hub .study-hero .study-hero-chapter { margin: 8px 0 0; color: #667085; font-size: 16px; font-weight: 600; line-height: 1.5; }
 /* 顶部数学插画：纯装饰，不承载信息。 */
 .learning-hub .study-hero-art { position: absolute; z-index: 0; top: 50%; right: -10px; width: min(340px, 56%); height: auto; transform: translateY(-50%); opacity: .8; pointer-events: none; }
 
 /* 细绿色进度条 + 内嵌百分比浮块。 */
-.learning-hub .study-progress { position: relative; width: 100%; max-width: 380px; height: 6px; margin: 20px 0 16px; border-radius: 999px; background: var(--zj-surface-soft); }
+.learning-hub .study-progress { position: relative; width: 100%; max-width: 500px; height: 9px; margin: 24px 0; border-radius: 999px; background: var(--zj-surface-soft); }
 .learning-hub .study-progress > span { display: block; height: 100%; max-width: 100%; border-radius: inherit; background: var(--zj-success); }
 /* 浮块自身居中于给定 left；left 由 JS 用 clamp 夹在轨道内，0% / 100% 都不会溢出。 */
 .learning-hub .study-progress > em { position: absolute; top: 50%; transform: translate(-50%, -50%); border-radius: 999px; background: var(--zj-success-soft); color: #067647; padding: 2px 8px; font-size: 11px; font-style: normal; font-weight: 650; line-height: 1.5; white-space: nowrap; }
@@ -515,7 +511,7 @@
 
 /* 书籍选择卡片：图标与书名同一行；选中态用左侧紫蓝竖线 + 边框高亮，不做大面积填色。
    旧 MVP 的 .book-cover-card 通用规则已合并到这里，避免同名前后再覆盖一次。 */
-.learning-hub .study-drill .book-cards { display: flex; flex-wrap: wrap; gap: 14px; }
+.learning-hub .study-drill .book-cards { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 24px; }
 .learning-hub .study-drill .book-cover-card {
   flex: 0 1 230px; min-height: 0; display: grid; align-content: center; justify-items: start;
   grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
@@ -534,8 +530,15 @@
 .learning-hub .study-drill .book-cover-card:disabled { cursor: default; opacity: 1; }
 .learning-hub .book-cover-icon > svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
-/* 章节卡片：桌面三列，数学字形色块 + 章节名 + 细进度条 + chevron。 */
+/* 章节卡片：桌面三列，教育类图标色块 + 章节名 + 细进度条 + chevron。 */
 .learning-hub .chapter-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+/* 超过 9 个章节时出现左右翻页箭头；≤9 个时不渲染该容器，不留空白占位。 */
+.learning-hub .chapter-browser { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; align-items: center; gap: 10px; }
+.learning-hub .chapter-browser .chapter-cards { margin-top: 20px; }
+.learning-hub .chapter-page-arrow { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--zj-text-tertiary); padding: 0; box-shadow: none; }
+.learning-hub .chapter-page-arrow > svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.learning-hub .chapter-page-arrow:hover:not(:disabled) { background: var(--zj-brand-soft); color: var(--zj-brand); }
+.learning-hub .chapter-page-arrow:disabled { opacity: .35; }
 .learning-hub .chapter-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 6px 12px; border: 1px solid var(--zj-border); border-radius: var(--zj-radius-md); background: var(--zj-surface); padding: 12px 14px; text-align: left; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
 .learning-hub .chapter-card:hover { border-color: var(--zj-border-strong); background: var(--zj-surface-hover); }
 .learning-hub .chapter-card.selected { border-color: var(--zj-brand); box-shadow: 0 0 0 2px var(--zj-brand-soft); }
@@ -586,7 +589,6 @@
   .learning-hub .hub-brand span { width: 17px; height: 17px; border-width: 4px; }
   .learning-hub .hub-header nav { order: 4; grid-column: 1 / -1; margin: 0 -16px; padding: 0 16px 9px; }
   .learning-hub .hub-header nav a { padding: 6px 10px; font-size: 13px; }
-  .learning-hub .hub-header nav a.active::after { bottom: -7px; }
   .learning-hub .hub-account { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
   .learning-hub .hub-main,
   .learning-hub .hub-main.narrow,
@@ -632,6 +634,12 @@
   .learning-hub .review-metrics { grid-template-columns: 1fr; }
   /* 学习页：375px 下章节单列、插画隐藏、学习状态改为单列横排避免标签折行。 */
   .learning-hub .chapter-cards { grid-template-columns: 1fr; }
+  /* 窄屏把翻页箭头移到章节区底部左右两端，避免挤压单列卡片。 */
+  .learning-hub .chapter-browser { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .learning-hub .chapter-browser .chapter-cards { grid-column: 1 / -1; grid-row: 1; }
+  .learning-hub .chapter-browser .chapter-page-arrow { grid-row: 2; }
+  .learning-hub .chapter-browser .chapter-page-arrow.previous { grid-column: 1; justify-self: start; }
+  .learning-hub .chapter-browser .chapter-page-arrow.next { grid-column: 2; justify-self: end; }
   .learning-hub .study-hero-art { display: none; }
   .learning-hub .study-progress { max-width: 100%; }
   .learning-hub .study-drill .book-cover-card { flex: 1 1 100%; }

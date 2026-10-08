@@ -5,17 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { platformApi, type BookDetail, type HubBootstrap, type LearnerProgress, type RecentChapter } from "./api";
 import { StudyPage } from "./PlatformApp";
 
-const chapters = [
-  { id: "c1", code: "c1", name: "函数与极限", description: "", sortOrder: 0, knowledgePointCount: 52,
-    trainableKnowledgePointCount: 52, publishedQuestionCount: 52, availableKnowledgePointCount: 40, knowledgePoints: [] },
-  { id: "c2", code: "c2", name: "导数与微分", description: "", sortOrder: 1, knowledgePointCount: 38,
-    trainableKnowledgePointCount: 38, publishedQuestionCount: 38, availableKnowledgePointCount: 30, knowledgePoints: [] },
-  { id: "c3", code: "c3", name: "微分中值定理与导数的应用", description: "", sortOrder: 2, knowledgePointCount: 41,
-    trainableKnowledgePointCount: 41, publishedQuestionCount: 41, availableKnowledgePointCount: 41, knowledgePoints: [] },
-  { id: "c4", code: "c4", name: "不定积分", description: "", sortOrder: 3, knowledgePointCount: 29,
-    trainableKnowledgePointCount: 29, publishedQuestionCount: 29, availableKnowledgePointCount: 29, knowledgePoints: [] },
-];
+/** 11 个章节：用于验证「每页最多 9 个」的纯前端本地分页。 */
+const manyChapters = Array.from({ length: 11 }, (_, index) => ({
+  id: `m${index + 1}`, code: `m${index + 1}`, name: `第 ${index + 1} 章`, description: "", sortOrder: index,
+  knowledgePointCount: 10 + index, trainableKnowledgePointCount: 10 + index, publishedQuestionCount: 10 + index,
+  availableKnowledgePointCount: 10 + index, knowledgePoints: [],
+}));
 
+/** 2 个章节：用于验证 ≤9 时不出现翻页箭头。 */
 const csChapters = [
   { id: "d1", code: "d1", name: "数据结构", description: "", sortOrder: 0, knowledgePointCount: 90,
     trainableKnowledgePointCount: 90, publishedQuestionCount: 90, availableKnowledgePointCount: 80, knowledgePoints: [] },
@@ -24,7 +21,7 @@ const csChapters = [
 ];
 
 const math: BookDetail = { id: "math1", name: "考研数学一", description: "", revision: 1,
-  knowledgePointCount: 340, totalKnowledgePointCount: 469, questionCount: 900, chapters };
+  knowledgePointCount: 340, totalKnowledgePointCount: 469, questionCount: 900, chapters: manyChapters };
 
 const cs: BookDetail = { id: "cs408", name: "考研408", description: "", revision: 1,
   knowledgePointCount: 399, totalKnowledgePointCount: 1018, questionCount: 700, chapters: csChapters };
@@ -51,9 +48,9 @@ const progress = {
   bands: { unstarted: 730, unmastered: 4, learning: 4, ready: 1, proficient: 1 },
   books: [{ bookId: "math1", name: "考研数学一", description: "", totalKnowledgePoints: 340, started: 9,
     ready: 4, proficient: 1, masteryProgress: 12, reviewDueOrSoon: 2,
-    chapters: chapters.map(item => ({ chapterId: item.id, code: item.code, name: item.name,
+    chapters: manyChapters.map(item => ({ chapterId: item.id, code: item.code, name: item.name,
       total: item.knowledgePointCount, started: 0, ready: 0, proficient: 0,
-      masteryProgress: item.id === "c3" ? 35 : 12 })) }],
+      masteryProgress: item.id === "m3" ? 35 : 12 })) }],
   recent: { gradedAttempts7d: 0, distinctKnowledgePoints7d: 0, activeStudyDays7d: 0, daily: [], knowledgePoints: [] },
   recentContacts: [],
   activity: { windowDays: 7, generatedAt: "2026-10-05T12:00:00Z",
@@ -62,13 +59,13 @@ const progress = {
     outcomes: { correct: 9, partial: 1, wrong: 2, revealedOnly: 0 }, daily: [] },
 } as LearnerProgress;
 
-/** 最近一次章节练习落在数学一的「微分中值定理与导数的应用」，进度 35%。 */
+/** 最近一次章节练习落在数学一的「第 3 章」，进度 35%。 */
 const recentChapter: RecentChapter = { status: "last", lastSessionId: "s1", bookId: "math1",
-  bookName: "考研数学一", chapterId: "c3", chapterName: "微分中值定理与导数的应用",
+  bookName: "考研数学一", chapterId: "m3", chapterName: "第 3 章",
   currentKnowledgePointIndex: 2, knowledgePointCount: 52, updatedAt: "2026-10-08T21:10:00Z" };
 
 function mockStudy(overrides: { recent?: RecentChapter } = {}) {
-  vi.spyOn(platformApi, "book").mockImplementation(async id => id === "cs408" ? cs : math);
+  const book = vi.spyOn(platformApi, "book").mockImplementation(async id => id === "cs408" ? cs : math);
   vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
   vi.spyOn(platformApi, "progress").mockResolvedValue(progress);
   vi.spyOn(platformApi, "recentChapter").mockResolvedValue(overrides.recent ?? recentChapter);
@@ -76,7 +73,7 @@ function mockStudy(overrides: { recent?: RecentChapter } = {}) {
     { id: "session", intent: "chapter_drill", status: "active", revision: 1 } as never);
   const updateProfile = vi.spyOn(platformApi, "updateProfile");
   Object.defineProperty(window, "scrollTo", { value: vi.fn(), configurable: true });
-  return { startChapter, updateProfile };
+  return { book, startChapter, updateProfile };
 }
 
 const renderStudy = async (overrides: { recent?: RecentChapter } = {}) => {
@@ -88,6 +85,8 @@ const renderStudy = async (overrides: { recent?: RecentChapter } = {}) => {
 
 const chapterCards = (view: { container: HTMLElement }) => view.container.querySelectorAll(".chapter-card");
 const bookCards = (view: { container: HTMLElement }) => view.container.querySelectorAll(".book-cover-card");
+const chapterNames = (view: { container: HTMLElement }) =>
+  [...chapterCards(view)].map(card => card.querySelector("b")!.textContent);
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -100,7 +99,10 @@ describe("Study page default state", () => {
     expect(chapterCards(view)).toHaveLength(0);
     expect(view.container.querySelector(".chapter-cards")).toBeNull();
     expect(screen.queryByRole("button", { name: "开始章节练习" })).toBeNull();
-    // 不显示「请选择书籍」之类空态提示，直接留白。
+    // 未选书时不渲染翻页容器，也不显示页码或空态提示。
+    expect(view.container.querySelector(".chapter-browser")).toBeNull();
+    expect(screen.queryByRole("button", { name: "上一页章节" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "下一页章节" })).toBeNull();
     expect(screen.queryByText(/请选择/)).toBeNull();
     expect(screen.queryByText(/选择章节/)).toBeNull();
   });
@@ -110,7 +112,7 @@ describe("Study page default state", () => {
 
     const hero = view.container.querySelector(".study-hero")!;
     expect(hero.querySelector(".study-hero-book")!.textContent).toBe("考研数学一");
-    expect(hero.querySelector(".study-hero-chapter")!.textContent).toBe("微分中值定理与导数的应用");
+    expect(hero.querySelector(".study-hero-chapter")!.textContent).toBe("第 3 章");
     expect(hero.querySelector(".study-progress")!.getAttribute("aria-label")).toBe("章节掌握进度 35%");
     expect(hero.querySelector(".study-progress span")!.getAttribute("style")).toContain("width: 35%");
     // 百分比只出现一次，且没有分式进度、没有标签与时间戳。
@@ -141,27 +143,35 @@ describe("Study page chapter browsing", () => {
   it("renders chapters only after the user picks a book", async () => {
     const { view } = await renderStudy();
 
-    fireEvent.click(bookCards(view)[0]);
-    await waitFor(() => expect(chapterCards(view)).toHaveLength(4));
+    fireEvent.click(bookCards(view)[1]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
     expect(view.container.querySelectorAll(".book-cover-card.selected")).toHaveLength(1);
-    expect([...chapterCards(view)].map(card => card.querySelector("b")!.textContent)).toEqual(
-      ["函数与极限", "导数与微分", "微分中值定理与导数的应用", "不定积分"]);
+    expect(chapterNames(view)).toEqual(["数据结构", "操作系统"]);
     // 未选章节时不出现章节操作区。
     expect(screen.queryByRole("button", { name: "开始章节练习" })).toBeNull();
+  });
+
+  it("shows no paging arrows when a book has at most nine chapters", async () => {
+    const { view } = await renderStudy();
+
+    fireEvent.click(bookCards(view)[1]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
+    expect(view.container.querySelector(".chapter-browser")).toBeNull();
+    expect(screen.queryByRole("button", { name: "上一页章节" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "下一页章节" })).toBeNull();
   });
 
   it("switches to the other book's chapters and clears the selected chapter", async () => {
     const { view } = await renderStudy();
 
-    fireEvent.click(bookCards(view)[0]);
-    await waitFor(() => expect(chapterCards(view)).toHaveLength(4));
-    fireEvent.click(chapterCards(view)[2]);
-    await waitFor(() => expect(chapterCards(view)[2].className).toContain("selected"));
-    expect(await screen.findByRole("button", { name: "开始章节练习" })).toBeTruthy();
-
     fireEvent.click(bookCards(view)[1]);
     await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
-    expect([...chapterCards(view)].map(card => card.querySelector("b")!.textContent)).toEqual(["数据结构", "操作系统"]);
+    fireEvent.click(chapterCards(view)[1]);
+    await waitFor(() => expect(chapterCards(view)[1].className).toContain("selected"));
+    expect(await screen.findByRole("button", { name: "开始章节练习" })).toBeTruthy();
+
+    fireEvent.click(bookCards(view)[0]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
     // 换书后章节选择被清空，操作区随之消失。
     expect(view.container.querySelectorAll(".chapter-card.selected")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "开始章节练习" })).toBeNull();
@@ -175,7 +185,7 @@ describe("Study page chapter browsing", () => {
     await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
 
     expect(hero().querySelector(".study-hero-book")!.textContent).toBe("考研数学一");
-    expect(hero().querySelector(".study-hero-chapter")!.textContent).toBe("微分中值定理与导数的应用");
+    expect(hero().querySelector(".study-hero-chapter")!.textContent).toBe("第 3 章");
     expect(hero().querySelector(".study-progress span")!.getAttribute("style")).toContain("width: 35%");
     // 书籍点击只切换本页浏览，不写学习范围。
     expect(updateProfile).not.toHaveBeenCalled();
@@ -184,12 +194,12 @@ describe("Study page chapter browsing", () => {
   it("keeps chapter clicking scoped to this page", async () => {
     const { view, updateProfile } = await renderStudy();
 
-    fireEvent.click(bookCards(view)[0]);
-    await waitFor(() => expect(chapterCards(view)).toHaveLength(4));
+    fireEvent.click(bookCards(view)[1]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
     fireEvent.click(chapterCards(view)[0]);
     await waitFor(() => expect(chapterCards(view)[0].className).toContain("selected"));
 
-    expect(view.container.querySelector(".study-hero-chapter")!.textContent).toBe("微分中值定理与导数的应用");
+    expect(view.container.querySelector(".study-hero-chapter")!.textContent).toBe("第 3 章");
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
@@ -204,12 +214,73 @@ describe("Study page chapter browsing", () => {
   });
 });
 
+describe("Study page local chapter paging", () => {
+  it("renders at most nine chapters per page and pages locally without a new request", async () => {
+    const { view, book } = await renderStudy();
+
+    fireEvent.click(bookCards(view)[0]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
+    expect(chapterNames(view)).toEqual(Array.from({ length: 9 }, (_, index) => `第 ${index + 1} 章`));
+
+    const previous = screen.getByRole("button", { name: "上一页章节" }) as HTMLButtonElement;
+    const next = screen.getByRole("button", { name: "下一页章节" }) as HTMLButtonElement;
+    expect(previous.disabled).toBe(true);
+    expect(next.disabled).toBe(false);
+    // 不显示页码或分页说明文字。
+    expect(view.container.querySelector(".chapter-browser")!.textContent).not.toMatch(/\d\s*\/\s*\d/);
+    const chapterRequests = book.mock.calls.length;
+
+    // 下一页：本地 slice 出剩余 2 个章节，且不重新请求后端章节。
+    fireEvent.click(next);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
+    expect(chapterNames(view)).toEqual(["第 10 章", "第 11 章"]);
+    expect((screen.getByRole("button", { name: "下一页章节" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(book.mock.calls.length).toBe(chapterRequests);
+
+    // 上一页：回到第一页 9 项。
+    fireEvent.click(screen.getByRole("button", { name: "上一页章节" }));
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
+    expect((screen.getByRole("button", { name: "上一页章节" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("clears the selected chapter when paging", async () => {
+    const { view } = await renderStudy();
+
+    fireEvent.click(bookCards(view)[0]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
+    fireEvent.click(chapterCards(view)[0]);
+    expect(await screen.findByRole("button", { name: "开始章节练习" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "下一页章节" }));
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
+    expect(view.container.querySelectorAll(".chapter-card.selected")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "开始章节练习" })).toBeNull();
+  });
+
+  it("resets to the first page and clears the chapter when switching books", async () => {
+    const { view } = await renderStudy();
+
+    fireEvent.click(bookCards(view)[0]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
+    fireEvent.click(screen.getByRole("button", { name: "下一页章节" }));
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
+    fireEvent.click(chapterCards(view)[0]);
+    expect(await screen.findByRole("button", { name: "开始章节练习" })).toBeTruthy();
+
+    fireEvent.click(bookCards(view)[1]);
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(2));
+    expect(chapterNames(view)).toEqual(["数据结构", "操作系统"]);
+    expect(screen.queryByRole("button", { name: "开始章节练习" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "上一页章节" })).toBeNull();
+  });
+});
+
 describe("Study page chapter cards and art", () => {
   it("uses education icons instead of math glyphs and shows no percentage text", async () => {
     const { view } = await renderStudy();
 
     fireEvent.click(bookCards(view)[0]);
-    await waitFor(() => expect(chapterCards(view)).toHaveLength(4));
+    await waitFor(() => expect(chapterCards(view)).toHaveLength(9));
 
     for (const card of chapterCards(view)) {
       // 图标是 SVG，而不是 ∑ / ∫ / π 之类的数学字形文本。
@@ -232,5 +303,26 @@ describe("Study page chapter cards and art", () => {
     // 插画里不得出现任何文字或公式（含「数学一」与 π / 积分号等）。
     expect(art.querySelectorAll("text")).toHaveLength(0);
     expect(art.textContent).toBe("");
+  });
+});
+
+describe("Shell header", () => {
+  it("marks the current module active and shows an avatar in the account pill", async () => {
+    history.replaceState(null, "", "/study");
+    const { view } = await renderStudy();
+
+    const nav = view.container.querySelector("nav[aria-label='主要导航']")!;
+    const active = nav.querySelectorAll("a.active");
+    expect(active).toHaveLength(1);
+    expect(active[0].textContent).toBe("学习");
+    // 只改选中视觉，不改路由判断。
+    expect(active[0].getAttribute("href")).toBe("/study");
+
+    // 账号入口是带浅紫头像的胶囊，文案仍是用户名，点击仍进账号页。
+    const account = view.container.querySelector(".hub-account")!;
+    expect(account.querySelector(".hub-account-avatar svg")).toBeTruthy();
+    expect(account.querySelector(".hub-account-avatar")!.getAttribute("aria-hidden")).toBe("true");
+    expect(account.textContent).toContain("学习者");
+    expect(account.getAttribute("href")).toBe("/account");
   });
 });
