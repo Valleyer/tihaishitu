@@ -16,37 +16,22 @@ type MarkdownNode = {
 };
 
 function normalizeMarkdownSource(value: string) {
-  return value.replace(
-    /\$([^$\n]*?)\\(?:neq|ne)(?![A-Za-z])([^$\n]*?)\$/g,
-    (_, left: string, right: string) => `${left}&ne;${right}`,
-  );
-}
-
-function normalizeMathValue(value: string) {
-  return value.replace(/\\frac(?![A-Za-z])/g, "\\dfrac");
+  return value
+    // 先在原始 Markdown 上直接把 \frac 改成 \dfrac，确保 remark-math / KaTeX
+    // 从一开始拿到的就是 \dfrac，而不是依赖后续 AST 再改写。
+    .replace(/\\frac(?![A-Za-z])/g, "\\dfrac")
+    .replace(
+      /\$([^$\n]*?)\\(?:neq|ne)(?![A-Za-z])([^$\n]*?)\$/g,
+      (_, left: string, right: string) => `${left}&ne;${right}`,
+    );
 }
 
 /**
  * 渲染层兼容：
- * - 原 Markdown 里的 $xxx\ne xxx$ / $xxx\neq xxx$ 在进入 Markdown 解析前，
- *   直接替换成 xxx&ne;xxx；这样由 Markdown 实体解析成普通文本 “≠”，完全绕开 KaTeX。
- * - 已被 remark-math 识别的数学节点中，\frac 按 \dfrac 渲染。
+ * - 原 Markdown 里的 \frac 在进入 Markdown / LaTeX 解析前直接改为 \dfrac；
+ * - $xxx\ne xxx$ / $xxx\neq xxx$ 在进入 Markdown 解析前直接改成 xxx&ne;xxx。
  * 数据库原文和编辑框内容都不修改。
  */
-function remarkNormalizeMath() {
-  return (tree: MarkdownNode) => {
-    const visit = (node: MarkdownNode) => {
-      if (
-        (node.type === "math" || node.type === "inlineMath") &&
-        typeof node.value === "string"
-      ) {
-        node.value = normalizeMathValue(node.value);
-      }
-      node.children?.forEach(visit);
-    };
-    visit(tree);
-  };
-}
 
 export function RichText({
   children,
@@ -59,7 +44,7 @@ export function RichText({
 }) {
   const content = (
     <Markdown
-      remarkPlugins={[remarkMath, remarkNormalizeMath]}
+      remarkPlugins={[remarkMath]}
       rehypePlugins={[rehypeKatex]}
       components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
     >
