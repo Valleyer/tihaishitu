@@ -49,7 +49,7 @@ export default function ManagementApp() {
   return (
     <div className="manage-shell">
       <aside className="manage-sidebar">
-        <header><img src="/brand-logo.png" alt="" /><b>万境书院</b><span>全服内容中台</span></header>
+        <header><img src="/brand-logo.png" alt="" /><div><b>万境书院</b><span>全服内容中台</span></div></header>
         <nav>
           <Nav active={page === "dashboard"} onClick={() => setPage("dashboard")}>管理首页</Nav>
           <Nav active={page === "questions"} onClick={() => setPage("questions")}>题目管理</Nav>

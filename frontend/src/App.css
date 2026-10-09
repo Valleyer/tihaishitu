@@ -750,7 +750,7 @@
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
-  margin: -18px 0 16px;
+  margin: 4px 0 10px;
   padding: 9px 11px;
   border: 1px solid #baae8366;
   background: #e5dfc9;
@@ -824,8 +824,21 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.self-assessment-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.self-assessment-scroll .question-prompt-area,
+.self-assessment-scroll .self-assessment-reference {
+  max-height: none;
+  overflow: visible;
+  flex-shrink: 0;
+}
 .question-prompt-area,
 .self-assessment-reference,
+.self-assessment-scroll,
 .explanation-block > .rich-text,
 .modal-body {
   scrollbar-width: none;
@@ -833,6 +846,7 @@
 }
 .question-prompt-area::-webkit-scrollbar,
 .self-assessment-reference::-webkit-scrollbar,
+.self-assessment-scroll::-webkit-scrollbar,
 .explanation-block > .rich-text::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar {
   width: 0;

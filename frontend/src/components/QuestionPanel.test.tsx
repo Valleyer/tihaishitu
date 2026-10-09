@@ -112,7 +112,7 @@ describe("World question panel exam metadata", () => {
     solution.question.gradingMode = "self_assessment";
     solution.question.options = {};
     solution.reveal = { explanation: "## 答案与解析\n\n完整过程", knowledgePoints: solution.question.knowledgePoints };
-    render(
+    const view = render(
       <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
         next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
@@ -120,6 +120,11 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("参考解析")).toBeTruthy();
     expect(screen.queryByText("参考解答")).toBeNull();
     expect(screen.queryByText("解题分析")).toBeNull();
+    const scroll = view.container.querySelector(".self-assessment-scroll");
+    expect(scroll).toBeTruthy();
+    expect(scroll?.querySelector(".question-prompt-area")).toBeTruthy();
+    expect(scroll?.querySelector(".self-assessment-reference")).toBeTruthy();
+    expect(scroll?.querySelectorAll(".question-prompt-area, .self-assessment-reference")).toHaveLength(2);
   });
 
   it("omits the standard-answer bar from a graded solution result", () => {

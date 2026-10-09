@@ -186,11 +186,11 @@ export function QuestionPanel({
             {exam?.examLabel && <span className="exam-label">{exam.examLabel}</span>}
             {exam?.displayQuestionNumber && <span className="exam-question-number">第{exam.displayQuestionNumber}题</span>}
           </div>
-          <div className="question-prompt-area">
-            <RichText className="question-text">{q.question}</RichText>
-          </div>
-          {isSelfAssessment ? (
-            attempt.reveal ? (
+          {isSelfAssessment && attempt.reveal ? (
+            <div className="self-assessment-scroll">
+              <div className="question-prompt-area">
+                <RichText className="question-text">{q.question}</RichText>
+              </div>
               <section className="self-assessment-reference" aria-live="polite">
                 <h3>参考解析</h3>
                 <RichText>{attempt.reveal.explanation}</RichText>
@@ -204,7 +204,14 @@ export function QuestionPanel({
                   ))}
                 </details>
               </section>
-            ) : (
+            </div>
+          ) : (
+            <div className="question-prompt-area">
+              <RichText className="question-text">{q.question}</RichText>
+            </div>
+          )}
+          {isSelfAssessment ? (
+            attempt.reveal ? null : (
               <p className="choice-hint self-assessment-hint">
                 请先在纸上完成推导或作答，再查看参考解析并如实自评。
               </p>

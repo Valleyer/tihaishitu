@@ -190,4 +190,23 @@
 .report-cols > span { display: grid; gap: 5px; min-width: 0; }
 .report-cols small { color: var(--muted, #64748b); white-space: normal; }
 .report-cols a { color: #4f46e5; }
-.manage-sidebar > header img { width: 46px; height: 46px; object-fit: contain; display: block; margin-bottom: 8px; }
+.manage-sidebar > header img { width: 46px; height: 46px; object-fit: contain; display: block; flex: 0 0 auto; }
+
+/* 品牌与页脚固定占位，仅中间导航在侧栏高度不足时滚动。 */
+.manage-sidebar { height: 100dvh; min-height: 0; box-sizing: border-box; overflow: hidden; }
+.manage-sidebar > header { display: flex; align-items: center; flex: 0 0 auto; }
+.manage-sidebar > header > div { display: grid; gap: 6px; }
+.manage-sidebar nav { flex: 1; min-height: 0; overflow-y: auto; align-content: start; }
+.manage-sidebar footer { flex: 0 0 auto; margin: 0 4px; }
+
+/* 为可见滚动条预留稳定槽位，避免覆盖最右侧操作内容。 */
+.question-management-table,
+.knowledge-management-table,
+.manage-question-list,
+.review-detail-scroll { scrollbar-gutter: stable; }
+
+@media(max-width:680px) {
+  .manage-sidebar { height: auto; overflow: visible; }
+  .manage-sidebar nav { flex: none; overflow-y: visible; }
+  .manage-sidebar footer { margin-top: 18px; }
+}
