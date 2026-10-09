@@ -90,7 +90,9 @@ flock -n 9 || fail 'Another deployment is running (lock held).'
 [[ -f "$UPLOAD/release.info" && ! -L "$UPLOAD/release.info" ]] || fail 'Missing release.info.'
 
 cd "$UPLOAD"
-sha256sum -c release.sha256 || fail 'SHA-256 mismatch: re-upload the complete release.'
+# build-release.bat writes text files with Windows CRLF. Normalize carriage returns in-memory
+# so Linux sha256sum does not treat "\r" as part of the listed filenames.
+tr -d '\r' < release.sha256 | sha256sum -c - || fail 'SHA-256 mismatch: re-upload the complete release.'
 # No shell sourcing/eval of uploaded metadata; only a 40-character Git SHA is accepted.
 SHA="$(awk -F= '$1 == "COMMIT_SHA" { print $2 }' release.info | tr -d '\r')"
 [[ "$SHA" =~ ^[0-9a-fA-F]{40}$ ]] || fail 'Invalid/duplicate COMMIT_SHA in release.info.'
