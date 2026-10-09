@@ -97,6 +97,15 @@
 .editor { gap: 15px; padding: 22px; }
 .editor > header { border-bottom-color: var(--manage-line); }
 .editor-group { border-color: var(--manage-line); border-radius: 11px; background: #fcfcfd; padding: 14px; }
+/* 题干图片：编辑器内不拉伸小图，也不让大图撑破抽屉。 */
+.stem-image-group { gap: 10px; }
+.stem-image-empty { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stem-image-empty small { color: #6b7a85; }
+.stem-image-current { display: grid; gap: 10px; }
+.stem-image-current .question-stem-image { margin: 0; max-height: 320px; border: 1px solid var(--manage-line); border-radius: 9px; background: #fff; padding: 6px; }
+.stem-image-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* 隐藏原生 file input：不能用 hidden / display:none，否则读屏与标签关联会失效。 */
+.stem-image-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .relations > div,.markdown-preview,.audit-row pre { border-radius: 9px; background: #f7f8fb; }
 .review-detail-panel { border-color: var(--manage-line); }
 .review-action-footer,.bulk-review-actions,.bulk-reject-form { border-color: var(--manage-line); background: #fff; }

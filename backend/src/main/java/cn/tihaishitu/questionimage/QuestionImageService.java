@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -107,9 +108,26 @@ public class QuestionImageService {
         throw bad("只允许上传 PNG 或 JPEG 图片。");
     }
 
+    /**
+     * original_name 只是 metadata，永远不参与磁盘路径，因此只取最后一段并做保守裁剪。
+     *
+     * <p>客户端可以提交含 NUL 等非法字符的文件名，{@code Path.of} 会抛
+     * {@link java.nio.file.InvalidPathException}。这类字符先剔除再取文件名，
+     * 不能让一个纯展示字段把上传变成 500。</p>
+     */
     private static String cleanOriginalName(String value) {
         if (value == null || value.isBlank()) return null;
-        String cleaned = Path.of(value).getFileName().toString();
+        String candidate = value.replace('\u0000', '_');
+        String cleaned;
+        try {
+            Path name = Path.of(candidate).getFileName();
+            cleaned = name == null ? "" : name.toString();
+        } catch (InvalidPathException fallback) {
+            int separator = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'));
+            cleaned = separator < 0 ? candidate : candidate.substring(separator + 1);
+        }
+        cleaned = cleaned.trim();
+        if (cleaned.isEmpty()) return null;
         return cleaned.length() <= 255 ? cleaned : cleaned.substring(cleaned.length() - 255);
     }
 

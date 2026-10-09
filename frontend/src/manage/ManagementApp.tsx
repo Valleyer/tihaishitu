@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { RichText } from "../components/RichText";
+import { QuestionStemImage } from "../components/QuestionStemImage";
 import { PAGE_SIZE } from "../pagination";
 import {
   manageApi,
@@ -296,6 +297,9 @@ function QuestionEditor({ initial, user, fail, saved, reviewMode = false }: { in
   const [knowledgeQuery, setKnowledgeQuery] = useState(""); const [matches, setMatches] = useState<KnowledgeView[]>([]); const [busy, setBusy] = useState(false);
   const [sourceQuery,setSourceQuery]=useState(""); const [sourceMatches,setSourceMatches]=useState<QuestionSourceView[]>([]);
   const [rejecting, setRejecting] = useState(false); const [rejectComment, setRejectComment] = useState("");
+  // 题干图片只改编辑器本地 state：上传 / 替换 / 移除都不自动保存 Question，
+  // 仍需用户显式点击“保存草稿 / 保存修改”。
+  const [imageBusy, setImageBusy] = useState(false); const imageInput = useRef<HTMLInputElement>(null);
   const isAdmin = user.roles.includes("ADMIN");
   const isReviewer = user.roles.includes("REVIEWER");
   const canReview = isAdmin || (isReviewer && user.id !== initial?.createdBy);
@@ -308,11 +312,26 @@ function QuestionEditor({ initial, user, fail, saved, reviewMode = false }: { in
     setQuestion({ ...question, knowledgePoints: relations.map((relation, sortOrder) => ({ ...relation, sortOrder })) });
   };
   const save = async () => { try { setBusy(true); const result = initial ? await manageApi.saveQuestion(question as QuestionView) : await manageApi.createQuestion(question); saved(result); } catch (e) { fail(e instanceof Error ? e.message : "保存失败"); } finally { setBusy(false); } };
+  const pickImage = () => { if (imageInput.current) { imageInput.current.value = ""; imageInput.current.click(); } };
+  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try { setImageBusy(true); const asset = await manageApi.uploadQuestionImage(file); setQuestion(current => ({ ...current, stemImageId: asset.id, stemImageUrl: asset.url })); }
+    catch (e) { fail(e instanceof Error ? e.message : "图片上传失败"); }
+    finally { setImageBusy(false); }
+  };
+  const setStemImage = (stemImageId: string | null, stemImageUrl: string | null) => setQuestion(current => ({ ...current, stemImageId, stemImageUrl }));
+  const stemImageField = <fieldset className="editor-group stem-image-group"><legend>题目图片（可选）</legend>
+    {question.stemImageUrl ? <div className="stem-image-current"><QuestionStemImage src={question.stemImageUrl} /><div className="stem-image-actions"><button disabled={imageBusy} onClick={pickImage}>{imageBusy ? "上传中…" : "替换图片"}</button><button className="danger" disabled={imageBusy} onClick={() => setStemImage(null, null)}>移除图片</button></div></div>
+      : <div className="stem-image-empty"><button disabled={imageBusy} onClick={pickImage}>{imageBusy ? "上传中…" : "上传图片"}</button><small>支持 PNG / JPEG，不超过 5MB。</small></div>}
+    <input ref={imageInput} className="stem-image-input" type="file" accept="image/png,image/jpeg" aria-label="上传题目图片" onChange={uploadImage} />
+  </fieldset>;
   const editorFields = <><header><b>{initial ? `题目 ${initial.id.slice(0, 8)}` : "新建全服题目草稿"}</b><span>{manageLabel("questionStatus", question.status || "draft")} {question.revision ? `· 修订版本 ${question.revision}` : ""}</span></header>
     <fieldset className="editor-group"><legend>来源</legend><div className="selected-source"><b>{question.sourceName||"尚未选择来源"}</b><span>{question.sourceType?manageLabel("source",question.sourceType):"—"}</span></div><div className="inline-search"><input placeholder="搜索已有来源" value={sourceQuery} onChange={e=>setSourceQuery(e.target.value)}/><button onClick={()=>manageApi.sources({query:sourceQuery,status:"active",size:10}).then(result=>setSourceMatches(result.content)).catch(error=>fail(error.message))}>搜索</button></div>{sourceMatches.length>0&&<div className="search-results">{sourceMatches.map(source=><button key={source.id} onClick={()=>setQuestion({...question,sourceId:source.id,sourceType:source.sourceType,sourceName:source.displayName,sourceCanonicalName:source.canonicalName})}>{source.displayName} · {manageLabel("source",source.sourceType)}</button>)}</div>}<small>新来源请先到“来源管理”创建；来源类型由所选来源决定。</small></fieldset>
     <div className="form-grid"><label>科目<input value={question.subject || ""} onChange={(e) => setQuestion({ ...question, subject: e.target.value })} /></label><label>年份<input type="number" value={question.examYear || ""} onChange={(e) => setQuestion({ ...question, examYear: Number(e.target.value) || undefined })} /></label><label>题号<input value={question.questionNumber || ""} onChange={(e) => setQuestion({ ...question, questionNumber: e.target.value })} /></label><label>难度<select value={question.difficulty} onChange={(e) => setQuestion({ ...question, difficulty: Number(e.target.value) })}>{[1,2,3,4,5].map((n) => <option key={n}>{n}</option>)}</select></label>
       <label>题型<select value={question.questionType} onChange={(e) => { const questionType=e.target.value; setQuestion({ ...question, questionType, ...questionTypeContract(questionType), options: questionType === "solution" ? [] : question.options }); }}>{question.questionType==="blank"&&<option value="blank" disabled>历史填空题（必须改选）</option>}{manageOptions("questionType").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>作答方式<select value={question.presentationType} disabled>{manageOptions("presentation").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>判题模式<select value={question.gradingMode} disabled>{manageOptions("grading").map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>
-    <label>题干（Markdown + LaTeX）<textarea rows={8} value={question.content || ""} onChange={(e) => setQuestion({ ...question, content: e.target.value })} /></label><details><summary>预览题干</summary><div className="markdown-preview"><RichText>{question.content || "暂无题干"}</RichText></div></details>
+    <label>题干（Markdown + LaTeX）<textarea rows={8} value={question.content || ""} onChange={(e) => setQuestion({ ...question, content: e.target.value })} /></label>{stemImageField}<details><summary>预览题干</summary><div className="markdown-preview"><RichText>{question.content || "暂无题干"}</RichText><QuestionStemImage src={question.stemImageUrl} /></div></details>
     <label>{question.questionType === "solution" ? "完整解析（包含答案与解析）" : "完整解析"}<textarea rows={7} value={question.analysis || ""} onChange={(e) => setQuestion({ ...question, analysis: e.target.value })} /></label><details><summary>预览解析</summary><div className="markdown-preview"><RichText>{question.analysis || "暂无解析"}</RichText></div></details>
     {question.questionType !== "solution" && <fieldset className="editor-group"><legend>游戏化选项</legend>{(question.options || []).map((option, index) => <OptionRow key={index} option={option} changed={(next) => setQuestion({ ...question, options: question.options!.map((old, i) => i === index ? next : old) })} remove={() => setQuestion({ ...question, options: question.options!.filter((_, i) => i !== index) })} />)}<button onClick={addOption}>添加选项</button></fieldset>}
     <fieldset className="editor-group"><legend>知识点绑定</legend><div className="inline-search"><input placeholder="搜索知识点编码 / 名称 / 别名" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} /><button onClick={() => manageApi.knowledge({ query: knowledgeQuery, status: "active", size: 10 }).then((p) => setMatches(p.content)).catch((e) => fail(e.message))}>搜索</button></div>

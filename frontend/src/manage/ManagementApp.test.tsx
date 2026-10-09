@@ -23,6 +23,7 @@ vi.mock("./api", () => ({
     importQuestionBatch: vi.fn(),
     questionReports: vi.fn(),
     updateQuestionReport: vi.fn(),
+    uploadQuestionImage: vi.fn(),
   },
 }));
 const reviewer: ManageUser = {
@@ -42,6 +43,36 @@ const saveSourceMock = vi.mocked(manageApi.saveSource);
 const importBatchMock = vi.mocked(manageApi.importQuestionBatch);
 const reportsMock = vi.mocked(manageApi.questionReports);
 const updateReportMock = vi.mocked(manageApi.updateQuestionReport);
+const uploadImageMock = vi.mocked(manageApi.uploadQuestionImage);
+
+const stemImage = (letter: string) => ({
+  id: `asset-${letter}`,
+  url: `/api/v1/question-images/asset-${letter}`,
+  originalName: `${letter}.png`,
+  contentType: "image/png" as const,
+  byteSize: 2048,
+});
+
+/** 打开图片文件选择框并选中一个文件，返回该隐藏 input。 */
+function chooseImageFile(file: File) {
+  const input = screen.getByLabelText("上传题目图片") as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  return input;
+}
+
+/**
+ * 编辑器里“当前图片”与“预览题干”都会渲染配图，所以按区域取值，
+ * 断言上传只更新了当前图片区域。
+ */
+function currentImage() {
+  return document.querySelector<HTMLImageElement>('.stem-image-current .question-stem-image');
+}
+
+function previewImage() {
+  return document.querySelector<HTMLImageElement>('.markdown-preview .question-stem-image');
+}
+
+const pngFile = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "图.png", { type: "image/png" });
 
 function question(index: number, status = "pending_review"): QuestionView {
   return {
@@ -85,6 +116,7 @@ beforeEach(() => {
   importBatchMock.mockReset();
   reportsMock.mockReset();
   updateReportMock.mockReset();
+  uploadImageMock.mockReset();
   vi.mocked(manageApi.saveQuestion).mockReset();
   vi.mocked(manageApi.createQuestion).mockReset();
   vi.mocked(manageApi.knowledge).mockReset();
@@ -160,6 +192,118 @@ describe("SourcePage", () => {
     fireEvent.change(screen.getByLabelText("展示名称"),{target:{value:"新展示名"}});
     fireEvent.click(screen.getByRole("button",{name:"保存来源"}));
     await waitFor(()=>expect(saveSourceMock).toHaveBeenCalledWith(expect.objectContaining({displayName:"新展示名",revision:1})));
+  });
+});
+
+describe("QuestionEditor stem image", () => {
+  async function openEditor(item = question(1, "draft")) {
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    return item;
+  }
+
+  it("uploads an image, previews it, and only saves after the explicit save click", async () => {
+    const item = await openEditor();
+    uploadImageMock.mockResolvedValue(stemImage("a"));
+
+    expect(await screen.findByText("题目图片（可选）")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "上传图片" })).toBeTruthy();
+    // 无图时编辑器里不应出现任何图片节点。
+    expect(currentImage()).toBeNull();
+    expect(previewImage()).toBeNull();
+
+    chooseImageFile(pngFile());
+    await screen.findByRole("button", { name: "替换图片" });
+    expect(uploadImageMock).toHaveBeenCalledTimes(1);
+    expect(currentImage()?.getAttribute("src")).toBe("/api/v1/question-images/asset-a");
+    // 上传成功不得自动保存 Question。
+    expect(vi.mocked(manageApi.saveQuestion)).not.toHaveBeenCalled();
+
+    // 题干预览同样显示图片（审核中心复用同一编辑器）。
+    fireEvent.click(screen.getByText("预览题干"));
+    expect(previewImage()?.getAttribute("src")).toBe("/api/v1/question-images/asset-a");
+
+    // 用户显式保存后才提交新 asset ID。
+    const saveMock = vi.mocked(manageApi.saveQuestion);
+    saveMock.mockResolvedValue({ ...item, stemImageId: "asset-a", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
+    expect(saveMock.mock.calls[0][0]).toMatchObject({ stemImageId: "asset-a" });
+  });
+
+  it("replaces the image with a new asset without auto-saving", async () => {
+    const item = { ...question(1, "draft"), stemImageId: "asset-old", stemImageUrl: "/api/v1/question-images/asset-old" };
+    await openEditor(item);
+    uploadImageMock.mockResolvedValue(stemImage("new"));
+
+    expect(await screen.findByRole("button", { name: "替换图片" })).toBeTruthy();
+    chooseImageFile(pngFile());
+
+    await waitFor(() => expect(currentImage()?.getAttribute("src"))
+      .toBe("/api/v1/question-images/asset-new"));
+    expect(vi.mocked(manageApi.saveQuestion)).not.toHaveBeenCalled();
+
+    const saveMock = vi.mocked(manageApi.saveQuestion);
+    saveMock.mockResolvedValue({ ...item, stemImageId: "asset-new", revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
+    expect(saveMock.mock.calls[0][0]).toMatchObject({ stemImageId: "asset-new" });
+  });
+
+  it("removes the image locally and saves stemImageId null", async () => {
+    const item = { ...question(1, "draft"), stemImageId: "asset-a", stemImageUrl: "/api/v1/question-images/asset-a" };
+    await openEditor(item);
+
+    expect(await screen.findByRole("button", { name: "替换图片" })).toBeTruthy();
+    expect(currentImage()?.getAttribute("src")).toBe("/api/v1/question-images/asset-a");
+    fireEvent.click(screen.getByRole("button", { name: "移除图片" }));
+
+    // 移除后回到无图态且不留下空占位。
+    await waitFor(() => expect(screen.getByRole("button", { name: "上传图片" })).toBeTruthy());
+    expect(currentImage()).toBeNull();
+    expect(previewImage()).toBeNull();
+    expect(document.querySelector(".stem-image-current")).toBeNull();
+    expect(vi.mocked(manageApi.saveQuestion)).not.toHaveBeenCalled();
+
+    const saveMock = vi.mocked(manageApi.saveQuestion);
+    saveMock.mockResolvedValue({ ...item, stemImageId: null, revision: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
+    expect(saveMock.mock.calls[0][0]).toMatchObject({ stemImageId: null, stemImageUrl: null });
+  });
+
+  it("surfaces an upload failure without touching the saved question", async () => {
+    const fail = vi.fn();
+    const item = question(1, "draft");
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    uploadImageMock.mockRejectedValue(new Error("只允许上传 PNG 或 JPEG 图片。"));
+    render(<QuestionPage user={reviewer} fail={fail} />);
+    fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+
+    // 等编辑器抽屉挂载后再触发文件选择。
+    const input = await screen.findByLabelText("上传题目图片") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array([1, 2, 3])], "fake.png", { type: "image/png" })] } });
+
+    await waitFor(() => expect(fail).toHaveBeenCalledWith("只允许上传 PNG 或 JPEG 图片。"));
+    expect(currentImage()).toBeNull();
+    expect(screen.getByRole("button", { name: "上传图片" })).toBeTruthy();
+    expect(vi.mocked(manageApi.saveQuestion)).not.toHaveBeenCalled();
+  });
+
+  it("shows the frozen stem image to the reviewer in the shared editor", async () => {
+    const item = { ...question(21), stemImageId: "asset-a", stemImageUrl: "/api/v1/question-images/asset-a" };
+    questionsMock.mockResolvedValue(result([item], 0, 1, 1));
+    questionMock.mockResolvedValue(item);
+    render(<QuestionPage user={reviewer} fail={vi.fn()} reviewOnly />);
+
+    fireEvent.click(await screen.findByText("2026 · 21"));
+    await screen.findByText("题目图片（可选）");
+    // 审核中心复用 QuestionEditor，审核者必须能看到当前绑定的配图。
+    expect(currentImage()?.getAttribute("src")).toBe("/api/v1/question-images/asset-a");
+    expect(currentImage()?.getAttribute("alt")).toBe("题目配图");
   });
 });
 

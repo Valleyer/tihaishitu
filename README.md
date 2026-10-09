@@ -122,6 +122,12 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 
 寒门仕途主界面与题面采用视口布局；复杂编辑器、长正文与互动面板可以局部滚动。
 
+## 题干图片
+
+正式题可以**可选绑定 1 张题干图片**：题干 Markdown / LaTeX 下方显示图片，再往下是选项或后续作答内容；没有配图时完全不渲染，不产生空占位。图片在管理后台的题目编辑器里上传（PNG / JPEG，单张 ≤ 5MB）。
+
+图片是 immutable asset：题目换图或移除图片只改变当前绑定，**不会改变任何历史 Attempt**；旧 Attempt 的冻结快照继续显示当时那张图。图片文件不在数据库里，完整备份必须同时包含 MySQL 与 `QUESTION_IMAGE_DIR`，见 [`docs/deployment.md`](docs/deployment.md) §6.1；长期规则见 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md) §6.2。本版不支持多图、解析图、选项图、OCR 与图片批量导入。
+
 ## 最小验证
 
 Agent 默认只跑最小必要测试（完整规则见 [`AGENTS.md`](AGENTS.md) 的“Agent 测试边界”）：
