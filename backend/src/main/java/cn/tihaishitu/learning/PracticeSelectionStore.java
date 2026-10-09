@@ -108,9 +108,9 @@ public class PracticeSelectionStore {
         if (learnerId == null) return Optional.empty();
         List<LastRandomAttempt> current = jdbc.query("""
                 SELECT attempt.target_knowledge_point_id, attempt.assessment
-                  FROM learner_random_attempt_cursor cursor
-                  JOIN study_attempt attempt ON attempt.id = cursor.last_random_attempt_id
-                 WHERE cursor.learner_id = ? AND attempt.learner_id = cursor.learner_id
+                  FROM learner_random_attempt_cursor rac
+                  JOIN study_attempt attempt ON attempt.id = rac.last_random_attempt_id
+                 WHERE rac.learner_id = ? AND attempt.learner_id = rac.learner_id
                    AND attempt.draw_mode = 'random'
                 """, (row, index) -> new LastRandomAttempt(row.getString(1), row.getString(2)), learnerId);
         if (!current.isEmpty()) return Optional.of(current.get(0));

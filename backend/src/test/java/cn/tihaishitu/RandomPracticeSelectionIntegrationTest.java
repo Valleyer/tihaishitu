@@ -647,6 +647,49 @@ class RandomPracticeSelectionIntegrationTest {
                 """, Integer.class, learner)).isEqualTo(3);
     }
 
+    @Test void worldRandomNextReadsPersistedCursorFromFourthToFifthAttempt() throws Exception {
+        String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
+        insertBook(book, chapter, "世界第五题回归文集");
+        String point = pointIn(book, chapter, "WORLD-RANDOM-FIFTH-K", 0);
+        for (int index = 1; index <= 5; index++)
+            questionIn(point, "WORLD-RANDOM-FIFTH", String.valueOf(index));
+        Cookie cookie = register("random-world-fifth");
+        String learner = jdbc.queryForObject(
+                "SELECT id FROM learner_account WHERE username=?", String.class, "random-world-fifth");
+        selectBook(learner, book);
+        initialize(cookie);
+
+        JsonNode game = begin(cookie, "read");
+        assertThat(game.path("adventure").path("run").path("plannedRounds").asInt()).isEqualTo(5);
+        Set<String> attempts = new LinkedHashSet<>();
+        for (int round = 1; round <= 5; round++) {
+            String attemptId = game.path("attempt").path("id").asText();
+            assertThat(attemptId).isNotBlank();
+            assertThat(attempts.add(attemptId)).isTrue();
+            assertThat(selections.lastRandomAttempt(learner)).contains(
+                    new PracticeSelectionStore.LastRandomAttempt(point, null));
+            assertThat(jdbc.queryForObject(
+                    "SELECT last_random_attempt_id FROM learner_random_attempt_cursor WHERE learner_id=?",
+                    String.class, learner)).isEqualTo(attemptId);
+
+            game = answer(cookie, game, true);
+            if (round < 5) {
+                assertThat(game.path("adventure").path("run").path("knowledgePointIndex").asInt())
+                        .isEqualTo(round);
+                game = next(cookie, game);
+                if (round == 4) {
+                    assertThat(game.path("attempt").path("id").asText()).isNotBlank();
+                    assertThat(game.path("adventure").path("run").path("knowledgePointIndex").asInt())
+                            .isEqualTo(4);
+                }
+            }
+        }
+
+        assertThat(attempts).hasSize(5);
+        assertThat(game.path("adventure").path("run").path("status").asText()).isEqualTo("settled");
+        assertThat(game.path("adventure").path("run").path("knowledgePointIndex").asInt()).isEqualTo(5);
+    }
+
     @Test void worldActivityExplainsExhaustedDailyQuotaInsteadOfStartingAndCrashing() throws Exception {
         String book = UUID.randomUUID().toString(), chapter = UUID.randomUUID().toString();
         insertBook(book, chapter, "世界额度耗尽文集");
