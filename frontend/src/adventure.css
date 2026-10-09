@@ -1339,6 +1339,7 @@
   }
 }
 @media (max-width: 720px) {
+  :where(html:not(.mobile-landscape-active)) {
   .scene-heading {
     max-width: 100%;
   }
@@ -1496,6 +1497,7 @@
   .world-scene {
     min-height: 150px;
   }
+}
 }
 @media (max-height: 580px) {
   .scene-heading p,
