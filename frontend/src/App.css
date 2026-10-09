@@ -2085,6 +2085,7 @@
   }
 }
 @media (max-width: 720px) {
+  :where(html:not(.mobile-landscape-active)) {
   .world-header {
     height: 64px;
     padding: 0 15px;
@@ -2361,4 +2362,5 @@
     font-size: 11px;
     text-align: center;
   }
+}
 }

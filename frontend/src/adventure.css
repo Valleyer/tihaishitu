@@ -408,12 +408,14 @@
 }
 
 @media (max-width: 720px) {
+  :where(html:not(.mobile-landscape-active)) {
   .exam-steps {
     grid-template-columns: 1fr;
   }
   .exam-steps article {
     min-height: auto;
   }
+}
 }
 .invitation {
   display: flex;
