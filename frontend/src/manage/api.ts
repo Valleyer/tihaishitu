@@ -71,6 +71,8 @@ export type QuestionView = {
   presentationType: string;
   gradingMode: string;
   content: string;
+  stemImageId?: string | null;
+  stemImageUrl?: string | null;
   analysis: string;
   difficulty: number;
   status: string;
@@ -145,6 +147,9 @@ export type ManagedChapter = {
 };
 export type ManagedBookDetail = { book: ManagedBook; chapters: ManagedChapter[] };
 export type BulkReviewResult = { reviewed: number; approved: number; rejected: number };
+export type QuestionImageAsset = {
+  id: string; url: string; originalName?: string | null; contentType: "image/png" | "image/jpeg"; byteSize: number;
+};
 
 export class ManageHttpError extends Error {
   status: number;
@@ -182,7 +187,7 @@ async function ensureCsrfToken(): Promise<string> {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method || "GET").toUpperCase();
   const headers = new Headers(init.headers);
-  if (init.body) headers.set("Content-Type", "application/json");
+  if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     headers.set(csrfHeaderName, await ensureCsrfToken());
   }
@@ -276,6 +281,11 @@ export const manageApi = {
   questions: (filters: Record<string, string | number | undefined>) =>
     request<PageResult<QuestionView>>(`/questions?${params(filters)}`),
   question: (id: string) => request<QuestionView>(`/questions/${id}`),
+  uploadQuestionImage: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<QuestionImageAsset>("/question-images", { method: "POST", body });
+  },
   createQuestion: (question: Partial<QuestionView>) =>
     request<QuestionView>("/questions", {
       method: "POST",
@@ -361,6 +371,7 @@ function questionPayload(question: Partial<QuestionView>) {
     presentationType: question.presentationType || "single_choice",
     gradingMode: question.gradingMode || "auto",
     content: question.content || "",
+    stemImageId: question.stemImageId ?? null,
     analysis: question.analysis || "",
     difficulty: question.difficulty || 1,
     options: (question.options || []).map((item, index) => ({ ...item, sortOrder: index })),

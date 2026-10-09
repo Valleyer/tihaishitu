@@ -2,6 +2,7 @@ package cn.tihaishitu.manage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import cn.tihaishitu.catalog.QuestionContractValidator;
+import cn.tihaishitu.questionimage.QuestionImageStore;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,14 @@ public class QuestionManagementService {
     private final QuestionManagementStore store;
     private final KnowledgeManagementStore knowledgeStore;
     private final QuestionSourceManagementService sources;
+    private final QuestionImageStore images;
 
     public QuestionManagementService(QuestionManagementStore store, KnowledgeManagementStore knowledgeStore,
-                                     QuestionSourceManagementService sources) {
+                                     QuestionSourceManagementService sources, QuestionImageStore images) {
         this.store = store;
         this.knowledgeStore = knowledgeStore;
         this.sources = sources;
+        this.images = images;
     }
 
     public QuestionManagementStore.QuestionView create(
@@ -136,6 +139,9 @@ public class QuestionManagementService {
             bad("来源、原始题型、展示类型或判题模式不合法。");
         }
         if (input.difficulty() < 1 || input.difficulty() > 5) bad("难度必须在 1–5 之间。");
+        if (input.stemImageId() != null && !input.stemImageId().isBlank() && !images.exists(input.stemImageId())) {
+            bad("题目引用了不存在的题干图片。");
+        }
         if ("real_exam".equals(input.sourceType()) && (input.examYear() == null || input.questionNumber() == null
                 || input.questionNumber().isBlank())) bad("真题必须填写年份和题号。");
         if ("auto".equals(input.gradingMode()) && "self_assessment".equals(input.presentationType())) {
@@ -177,8 +183,8 @@ public class QuestionManagementService {
         var source = sources.requireForBinding(input.sourceId(), existingSourceId);
         return new QuestionManagementStore.QuestionInput(input.subject(), source.id(), source.sourceType(),
                 source.canonicalName(), input.examYear(), input.questionNumber(), input.questionType(),
-                input.presentationType(), input.gradingMode(), input.content(), input.analysis(),
-                input.difficulty(), input.parentQuestionId(), input.derivationType(), input.options(), input.knowledgePoints());
+                input.presentationType(), input.gradingMode(), input.content(), input.stemImageId(),
+                input.analysis(), input.difficulty(), input.parentQuestionId(), input.derivationType(), input.options(), input.knowledgePoints());
     }
 
     private void validateStored(QuestionManagementStore.QuestionView question) {

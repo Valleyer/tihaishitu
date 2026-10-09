@@ -118,7 +118,7 @@ public class CatalogNormalizer {
                 question.question().trim(), question.options(), question.answer(),
                 defaultText(question.explanation(), "请对照标准答案复习。"), question.aliases(), question.keywords(),
                 question.difficulty(), question.frequency(), question.tags(),
-                List.copyOf(new LinkedHashSet<>(pointIds)), question.enabled());
+                List.copyOf(new LinkedHashSet<>(pointIds)), question.stemImageUrl(), question.enabled());
     }
 
     private static String uuid(String candidate, String seed) {

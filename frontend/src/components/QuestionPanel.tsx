@@ -9,6 +9,7 @@ import { typeNames } from "../engine/QuestionBankManager";
 import { examMetadataView } from "../utils/examMetadata";
 import { Modal } from "./Modal";
 import { RichText } from "./RichText";
+import { QuestionStemImage } from "./QuestionStemImage";
 export function QuestionPanel({
   nextLabel = "继续此生 →",
   allowReview = true,
@@ -190,6 +191,7 @@ export function QuestionPanel({
             <div className="self-assessment-scroll">
               <div className="question-prompt-area">
                 <RichText className="question-text">{q.question}</RichText>
+                <QuestionStemImage src={q.stemImageUrl} />
               </div>
               <section className="self-assessment-reference" aria-live="polite">
                 <h3>参考解析</h3>
@@ -208,6 +210,7 @@ export function QuestionPanel({
           ) : (
             <div className="question-prompt-area">
               <RichText className="question-text">{q.question}</RichText>
+              <QuestionStemImage src={q.stemImageUrl} />
             </div>
           )}
           {isSelfAssessment ? (

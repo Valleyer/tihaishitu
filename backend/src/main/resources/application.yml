@@ -18,6 +18,10 @@ server:
 spring:
   application:
     name: tihaishitu-backend
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
     url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/tihaishitu?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:root}
@@ -49,6 +53,8 @@ management:
       show-details: when-authorized
 
 app:
+  question-images:
+    storage-dir: ${QUESTION_IMAGE_DIR:./data/question-images}
   initial-admin:
     username: ${APP_INITIAL_ADMIN_USERNAME:}
     password: ${APP_INITIAL_ADMIN_PASSWORD:}

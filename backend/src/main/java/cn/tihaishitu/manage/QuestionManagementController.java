@@ -110,7 +110,7 @@ public class QuestionManagementController {
     private static QuestionManagementStore.QuestionInput input(QuestionRequest r) {
         return new QuestionManagementStore.QuestionInput(r.subject(), r.sourceId(), r.sourceType(), r.sourceName(), r.examYear(),
                 r.questionNumber(), r.questionType(), r.presentationType(), r.gradingMode(), r.content(),
-                r.analysis() == null ? "" : r.analysis(), r.difficulty(), r.parentQuestionId(),
+                r.stemImageId(), r.analysis() == null ? "" : r.analysis(), r.difficulty(), r.parentQuestionId(),
                 r.derivationType(), r.options() == null ? List.of() : r.options().stream()
                     .map(o -> new QuestionManagementStore.OptionInput(o.key(), o.text(), o.correct(), o.sortOrder())).toList(),
                 r.knowledgePoints() == null ? List.of() : r.knowledgePoints().stream()
@@ -122,7 +122,7 @@ public class QuestionManagementController {
     public record QuestionRequest(
             @NotBlank String subject, String sourceId, String sourceType, String sourceName, Integer examYear,
             String questionNumber, @NotBlank String questionType, @NotBlank String presentationType,
-            @NotBlank String gradingMode, @NotBlank String content,
+            @NotBlank String gradingMode, @NotBlank String content, String stemImageId,
             String analysis, @Min(1) int difficulty, String parentQuestionId, String derivationType,
             List<OptionRequest> options, List<RelationRequest> knowledgePoints, Long expectedRevision) {}
     public record RevisionRequest(@NotNull Long expectedRevision) {}

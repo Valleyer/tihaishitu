@@ -3,6 +3,7 @@ package cn.tihaishitu.manage;
 import cn.tihaishitu.learning.QuestionNumberFormatter;
 import cn.tihaishitu.learning.QuestionNumberSort;
 import cn.tihaishitu.learning.QuestionSearchQuery;
+import cn.tihaishitu.questionimage.QuestionImageUrls;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -28,7 +29,7 @@ public class QuestionManagementStore {
             String sourceCanonicalName, Integer examYear,
             String questionNumber, String displayQuestionNumber, String questionType,
             String presentationType, String gradingMode,
-            String content, String analysis, int difficulty, String status,
+            String content, String stemImageId, String stemImageUrl, String analysis, int difficulty, String status,
             String parentQuestionId, String derivationType, String createdBy, String creatorName,
             String reviewedBy, String reviewComment, long revision, Instant updatedAt,
             List<OptionView> options, List<KnowledgeRelationView> knowledgePoints) {}
@@ -37,7 +38,7 @@ public class QuestionManagementStore {
     public record QuestionInput(
             String subject, String sourceId, String sourceType, String sourceName, Integer examYear, String questionNumber,
             String questionType, String presentationType, String gradingMode, String content,
-            String analysis, int difficulty, String parentQuestionId,
+            String stemImageId, String analysis, int difficulty, String parentQuestionId,
             String derivationType, List<OptionInput> options, List<RelationInput> knowledgePoints) {}
 
     private final JdbcTemplate jdbc;
@@ -87,13 +88,13 @@ public class QuestionManagementStore {
         jdbc.update("""
                 INSERT INTO question_resource(
                     id, subject_name, source_id, source_type, source_name, exam_year, question_number,
-                    question_type, presentation_type, grading_mode, content_markdown,
+                    question_type, presentation_type, grading_mode, content_markdown, stem_image_id,
                     standard_answer_json, analysis_markdown, difficulty, status,
                     parent_question_id, derivation_type, created_by, updated_by, revision
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, 1)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, 1)
                 """, id, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
-                input.content(), null, input.analysis(), input.difficulty(),
+                input.content(), blank(input.stemImageId()), null, input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, actorId);
         replaceChildren(id, input, actorId);
         knowledgeStore.audit(actorId, "QUESTION_CREATED", "question", id, java.util.Map.of());
@@ -105,14 +106,14 @@ public class QuestionManagementStore {
         int changed = jdbc.update("""
                 UPDATE question_resource
                    SET subject_name = ?, source_id = ?, source_type = ?, source_name = ?, exam_year = ?, question_number = ?,
-                       question_type = ?, presentation_type = ?, grading_mode = ?, content_markdown = ?,
+                       question_type = ?, presentation_type = ?, grading_mode = ?, content_markdown = ?, stem_image_id = ?,
                        standard_answer_json = ?, analysis_markdown = ?, difficulty = ?, parent_question_id = ?,
                        derivation_type = ?, updated_by = ?, revision = revision + 1,
                        updated_at = CURRENT_TIMESTAMP
                  WHERE id = ? AND revision = ?
                 """, input.subject(), input.sourceId(), input.sourceType(), blank(input.sourceName()), input.examYear(),
                 blank(input.questionNumber()), input.questionType(), input.presentationType(), input.gradingMode(),
-                input.content(), null, input.analysis(), input.difficulty(),
+                input.content(), blank(input.stemImageId()), null, input.analysis(), input.difficulty(),
                 blank(input.parentQuestionId()), blank(input.derivationType()), actorId, id, expectedRevision);
         if (changed == 0) conflictOrMissing(id);
         replaceChildren(id, input, actorId);
@@ -238,7 +239,8 @@ public class QuestionManagementStore {
                 QuestionNumberFormatter.display(questionNumber, examYear),
                 result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
-                result.getString("content_markdown"), result.getString("analysis_markdown"),
+                result.getString("content_markdown"), result.getString("stem_image_id"),
+                QuestionImageUrls.url(result.getString("stem_image_id")), result.getString("analysis_markdown"),
                 result.getInt("difficulty"), result.getString("status"),
                 result.getString("parent_question_id"), result.getString("derivation_type"),
                 result.getString("created_by"), result.getString("creator_name"),

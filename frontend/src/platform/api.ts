@@ -25,6 +25,7 @@ export interface BrowseQuestion {
   displayQuestionNumber?: string;
   questionType: string;
   presentationType: string; gradingMode: string; contentMarkdown: string; analysisMarkdown: string;
+  stemImageUrl?: string | null;
   correctAnswer?: unknown; difficulty: number; revision: number;
   options?: { key: string; text: string }[]; knowledgePoints?: KnowledgePoint[];
   learnerQuestionStatus?: "unseen" | "mastered" | "needs_review";
@@ -123,7 +124,7 @@ export interface LearnerProgress {
 }
 export interface WrongQuestion {
   questionId: string; targetKnowledgePointId: string; knowledgePointName: string;
-  contentMarkdown: string; lastGradedAt: string; available: boolean;
+  contentMarkdown: string; stemImageUrl?: string | null; lastGradedAt: string; available: boolean;
   unavailableReason?: "out_of_scope" | "question_unavailable" | "knowledge_unavailable" | null;
   /** 动态生成的真题展示标签，例如 2022年考研数学一真题；后端按 exam_year + subject_name 生成。 */
   examLabel?: string | null; sourceName?: string | null; examYear?: number | null;
@@ -138,7 +139,7 @@ export interface PracticeAttempt {
   targetKnowledgePointName: string; evidenceMode: "normal" | "training" | "remedial"; diagnosisRole?: string;
   question: {
     id: string; subject: string; chapter: string; presentationType: string; gradingMode: string;
-    question: string; options: Record<string, string>; difficulty: number;
+    question: string; stemImageUrl?: string | null; options: Record<string, string>; difficulty: number;
   };
   standard?: unknown; explanation?: string; assessment?: "correct" | "partial" | "wrong";
   gradingSource?: string; answerRevealed: boolean;
