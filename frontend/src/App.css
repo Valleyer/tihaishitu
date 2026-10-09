@@ -824,6 +824,21 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.question-prompt-area,
+.self-assessment-reference,
+.explanation-block > .rich-text,
+.modal-body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.question-prompt-area::-webkit-scrollbar,
+.self-assessment-reference::-webkit-scrollbar,
+.explanation-block > .rich-text::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 .self-assessment-reference > h3 {
   margin: 0.75rem 0 0.4rem;
   color: var(--gold-deep);

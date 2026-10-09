@@ -323,8 +323,6 @@
   justify-content: safe center;
   position: relative;
   padding: 14px 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .result-heading {
   font:
@@ -397,6 +395,17 @@
     serif;
   color: #657454;
   margin: 0;
+}
+.explanation-block {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.explanation-block > .rich-text {
+  min-height: 0;
+  max-height: min(32vh, 280px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .result-stage .changes {
   gap: 10px;

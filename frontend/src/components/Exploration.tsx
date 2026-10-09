@@ -6,7 +6,6 @@ import { useState } from "react";
 import type { Game } from "../domain/types";
 import {
   activities,
-  adventureDesign,
   companions,
   exams,
   favorabilityLevel,
@@ -184,10 +183,8 @@ export function WorldHub({
 }
 
 export function ActivityShelf({
-  game,
   inspect,
 }: {
-  game: Game;
   inspect: (id: string) => void;
 }) {
   return (
@@ -203,11 +200,7 @@ export function ActivityShelf({
               <small>{a.subtitle}</small>
               <h3>{a.name}</h3>
               <p>{a.description}</p>
-              <span>
-                {rewardLines(a.tiers.at(-1)!.rewards).join(" · ")}
-                <br />
-                最高成绩 {game.adventure!.best[a.id] ?? "—"} 分 →
-              </span>
+              <span>{rewardLines(a.tiers.at(-1)!.rewards).join(" · ")}</span>
             </button>
           ))}
       </div>
@@ -237,14 +230,6 @@ export function ActivityDetail({
   const person = game.npcs.find((n) => n.id === activity.npcId);
   return (
     <div className="activity-detail">
-      <small>
-        {adventureDesign.rankNames[activity.kind]} · {activity.rounds} 个知识点 ·{" "}
-        {activity.activityMode === "task"
-          ? activity.quest === "main"
-            ? "10/10 完成"
-            : "答对 3/5 完成"
-          : activity.passScore + " 分获得本轮收获"}
-      </small>
       <h2>{activity.name}</h2>
       <p>{activity.description}</p>
       <div className="invitation">
@@ -262,6 +247,7 @@ export function ActivityDetail({
         {activity.tiers.filter((t) => t.minScore >= 60).map((t) => (
           <div key={t.minScore}>
             <strong>通关奖励</strong>
+            <small>达到{t.minScore}分</small>
             <span>
               {rewardLines(t.rewards).join(" · ") || "保留本轮学识与错题记录"}
               {t.firstRewards && rewardLines(t.firstRewards).length > 0 && (
@@ -273,7 +259,6 @@ export function ActivityDetail({
                 </em>
               )}
             </span>
-            <small>达到 {t.minScore} 分</small>
           </div>
         ))}
       </div>

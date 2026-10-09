@@ -591,11 +591,7 @@ function App() {
           }}
           wide={panel === "library" || panel === "stats"}
           subtitle={
-            panel === "display"
-              ? null
-              : panel === "new"
-              ? "前尘未定 · 一念入世"
-              : (game?.player.name || "青溪") + " · 案头文书"
+            panel === "new" ? "前尘未定 · 一念入世" : undefined
           }
         >
           {error && warning}
@@ -754,7 +750,7 @@ function App() {
             />
           )}
           {game && panel === "study" && (
-            <ActivityShelf game={game} inspect={inspect} />
+            <ActivityShelf inspect={inspect} />
           )}
           {game && panel === "exam" && (
             <ExamPanel
