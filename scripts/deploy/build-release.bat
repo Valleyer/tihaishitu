@@ -160,7 +160,10 @@ echo    release.sha256
 echo    release.info
 echo Then run: bash /usr/local/deploy/deploy-release.sh
 echo.
-echo [IMPORTANT] First back up the LIVE database manually, including Flyway history.
+echo [IMPORTANT] Before Linux deployment:
+echo   1. Manually back up the LIVE database ^(schema + data + flyway_schema_history^).
+echo   2. Confirm production QUESTION_IMAGE_DIR is configured and writable.
+echo      deploy-release.sh will snapshot the image directory before stopping the old backend.
 popd
 pause
 exit /b 0
