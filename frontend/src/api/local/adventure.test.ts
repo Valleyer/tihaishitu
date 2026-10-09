@@ -2,6 +2,7 @@
 import { expect, it } from "vitest";
 import { createLocalApi, STORAGE_KEY } from "./store";
 import type { Game, GameApi, NewGame } from "../../domain/types";
+import { flagRequirementName } from "../../engine/AdventureEngine";
 const config: NewGame = {
   name: "游历测试",
   gender: "女",
@@ -21,6 +22,15 @@ function setup() {
     };
   return { api: createLocalApi(storage), storage };
 }
+it("所有剧情前置 flag 都通过统一展示映射转为中文任务名", () => {
+  expect(flagRequirementName("letter-read")).toBe("门内的一封信");
+  expect(flagRequirementName("county-exam-passed")).toBe("青溪县试正卷");
+  expect(flagRequirementName("medicine-entrusted")).toBe("廊下的药香");
+  expect(flagRequirementName("book-box-found")).toBe("桥下的书箱");
+  expect(flagRequirementName("warehouse-clue")).toBe("县仓熄灯之后");
+  expect(flagRequirementName("lantern-clue")).toBe("灯谜摊前的一场争执");
+  expect(flagRequirementName("unknown-internal-id")).toBe("一段前置剧情");
+});
 async function play(api: GameApi, game: Game, correctCount: number) {
   const bankList = (await api.bootstrap()).banks;
   let safety = 0;

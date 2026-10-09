@@ -447,11 +447,13 @@
 }
 .reward-tiers {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 9px;
 }
 .reward-tiers > div {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 12px;
   border: 1px solid #70865c55;
   padding: 12px;
@@ -462,11 +464,10 @@
   font-weight: 400;
   font-size: 17px;
 }
-.reward-tiers strong small {
-  display: block;
+.reward-tiers > div > small {
   font-size: 10px;
-  margin-top: 6px;
   color: #9dae8f;
+  white-space: nowrap;
 }
 .reward-tiers span {
   font-size: 11px;
@@ -1630,7 +1631,7 @@
 .modal .reward-tiers strong {
   color: #805d20;
 }
-.modal .reward-tiers strong small {
+.modal .reward-tiers > div > small {
   color: #4f684e;
 }
 .modal .reward-tiers span {

@@ -414,10 +414,6 @@ function App() {
                 }}
               >
                 <div>
-                  <small>
-                    第 {String(game.chapter + 1).padStart(2, "0")} 章 ·{" "}
-                    {chapter!.title}
-                  </small>
                   <b>
                     {activityOpen
                       ? activityRun?.definition.name
@@ -595,7 +591,9 @@ function App() {
           }}
           wide={panel === "library" || panel === "stats"}
           subtitle={
-            panel === "new"
+            panel === "display"
+              ? null
+              : panel === "new"
               ? "前尘未定 · 一念入世"
               : (game?.player.name || "青溪") + " · 案头文书"
           }

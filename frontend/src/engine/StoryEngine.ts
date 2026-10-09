@@ -14,7 +14,7 @@ import {
 export const initialNpcs = () => structuredClone(characterDesign);
 export const chapters = chapterDesign;
 /**
- * 顶部纪年直接取玩家本机时间：公历年份减 2000 作为景和年号，
+ * 顶部纪年直接取玩家本机时间：公历年份减 2000 作为境元年号，
  * 月日使用中文写法，小时按传统十二时辰（每个时辰两小时）换算。
  */
 export function calendar(now = new Date()) {

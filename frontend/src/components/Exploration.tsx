@@ -19,7 +19,6 @@ import {
   requirementIssues,
 } from "../engine/AdventureEngine";
 import { Portrait } from "./Portrait";
-import { RichText } from "./RichText";
 
 export function WorldHub({
   game,
@@ -70,7 +69,6 @@ export function WorldHub({
         }}
       >
         <div className="scene-heading">
-          <small>{adventureDesign.hub.eyebrow}</small>
           <h1>{location.name.split(" · ").at(-1)}</h1>
           <p>{location.ambience}</p>
         </div>
@@ -263,9 +261,7 @@ export function ActivityDetail({
       <div className="reward-tiers">
         {activity.tiers.filter((t) => t.minScore >= 60).map((t) => (
           <div key={t.minScore}>
-            <strong>
-              通关奖励<small>达到 {t.minScore} 分</small>
-            </strong>
+            <strong>通关奖励</strong>
             <span>
               {rewardLines(t.rewards).join(" · ") || "保留本轮学识与错题记录"}
               {t.firstRewards && rewardLines(t.firstRewards).length > 0 && (
@@ -277,6 +273,7 @@ export function ActivityDetail({
                 </em>
               )}
             </span>
+            <small>达到 {t.minScore} 分</small>
           </div>
         ))}
       </div>
@@ -705,7 +702,6 @@ export function Outcome({
       <small>此行已毕 · {run.definition.name}</small>
       <div className="outcome-score">
         {run.score}
-        <span>分 · {run.grade}</span>
       </div>
       <h2>
         {run.definition.kind === "exam"
@@ -717,28 +713,14 @@ export function Outcome({
           : "错处已明，随时可以再试"}
       </h2>
       <blockquote>{run.response}</blockquote>
-      <p>
-        首次答对 {run.correct} / {run.definition.rounds} 个知识点 · 前置核验与复核{" "}
-        {run.diagnosticAnswered || 0} 题 · 补强 {run.trainingAnswered} 题 · 最高成绩{" "}
-        {game.adventure!.best[run.definition.id]} 分
-      </p>
-      <div className="loot-list">
-        {run.rewards.length ? (
-          run.rewards.map((line, i) => <span key={i}>{line}</span>)
-        ) : (
-          <span>保留已积累的学识，疑处留待重审</span>
-        )}
-      </div>
-      {game.attempt?.result && (
-        <details>
-          <summary>回看最后一页解析</summary>
-          <RichText>{game.attempt.result.explanation}</RichText>
-        </details>
+      {run.rewards.length > 0 && (
+        <div className="loot-list">
+          {run.rewards.map((line, i) => <span key={i}>{line}</span>)}
+        </div>
       )}
       <button className="gold-button" disabled={busy} onClick={finish}>
-        收好所得，回到青溪 →
+        回到青溪
       </button>
-      <small>奖励已自动入账，无需重复领取。</small>
     </section>
   );
 }

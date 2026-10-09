@@ -122,18 +122,20 @@ export function QuestionPanel({
                 : "错处留卷，来日再审。"}
             </small>
           </div>
-          <div className="answer-summary">
-            {!isSelfAssessment && <p>
+          {!isSelfAssessment && (
+            <div className="answer-summary">
+              <p>
               <b>标准答案</b>
               <RichAnswer answer={result!.standard!} options={q.options} trueFalse={q.type === "true_false"} />
-            </p>}
-            {!isSelfAssessment && !result!.correct && !result!.noIdea && (
-              <p>
-                <b>你的回答</b>
-                <RichAnswer answer={result!.answer} options={q.options} trueFalse={q.type === "true_false"} />
               </p>
-            )}
-          </div>
+              {!result!.correct && !result!.noIdea && (
+                <p>
+                  <b>你的回答</b>
+                  <RichAnswer answer={result!.answer} options={q.options} trueFalse={q.type === "true_false"} />
+                </p>
+              )}
+            </div>
+          )}
           <div className="explanation-block">
             {isSelfAssessment && <h3>完整解析</h3>}
             <RichText>{result!.explanation}</RichText>
@@ -183,7 +185,6 @@ export function QuestionPanel({
             ))}
             {exam?.examLabel && <span className="exam-label">{exam.examLabel}</span>}
             {exam?.displayQuestionNumber && <span className="exam-question-number">第{exam.displayQuestionNumber}题</span>}
-            {exam?.sourceName && <span className="exam-source">{exam.sourceName}</span>}
           </div>
           <div className="question-prompt-area">
             <RichText className="question-text">{q.question}</RichText>
