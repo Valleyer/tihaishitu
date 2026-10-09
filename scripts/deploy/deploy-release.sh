@@ -159,9 +159,25 @@ mkdir -p "$RELEASE_DIR/frontend" "$BACKUP_DIR"
 install -m 0644 "$UPLOAD/tihaishitu-backend.jar" "$RELEASE_DIR/tihaishitu-backend.jar"
 install -m 0644 "$UPLOAD/frontend-dist.zip" "$RELEASE_DIR/frontend-dist.zip"
 install -m 0644 "$UPLOAD/release.info" "$RELEASE_DIR/release.info"
-unzip -tq "$RELEASE_DIR/frontend-dist.zip" >/dev/null
+FRONTEND_ZIP_TEST_RC=0
+unzip -tq "$RELEASE_DIR/frontend-dist.zip" >/dev/null 2>&1 || FRONTEND_ZIP_TEST_RC=$?
+if (( FRONTEND_ZIP_TEST_RC > 1 )); then
+  fail "Frontend ZIP integrity test failed (unzip exit $FRONTEND_ZIP_TEST_RC)."
+fi
+if (( FRONTEND_ZIP_TEST_RC == 1 )); then
+  printf '[WARN] Frontend ZIP integrity test returned warnings; continuing to real extraction and structure validation.\n'
+fi
+
 unzip -tq "$RELEASE_DIR/tihaishitu-backend.jar" >/dev/null || fail 'Backend JAR is not a valid ZIP/JAR archive.'
-unzip -oq "$RELEASE_DIR/frontend-dist.zip" -d "$RELEASE_DIR/frontend"
+
+FRONTEND_UNZIP_RC=0
+unzip -oq "$RELEASE_DIR/frontend-dist.zip" -d "$RELEASE_DIR/frontend" >/dev/null 2>&1 || FRONTEND_UNZIP_RC=$?
+if (( FRONTEND_UNZIP_RC > 1 )); then
+  fail "Frontend ZIP extraction failed (unzip exit $FRONTEND_UNZIP_RC)."
+fi
+if (( FRONTEND_UNZIP_RC == 1 )); then
+  printf '[WARN] Frontend ZIP extraction returned warnings (common for Windows path separators); validating extracted files.\n'
+fi
 [[ -s "$RELEASE_DIR/frontend/index.html" && -d "$RELEASE_DIR/frontend/assets" ]] || fail 'ZIP content lacks index.html/assets. Stop before changing live system.'
 # Staging uses umask 077 for private backups; explicitly make PUBLIC static assets readable.
 chmod -R u+rwX,go+rX "$RELEASE_DIR/frontend"
