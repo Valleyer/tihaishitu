@@ -196,7 +196,19 @@
 .manage-sidebar { height: 100dvh; min-height: 0; box-sizing: border-box; overflow: hidden; }
 .manage-sidebar > header { display: flex; align-items: center; flex: 0 0 auto; }
 .manage-sidebar > header > div { display: grid; gap: 6px; }
-.manage-sidebar nav { flex: 1; min-height: 0; overflow-y: auto; align-content: start; }
+.manage-sidebar nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.manage-sidebar nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 .manage-sidebar footer { flex: 0 0 auto; margin: 0 4px; }
 
 /* 为可见滚动条预留稳定槽位，避免覆盖最右侧操作内容。 */
