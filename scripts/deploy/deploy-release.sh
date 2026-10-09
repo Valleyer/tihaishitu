@@ -134,7 +134,7 @@ for protected in "$WEB_ROOT" "$UPLOAD" "$RELEASE_ROOT" "$BACKUP_ROOT"; do
   fi
 done
 
-SERVICE_USER="$(systemctl show "$SERVICE" -p User --value)"
+SERVICE_USER="$(systemctl show "$SERVICE" -p User | awk -F= '$1 == "User" { print $2; exit }')"
 [[ -n "$SERVICE_USER" ]] || SERVICE_USER=root
 runuser -u "$SERVICE_USER" -- test -r "$QUESTION_IMAGE_DIR"   || fail "QUESTION_IMAGE_DIR is not readable by systemd service user $SERVICE_USER: $QUESTION_IMAGE_DIR"
 runuser -u "$SERVICE_USER" -- test -w "$QUESTION_IMAGE_DIR"   || fail "QUESTION_IMAGE_DIR is not writable by systemd service user $SERVICE_USER: $QUESTION_IMAGE_DIR"
