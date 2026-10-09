@@ -77,8 +77,9 @@ if defined DIRTY (
 set "SHA="
 set "SHORT_SHA="
 for /f "delims=" %%L in ('git rev-parse HEAD') do set "SHA=%%L"
-for /f "delims=" %%L in ('git rev-parse --short=7 HEAD') do set "SHORT_SHA=%%L"
 if not defined SHA goto :failed_repo
+rem Avoid a second git rev-parse inside FOR /F; derive the release short SHA from the validated full SHA.
+set "SHORT_SHA=!SHA:~0,7!"
 if not defined SHORT_SHA goto :failed_repo
 
 echo [INFO] Building main at !SHA!
