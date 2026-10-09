@@ -66,16 +66,11 @@ defaultWeights 是比例，不要求加起来等于 100。例如数学一 7、40
 
 ### 成长 growth
 
-答对获得：min(maxGain, correctBase + ceil(难度 / difficultyDivisor) + 高频奖励)。
-题目 frequency 达到 highFrequencyThreshold 时，额外加 highFrequencyBonus。
-答错获得 wrongGain 学识。
+单题作答不再直接改变寒门仕途的学识、声望或银两。核心资源在整轮
+Activity 成功结算时按 `activities*.json` 发放；功名由 Exam 状态派生。
 
 | 字段 | 含义 |
 | --- | --- |
-| correctBase、difficultyDivisor | 答对基础值和难度系数的除数 |
-| highFrequencyThreshold、highFrequencyBonus | 高频加成条件与数值 |
-| maxGain、wrongGain | 单题答对上限与答错收益 |
-| reputationEvery | 累计题数到该值的整数倍且本题答对时，声望 +1 |
 | relationshipMax | 好感度上限 |
 
 ### 复习 review

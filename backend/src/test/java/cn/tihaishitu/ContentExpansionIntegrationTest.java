@@ -3,6 +3,7 @@ package cn.tihaishitu;
 import cn.tihaishitu.game.GameContent;
 import cn.tihaishitu.game.GameFactory;
 import cn.tihaishitu.game.NewGameRequest;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,8 +45,14 @@ class ContentExpansionIntegrationTest {
 
         assertThat(content.activity("read").orElseThrow().path("activityMode").asText())
                 .isEqualTo("repeatable");
+        assertThat(content.activity("read").orElseThrow().path("tiers").path(1).path("rewards").toString())
+                .isEqualTo("{\"knowledge\":5}");
+        assertThat(content.activity("copy-work").orElseThrow().path("tiers").path(1).path("rewards").toString())
+                .isEqualTo("{\"coins\":4}");
         assertThat(content.activity("read-lu").orElseThrow().path("activityMode").asText())
                 .isEqualTo("repeatable");
+        assertThat(content.activity("read-lu").orElseThrow().path("tiers").path(1).path("rewards").fieldNames())
+                .toIterable().containsExactly("favorability");
 
         ObjectNode main = content.activity("prefecture-exam-paper").orElseThrow();
         assertThat(main.path("rounds").asInt()).isEqualTo(10);
@@ -62,6 +69,16 @@ class ContentExpansionIntegrationTest {
         assertThat(game.path("adventure").path("exams").path("prefecture-exam").isObject()).isTrue();
         assertThat(game.path("npcs").findValuesAsText("id")).contains("pei", "su");
 
+        game.with("adventure").with("attributes").put("insight", 99);
+        game.with("adventure").with("inventory").put("inkstone", 1);
+        game.with("adventure").with("equipped").put("desk", "inkstone");
+        ObjectNode frozenRun = JsonNodeFactory.instance.objectNode();
+        game.with("adventure").set("run", frozenRun);
+        ObjectNode frozenDefinition = frozenRun.with("definition");
+        frozenDefinition.put("id", "trial-ink");
+        frozenDefinition.with("completionReward").put("reputation", 7);
+        frozenDefinition.put("successDialogue", "旧旅程的承诺");
+
         ((ObjectNode) game.path("adventure").path("exams")).remove("prefecture-exam");
         game.withArray("npcs").removeAll();
         factory.hydrate(game);
@@ -69,5 +86,11 @@ class ContentExpansionIntegrationTest {
         assertThat(game.path("adventure").path("exams").path("prefecture-exam").path("status").asText())
                 .isEqualTo("unregistered");
         assertThat(game.path("npcs").findValuesAsText("id")).contains("pei", "su");
+        assertThat(game.path("adventure").path("attributes").path("insight").asInt()).isEqualTo(99);
+        assertThat(game.path("adventure").path("equipped").isEmpty()).isTrue();
+        assertThat(game.path("adventure").path("run").path("definition")
+                .path("completionReward").path("reputation").asInt()).isEqualTo(7);
+        assertThat(game.path("adventure").path("run").path("definition")
+                .path("successDialogue").asText()).isEqualTo("旧旅程的承诺");
     }
 }

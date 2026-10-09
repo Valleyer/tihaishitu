@@ -21,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StoreSqlShapeTest {
     private static final Path LEARNING_STORE = Path.of("src/main/java/cn/tihaishitu/learning/LearningBrowseStore.java");
     private static final Path MANAGEMENT_STORE = Path.of("src/main/java/cn/tihaishitu/manage/QuestionManagementStore.java");
+    private static final Path PRACTICE_SELECTION_STORE =
+            Path.of("src/main/java/cn/tihaishitu/learning/PracticeSelectionStore.java");
 
     @Test
     void learningQuestionPagingSelectsPlainIdWhileTotalStaysDistinct() throws IOException {
@@ -47,6 +49,18 @@ class StoreSqlShapeTest {
         String expression = QuestionNumberSort.naturalKey("q.question_number", "q.exam_year");
         assertThat(expression).contains("CONCAT(q.exam_year,'-')");
         assertThat(source).doesNotContain("QuestionNumberSort.naturalKey(\"q.question_number\")");
+    }
+
+    /**
+     * H2 的 MySQL 模式接受 {@code cursor} 表别名，真实 MySQL 5.7/8 会把它按关键字语义解析。
+     * 集成测试覆盖查询行为；这条源码形状守卫专门锁住两者之间无法由 H2 暴露的兼容性差异。
+     */
+    @Test
+    void randomAttemptCursorUsesMysqlSafeAlias() throws IOException {
+        String source = read(PRACTICE_SELECTION_STORE);
+        assertThat(source).contains("FROM learner_random_attempt_cursor rac");
+        assertThat(source).contains("attempt.id = rac.last_random_attempt_id");
+        assertThat(source).doesNotContain("learner_random_attempt_cursor cursor");
     }
 
     /**

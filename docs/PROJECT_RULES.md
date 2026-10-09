@@ -1720,3 +1720,49 @@ Skills、Plugins / Connectors / Apps 与专业工具，并按本任务需求选�
 - 任何工具使用都不得扩大当前 PR 约定范围。预计跨 PR 持续有效的新增决策
   仍按 §20 进入本文件；实施过程与一次性排查留在当前任务中。
 
+---
+
+## 25. 寒门仕途核心成长 V2
+
+寒门仕途的玩家可见核心成长只有：
+
+```text
+学识 / 声望 / 银两 / 功名
+```
+
+来源必须单一、清楚：
+
+```text
+学识 ← 潜心读书（repeatable，5 题，60 分，成功时 +5）
+银两 ← 抄书谋生（repeatable，5 题，60 分，成功时 +4）
+声望 ← activityMode=task 的一次性任务
+功名 ← Exam 主线 status=passed 的配置驱动文本
+```
+
+可重复人物活动只能增加好感度。普通单题作答不直接改变学识、声望、银两或功名；
+现代 Learner World 与 Legacy local 都在整轮 Activity 成功结算时改变核心资源。
+
+一次性 task 的 canonical 完成奖励只可包含：
+
+```text
+reputation / favorability / items / flags / title
+```
+
+每个 task 必须至少奖励 `reputation +1`；不得奖励 knowledge、coins 或 legacy attributes。
+任务失败无游戏惩罚、不记失败履历、入场费退回且可无限重试；成功奖励只发一次，
+`clears=1` 后入口永久关闭。
+
+功名与 `player.title` 分开：`player.title` 是叙事身份；功名按 `exams.json` 顺序取最高已通过 Exam 的
+`meritTitle`，未通过任何科举时显示「尚无功名」。
+
+`insight / eloquence / craft`（悟性 / 辞采 / 筹算）只是 Legacy compatibility：
+
+- canonical map / activity / exam 不得把它们用作门槛或奖励；
+- canonical item 不得再定义这些 `bonuses` 或 `use.attributes`；
+- HUD、地图、科举和行囊不展示它们；
+- 旧存档的 `adventure.attributes` 仍可读取，不做数据库硬迁移，但不参与新玩法；
+- 旧 `equipped` 指向当前 canonical 非 equipment 物品时，hydrate 安全清理该引用；
+- 旧 frozen run 的历史 requirement / reward 快照仍由兼容引擎容忍，不删除通用 attributes 解析分支。
+
+县试报名资格是学识 35、声望 3、报名银 12；府试是 `linchuan-arrived`、学识 50、声望 3、
+报名银 24。两者均不得使用 legacy attributes。

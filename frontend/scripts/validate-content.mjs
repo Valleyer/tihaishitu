@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateHanmenContent } from "../../scripts/validate-hanmen-content.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const content = join(root, "src", "content");
@@ -87,6 +88,19 @@ for (const exam of exams) {
   has(activityIds, exam.activityId, `科举 ${exam.id}`);
   has(activityIds, exam.preparationActivityId, `科举 ${exam.id}`);
 }
+const events = read("events.json");
+const adventure = read("adventure.json");
+errors.push(
+  ...validateHanmenContent({
+    activities,
+    adventure,
+    companions,
+    events,
+    exams,
+    items,
+    maps,
+  }),
+);
 for (const bank of read("question-banks.json")) {
   const points = unique(bank.knowledgePoints || [], `文集 ${bank.id} 知识点`);
   for (const question of bank.questions || []) {

@@ -21,9 +21,8 @@
       {
         "id": "ask-clearly",
         "text": "先向药童问清煎法与禁忌，再送进门",
-        "hint": "学识 +2，开启送药支线",
+        "hint": "开启送药支线",
         "effects": {
-          "knowledge": 2,
           "flags": [
             "medicine-entrusted"
           ]
@@ -42,10 +41,8 @@
       {
         "id": "study",
         "text": "留下温习，补齐今日疑处",
-        "hint": "学识 +3",
-        "effects": {
-          "knowledge": 3
-        }
+        "hint": "留下一夜温习的记忆",
+        "effects": {}
       },
       {
         "id": "sort",
@@ -139,17 +136,14 @@
       {
         "id": "keep",
         "text": "把这句话抄进自己的疑难册，不追问是谁",
-        "hint": "悟性增长，学识 +3",
-        "effects": {
-          "knowledge": 3
-        }
+        "hint": "收下无名书友的批注",
+        "effects": {}
       },
       {
         "id": "reply",
         "text": "在下方写下自己的理解，把书放回原处",
-        "hint": "声望 +1，留下无名书友的回应",
+        "hint": "留下无名书友的回应",
         "effects": {
-          "reputation": 1,
           "flags": [
             "answered-margin-note"
           ]
@@ -181,9 +175,8 @@
       {
         "id": "defer",
         "text": "先顾课业，答应核对书院的副本",
-        "hint": "学识 +3，沈砚好感度 +1",
+        "hint": "沈砚好感度 +1",
         "effects": {
-          "knowledge": 3,
           "favorability": {
             "shen": 1
           }
@@ -238,17 +231,14 @@
       {
         "id": "keep",
         "text": "收下，添些纸笔",
-        "hint": "铜钱 +20",
-        "effects": {
-          "coins": 20
-        }
+        "hint": "记下这次相助",
+        "effects": {}
       },
       {
         "id": "share",
         "text": "买些纸，分给书院同窗",
-        "hint": "声望 +2，顾怀安好感度 +2",
+        "hint": "顾怀安好感度 +2",
         "effects": {
-          "reputation": 2,
           "favorability": {
             "gu": 2
           }
@@ -303,9 +293,8 @@
       {
         "id": "rest",
         "text": "合上书卷，把明日要带的东西逐一收好",
-        "hint": "声望 +2，记住临场亦需从容",
+        "hint": "记住临场亦需从容",
         "effects": {
-          "reputation": 2,
           "flags": [
             "exam-eve-rest"
           ]
@@ -314,9 +303,8 @@
       {
         "id": "one-page",
         "text": "只重看最没有把握的一页，随后熄灯",
-        "hint": "学识 +5，不再无休止熬夜",
+        "hint": "留下临考复盘",
         "effects": {
-          "knowledge": 5,
           "flags": [
             "exam-eve-review"
           ]
@@ -348,37 +336,101 @@
       {
         "id": "quiet",
         "text": "将纸收好，默默继续温书",
-        "hint": "学识 +5",
-        "effects": {
-          "knowledge": 5
-        }
+        "hint": "把承诺记在心里",
+        "effects": {}
       }
     ],
     "speaker": "顾怀安",
     "npcId": "gu"
   },
   {
-    "id":"linchuan-rain","at":260,"title":"府城第一场雨","text":"南门客栈的瓦沟忽然漫水。裴照抱着一摞题签进门，看见你仍在核对投宿名册：‘府城比青溪大，但错一行名字，还是会让一个人无处落脚。’",
-    "options":[
-      {"id":"finish","text":"先把缺失的名字逐一补齐，再谈备考","hint":"裴照好感度 +2，声望 +1","effects":{"favorability":{"pei":2},"reputation":1}},
-      {"id":"share","text":"请同住举子一起核对，让每个人确认自己的记录","hint":"裴照好感度 +2，学识 +3","effects":{"favorability":{"pei":2},"knowledge":3}}
+    "id": "linchuan-rain",
+    "at": 260,
+    "title": "府城第一场雨",
+    "text": "南门客栈的瓦沟忽然漫水。裴照抱着一摞题签进门，看见你仍在核对投宿名册：‘府城比青溪大，但错一行名字，还是会让一个人无处落脚。’",
+    "options": [
+      {
+        "id": "finish",
+        "text": "先把缺失的名字逐一补齐，再谈备考",
+        "hint": "裴照好感度 +2",
+        "effects": {
+          "favorability": {
+            "pei": 2
+          }
+        }
+      },
+      {
+        "id": "share",
+        "text": "请同住举子一起核对，让每个人确认自己的记录",
+        "hint": "裴照好感度 +2",
+        "effects": {
+          "favorability": {
+            "pei": 2
+          }
+        }
+      }
     ],
-    "speaker":"裴照","npcId":"pei"
+    "speaker": "裴照",
+    "npcId": "pei"
   },
   {
-    "id":"wharf-supper","at":320,"title":"码头收工饭","text":"苏明绮把核完的账尺搁到一旁，请船工、抄手和你围坐吃面。席上没人谈大道理，只把今日少损了多少粮、早开了多少时辰说得清清楚楚。",
-    "options":[
-      {"id":"listen","text":"听船工讲纸上看不见的水路规矩","hint":"筹算 +2","effects":{"flags":["heard-river-workers"]}},
-      {"id":"record","text":"把每条经验写在账页背面，留给下一班抄手","hint":"苏明绮好感度 +2，声望 +2","effects":{"favorability":{"su":2},"reputation":2}}
+    "id": "wharf-supper",
+    "at": 320,
+    "title": "码头收工饭",
+    "text": "苏明绮把核完的账尺搁到一旁，请船工、抄手和你围坐吃面。席上没人谈大道理，只把今日少损了多少粮、早开了多少时辰说得清清楚楚。",
+    "options": [
+      {
+        "id": "listen",
+        "text": "听船工讲纸上看不见的水路规矩",
+        "hint": "记下水路规矩",
+        "effects": {
+          "flags": [
+            "heard-river-workers"
+          ]
+        }
+      },
+      {
+        "id": "record",
+        "text": "把每条经验写在账页背面，留给下一班抄手",
+        "hint": "苏明绮好感度 +2",
+        "effects": {
+          "favorability": {
+            "su": 2
+          }
+        }
+      }
     ],
-    "speaker":"苏明绮","npcId":"su"
+    "speaker": "苏明绮",
+    "npcId": "su"
   },
   {
-    "id":"exam-lanterns","at":400,"title":"贡院熄灯前","text":"府试前夜，贡院外的灯一盏盏熄下。裴照没有再递新题，只问：‘十个知识点里，哪一个你仍说不清？知道它，比假装全会更接近取中。’",
-    "options":[
-      {"id":"name","text":"写下最没有把握的知识点，先做一道最简单的同类题","hint":"学识 +5，留下临考复盘","effects":{"knowledge":5,"flags":["prefecture-eve-review"]}},
-      {"id":"rest","text":"合卷休息，明日用清醒的头脑逐题作答","hint":"声望 +2，留下临考从容","effects":{"reputation":2,"flags":["prefecture-eve-rest"]}}
+    "id": "exam-lanterns",
+    "at": 400,
+    "title": "贡院熄灯前",
+    "text": "府试前夜，贡院外的灯一盏盏熄下。裴照没有再递新题，只问：‘十个知识点里，哪一个你仍说不清？知道它，比假装全会更接近取中。’",
+    "options": [
+      {
+        "id": "name",
+        "text": "写下最没有把握的知识点，先做一道最简单的同类题",
+        "hint": "留下临考复盘",
+        "effects": {
+          "flags": [
+            "prefecture-eve-review"
+          ]
+        }
+      },
+      {
+        "id": "rest",
+        "text": "合卷休息，明日用清醒的头脑逐题作答",
+        "hint": "记住临场亦需从容",
+        "effects": {
+          "flags": [
+            "prefecture-eve-rest"
+          ]
+        }
+      }
     ],
-    "speaker":"裴照","npcId":"pei"
+    "speaker": "裴照",
+    "npcId": "pei"
   }
 ]

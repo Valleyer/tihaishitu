@@ -135,6 +135,17 @@ public class GameFactory {
         completedIds.forEach(id -> content.activity(id).ifPresent(activity -> {
             if ("task".equals(activity.path("activityMode").asText())) clears.put(id, 1);
         }));
+        if (!adventure.path("equipped").isObject()) adventure.set("equipped", objectMapper.createObjectNode());
+        ObjectNode equipped = (ObjectNode) adventure.path("equipped");
+        List<String> invalidSlots = new java.util.ArrayList<>();
+        equipped.fields().forEachRemaining(entry -> {
+            boolean valid = content.item(entry.getValue().asText())
+                    .filter(item -> "equipment".equals(item.path("kind").asText()))
+                    .filter(item -> entry.getKey().equals(item.path("slot").asText()))
+                    .isPresent();
+            if (!valid) invalidSlots.add(entry.getKey());
+        });
+        invalidSlots.forEach(equipped::remove);
         if (adventure.path("run").isObject()) {
             ObjectNode run = (ObjectNode) adventure.path("run");
             run.put("entryCost", run.path("entryCost").asInt());
@@ -143,7 +154,9 @@ public class GameFactory {
             content.activity(run.path("definition").path("id").asText()).ifPresent(activity -> {
                 ObjectNode definition = (ObjectNode) run.path("definition");
                 for (String key : List.of("activityMode", "completionReward", "successDialogue", "failureDialogue"))
-                    if (activity.has(key)) definition.set(key, activity.path(key).deepCopy());
+                    // Active runs are frozen promises: only backfill fields that
+                    // did not exist in older snapshots.
+                    if (!definition.has(key) && activity.has(key)) definition.set(key, activity.path(key).deepCopy());
             });
         }
         return game;

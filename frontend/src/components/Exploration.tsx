@@ -15,8 +15,6 @@ import {
 } from "../content";
 import {
   activityIssues,
-  attributeName,
-  effectiveAttribute,
   rewardLines,
   requirementIssues,
 } from "../engine/AdventureEngine";
@@ -197,11 +195,11 @@ export function ActivityShelf({
   return (
     <>
       <p className="hint">
-        点一盏灯，选一卷想读的书。每轮五题；达到通关要求即可获得本轮奖励，满分不再叠加额外档位。
+        潜心读书积累学识，抄书谋生赚取银两。两项日常均为五题，60 分通关。
       </p>
       <div className="activity-shelf">
         {activities
-          .filter((a) => a.kind === "study")
+          .filter((a) => ["read", "copy-work"].includes(a.id))
           .map((a) => (
             <button key={a.id} onClick={() => inspect(a.id)}>
               <small>{a.subtitle}</small>
@@ -301,11 +299,13 @@ export function ActivityDetail({
             mapDesign.locations.find((l) => l.id === activity.locationId)?.name
           : activity.kind === "study"
             ? "点灯，展开这一卷"
-            : activity.kind === "companion"
-              ? "坐下，与他一道读"
-              : activity.kind === "exam"
-                ? "点名入号，开始应试"
-              : "应下此事，进入挑战"}{" "}
+            : activity.kind === "work"
+              ? "提笔，开始校抄"
+              : activity.kind === "companion"
+                ? "坐下，与他一道读"
+                : activity.kind === "exam"
+                  ? "点名入号，开始应试"
+                  : "应下此事，进入挑战"}{" "}
         →
       </button>
     </div>
@@ -396,7 +396,7 @@ export function ExamPanel({
       <div className="exam-steps">
         <article className={record.status !== "unregistered" ? "done" : ""}>
           <b>壹 · 验明资格</b>
-          <p>{issues.length ? "报名资格尚未齐备" : "学识、声名与三门本领均已验明"}</p>
+          <p>{issues.length ? "报名资格尚未齐备" : "学识与声名均已验明"}</p>
         </article>
         <article className={record.status !== "unregistered" ? "done" : ""}>
           <b>贰 · 递帖报名</b>
@@ -598,8 +598,9 @@ export function Inventory({
   const [shop, setShop] = useState(false),
     [page, setPage] = useState(0);
   const state = game.adventure!,
+    shopAvailable = items.some((item) => (item.price || 0) > 0),
     list = items.filter((i) =>
-      shop ? !!i.price : (state.inventory[i.id] || 0) > 0,
+      shop && shopAvailable ? !!i.price : (state.inventory[i.id] || 0) > 0,
     ),
     pages = Math.max(1, Math.ceil(list.length / 4)),
     current = Math.min(page, pages - 1);
@@ -610,26 +611,16 @@ export function Inventory({
           <b>随身珍藏</b>
           <span>银两 {game.player.coins} 两</span>
         </div>
-        <button
-          onClick={() => {
-            setShop(!shop);
-            setPage(0);
-          }}
-        >
-          {shop ? "返回行囊" : "去纸墨铺添置 →"}
-        </button>
-      </div>
-      <div className="attribute-strip">
-        {adventureDesign.attributes.map((a) => (
-          <span key={a.id}>
-            {a.name}
-            <b>{effectiveAttribute(game, a.id)}</b>
-            <small>
-              本领 {state.attributes[a.id] || 0} + 装备{" "}
-              {effectiveAttribute(game, a.id) - (state.attributes[a.id] || 0)}
-            </small>
-          </span>
-        ))}
+        {shopAvailable && (
+          <button
+            onClick={() => {
+              setShop(!shop);
+              setPage(0);
+            }}
+          >
+            {shop ? "返回行囊" : "去纸墨铺添置 →"}
+          </button>
+        )}
       </div>
       <div className="inventory-grid">
         {list.slice(current * 4, current * 4 + 4).map((item) => {
@@ -647,13 +638,6 @@ export function Inventory({
                   {!shop && <small> ×{state.inventory[item.id]}</small>}
                 </h3>
                 <p>{item.description}</p>
-                {item.bonuses && (
-                  <em>
-                    {Object.entries(item.bonuses)
-                      .map(([id, v]) => attributeName(id) + " +" + v)
-                      .join(" · ")}
-                  </em>
-                )}
                 {shop ? (
                   <button
                     disabled={busy || game.player.coins < (item.price || 0)}
@@ -701,7 +685,7 @@ export function Inventory({
         </div>
       )}
       <p className="hint">
-        装备同一部位只能一件，加成用于解锁门槛；成绩仍由真正答对的题数决定。道具与银两来自读书、委托与试炼。
+        行囊保存旅途信物与剧情凭证；它们不再提供成长数值加成。
       </p>
     </>
   );

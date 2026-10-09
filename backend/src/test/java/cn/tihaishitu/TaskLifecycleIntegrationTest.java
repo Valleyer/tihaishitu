@@ -66,6 +66,8 @@ class TaskLifecycleIntegrationTest extends DiagnosticWorldTestSupport {
         state = worldStates.find(learner, WorldRegistry.ANCIENT_OFFICIAL);
         state.with("adventure").put("locationId", "old-school");
         int sideCoins = state.path("player").path("coins").asInt();
+        int sideKnowledge = state.path("player").path("knowledge").asInt();
+        int sideReputation = state.path("player").path("reputation").asInt();
         int sideFavorability = state.path("npcs").path(0).path("favorability").asInt();
         worldStates.save(learner, WorldRegistry.ANCIENT_OFFICIAL, state);
 
@@ -80,7 +82,9 @@ class TaskLifecycleIntegrationTest extends DiagnosticWorldTestSupport {
         JsonNode sidePassed = complete(begin(cookie, "story-letter"), cookie, 2);
         assertThat(sidePassed.path("adventure").path("run").path("score").asInt()).isEqualTo(60);
         assertThat(sidePassed.path("adventure").path("clears").path("story-letter").asInt()).isOne();
-        assertThat(sidePassed.path("player").path("coins").asInt()).isEqualTo(sideCoins + 12);
+        assertThat(sidePassed.path("player").path("coins").asInt()).isEqualTo(sideCoins);
+        assertThat(sidePassed.path("player").path("knowledge").asInt()).isEqualTo(sideKnowledge);
+        assertThat(sidePassed.path("player").path("reputation").asInt()).isEqualTo(sideReputation + 1);
         assertThat(sidePassed.path("npcs").path(0).path("favorability").asInt()).isEqualTo(sideFavorability + 2);
         finish(cookie, sidePassed);
         rejectBegin(cookie, "story-letter");

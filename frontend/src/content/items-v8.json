@@ -1,7 +1,42 @@
 [
-  {"id":"linchuan-guide","name":"临川坊图","description":"南门客栈抄给外乡举子的府城坊图，标着贡院、书院、码头与几条不易迷路的小巷。","kind":"keepsake","rarity":"旧物","symbol":"图"},
-  {"id":"pei-question-slip","name":"分题竹签","description":"裴照按细分知识点排好的一叠题签。装备后悟性 +3。","kind":"equipment","rarity":"雅物","symbol":"签","slot":"desk","bonuses":{"insight":3}},
-  {"id":"su-ledger-rule","name":"旧账尺","description":"苏明绮用来核验账页行距与改笔的木尺。装备后筹算 +3、悟性 +1。","kind":"equipment","rarity":"雅物","symbol":"尺","slot":"hand","bonuses":{"craft":3,"insight":1}},
-  {"id":"river-map-fragment","name":"浸水河图","description":"从府衙文库旧案中拼回的河图残页，标着一段从未真正疏浚的旧河道。","kind":"keepsake","rarity":"珍品","symbol":"河"},
-  {"id":"prefecture-pass-note","name":"府试取中帖","description":"临川府试十题全对的取中凭帖，是继续参加院试的正式凭证。","kind":"keepsake","rarity":"功名","symbol":"捷"}
+  {
+    "id": "linchuan-guide",
+    "name": "临川坊图",
+    "description": "南门客栈抄给外乡举子的府城坊图，标着贡院、书院、码头与几条不易迷路的小巷。",
+    "kind": "keepsake",
+    "rarity": "旧物",
+    "symbol": "图"
+  },
+  {
+    "id": "pei-question-slip",
+    "name": "分题竹签",
+    "description": "裴照按细分知识点排好的一叠题签。",
+    "kind": "keepsake",
+    "rarity": "雅物",
+    "symbol": "签"
+  },
+  {
+    "id": "su-ledger-rule",
+    "name": "旧账尺",
+    "description": "苏明绮用来核验账页行距与改笔的木尺。",
+    "kind": "keepsake",
+    "rarity": "雅物",
+    "symbol": "尺"
+  },
+  {
+    "id": "river-map-fragment",
+    "name": "浸水河图",
+    "description": "从府衙文库旧案中拼回的河图残页，标着一段从未真正疏浚的旧河道。",
+    "kind": "keepsake",
+    "rarity": "珍品",
+    "symbol": "河"
+  },
+  {
+    "id": "prefecture-pass-note",
+    "name": "府试取中帖",
+    "description": "临川府试十题全对的取中凭帖，是继续参加院试的正式凭证。",
+    "kind": "keepsake",
+    "rarity": "功名",
+    "symbol": "捷"
+  }
 ]

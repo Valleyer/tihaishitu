@@ -1,306 +1,171 @@
-# V2—V5：探索、人物、挑战与奖励修改手册
+# 寒门仕途玩法与内容修改手册
 
-这轮沿用现有 React 项目和本地 API，按四个连续里程碑落地：
-V2 默认世界与主动读书 → V3 人物对话与共读 → V4 地图副本与剧情答题 → V5 行囊装备、关系信物与连环委托。
+本文记录 PR9 之后的 canonical 玩法。目标是让新人生围绕四项成长推进，并让旧存档安全读取。
 
-它们是本轮具体功能的版本划分。游戏仍在青溪求学阶段，尚未实现正式科举、官场经营、战争或称帝。
+## 1. 四项核心成长
 
-## 1. 玩家现在怎样玩
+| 成长 | 唯一主要来源 | 说明 |
+| --- | --- | --- |
+| 学识 | 潜心读书 | 每轮五题，60 分通关，整轮结算 `knowledge +5` |
+| 银两 | 抄书谋生 | 每轮五题，60 分通关，整轮结算 `coins +4` |
+| 声望 | 一次性任务 | 成功后一次发放；失败不罚，可无限重试 |
+| 功名 | 科举主线 | 由配置中的 Exam 状态决定，不新增玩家数值字段 |
 
-进入人生后先看到所在地风景、故人和可遇之事，题目默认隐藏。旧版题面上方那条常驻人物对白已移除。
+普通单题只更新答题历史、错题和掌握度，不直接改变这四项资源。
+人物共读只增加对应人物的好感度。
 
-- **想提升自己**：底部“读书”→ 选青灯读书、临窗习文、案头演算；普通活动统一每轮五题，提升学识及悟性/辞采/筹算，赚取银两。
-- **想结交某人**：“故人”→ 前去拜访 → 闲谈或邀他共读。闲谈不送好感；共读五题达到通关线后获得统一奖励，满分不再增加第二档奖励。
-- **想拿专属宝物**：点击场景右上角“展开地图”→ 查看地点 → 动身前往 → 查看副本 → 进入挑战。一次性任务按完成条件发完整 `completionReward`。
-- **想看故事后续**：到达地点时可能遇上人物委托，回应后进入答题挑战。也可以先关掉邀请，之后从该地的“此间故事”继续。
-- **想使用所得**：“行囊”中查看、装备或使用物品；纸墨铺可以把答题获得的银两换成属性道具。
-- **想休息**：当前正式答题会持续推进到本轮结算；结束后回到世界继续旅行或选择其他活动。
+功名与身份称号彼此独立。`player.title` 仍是身份称号；功名显示取已通过的最高一场考试：
 
-最终题判完就自动结算，只发一次。点“查看此行战果”，然后“收好所得，回到青溪”。
-刷新或重进游戏仍默认展示世界，已有挑战会出现“继续行程/查看战果”入口。
-
-## 2. 配置文件一览
-
-均在 frontend/src/content/：
-
-| 文件 | 负责的内容 |
+| 状态 | 功名文本 |
 | --- | --- |
-| adventure.json | 初始地点、货币名称、三项本领的名称说明、世界文案 |
-| activities.json | V2—V6 的 25 项基础活动：修习、共读、副本、支线故事与主线任务 |
-| activities-v7.json | V7 地点扩充活动，集中补足东斋、藏书楼、夜读斋与清溪驿路 |
-| activities-v8.json | V8 临川府、府试、河工旧案、府城共读与副本 |
-| companions.json | 4 位人物的性格、分层问候、话题、共读入口与关系礼物 |
-| items.json | 17 件基础装备、消耗品和纪念信物 |
-| items-v7.json | V7 新增的东斋竹棋、旧册青线、五更铜灯与清溪驿铃 |
-| maps.json | 2 张大地图、12 个可移动地点、解锁门槛、人物、氛围文字、独立背景与地图坐标 |
-| characters.json | 人物姓名、身份、立绘和新人生关系初值 |
-| portraits.json | 八张独立方形头像的图片路径、名称与取景位置 |
-| game.json | 既有每题学识收益、日历、批注限制等 |
-| question-banks.json | 题库；本轮继续使用判断、单选、多选 |
+| 未通过任何考试 | 尚无功名 |
+| 县试通过 | 县试取中 |
+| 府试通过 | 府试取中 |
 
-代码中的中文注释解释了状态和结算原因。JSON 不支持注释，字段说明写在本手册。
-修改配置后运行一次 npm run validate:content 即可检查常见引用错误；正式发布再构建。
+历史存档里的 `adventure.attributes` 只作兼容保留。悟性、辞采、筹算不再参与新玩法的展示、门槛、奖励或物品效果。
 
-## 3. 活动的完整结构
+## 2. 玩家怎样推进
 
-新增读书、邀约、副本或剧情时，通常只需在 activities.json 追加一个对象。
-例：在旧书塾加一个副本，使用现有青溪砚作为奖励：
+新人生的主路径是：
 
-~~~json
+1. 在旧书塾反复“潜心读书”，把学识提升到地点与考试门槛。
+2. 需要银两时反复“抄书谋生”。
+3. 完成青溪的一次性任务取得声望和剧情标记。
+4. 达到学识 35、声望 3 后报名县试，十题全对取中。
+5. 完成驿路赴府与临川抵达剧情。
+6. 达到学识 50、声望 3 且拥有 `linchuan-arrived` 后报名府试。
+
+底部基础 Activity Shelf 只展示“潜心读书”和“抄书谋生”。人物共读、地点任务、温卷与考试仍从各自场景入口进入。
+
+## 3. 内容配置文件
+
+内容文件位于 `frontend/src/content/`：
+
+| 文件 | 用途 |
+| --- | --- |
+| `adventure.json` | 世界文案、关系等级、Activity kind 名称 |
+| `activities*.json` | 日常、人物共读、一次性任务、温卷与考试活动 |
+| `maps.json` | 地区、地点及学识/物品/剧情标记门槛 |
+| `exams.json` | 考试资格、费用、活动与功名文本 |
+| `items*.json` | 稳定物品 ID、纪念信物和任务物品 |
+| `companions.json` | 人物话题、共读入口与关系心意 |
+| `events.json` | 叙事选择；不得作为四项核心资源的来源 |
+| `game.json` | 通用上限等规则，不含逐题资源增长 |
+
+`activities.json`、`activities-v7.json`、`activities-v8.json` 会在运行时合并。已发布的 ID 不要改名或删除，以免破坏存档引用。
+
+## 4. 两项基础日常
+
+基础活动必须保持以下契约：
+
+```json
 {
-  "id": "trial-copy",
-  "kind": "dungeon",
-  "name": "旧卷寻真",
-  "subtitle": "副本 · 五关连试",
-  "description": "先生留下五册旧卷，要你核对其中的疑处。",
-  "invitation": "“你若读得透，这方砚便送你。”",
-  "npcId": "lu",
-  "locationId": "old-school",
+  "id": "read",
+  "kind": "study",
+  "name": "潜心读书",
+  "activityMode": "repeatable",
   "rounds": 5,
   "passScore": 60,
-  "activityMode": "repeatable",
-  "repeatable": true,
-  "requirements": {"attributes": {"insight": 4}},
   "tiers": [
-    {"minScore": 0, "label": "未过关", "rewards": {}, "dialogue": "“下回再来，不必急。”"},
-    {"minScore": 60, "label": "基础过关", "rewards": {"coins": 10}, "dialogue": "“已见用心。”"},
-    {
-      "minScore": 100,
-      "label": "完美过关",
-      "rewards": {"coins": 20, "attributes": {"insight": 2}},
-      "firstRewards": {"items": {"inkstone": 1}},
-      "dialogue": "“此物归你。”"
-    }
+    {"minScore": 0, "rewards": {}},
+    {"minScore": 60, "rewards": {"knowledge": 5}}
   ]
 }
-~~~
+```
 
-| 字段 | 说明 |
+```json
+{
+  "id": "copy-work",
+  "kind": "work",
+  "name": "抄书谋生",
+  "activityMode": "repeatable",
+  "rounds": 5,
+  "passScore": 60,
+  "tiers": [
+    {"minScore": 0, "rewards": {}},
+    {"minScore": 60, "rewards": {"coins": 4}}
+  ]
+}
+```
+
+旧普通 Study 不得重新放回基础 Shelf。县试与府试的温卷活动保留稳定 ID，仅作为落榜后的考试准备入口，不发成长资源。
+
+## 5. 一次性任务
+
+一次性任务使用 `activityMode: "task"`。成功奖励可包含：
+
+- `reputation`
+- `favorability`
+- `items`
+- `flags`
+- `title`
+
+不得包含 `knowledge`、`coins` 或 `attributes`。已有声望值保持；没有声望的一次性任务至少补 `reputation +1`。
+
+任务生命周期是稳定契约：
+
+- 失败没有数值惩罚和失败履历，可无限重试。
+- 入场费用开始时托管；失败或中止原数退回，成功才提交。
+- 达标时只发一次 `completionReward`，`clears[id]` 固定为 1。
+- 成功后入口永久关闭，不能重复领奖。
+- 已开始的活动保存完整定义快照；之后修改 canonical 配置不得覆盖旧快照承诺。
+
+## 6. 地点门槛
+
+canonical 地点只使用学识、剧情标记和物品推进：
+
+| 地点 | 门槛 |
 | --- | --- |
-| id | 活动稳定编号；存档用它记录最高成绩与首次奖励 |
-| kind | study 读书 / companion 共读 / dungeon 副本 / story 剧情 |
-| name、subtitle、description、invitation | 活动名称、类别说明、背景、出场邀请 |
-| npcId | 可选，主讲人物；须在 characters 中存在 |
-| locationId | 可选；有此字段就必须到达该地点才能开始 |
-| rounds | 一轮题数，配置检查允许 1–50 |
-| passScore | 通关分数，达到后 clears 次数增加 |
-| activityMode | `task` 为一次性任务，`repeatable` 为可重复活动；旧配置会按 kind/quest/repeatable 兼容归一 |
-| repeatable | 兼容字段；运行时以 activityMode 为准 |
-| requirements | 开始所需属性、道具或剧情前置，见下一节 |
-| tiers | 分数档与奖励，必须有 0 分兜底档 |
-| reviewOnly | true 只抽错题；没有错题时明确提示，不扣资源、不开始空活动 |
+| 旧书塾 | 无 |
+| 东斋 | 无 |
+| 藏书楼 | 学识 15 |
+| 县衙 | 学识 20 |
+| 试院前巷 | 学识 30 |
+| 夜读斋 | 学识 50 |
+| 清溪驿路 | `county-exam-passed` |
+| 临川府驿馆 | `prefecture-road-opened` |
+| 临川府试院前街 | `prefecture-road-opened` |
+| 临川府清晖书院 | `prefecture-road-opened` 且学识 55 |
+| 临川府河埠 | `prefecture-road-opened` 且学识 60 |
+| 临川府档案库 | `prefecture-road-opened` 且 `wharf-ledger-cleared` |
 
-普通题目仍从玩家在藏书阁启用的题库抽取，科目权重、掌握题排除和复习逻辑继续生效。活动不自带一套偷偷替换的题库。
-同一轮开始时会保存活动定义快照；中途改配置不会改变已承诺的轮数和奖励，新一轮才使用新配置。
+地点与活动自己的 requirements 会共同检查，不能从其他入口绕过。
 
-全局规格写在 `adventure.json.answerRules`：可重复读书、人物共读和副本仍按成绩档结算；一次性支线任务固定五题，答对至少三题完成；`kind: "exam"` 或 `quest: "main"` 的一次性主线固定十题且必须全对。旧配置会在加载时归一为明确的 `activityMode`。
+## 7. 科举与功名
 
-### 计分与奖励
+县试资格为学识 35、声望 3；府试资格为 `linchuan-arrived`、学识 50、声望 3。两场考试都不检查旧本领。
 
-分数 = 四舍五入（答对题数 / 总题数 × 100）。多选全部一致才算正确，不部分给分。
-普通五题可以得到 0/20/40/60/80/100。可重复活动达到通关线后统一发原最低通过档奖励；一次性支线在 60/80/100 时都发同一份完整奖励；主线十题只有 100 分完成。
+考试配置用 `meritTitle` 声明功名文本。界面按考试配置顺序寻找已通过的最高一场，不把功名写进 `player.title`，也不新增数据库字段。
 
-- repeatable 的 rewards：canonical runtime 只有 0 分档与一个 pass 档；达到通关线即发原最低通过档奖励，100 分不叠加额外奖励。
-- task 的 completionReward：把旧成功 tiers 的 rewards/firstRewards 折叠成一份；同 key 取最大值，不同 key 与 flags 合并，完成后只发一次。
-- firstRewards：repeatable 只保留最低通过档自身的首次奖励；更高旧档不再合并。progression-critical item / flag / title 必须放在 task 的 `completionReward` 归一输入中。
-- 首次奖励以 活动id:分数门槛 记账。改活动 id 或门槛会被视为新奖励，请谨慎对待旧存档。
-- Task 未完成只保留学习层答题 / evidence / mastery，不发整轮奖励、不降低好感度，也不形成游戏失败履历；可无限次重新开始。
-- Task 的入场费用在 begin 时托管，未完成或中途放下原数退回，完成时提交。完成后 clears 固定为 1，入口关闭。
+主线考试固定十题且必须全对。落榜后通过对应温卷活动恢复报名资格；温卷本身不发学识、银两或声望。
 
-## 4. 解锁门槛 requirements
+## 8. 物品与旧存档
 
-~~~json
-{
-  "knowledge": 50,
-  "reputation": 3,
-  "attributes": {"insight": 6, "craft": 4},
-  "favorability": {"shen": 12},
-  "items": ["shen-pass"],
-  "flags": ["debt-cleared"]
-}
-~~~
+canonical 物品不得包含 `bonuses.insight`、`bonuses.eloquence`、`bonuses.craft` 或 `use.attributes`。旧装备、消耗品的稳定 item ID 继续保留，但转为无旧属性效果的纪念信物。
 
-所有配置的条件都要满足；省略表示没有该门槛。
+读取旧存档时：
 
-- knowledge：学识；reputation：声望。
-- attributes：本领，当前内置 insight 悟性 / eloquence 辞采 / craft 筹算。
-- favorability：指定人物好感度。
-- items：背包必须拥有的道具，不要求装备，也不消耗。
-- flags：完成前置剧情后获得的标记。
-- 属性门槛取“基础本领 + 当前装备加成”。
-- 地点门槛与活动门槛共同生效，不能从其他入口绕过。
-- 页面展示缺少什么，并提供读书入口；地点解锁后可点击旅行。
+- 保留已有 `adventure.attributes` 数据，但不显示、不参与计算。
+- 若 `equipped` 指向当前不存在、非 equipment 或槽位不匹配的物品，安全移除该装备引用。
+- 不清空旧背包，不改写稳定 item ID。
+- 旧 active run 的冻结 requirements、tiers、奖励和对白继续按开始时快照执行。
 
-新增本领：先在 adventure.json.attributes 加 id/name/description，再在奖励或门槛里引用。界面和存档会为新字段提供初值 0。
-若要添加全新的条件类型，例如真实日期或多人队伍，需要扩展 Requirements 和 AdventureEngine。
+外层存档格式与数据库 schema 均不因本轮变化升级。
 
-## 5. 奖励 rewards / firstRewards
+## 9. 运行时边界
 
-~~~json
-{
-  "knowledge": 5,
-  "coins": 20,
-  "reputation": 2,
-  "attributes": {"craft": 3},
-  "favorability": {"gu": 4},
-  "items": {"gu-knot": 1},
-  "flags": ["helped-gu"]
-}
-~~~
+前后端都从同一套内容配置读取规则。`AdventureEngine` 与后端 `GameActionService` 负责整轮活动结算；`ProgressionSystem.settleProgress()` 不得按单题增加学识或声望。
 
-coins 是游戏货币原有字段，现在显示为“银两”。旧存档保留该字段数值，不做额外兑换或清零。
-人物关系上限沿用 game.json.growth.relationshipMax。
+RANDOM、Mastery V3、错题本、Global Question Bank、Study、Progress 与 `learnerDataCache` 不属于本轮改造范围。
 
-奖励字段只接受这里已经实现的含义，不能只加一个任意字段就期待生效。所有奖励预览与结算共用同一个解释函数，避免描述与实际脱节。
+## 10. 修改后的最小验证
 
-## 6. 人物对话与共读 companions.json
+```powershell
+cd frontend
+npm test
+npm run validate:content
+npm run build
+npm run lint
+```
 
-每位互动人物对应一项：
-
-- npcId：人物编号，关联 characters.json。
-- locationId：固定拜访地点，应与 maps 中 npcs 一致。
-- personality：性格描述。
-- greetings：按 minFavorability 分层的问候，按门槛从低到高排序。
-- topics：对话话题数组。
-- activities：共读活动 id 数组，活动中的 npcId 应与当前人物一致。
-- milestones：好感达到门槛后可领取的一次性礼物。
-
-话题示例：
-
-~~~json
-{
-  "id": "old-days",
-  "label": "说说你的旧事？",
-  "minFavorability": 10,
-  "lines": ["“那时，我也和你一样。”", "“可有些路，只能自己走一遍。”"]
-}
-~~~
-
-每次点“听下去”推进一句。没有达到好感门槛的话题会锁定。闲谈只记录谈话，不赠送属性或好感，因此无法靠重复点击刷关系。
-
-心意示例：
-
-~~~json
-{
-  "favorability": 12,
-  "title": "以身作保",
-  "reward": {"items": {"shen-pass": 1}},
-  "dialogue": "“拿着这帖去内库。出了岔子，来找我。”"
-}
-~~~
-
-必须在人物所在地点当面领取；每档按 人物id:数组下标 记账。已发布的礼物数组尽量只在末尾追加，不要重排旧档。
-当前陆承明、顾怀安、沈砚、林知微各有分层问候、四个主题话题、一种共读与一份关系礼物。
-
-共读好感度来自活动的整轮奖励。旧 `affinity`/`trust` 奖励在加载时按同一人物取最大值转成 `favorability`，不会相加膨胀。
-好感度固定为 0–100，等级统一从 `adventure.json.favorabilityLevels` 读取：0–9 初识、10–29 熟识、30–49 亲近、50–79 知己、80–100 莫逆。
-
-## 7. 地图、被动剧情与连环委托
-
-maps.json 每个地点新增：
-
-~~~json
-{
-  "requirements": {"attributes": {"craft": 2}},
-  "npcs": ["shen"],
-  "ambience": "账册摞得齐整，院外有船夫等着申辩。"
-}
-~~~
-
-原有 name、background、position、x、y 仍有效。地图上的所有节点都可以查看，未解锁地点展示门槛，已解锁地点可移动。
-
-`regionId` 把小地点归入大地图，`regions` 配置每张大地图的名称、底图与开放门槛。地点名称必须使用“大地图名 · 小地点名”，地图节点只显示点号后的短名。切换大地图不会直接移动人物，仍需点击具体地点并动身前往。
-
-到达地点后，系统寻找：
-kind=story + locationId 匹配 + 前置已满足 + 未完成 + 未弹过邀请。
-满足时弹出邀请详情；玩家选择应下才进入题面，关闭则留在当地，不会丢失任务。以后可从所在地故事卡重新打开。
-
-当前委托链：
-
-| 顺序 | 地点 | 故事 | 通关标记 |
-| --- | --- | --- | --- |
-| 1 | 旧书塾 | 门内的一封信 | letter-read |
-| 2 | 东斋 | 一张不该有的欠条 | debt-cleared |
-| 3 | 县衙 | 河埠的失踪货单 | ferry-cleared |
-| 4 | 试院前巷 | 满城灯火为谁明 | qingxi-complete |
-
-后一任务通过 requirements.flags 引用前一标记；完成奖励的 flags 写入新标记。
-目前没有随机战斗或自由脚本执行器，所有被动挑战都来自可审阅的配置。
-
-## 8. 副本和专属宝物
-
-| 副本 | 主要条件 | 100 分首次宝物 |
-| --- | --- | --- |
-| 旧塾夜试 | 旧书塾可直接挑战 | 青溪砚：悟性 +3 |
-| 漕仓疑账 | 县衙、筹算 4 | 清账算盘：筹算 +4 |
-| 听雨雅集 | 试院前巷、辞采 4 | 听雨玉笛：辞采 +4 |
-| 藏书楼秘卷 | 藏书楼、悟性 8、拥有青溪砚 | 藏书楼玉印 |
-| 内库尘封卷 | 县衙、筹算 8、拥有县衙通行帖 | 青溪河防图：筹算 +6、悟性 +2 |
-
-县衙通行帖由沈砚好感 12 的心意获得。因此“拜访 → 共读 → 关系信物 → 隐秘副本”是可以实际走通的闭环。
-副本没有额外入场扣费和失败惩罚，普通奖励可重刷，专属首奖不重复。
-
-## 9. 道具与装备 items.json
-
-| 字段 | 说明 |
-| --- | --- |
-| id、name、description | 编号、名称、说明 |
-| kind | equipment 装备 / consumable 消耗品 / keepsake 信物 |
-| rarity、symbol | 品级与文字印记，纯展示 |
-| slot | 装备部位，如 desk / hand / charm；同部位只能一件 |
-| bonuses | 装备提供的本领加成，卸下后自然消失 |
-| use | 消耗品使用一次发放的 Rewards，同时数量减 1 |
-| price | 有正数价格才进入纸墨铺，货币不足不能买 |
-
-装备与基础本领分开存储，不用“穿上加值、卸下减值”的重复修改方式，避免重复装备无限叠加。
-评分永远取真实正确率，装备不替玩家作答，也不直接提高分数。
-
-新增副本专属物品时不要设置 price，它就不会进入商店。添加到对应活动的 firstRewards.items 即可。
-
-## 10. 保存、升级与默认页面
-
-外层存档 version 仍为 2，以兼容原 API 与导出格式；新增 adventure.version=5 表示探索功能版本。
-游戏版本里程碑 V2—V5 不等于外层存储格式编号。
-
-Game.adventure 主要字段：
-
-| 字段 | 内容 |
-| --- | --- |
-| locationId、visited | 当前所在地与已访地点 |
-| attributes | 基础本领 |
-| inventory、equipped | 物品数量、各部位装备 |
-| best、clears | 活动最高成绩和达标次数 |
-| rewardClaims | 首档奖励与关系心意的领取标记 |
-| conversations | 话题互动次数，无数值收益 |
-| seenEncounters、encounter | 已弹过的剧情邀请、当前邀请 |
-| run | 当前活动快照、已答数、正确数、成绩与已结算奖励 |
-
-旧人生首次读取时添加 adventure，返回旧书塾，保留姓名、学识、钱、NPC 关系、历史题目和章节。
-未提交的 V1 课卷退出；不会算作答错。新人物补入，已有 NPC 关系不重置。
-旧版已待处理的选择际遇仍可从世界中的入口回应；本轮不再持续生成 V1 的题数际遇，而是使用探索剧情链。
-
-新活动恢复时，世界页有继续入口。当前题 options 顺序、当前轮配置、已结算状态都保存，刷新不会重洗当前题或重复发奖励。
-对话框当前看到第几句是 UI 临时状态，不单独跨刷新保存。
-
-## 11. 最小修改与验证
-
-- 改对白、奖励、物品名称：改相应 JSON，运行一次 npm run validate:content。
-- 改 UI 或规则：npm run build。
-- 改结算、迁移、存档：再跑 npm test；当前共 8 项核心回归，不做大量随机模拟。
-- 副本与物品配置的修改下一轮生效；当前活动承诺保持原快照。
-- 人物的初始名字/关系主要对新人生生效；不要删除旧存档正在引用的 id。
-
-逻辑入口是 engine/AdventureEngine.ts。API 负责一次读取、完整结算、一次写回；组件不直接操作存档数值。
-
-## 12. V7 地点内容扩充
-
-V7 使用独立的 `activities-v7.json` 与 `items-v7.json`，运行时会与原配置合并。这样继续增加地区时可以按版本拆文件，不需要反复改动早期内容。
-
-| 地点 | 新内容 | 连续关系 |
-| --- | --- | --- |
-| 青溪县 · 东斋 | 竹窗残局 | 满分获得东斋竹棋，可重复挑战 |
-| 青溪县 · 藏书楼 | 不在册中的书、百卷辨伪 | 先补回书目取得 `catalog-restored`，再开放辨伪副本 |
-| 青溪县 · 夜读斋 | 子夜温书、灯芯里的字、旧卷五更 | 可重复修习；读懂灯中来信后开放旧卷副本 |
-| 青溪县 · 清溪驿路 | 驿马不归、雨关递卷 | 寻回驿马取得 `post-horse-found`，再开放风雨护牒副本 |
-
-普通可重复活动自动归一为五题、单一通关奖励。失败不扣数值，只记录作答与错题。任务的前置标记和专属物品继续通过 `completionReward` 完整保留。
+后端至少运行任务生命周期、世界状态、题库、随机目标、奖励归一、内容扩展和寒门可达性这些定向测试。涉及长期规则时还要用真实浏览器检查：HUD 只显示四项成长、基础 Shelf 只有两个入口、行囊不显示旧属性，以及旧存档载入不崩溃。
