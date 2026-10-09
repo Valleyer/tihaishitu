@@ -310,11 +310,9 @@ export function ExamPanel({
   register: (id: string) => void;
   report: (message: string) => void;
 }) {
-  const [examId, setExamId] = useState(
-      exams.find((item) => game.adventure!.exams[item.id]?.status !== "passed")
-        ?.id || exams.at(-1)!.id,
-    ),
-    exam = exams.find((item) => item.id === examId) || exams[0],
+  const exam =
+      exams.find((item) => game.adventure!.exams[item.id]?.status !== "passed") ||
+      exams.at(-1)!,
     record = game.adventure!.exams[exam.id],
     issues = requirementIssues(game, exam.requirements),
     atExam = game.adventure!.locationId === exam.locationId,
@@ -350,18 +348,6 @@ export function ExamPanel({
               : "验明资格，递帖报名";
   return (
     <div className="exam-panel">
-      <nav className="exam-tabs" aria-label="科举阶段">
-        {exams.map((item) => (
-          <button
-            key={item.id}
-            className={item.id === exam.id ? "active" : ""}
-            onClick={() => setExamId(item.id)}
-          >
-            {item.name}
-            <small>{game.adventure!.exams[item.id]?.status === "passed" ? "已取中" : "查看进度"}</small>
-          </button>
-        ))}
-      </nav>
       <header>
         <small>{exam.subtitle}</small>
         <h2>{exam.name}</h2>
@@ -382,11 +368,11 @@ export function ExamPanel({
         </article>
         <article className={record.status !== "unregistered" ? "done" : ""}>
           <b>贰 · 递帖报名</b>
-          <p>{shortOfMoney ? "报名银尚未备足" : "报名银 " + exam.fee + " 两已经备妥"}</p>
+          <p>{shortOfMoney ? "报名银尚未备足" : "报名银 " + exam.fee + " 两"}</p>
         </article>
         <article className={record.status === "passed" ? "done" : ""}>
           <b>叁 · 十题定榜</b>
-          <p>十题全对取中 · 最高 {record.best || "—"} 分 · 取中后永久结案</p>
+          <p>十题全对取中</p>
         </article>
       </div>
       <button className="gold-button full" disabled={busy || !!game.adventure!.run || record.status === "passed"} onClick={action}>
