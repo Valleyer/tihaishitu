@@ -45,6 +45,7 @@
 - 发布脚本不会自动创建 / chown / chmod 图片目录，也不会自动恢复、删除或 `rsync --delete` 生产图片；失败后保留备份与现场，由人工结合数据库状态判断恢复。
 - 带新 Flyway migration 的版本通过 **新 JAR 启动自动执行**，**脚本不会直接操作 MySQL 表和 `flyway_schema_history`**。新服务不健康就不发布前端。
 - 新前端静态资源先复制，`index.html` 最后单文件切换；旧 hashed assets 暂不删除，避免已打开的浏览器标签加载失败。
+- Windows PowerShell `Compress-Archive` 生成的 ZIP 在部分 Linux `unzip` 版本上会因反斜线路径分隔符返回 exit 1（warning）。最新版脚本把 `unzip` 的 0 视为成功、1 视为“带 warning 继续验证”、>1 才视为失败；随后必须真实解压并检查 `index.html`、`assets` 与 `favicon.ico`，因此不会因为忽略 warning 而放过损坏包。
 - 出错即停止，保留错误现场；**不自动 `repair`、不清理迁移记录、不恢复旧 JAR、不自动回滚 DB**。数据库新结构可能与旧 JAR 不兼容，需要人工判断。
 - 程序检查 `actuator/health` 和静态文件 HTTP，但**不等于业务功能端到端验收**。成功后仍应浏览器验证登录、知识、题库、练习、寒门仕途及管理功能，并在有新迁移时 Navicat 确认 Flyway 版本。
 - 当前数据库应用账号保留 DDL 权限是用户此前选择；如以后采用独立 Flyway 账号，需同步调整手册，不应在脚本里永久扩大权限。
