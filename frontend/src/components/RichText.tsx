@@ -15,29 +15,67 @@ type MarkdownNode = {
   children?: MarkdownNode[];
 };
 
+const inequalityCommand = /\\(?:neq|ne)(?![A-Za-z])/g;
+
 function normalizeMathValue(value: string) {
-  return value
-    .replace(/\\frac(?![A-Za-z])/g, "\\dfrac")
-    .replace(/\\(?:neq|ne)(?![A-Za-z])/g, "≠");
+  return value.replace(/\\frac(?![A-Za-z])/g, "\\dfrac");
 }
 
 /**
  * 仅规范 remark-math 已识别出的数学节点：
  * - \frac 按 \dfrac 渲染，统一题干 / 解析 / 选项的分式尺寸；
- * - 历史题库里的 \ne / \neq 直接替换为 Unicode ≠，避免部分 KaTeX / 字体环境
- *   把组合式不等号显示成类似 "/=" 的效果。
+ * - inline math 中的 \ne / \neq 不再交给 KaTeX 画组合符号，而是把数学节点拆开，
+ *   在两个数学片段之间插入普通文本 Unicode “≠”。这样最终使用页面正文字体的
+ *   单字符不等号，不会再显示成视觉上类似 “/=” 的 KaTeX 组合字形。
  * 不改数据库原文，也不触碰代码块或普通 Markdown 文本。
  */
 function remarkNormalizeMath() {
   return (tree: MarkdownNode) => {
     const visit = (node: MarkdownNode) => {
-      if (
-        (node.type === "math" || node.type === "inlineMath") &&
-        typeof node.value === "string"
-      ) {
-        node.value = normalizeMathValue(node.value);
+      if (!node.children) {
+        if (
+          node.type === "math" &&
+          typeof node.value === "string"
+        ) {
+          node.value = normalizeMathValue(node.value);
+        }
+        return;
       }
-      node.children?.forEach(visit);
+
+      const nextChildren: MarkdownNode[] = [];
+      for (const child of node.children) {
+        if (
+          child.type === "inlineMath" &&
+          typeof child.value === "string" &&
+          inequalityCommand.test(child.value)
+        ) {
+          inequalityCommand.lastIndex = 0;
+          const parts = child.value.split(inequalityCommand);
+          parts.forEach((part, index) => {
+            if (part) {
+              nextChildren.push({
+                type: "inlineMath",
+                value: normalizeMathValue(part),
+              });
+            }
+            if (index < parts.length - 1) {
+              nextChildren.push({ type: "text", value: " ≠ " });
+            }
+          });
+          continue;
+        }
+
+        inequalityCommand.lastIndex = 0;
+        if (
+          (child.type === "math" || child.type === "inlineMath") &&
+          typeof child.value === "string"
+        ) {
+          child.value = normalizeMathValue(child.value);
+        }
+        visit(child);
+        nextChildren.push(child);
+      }
+      node.children = nextChildren;
     };
     visit(tree);
   };
