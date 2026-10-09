@@ -1,5 +1,6 @@
 // 内容编辑后的轻量检查：检查引用、题型与素材路径；不运行游戏模拟。
 import fs from "node:fs";
+import { validateHanmenContent } from "./validate-hanmen-content.mjs";
 const root = new URL("../frontend/src/content/", import.meta.url);
 const read = (name) =>
   JSON.parse(
@@ -134,10 +135,6 @@ check(
   game.calendar.normal > 0 && game.calendar.slow > 0,
   "每一天的题数必须大于 0",
 );
-check(
-  game.growth.difficultyDivisor > 0 && game.growth.reputationEvery > 0,
-  "成长计算的除数必须大于 0",
-);
 for (const path of [
   game.titleBackground,
   // 新版头像是独立方图，不再依赖旧版横向图集。
@@ -220,10 +217,6 @@ const checkGate = (gate, source) => {
 };
 check(locIds.includes(adventure.startLocation), "初始地图不存在");
 for (const a of activities) {
-  check(
-    ["study", "companion", "dungeon", "story", "exam"].includes(a.kind),
-    a.id + " 活动类型无效",
-  );
   check(["task", "repeatable"].includes(a.activityMode), a.id + " 缺少 activityMode");
   check(
     Number.isInteger(a.rounds) && a.rounds > 0 && a.rounds <= 50,
@@ -296,6 +289,17 @@ for (const l of maps.locations) {
   checkGate(l.requirements, l.id);
   for (const id of l.npcs) check(npcIds.includes(id), l.id + " 人物不存在");
 }
+errors.push(
+  ...validateHanmenContent({
+    activities,
+    adventure,
+    companions,
+    events,
+    exams,
+    items,
+    maps,
+  }),
+);
 console.log(
   "探索内容：" +
     activities.length +
