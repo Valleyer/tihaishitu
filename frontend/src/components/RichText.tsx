@@ -18,13 +18,14 @@ type MarkdownNode = {
 function normalizeMathValue(value: string) {
   return value
     .replace(/\\frac(?![A-Za-z])/g, "\\dfrac")
-    .replace(/\\ne(?!q|g|arrow)/g, "\\neq ");
+    .replace(/\\(?:neq|ne)(?![A-Za-z])/g, "≠");
 }
 
 /**
  * 仅规范 remark-math 已识别出的数学节点：
  * - \frac 按 \dfrac 渲染，统一题干 / 解析 / 选项的分式尺寸；
- * - 历史题库里的 \ne 兼容成 \neq，视觉上渲染为 ≠。
+ * - 历史题库里的 \ne / \neq 直接替换为 Unicode ≠，避免部分 KaTeX / 字体环境
+ *   把组合式不等号显示成类似 "/=" 的效果。
  * 不改数据库原文，也不触碰代码块或普通 Markdown 文本。
  */
 function remarkNormalizeMath() {
