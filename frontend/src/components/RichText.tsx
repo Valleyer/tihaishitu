@@ -15,67 +15,34 @@ type MarkdownNode = {
   children?: MarkdownNode[];
 };
 
-const inequalityCommand = /\\(?:neq|ne)(?![A-Za-z])/g;
+function normalizeMarkdownSource(value: string) {
+  return value.replace(
+    /\$([^$\n]*?)\\(?:neq|ne)(?![A-Za-z])([^$\n]*?)\$/g,
+    (_, left: string, right: string) => `${left}&ne;${right}`,
+  );
+}
 
 function normalizeMathValue(value: string) {
   return value.replace(/\\frac(?![A-Za-z])/g, "\\dfrac");
 }
 
 /**
- * 仅规范 remark-math 已识别出的数学节点：
- * - \frac 按 \dfrac 渲染，统一题干 / 解析 / 选项的分式尺寸；
- * - inline math 中的 \ne / \neq 不再交给 KaTeX 画组合符号，而是把数学节点拆开，
- *   在两个数学片段之间插入普通文本 Unicode “≠”。这样最终使用页面正文字体的
- *   单字符不等号，不会再显示成视觉上类似 “/=” 的 KaTeX 组合字形。
- * 不改数据库原文，也不触碰代码块或普通 Markdown 文本。
+ * 渲染层兼容：
+ * - 原 Markdown 里的 $xxx\ne xxx$ / $xxx\neq xxx$ 在进入 Markdown 解析前，
+ *   直接替换成 xxx&ne;xxx；这样由 Markdown 实体解析成普通文本 “≠”，完全绕开 KaTeX。
+ * - 已被 remark-math 识别的数学节点中，\frac 按 \dfrac 渲染。
+ * 数据库原文和编辑框内容都不修改。
  */
 function remarkNormalizeMath() {
   return (tree: MarkdownNode) => {
     const visit = (node: MarkdownNode) => {
-      if (!node.children) {
-        if (
-          node.type === "math" &&
-          typeof node.value === "string"
-        ) {
-          node.value = normalizeMathValue(node.value);
-        }
-        return;
+      if (
+        (node.type === "math" || node.type === "inlineMath") &&
+        typeof node.value === "string"
+      ) {
+        node.value = normalizeMathValue(node.value);
       }
-
-      const nextChildren: MarkdownNode[] = [];
-      for (const child of node.children) {
-        if (
-          child.type === "inlineMath" &&
-          typeof child.value === "string" &&
-          inequalityCommand.test(child.value)
-        ) {
-          inequalityCommand.lastIndex = 0;
-          const parts = child.value.split(inequalityCommand);
-          parts.forEach((part, index) => {
-            if (part) {
-              nextChildren.push({
-                type: "inlineMath",
-                value: normalizeMathValue(part),
-              });
-            }
-            if (index < parts.length - 1) {
-              nextChildren.push({ type: "text", value: " ≠ " });
-            }
-          });
-          continue;
-        }
-
-        inequalityCommand.lastIndex = 0;
-        if (
-          (child.type === "math" || child.type === "inlineMath") &&
-          typeof child.value === "string"
-        ) {
-          child.value = normalizeMathValue(child.value);
-        }
-        visit(child);
-        nextChildren.push(child);
-      }
-      node.children = nextChildren;
+      node.children?.forEach(visit);
     };
     visit(tree);
   };
@@ -96,7 +63,7 @@ export function RichText({
       rehypePlugins={[rehypeKatex]}
       components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
     >
-      {children}
+      {normalizeMarkdownSource(children)}
     </Markdown>
   );
   if (inline) return <span className={`rich-text rich-inline ${className}`}>{content}</span>;
