@@ -79,7 +79,6 @@ export function QuestionPanel({
       : result?.correct
         ? "此卷已明"
         : "留待复核";
-  const knowledgePoints = attempt.reveal?.knowledgePoints || q.knowledgePoints;
   /**
    * 题面来源 metadata（后端在发题时冻结进 attempt snapshot，Hub 与 World 共用同一结构）。
    * 来源 / 真题标签 / 显示题号作为明确 metadata 展示，不塞进剧情文字；
@@ -141,15 +140,6 @@ export function QuestionPanel({
             {isSelfAssessment && <h3>完整解析</h3>}
             <RichText>{result!.explanation}</RichText>
           </div>
-          <details className="knowledge-explanation">
-            <summary>查看本题知识点解析</summary>
-            {knowledgePoints.map((point) => (
-              <section key={point.id}>
-                <h3>{point.name}</h3>
-                <RichText>{point.explanation || point.description}</RichText>
-              </section>
-            ))}
-          </details>
           <div className="changes">
             {result!.changes.map((change) => (
               <span key={change.label}>
