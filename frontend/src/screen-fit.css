@@ -1165,6 +1165,7 @@
   }
 }
 @media (max-width: 720px) {
+  :where(html:not(.mobile-landscape-active)) {
   .world-shell .game-app.in-world {
     grid-template-rows: 54px minmax(0, 1fr) 58px;
   }
@@ -1473,6 +1474,7 @@
   .map-location small {
     font-size: 8px;
   }
+}
 }
 @media (max-height: 570px) {
   .title-top {

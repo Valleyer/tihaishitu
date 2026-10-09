@@ -597,6 +597,7 @@
 }
 
 @media (max-width: 767px) {
+  :where(html:not(.mobile-landscape-active)) {
   .learning-hub .hub-header { height: auto; min-height: 64px; }
   .learning-hub .hub-header-inner { width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 0 16px; }
   .learning-hub .hub-brand { font-size: 18px; }
@@ -632,8 +633,10 @@
   .learning-hub .activity-chart { gap: 5px; }
   .auth-page .auth-card { padding: 28px 24px; }
 }
+}
 
 @media (max-width: 560px) {
+  :where(html:not(.mobile-landscape-active)) {
   .learning-hub .overview-metrics,
   .learning-hub .progress-hero-grid,
   .learning-hub .book-progress-metrics,
@@ -666,6 +669,7 @@
   .learning-hub .today-metrics p > span:not(.study-status-icon) { grid-column: 2; }
   .learning-hub .today-metrics b { grid-column: 3; grid-row: 1; font-size: 24px; }
   .learning-hub .study-status-icon { grid-row: 1; }
+}
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -745,4 +749,7 @@
 .learning-hub .chart-column span { color: var(--zj-text-tertiary); font-size: 10px; white-space: nowrap; }
 .learning-hub .chart-empty { position: absolute; z-index: 1; inset: 42% 0 auto; color: var(--zj-text-tertiary); text-align: center; }
 .learning-hub .chart-x-title { color: var(--zj-text-tertiary); font-size: 12px; text-align: center; }
-@media(max-width:700px){.learning-hub .chapter-drill-action{align-items:stretch;flex-direction:column}.learning-hub .activity-chart-body{grid-template-columns:18px 30px 1fr}.learning-hub .chart-column span{font-size:9px}}
+@media(max-width:700px){
+  :where(html:not(.mobile-landscape-active)) {.learning-hub .chapter-drill-action{align-items:stretch;flex-direction:column}.learning-hub .activity-chart-body{grid-template-columns:18px 30px 1fr}.learning-hub .chart-column span{font-size:9px}
+}
+}

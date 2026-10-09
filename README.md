@@ -128,6 +128,10 @@ $env:JAVA_HOME='D:\Java\jdk-17.0.2'
 
 图片是 immutable asset：题目换图或移除图片只改变当前绑定，**不会改变任何历史 Attempt**；旧 Attempt 的冻结快照继续显示当时那张图。图片文件不在数据库里，完整备份必须同时包含 MySQL 与 `QUESTION_IMAGE_DIR`，见 [`docs/deployment.md`](docs/deployment.md) §6.1；长期规则见 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md) §6.2。本版不支持多图、解析图、选项图、OCR 与图片批量导入。
 
+## 手机端
+
+窄屏触摸手机登录后，已登录应用会自动按横屏画布展示（登录 / 注册页保持竖屏，设备真实横屏时不旋转）；这是正式移动端重构前的临时兼容层，规则见 [`docs/PROJECT_RULES.md`](docs/PROJECT_RULES.md) §25。
+
 ## 最小验证
 
 Agent 默认只跑最小必要测试（完整规则见 [`AGENTS.md`](AGENTS.md) 的“Agent 测试边界”）：

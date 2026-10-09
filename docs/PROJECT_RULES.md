@@ -1787,7 +1787,86 @@ Skills、Plugins / Connectors / Apps 与专业工具，并按本任务需求选�
 
 ---
 
-## 25. 寒门仕途核心成长 V2
+## 25. 手机端登录后强制横屏兼容层（临时长期策略）
+
+正式手机端响应式重构完成前，认证页继续使用现有 portrait 响应式布局；窄屏触摸手机在
+登录后的 portrait 状态使用统一 forced-landscape compatibility shell，复用现有横屏 /
+窄桌面 UI；设备真实 landscape 时不旋转。该兼容层只负责 viewport 与布局适配，**不改变
+Hub / World / Manage 的业务职责**。未来正式移动端完成后，应**整体移除**该兼容层，
+而不是继续在业务页面堆叠移动端补丁。
+
+固定产品行为：
+
+```text
+手机 /login、/register            → 保持现有 portrait 页面，不旋转
+手机 portrait 登录后              → 整个已登录应用统一旋转 90°，按横向画布展示
+手机真实 landscape                → 不做 CSS 旋转，直接使用真实横屏 viewport
+PC / 普通桌面                     → 完全不变
+```
+
+实现事实：
+
+```text
+外壳                frontend/src/components/MobileLandscapeShell.tsx（唯一最外层，包住 RootApp）
+样式                frontend/src/mobile-landscape.css（shell / 逻辑 viewport / phone-only 隔离 / low-height 复用）
+激活判定            (orientation: portrait) and (max-width: 600px)
+                    AND (navigator.maxTouchPoints > 0 or (pointer: coarse))
+根节点 class        html.mobile-landscape-active（render 阶段同步写入，退出/卸载清理）
+逻辑 viewport       --mobile-landscape-width / --mobile-landscape-height（100dvh / 100dvw）
+```
+
+长期约束：
+
+```text
+不逐页重构 Hub / World / Manage，不新增手机底部导航，不复制第二套页面；
+Shell 始终存在，portrait / landscape 之间只切 class 与 CSS，绝不在 Fragment ↔ div 之间
+  切换 DOM 层级，避免 orientation 切换 remount 业务 App（Practice / World / Modal /
+  QuestionEditor 状态不得因旋转丢失）；
+不新增“请旋转手机 / 点击进入横屏”这类阻塞遮罩；
+不使用 screen.orientation.lock() 作为主方案，不使用 Chrome 私有 API，不禁止缩放；
+旋转只属于视觉层：不改变 DOM 顺序、Tab 顺序、ARIA 与屏幕阅读语义；
+forced landscape 下非 shell 的滚动容器不再滚动，Hub 路由切换后必须复位 shell scrollTop。
+```
+
+响应式隔离原则：
+
+```text
+phone-only media query（约 560 / 680 / 700 / 720 / 767）在 active 时不进入 cascade，
+  做法是在原 CSS 文件把这些块包进 :where(html:not(.mobile-landscape-active))，
+  不复制桌面 CSS 去硬覆盖 mobile CSS；
+窄桌面 / tablet 横屏规则（约 900 / 1000 / 1024 / 1050 / 1100 / 1180 / 1190）继续保留，
+  同样**不要**隔离 1050 这类分档：forced landscape 的逻辑宽度约 812 / 844 / 932，
+  本来就应该命中它们；
+low-height compact 规则（源文件里的 @media max-height 740 / 760 / 570 / 580）在 forced
+  landscape 下**永远不会自动触发**：真实 portrait height 是 800+，而旋转后的逻辑高度
+  只有约 390，media query 看到的是前者。因此 mobile-landscape.css 中这些规则必须
+  **直接以 html.mobile-landscape-active 选择器无条件生效**，不能继续包在
+  @media (max-height: …) 里；`mobile-landscape-active` 成立本身已蕴含
+  「手机 portrait + max-width:600px + 触摸」，而真实 portrait width 恰好等于旋转后的
+  逻辑高度。数值仍复用源文件那一组，不得另起一套长期漂移。
+  若将来确实要按逻辑高度分档，用真实 portrait width 表达（如 @media (max-width:430px)），
+  但当前固定行为是目标机型 375 / 390 / 430 统一使用同一套 compact 规则；
+100vw / 100vh / 100dvh 之类引用真实 viewport 的几何，只在 forced landscape 下按逻辑
+  width / height 修正真正受影响的根高度、Hub 内容宽度、World 题面高度、Manage
+  sidebar / 列表 / drawer / toast、以及 manage-loading / hub-loading 这类 min-height:100vh
+  满屏容器与原生 <dialog> 弹窗，不做机械全局替换。
+```
+
+注意：`getComputedStyle(el).width/height` 给的是 transform **之前**的 layout size，
+`getBoundingClientRect()` 给的是 transform **之后**落在真实 viewport 上的 visual box。
+在 forced landscape 里两者必然互换（844/390 ↔ 390/844），这是预期现象，不是 bug；
+断言布局尺寸时必须读 computed style。这条对自动化验收同样长期有效。
+
+`<dialog showModal()>` 进入 top layer，其 `position: fixed` 的 containing block 是真实
+viewport，不受 shell transform 影响，因此弹窗需要自己按逻辑 viewport 尺寸旋转；这条
+长期有效，新增弹窗组件时应继续复用同一套 scoped 规则。
+
+验证边界：Chromium Device Emulation 可以验证判定、几何与回归；**真实 iOS Safari
+必须在报告中单独标注是否真实验证**，不得用 Chromium 结果声称全平台兼容。
+
+---
+
+## 26. 寒门仕途核心成长 V2
 
 寒门仕途的玩家可见核心成长只有：
 
