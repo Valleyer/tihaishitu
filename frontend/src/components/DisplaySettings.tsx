@@ -30,12 +30,6 @@ export function DisplaySettings() {
           {fullscreen ? "退出全屏" : "进入全屏"}
         </button>
       </div>
-      <div>
-        <h3>屏幕适配</h3>
-        <p>
-          主界面随窗口自动调整。窄屏收起侧栏，长题干与选项分段翻页，不压缩成难读的小字。
-        </p>
-      </div>
       {error && (
         <p className="error-banner" role="alert">
           {error}

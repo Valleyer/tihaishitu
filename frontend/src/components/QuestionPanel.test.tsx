@@ -59,10 +59,9 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("第3题")).toBeTruthy();
     // displayQuestionNumber 已剥离年份前缀，不能再出现 `第2022-3题`。
     expect(screen.queryByText(/第2022-3题/)).toBeNull();
-    expect(view.container.querySelector(".knowledge-ribbon .exam-source")?.textContent)
-      .toBe("2022年全国硕士研究生招生考试数学一");
+    expect(view.container.querySelector(".knowledge-ribbon .exam-source")).toBeNull();
     expect(view.container.querySelectorAll(".knowledge-ribbon .exam-label")).toHaveLength(1);
-    expect(screen.getAllByText("2022年全国硕士研究生招生考试数学一")).toHaveLength(1);
+    expect(screen.queryByText("2022年全国硕士研究生招生考试数学一")).toBeNull();
   });
 
   it("deduplicates a source name equal to the exam label after trimming", () => {
@@ -113,7 +112,7 @@ describe("World question panel exam metadata", () => {
     solution.question.gradingMode = "self_assessment";
     solution.question.options = {};
     solution.reveal = { explanation: "## 答案与解析\n\n完整过程", knowledgePoints: solution.question.knowledgePoints };
-    render(
+    const view = render(
       <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
         next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
@@ -121,6 +120,37 @@ describe("World question panel exam metadata", () => {
     expect(screen.getByText("参考解析")).toBeTruthy();
     expect(screen.queryByText("参考解答")).toBeNull();
     expect(screen.queryByText("解题分析")).toBeNull();
+    const scroll = view.container.querySelector(".self-assessment-scroll");
+    expect(scroll).toBeTruthy();
+    expect(scroll?.querySelector(".question-prompt-area")).toBeTruthy();
+    expect(scroll?.querySelector(".self-assessment-reference")).toBeTruthy();
+    expect(scroll?.querySelectorAll(".question-prompt-area, .self-assessment-reference")).toHaveLength(2);
+  });
+
+  it("omits the standard-answer bar from a graded solution result", () => {
+    const solution = attempt();
+    solution.question.type = "self_assessment";
+    solution.question.originalType = "solution";
+    solution.question.presentationType = "self_assessment";
+    solution.question.gradingMode = "self_assessment";
+    solution.question.options = {};
+    solution.result = {
+      correct: false,
+      assessment: "partial",
+      answer: "partial",
+      standard: "",
+      explanation: "完整过程",
+      aliases: [],
+      story: "",
+      changes: [],
+    };
+    const view = render(
+      <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
+        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        setReview={noop} onEvent={noop} />,
+    );
+    expect(view.container.querySelector(".answer-summary")).toBeNull();
+    expect(screen.getByText("完整解析")).toBeTruthy();
   });
 
   it("offers no-idea and submits a question report", async () => {

@@ -106,6 +106,29 @@ const legacyAttributeNames: Record<string, string> = {
 export const attributeName = (id: string) => legacyAttributeNames[id] || id;
 export const itemName = (id: string) =>
   items.find((item) => item.id === id)?.name || id;
+
+/**
+ * 剧情事件产生的 flag 没有对应活动定义，需在展示层补齐中文前置名。
+ * 这里只负责 presentation；flag 本身及其判定逻辑始终保持不变。
+ */
+const eventFlagNames: Record<string, string> = {
+  "medicine-entrusted": "廊下的药香",
+  "book-box-found": "桥下的书箱",
+  "warehouse-clue": "县仓熄灯之后",
+  "lantern-clue": "灯谜摊前的一场争执",
+};
+
+export function flagRequirementName(flag: string) {
+  const prior = activities.find((activity) => {
+    const rewards = [
+      activity.completionReward,
+      ...activity.tiers.flatMap((tier) => [tier.rewards, tier.firstRewards]),
+    ];
+    return rewards.some((reward) => reward?.flags?.includes(flag));
+  });
+  return prior?.name || eventFlagNames[flag] || "一段前置剧情";
+}
+
 export function effectiveAttribute(game: Game, id: string) {
   return (
     (game.adventure?.attributes[id] || 0) +
@@ -143,12 +166,8 @@ export function requirementIssues(
     if (!((game.adventure?.inventory[id] || 0) > 0))
       issues.push("需要 " + itemName(id));
   for (const flag of requirements.flags || [])
-    if (!game.flags.includes(flag)) {
-      const prior = activities.find((a) =>
-        a.tiers.some((t) => t.rewards.flags?.includes(flag)),
-      );
-      issues.push("先完成「" + (prior?.name || flag) + "」");
-    }
+    if (!game.flags.includes(flag))
+      issues.push("先完成「" + flagRequirementName(flag) + "」");
   return issues;
 }
 export function activityIssues(game: Game, activity: Activity) {

@@ -45,7 +45,7 @@ export function Modal({
     >
       <div className="modal-header">
         <div>
-          <small>{subtitle || "青溪 · 案头文书"}</small>
+          {subtitle && <small>{subtitle}</small>}
           <h2>{title}</h2>
         </div>
         <button className="icon-button" aria-label="关闭窗口" onClick={close}>

@@ -24,12 +24,11 @@ import { NewGameForm } from "./components/NewGameForm";
 import { QuestionPanel } from "./components/QuestionPanel";
 import { Library } from "./components/Library";
 import { download } from "./utils/download";
-import { Journal, Reviews, Statistics } from "./components/Records";
+import { Journal } from "./components/Records";
 import { ChapterGate } from "./components/ChapterGate";
 import { DisplaySettings } from "./components/DisplaySettings";
 import { WorldMap } from "./components/WorldMap";
 import { RichText } from "./components/RichText";
-import { isLearningMastered } from "./engine/SpacedRepetitionEngine";
 import { meritLabel } from "./platform/worldPresentation";
 import "./App.css";
 import "./screen-fit.css";
@@ -45,8 +44,6 @@ type Panel =
   | "notes"
   | "journal"
   | "people"
-  | "review"
-  | "stats"
   | "display"
   | "map"
   | "story"
@@ -63,8 +60,6 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
   notes: "卷边批注",
   journal: "人生札记",
   people: "故人录",
-  review: "疑难卷宗",
-  stats: "修业簿",
   display: "游戏设置",
   map: "山河地图",
   story: "此间前情",
@@ -73,8 +68,6 @@ const panelNames: Record<Exclude<Panel, null>, string> = {
 const dock = [
   { id: "study", icon: "书", label: "读书" },
   { id: "people", icon: "人", label: "故人" },
-  { id: "review", icon: "卷", label: "旧案" },
-  { id: "stats", icon: "业", label: "修业" },
   { id: "bag", icon: "囊", label: "行囊" },
 ] as const;
 function App() {
@@ -393,13 +386,6 @@ function App() {
                     <dd className="subdued">{meritLabel(game)}</dd>
                   </div>
                 </dl>
-                <div className="mini-road">
-                  {gameDesign.road.map((label, index) => (
-                    <span key={label} className={index === 0 ? "current" : ""}>
-                      {label}
-                    </span>
-                  ))}
-                </div>
               </section>
             </aside>
             <main className="story-column">
@@ -414,10 +400,6 @@ function App() {
                 }}
               >
                 <div>
-                  <small>
-                    第 {String(game.chapter + 1).padStart(2, "0")} 章 ·{" "}
-                    {chapter!.title}
-                  </small>
                   <b>
                     {activityOpen
                       ? activityRun?.definition.name
@@ -564,12 +546,6 @@ function App() {
               <button key={item.id} onClick={() => show(item.id)}>
                 <span>{item.icon}</span>
                 <b>{item.label}</b>
-                {item.id === "review" &&
-                  Object.values(game.learning).some(
-                    (r) => r.wrong > 0 && !isLearningMastered(r),
-                  ) && (
-                    <i />
-                  )}
               </button>
             ))}
           </nav>
@@ -593,11 +569,9 @@ function App() {
                 );
             }
           }}
-          wide={panel === "library" || panel === "stats"}
+          wide={panel === "library"}
           subtitle={
-            panel === "new"
-              ? "前尘未定 · 一念入世"
-              : (game?.player.name || "青溪") + " · 案头文书"
+            panel === "new" ? "前尘未定 · 一念入世" : undefined
           }
         >
           {error && warning}
@@ -756,7 +730,7 @@ function App() {
             />
           )}
           {game && panel === "study" && (
-            <ActivityShelf game={game} inspect={inspect} />
+            <ActivityShelf inspect={inspect} />
           )}
           {game && panel === "exam" && (
             <ExamPanel
@@ -798,16 +772,6 @@ function App() {
               study={() => show("study")}
             />
           )}
-          {game && panel === "review" && (
-            <Reviews
-              game={game}
-              busy={busy}
-              start={() => {
-                inspect("review");
-              }}
-            />
-          )}
-          {game && panel === "stats" && <Statistics game={game} />}
           {game && attempt && panel === "story" && (
             <div className="story-recap">
               <Portrait variant={attempt.scene.npcId} />

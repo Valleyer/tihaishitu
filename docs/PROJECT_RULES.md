@@ -87,6 +87,9 @@ World 负责学习体验与游戏体验，Hub 负责学习进度与内容组织�
 确定后共享正式 Question Contract、Attempt Variant、grading、Wrong Book、
 Evidence 与 Mastery。
 
+万境中枢是错题本与学习进度 / 统计的唯一用户入口；World 不再维护独立的错题 / 进度
+展示入口。World 只消费统一的学习事实，不复制全局学习产品层。
+
 普通正式训练的选题由四套独立策略负责：
 
 ```text

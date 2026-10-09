@@ -6,7 +6,6 @@ import { useState } from "react";
 import type { Game } from "../domain/types";
 import {
   activities,
-  adventureDesign,
   companions,
   exams,
   favorabilityLevel,
@@ -19,7 +18,6 @@ import {
   requirementIssues,
 } from "../engine/AdventureEngine";
 import { Portrait } from "./Portrait";
-import { RichText } from "./RichText";
 
 export function WorldHub({
   game,
@@ -70,7 +68,6 @@ export function WorldHub({
         }}
       >
         <div className="scene-heading">
-          <small>{adventureDesign.hub.eyebrow}</small>
           <h1>{location.name.split(" · ").at(-1)}</h1>
           <p>{location.ambience}</p>
         </div>
@@ -186,10 +183,8 @@ export function WorldHub({
 }
 
 export function ActivityShelf({
-  game,
   inspect,
 }: {
-  game: Game;
   inspect: (id: string) => void;
 }) {
   return (
@@ -205,11 +200,7 @@ export function ActivityShelf({
               <small>{a.subtitle}</small>
               <h3>{a.name}</h3>
               <p>{a.description}</p>
-              <span>
-                {rewardLines(a.tiers.at(-1)!.rewards).join(" · ")}
-                <br />
-                最高成绩 {game.adventure!.best[a.id] ?? "—"} 分 →
-              </span>
+              <span>{rewardLines(a.tiers.at(-1)!.rewards).join(" · ")}</span>
             </button>
           ))}
       </div>
@@ -239,14 +230,6 @@ export function ActivityDetail({
   const person = game.npcs.find((n) => n.id === activity.npcId);
   return (
     <div className="activity-detail">
-      <small>
-        {adventureDesign.rankNames[activity.kind]} · {activity.rounds} 个知识点 ·{" "}
-        {activity.activityMode === "task"
-          ? activity.quest === "main"
-            ? "10/10 完成"
-            : "答对 3/5 完成"
-          : activity.passScore + " 分获得本轮收获"}
-      </small>
       <h2>{activity.name}</h2>
       <p>{activity.description}</p>
       <div className="invitation">
@@ -263,9 +246,8 @@ export function ActivityDetail({
       <div className="reward-tiers">
         {activity.tiers.filter((t) => t.minScore >= 60).map((t) => (
           <div key={t.minScore}>
-            <strong>
-              通关奖励<small>达到 {t.minScore} 分</small>
-            </strong>
+            <strong>通关奖励</strong>
+            <small>达到{t.minScore}分</small>
             <span>
               {rewardLines(t.rewards).join(" · ") || "保留本轮学识与错题记录"}
               {t.firstRewards && rewardLines(t.firstRewards).length > 0 && (
@@ -705,7 +687,6 @@ export function Outcome({
       <small>此行已毕 · {run.definition.name}</small>
       <div className="outcome-score">
         {run.score}
-        <span>分 · {run.grade}</span>
       </div>
       <h2>
         {run.definition.kind === "exam"
@@ -717,28 +698,14 @@ export function Outcome({
           : "错处已明，随时可以再试"}
       </h2>
       <blockquote>{run.response}</blockquote>
-      <p>
-        首次答对 {run.correct} / {run.definition.rounds} 个知识点 · 前置核验与复核{" "}
-        {run.diagnosticAnswered || 0} 题 · 补强 {run.trainingAnswered} 题 · 最高成绩{" "}
-        {game.adventure!.best[run.definition.id]} 分
-      </p>
-      <div className="loot-list">
-        {run.rewards.length ? (
-          run.rewards.map((line, i) => <span key={i}>{line}</span>)
-        ) : (
-          <span>保留已积累的学识，疑处留待重审</span>
-        )}
-      </div>
-      {game.attempt?.result && (
-        <details>
-          <summary>回看最后一页解析</summary>
-          <RichText>{game.attempt.result.explanation}</RichText>
-        </details>
+      {run.rewards.length > 0 && (
+        <div className="loot-list">
+          {run.rewards.map((line, i) => <span key={i}>{line}</span>)}
+        </div>
       )}
       <button className="gold-button" disabled={busy} onClick={finish}>
-        收好所得，回到青溪 →
+        回到青溪
       </button>
-      <small>奖励已自动入账，无需重复领取。</small>
     </section>
   );
 }

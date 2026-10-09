@@ -739,8 +739,10 @@
   margin: 0;
 }
 .question-prompt-area {
+  min-height: 0;
   max-height: 34vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px 10px 4px 0;
 }
 .knowledge-ribbon {
@@ -748,7 +750,7 @@
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
-  margin: -8px 0 16px;
+  margin: 4px 0 10px;
   padding: 9px 11px;
   border: 1px solid #baae8366;
   background: #e5dfc9;
@@ -772,6 +774,24 @@
   color: #5b4a94;
 }
 .knowledge-ribbon button.knowledge-tag.auxiliary {
+  border-color: #7fa8b4;
+  background: #e6f4f7;
+  color: #155e75;
+}
+.knowledge-ribbon .exam-label,
+.knowledge-ribbon .exam-question-number {
+  border: 1px solid #a99564;
+  border-radius: 999px;
+  padding: 4px 8px;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+.knowledge-ribbon .exam-label {
+  border-color: #9b8ac9;
+  background: #efe9fb;
+  color: #5b4a94;
+}
+.knowledge-ribbon .exam-question-number {
   border-color: #7fa8b4;
   background: #e6f4f7;
   color: #155e75;
@@ -803,6 +823,35 @@
   max-height: min(42vh, 430px);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.self-assessment-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.self-assessment-scroll .question-prompt-area,
+.self-assessment-scroll .self-assessment-reference {
+  max-height: none;
+  overflow: visible;
+  flex-shrink: 0;
+}
+.question-prompt-area,
+.self-assessment-reference,
+.self-assessment-scroll,
+.explanation-block > .rich-text,
+.modal-body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.question-prompt-area::-webkit-scrollbar,
+.self-assessment-reference::-webkit-scrollbar,
+.self-assessment-scroll::-webkit-scrollbar,
+.explanation-block > .rich-text::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 .self-assessment-reference > h3 {
   margin: 0.75rem 0 0.4rem;
