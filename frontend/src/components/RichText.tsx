@@ -9,12 +9,6 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-type MarkdownNode = {
-  type?: string;
-  value?: string;
-  children?: MarkdownNode[];
-};
-
 function normalizeMarkdownSource(value: string) {
   return value
     // 先在原始 Markdown 上直接把 \frac 改成 \dfrac，确保 remark-math / KaTeX
