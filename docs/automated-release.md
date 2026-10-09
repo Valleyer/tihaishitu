@@ -40,7 +40,7 @@
 
 ## 自动保护边界
 
-- 运行前要校验 SHA-256、`main` 提交身份、旧后端健康、Nginx 和 MySQL 容器、足够磁盘空间、已手动确认数据库备份；否则不切换。
+- 运行前要校验 SHA-256、`main` 提交身份、旧后端健康、Nginx 和 MySQL 容器、足够磁盘空间、已手动确认数据库备份；否则不切换。Windows `build-release.bat` 生成的 `release.sha256` 使用 CRLF 时，Linux 脚本会在内存中去掉行尾 `\r` 后再交给 `sha256sum -c`，不会修改上传文件，也不会把 `\r` 误当成文件名的一部分。
 - 每次备份旧 JAR、旧前端全目录、Nginx 配置、systemd unit、如存在则备份环境文件（权限严格设置 0600），并自动把 `QUESTION_IMAGE_DIR` 保存为 `question-images-old.tar.gz` + `question-images.info`；备份目录仅 root 可访问。图片目录配置缺失、路径危险、目录不存在、服务用户不可读写或 tar 校验失败时，脚本会在停止旧后端之前终止。
 - 发布脚本不会自动创建 / chown / chmod 图片目录，也不会自动恢复、删除或 `rsync --delete` 生产图片；失败后保留备份与现场，由人工结合数据库状态判断恢复。
 - 带新 Flyway migration 的版本通过 **新 JAR 启动自动执行**，**脚本不会直接操作 MySQL 表和 `flyway_schema_history`**。新服务不健康就不发布前端。
