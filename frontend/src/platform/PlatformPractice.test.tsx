@@ -436,3 +436,84 @@ describe("practice interaction closure", () => {
     expect(quick.hasAttribute("disabled")).toBe(true);
   });
 });
+
+describe("Learning Hub stem image", () => {
+  const IMAGE = "/api/v1/question-images/asset-a";
+
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); resetLearnerDataCache(); });
+
+  it("renders the image under the stem and above the options on the read-only question page", async () => {
+    vi.spyOn(platformApi, "question").mockResolvedValue(browseQuestion({ stemImageUrl: IMAGE }));
+    const view = render(<QuestionPage data={data} id="question" />);
+
+    await waitFor(() => expect(view.container.querySelector(".hub-panel.rich")).toBeTruthy());
+    const panel = view.container.querySelector(".hub-panel.rich")!;
+    const image = panel.querySelector<HTMLImageElement>(".question-stem-image");
+    expect(image?.getAttribute("src")).toBe(IMAGE);
+    expect(image?.getAttribute("alt")).toBe("题目配图");
+    // 顺序：题干 → 图片 → 选项。
+    expect(panel.children[1].className).toBe("question-stem-image");
+    expect(panel.querySelectorAll(".readonly-option")[0].compareDocumentPosition(image!))
+      .toBe(Node.DOCUMENT_POSITION_PRECEDING);
+  });
+
+  it("shows the image on the collapsed preview card and inside the expanded preview exactly once", async () => {
+    vi.spyOn(platformApi, "question").mockResolvedValue(browseQuestion({ stemImageUrl: IMAGE }));
+    const view = render(<QuestionPreviewCard summary={browseQuestion({ stemImageUrl: IMAGE })} />);
+
+    // 收起状态：摘要卡片直接显示图片。
+    expect(view.container.querySelectorAll(".question-stem-image")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
+    await waitFor(() => expect(view.container.querySelector(".inline-question-preview")).toBeTruthy());
+    // 展开后只由 ReadonlyQuestion 渲染一次，不重复。
+    const images = view.container.querySelectorAll(`.inline-question-preview .question-stem-image`);
+    expect(images).toHaveLength(1);
+    expect((images[0] as HTMLImageElement).getAttribute("src")).toBe(IMAGE);
+    expect(view.container.querySelectorAll(".question-stem-image")).toHaveLength(1);
+  });
+
+  it("shows the image in the wrong book and in an active practice attempt", async () => {
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{
+      questionId: "q", targetKnowledgePointId: "k", knowledgePointName: "函数",
+      contentMarkdown: "题干", stemImageUrl: IMAGE,
+      lastGradedAt: "2026-10-06T00:00:00Z", available: true,
+    }]);
+    const wrong = render(<WrongQuestionsPage data={data} />);
+    const wrongImage = await waitFor(() => {
+      const node = wrong.container.querySelector<HTMLImageElement>(".wrong-cards .question-stem-image");
+      expect(node).toBeTruthy();
+      return node!;
+    });
+    expect(wrongImage.getAttribute("src")).toBe(IMAGE);
+    cleanup();
+
+    const withImage = session("correct");
+    withImage.currentAttempt.question.stemImageUrl = IMAGE;
+    vi.spyOn(platformApi, "practice").mockResolvedValue(withImage);
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([]);
+    const practice = render(<PracticePage data={data} id="session" />);
+    await waitFor(() => expect(practice.container.querySelector(".practice-options")).toBeTruthy());
+    expect(practice.container.querySelector<HTMLImageElement>(".question-stem-image")?.getAttribute("src"))
+      .toBe(IMAGE);
+  });
+
+  it("adds no image node or placeholder for questions without an image", async () => {
+    vi.spyOn(platformApi, "question").mockResolvedValue(browseQuestion());
+    const detail = render(<QuestionPage data={data} id="question" />);
+    await waitFor(() => expect(detail.container.querySelector(".hub-panel.rich")).toBeTruthy());
+    expect(detail.container.querySelector(".question-stem-image")).toBeNull();
+    expect(detail.container.querySelectorAll(".hub-panel.rich img")).toHaveLength(0);
+    cleanup();
+
+    const summary = render(<QuestionPreviewCard summary={browseQuestion()} />);
+    expect(summary.container.querySelector(".question-stem-image")).toBeNull();
+
+    vi.spyOn(platformApi, "wrongQuestions").mockResolvedValue([{
+      questionId: "q", targetKnowledgePointId: "k", knowledgePointName: "函数",
+      contentMarkdown: "题干", lastGradedAt: "2026-10-06T00:00:00Z", available: true,
+    }]);
+    const wrong = render(<WrongQuestionsPage data={data} />);
+    await waitFor(() => expect(wrong.container.querySelector(".wrong-cards article")).toBeTruthy());
+    expect(wrong.container.querySelector(".wrong-cards .question-stem-image")).toBeNull();
+  });
+});

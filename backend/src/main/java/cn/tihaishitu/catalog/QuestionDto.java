@@ -25,6 +25,7 @@ public record QuestionDto(
         int frequency,
         List<String> tags,
         List<String> knowledgePointIds,
+        String stemImageUrl,
         boolean enabled
 ) {
     public QuestionDto {

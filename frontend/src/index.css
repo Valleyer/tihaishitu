@@ -114,6 +114,14 @@ meter {
   white-space: nowrap;
   border: 0;
 }
+.question-stem-image {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: 12px auto 16px;
+  object-fit: contain;
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

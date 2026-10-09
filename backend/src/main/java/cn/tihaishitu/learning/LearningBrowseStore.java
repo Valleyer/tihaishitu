@@ -240,7 +240,7 @@ public class LearningBrowseStore {
                        COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year,
                        q.question_number, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
-                       q.difficulty, q.revision
+                       q.difficulty, q.revision, q.stem_image_id
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
@@ -405,7 +405,7 @@ public class LearningBrowseStore {
             q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
             COALESCE(s.display_name,q.source_name,'全服题库') source_name, q.exam_year, q.question_number,
             q.question_type, q.presentation_type, q.grading_mode, q.content_markdown, q.analysis_markdown,
-            q.difficulty, q.revision
+            q.difficulty, q.revision, q.stem_image_id
             """;
 
     /**
@@ -502,6 +502,7 @@ public class LearningBrowseStore {
                 "displayQuestionNumber", QuestionNumberFormatter.display(questionNumber, examYear),
                 "questionType", result.getString("question_type"), "presentationType", result.getString("presentation_type"),
                 "gradingMode", result.getString("grading_mode"), "contentMarkdown", result.getString("content_markdown"),
+                "stemImageUrl", cn.tihaishitu.questionimage.QuestionImageUrls.url(result.getString("stem_image_id")),
                 "analysisMarkdown", result.getString("analysis_markdown"),
                 "difficulty", result.getInt("difficulty"), "revision", result.getLong("revision"));
     }

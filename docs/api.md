@@ -142,6 +142,8 @@ v3 / v2 兼容：客观题 standardAnswer 只做一致性校验，不持久化�
 | POST | /manage/knowledge-points/{id}/merge | ADMIN | 按 expectedRevision 把源知识点事务合并到 active 目标并保留历史 |
 | GET/POST | /manage/questions | CONTRIBUTOR+ | 查询题目或创建自己的 draft |
 | GET/PUT | /manage/questions/{id} | 按资源权限 | 详情与带 expectedRevision 的编辑 |
+| POST | /manage/question-images | CONTRIBUTOR/REVIEWER/ADMIN | multipart 上传题干图片，返回新的 immutable asset |
+| GET | /question-images/{assetId} | 放行（只按 UUID 寻址） | 按 asset id 读取图片字节（同源 `<img>` 使用） |
 | GET | /manage/sources | CONTRIBUTOR+ | 按 query、sourceType、status 分页查询全局题目来源；来源管理页仍仅 ADMIN 可见 |
 | GET | /manage/sources/{id} | CONTRIBUTOR+ | 读取来源详情、revision 与绑定题目数 |
 | POST | /manage/sources | ADMIN | 新建全局来源；`(sourceType, canonicalName)` 唯一 |
@@ -181,6 +183,59 @@ query 支持 “年份-题号” 结构化搜索：2020-7 / 2020 - 7 / 2020—7
 解析来源。`study_attempt.question_snapshot_json` 是创建 attempt 时的冻结快照，来源后来改名不会修改历史快照。
 
 知识点合并还会在同一事务中迁移 Learner Focus、attempt target、Knowledge Evidence、题目级掌握槽位与 Knowledge Guide。若源与目标同时已有状态，服务端会把题目关系与历史正式作答归一到目标知识点，并重建唯一的 V3 聚合状态。
+
+### 题干图片 API（PR11）
+
+正式 Question 可选绑定 1 张 immutable 题干图片；长期规则见 [`PROJECT_RULES.md`](./PROJECT_RULES.md) §6.2。
+
+```http
+POST /api/v1/manage/question-images
+Content-Type: multipart/form-data
+file=<binary>
+
+200 → { id, url, originalName, contentType, byteSize }
+```
+
+```http
+GET /api/v1/question-images/{assetId}
+
+200 → image bytes
+      Content-Type: image/png | image/jpeg
+      ETag: "<sha256>"
+      Cache-Control: public, max-age=31536000, immutable
+404 → { message: "题目图片不存在。" }
+```
+
+契约：
+
+```text
+只接受 PNG / JPEG，按 magic bytes 判定，不信任扩展名与原始 Content-Type
+单张最大 5MB；超限统一 413 { message: "图片不能超过 5MB。" }
+非图片统一 400 { message: "只允许上传 PNG 或 JPEG 图片。" }
+asset id 与 storage name 均为 UUID；originalName 只作为 metadata 保存
+读取只按 asset id，不接受任意路径
+asset 是 immutable 的：同一个 id 的字节与 ETag 永不改变
+```
+
+`GET /api/v1/question-images/{assetId}` 由 `anyRequest().permitAll()` 放行，因此 Hub / World
+的 `<img>` 在未登录时也能取到图；它只按不可猜测的 asset UUID 寻址，不接受任意路径。
+本 PR 不做 CDN / OSS / 签名 URL，也不把图片变成可枚举的公开资源。
+
+DTO 字段：
+
+```text
+Question Management 读 / 写：QuestionView.stemImageId、QuestionView.stemImageUrl
+                              QuestionRequest.stemImageId（null 表示移除绑定）
+正式 Question 与 Attempt 快照：QuestionDto.stemImageUrl
+Learning Hub 浏览：BrowseQuestion.stemImageUrl
+错题本：WrongQuestion.stemImageUrl
+专项练习：PracticeAttempt.question.stemImageUrl
+```
+
+`stemImageId` 必须指向已存在的 asset，否则 create / update 返回
+`400 { message: "题目引用了不存在的题干图片。" }`。URL 一律由 asset id 现场生成，
+不入库；替换或移除当前 Question 的图片都不会删除旧 asset，也不会改变历史 Attempt。
+`global-question-batch/v4` 批量导入仍然只处理文本题，不接受图片或 asset id。
 
 ## Learner Knowledge State V3
 

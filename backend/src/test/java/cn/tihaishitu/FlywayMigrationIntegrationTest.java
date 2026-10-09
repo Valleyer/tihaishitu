@@ -5,6 +5,7 @@ import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -316,6 +317,40 @@ class FlywayMigrationIntegrationTest {
         assertThat(tableExists(old, "learner_random_kp_rotation")).isTrue();
         assertThat(tableExists(old, "learner_random_attempt_cursor")).isTrue();
         assertThat(old.queryForObject("SELECT COUNT(*) FROM learner_random_attempt_cursor", Integer.class)).isZero();
+    }
+
+    @Test
+    void v25AddsImmutableStemImageAssetAndKeepsExistingQuestionsImageFree() {
+        String url = migrationUrl("v24-question-stem-image");
+        Flyway.configure().dataSource(url, "sa", "")
+                .target(MigrationVersion.fromVersion("24")).load().migrate();
+        JdbcTemplate old = new JdbcTemplate(new DriverManagerDataSource(url, "sa", ""));
+        assertThat(tableExists(old, "question_image_asset")).isFalse();
+        assertThat(columnExists(old, "question_resource", "stem_image_id")).isFalse();
+        // V25 之前建立的题目必须继续可读，迁移不能强制回填图片。
+        String legacyQuestion = insertLegacyQuestion(old, "custom", "无图旧题");
+
+        Flyway.configure().dataSource(url, "sa", "").load().migrate();
+
+        assertThat(tableExists(old, "question_image_asset")).isTrue();
+        assertThat(columnExists(old, "question_resource", "stem_image_id")).isTrue();
+        assertThat(indexExists(old, "question_resource", "idx_question_resource_stem_image")).isTrue();
+        assertThat(old.queryForObject("SELECT stem_image_id FROM question_resource WHERE id=?",
+                String.class, legacyQuestion)).isNull();
+
+        String asset = UUID.randomUUID().toString();
+        old.update("""
+                INSERT INTO question_image_asset(id,storage_name,original_name,content_type,byte_size,sha256,created_by)
+                VALUES (?,?,'图.png','image/png',8,?,'fixture')
+                """, asset, asset + ".png", "a".repeat(64));
+        old.update("UPDATE question_resource SET stem_image_id=? WHERE id=?", asset, legacyQuestion);
+        assertThat(old.queryForObject("SELECT stem_image_id FROM question_resource WHERE id=?",
+                String.class, legacyQuestion)).isEqualTo(asset);
+
+        // FK 必须拦住不存在的 asset：题干图片只能是已登记的 immutable asset。
+        assertThatThrownBy(() -> old.execute(
+                "UPDATE question_resource SET stem_image_id='" + UUID.randomUUID() + "' WHERE id='" + legacyQuestion + "'"))
+                .isInstanceOf(DataAccessException.class);
     }
 
     private String migrationUrl(String name) {

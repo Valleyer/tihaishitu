@@ -188,3 +188,36 @@ describe("World question panel exam metadata", () => {
     expect(examMetadataView(undefined)).toBeUndefined();
   });
 });
+
+describe("World question panel stem image", () => {
+  const panel = (value: Attempt) => render(
+    <QuestionPanel attempt={value} busy={false} submit={noop} reveal={noop} assess={noop}
+      next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+      setReview={noop} onEvent={noop} />,
+  );
+
+  it("renders the frozen stem image inside the question prompt area", () => {
+    const frozen = attempt();
+    // 旧 Attempt 的图 A 由 question_snapshot_json 冻结进题面，World 直接渲染这个 URL。
+    frozen.question.stemImageUrl = "/api/v1/question-images/asset-a";
+    const view = panel(frozen);
+
+    const prompt = view.container.querySelector(".question-prompt-area");
+    expect(prompt).toBeTruthy();
+    const image = prompt!.querySelector<HTMLImageElement>(".question-stem-image");
+    expect(image?.getAttribute("src")).toBe("/api/v1/question-images/asset-a");
+    expect(image?.getAttribute("alt")).toBe("题目配图");
+    // 图片必须排在题干之后、选项之前。
+    const children = Array.from(prompt!.children).map(node => node.className);
+    expect(children.indexOf("question-stem-image")).toBeGreaterThan(children.findIndex(name => name.includes("question-text")));
+  });
+
+  it("keeps PR10 layout with no image node or placeholder when the question has no image", () => {
+    const view = panel(attempt());
+    expect(view.container.querySelector(".question-stem-image")).toBeNull();
+    const prompt = view.container.querySelector(".question-prompt-area");
+    expect(prompt!.querySelectorAll("img")).toHaveLength(0);
+    // 无图时不能多出空 wrapper：题干区仍然只有题干本身。
+    expect(prompt!.children).toHaveLength(1);
+  });
+});

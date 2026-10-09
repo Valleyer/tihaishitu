@@ -22,7 +22,7 @@ public class LearnerPracticeStore {
                           String sourceQuestionId, String currentAttemptId, String status, long revision,
                           Instant createdAt, Instant updatedAt, Instant endedAt) {}
     public record WrongQuestion(String questionId, String targetKnowledgePointId, String knowledgePointName,
-                                String contentMarkdown, String subjectName, Integer examYear,
+                                String contentMarkdown, String stemImageUrl, String subjectName, Integer examYear,
                                 String questionNumber, Instant lastGradedAt, boolean available,
                                 String unavailableReason, List<KnowledgePointTag> knowledgePoints) {
         public WrongQuestion {
@@ -30,7 +30,7 @@ public class LearnerPracticeStore {
         }
 
         public WrongQuestion withKnowledgePoints(List<KnowledgePointTag> tags) {
-            return new WrongQuestion(questionId, targetKnowledgePointId, knowledgePointName, contentMarkdown,
+            return new WrongQuestion(questionId, targetKnowledgePointId, knowledgePointName, contentMarkdown, stemImageUrl,
                     subjectName, examYear, questionNumber, lastGradedAt, available, unavailableReason, tags);
         }
 
@@ -297,7 +297,7 @@ public class LearnerPracticeStore {
         args.add(learnerId);
         List<WrongQuestion> questions = jdbc.query("""
                 SELECT wrong.question_id,wrong.target_knowledge_point_id,k.name knowledge_name,
-                       q.content_markdown,q.subject_name,q.exam_year,q.question_number,
+                       q.content_markdown,q.stem_image_id,q.subject_name,q.exam_year,q.question_number,
                        wrong.last_wrong_at
                   FROM learner_wrong_question wrong
                   JOIN question_resource q ON q.id=wrong.question_id
@@ -321,7 +321,8 @@ public class LearnerPracticeStore {
                         TrainableKnowledge.exists("visible_k"), FormalQuestionPolicy.published("q")),
                 (rs, row) -> new WrongQuestion(rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("knowledge_name"),
-                rs.getString("content_markdown"), rs.getString("subject_name"),
+                rs.getString("content_markdown"), cn.tihaishitu.questionimage.QuestionImageUrls.url(rs.getString("stem_image_id")),
+                rs.getString("subject_name"),
                 rs.getObject("exam_year", Integer.class), rs.getString("question_number"),
                 rs.getTimestamp("last_wrong_at").toInstant(),
                 true, null, List.of()), args.toArray());

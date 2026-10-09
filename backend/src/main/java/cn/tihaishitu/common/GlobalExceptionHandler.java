@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
@@ -52,6 +53,11 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> status(ResponseStatusException error) {
         return ResponseEntity.status(error.getStatusCode())
                 .body(ApiError.of(error.getReason() == null ? "请求无法处理。" : error.getReason()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException error) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(ApiError.of("图片不能超过 5MB。"));
     }
 
     @ExceptionHandler(Exception.class)

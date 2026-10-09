@@ -48,6 +48,7 @@ export interface Question {
   gradingMode?: "auto" | "self_assessment";
   /** Markdown + LaTeX；后端按原文返回，前端负责安全渲染。 */
   question: string;
+  stemImageUrl?: string | null;
   options: Record<string, string>;
   answer: Answer;
   aliases: string[];

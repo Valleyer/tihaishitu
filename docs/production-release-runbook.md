@@ -55,8 +55,9 @@ df -h
 1. 确认仓库最新 main、GitHub CI、变更范围，以及新增 migration 列表；确认没有未解决的失败 migration。
 2. 记录当前 DB 版本、关键表数量、账号数和作答数。**本次 PR5 迁移前的历史基线**是 V18、1453 题、2 个 learner、84 条 attempt；迁移后数量保持不变。未来的实际数据会增长，不应要求等于这些数字。
 3. 每次发布保存**结构 + 数据**的完整数据库备份，含 `flyway_schema_history`，并尽可能测试恢复到隔离库。已有线上写入时，应安排停写窗口生成最终一致性备份，避免半途数据变化；不要仅以“备份文件不为 0”判定可恢复。
-4. 备份旧 JAR、整套 Nginx 静态目录、Nginx 配置和 systemd 服务配置；切勿将 `backend.env`、口令、Token 放进仓库。
-5. 预留维护窗口：若有 DB schema/答案字段变更（例如历史 V20），必须按“可能无法零停机”规划。
+4. **从 PR11 起，完整备份 = MySQL 数据库 + 题干图片目录 `QUESTION_IMAGE_DIR`。** 图片字节不在数据库里，只备份数据库会得到 `question_image_asset` 有记录、文件却缺失的题目。两者必须在同一次发布前成对采集、成对恢复。目录与权限见 [`deployment.md`](./deployment.md) §6.1。
+5. 备份旧 JAR、整套 Nginx 静态目录、Nginx 配置和 systemd 服务配置；切勿将 `backend.env`、口令、Token 放进仓库。
+6. 预留维护窗口：若有 DB schema/答案字段变更（例如历史 V20、PR11 的 V25），必须按“可能无法零停机”规划。
 
 Navicat（推荐已熟悉的操作）：右键生产库 `tihaishitu` → **转储 SQL 文件 → 结构和数据**，保存到安全的本地目录。检查包含 `flyway_schema_history` 的建表及数据；最好在测试库演练导入。不要用“数据传输”覆盖生产库。
 
@@ -82,9 +83,16 @@ mkdir -p "$BACKUP"
 tar -czf "$BACKUP/frontend-old.tar.gz" -C /usr/local/docker/nginx/html .
 tar -czf "$BACKUP/nginx-conf-old.tar.gz" -C /usr/local/docker/nginx conf
 \cp -a /etc/systemd/system/wanjingqiuzhi.service "$BACKUP/"
+# PR11 起：题干图片目录与数据库必须成对备份（路径以实际 QUESTION_IMAGE_DIR 为准）
+tar -czf "$BACKUP/question-images-$STAMP.tar.gz" -C /usr/local/wanjingqiuzhi/data question-images
 ls -lh "$BACKUP"
 tar -tzf "$BACKUP/frontend-old.tar.gz" | grep -m1 '^\./index.html$'
+tar -tzf "$BACKUP/question-images-$STAMP.tar.gz" | head -3
 ```
+
+数据库备份片段与图片目录备份必须来自同一次停写窗口；`tar` 只读采集，**不得**在发布脚本里
+清空、覆盖或 `rsync --delete` 该图片目录。本 PR 不做图片垃圾回收，备份中“已不被任何题目引用”
+的图片属于正常保留，禁止手工清理。
 
 如果将来采用 `mysqldump`：使用与生产兼容的客户端、`--single-transaction`（仅能为事务表提供一致快照）、`--routines --triggers --events`，导出期间不要并行 DDL；密码交互输入，不放进命令历史和仓库。**数据库备份优先保留一份不在服务器上的副本。**
 

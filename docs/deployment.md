@@ -276,6 +276,9 @@ DB_USERNAME=wanjing_app
 DB_PASSWORD=<CHANGE_ME>
 DB_POOL_SIZE=10
 
+# 题干图片：immutable asset 持久化目录，完整备份必须包含它
+QUESTION_IMAGE_DIR=/usr/local/wanjingqiuzhi/data/question-images
+
 CATALOG_SEED_ENABLED=false
 MATH1_KNOWLEDGE_SEED_ENABLED=false
 
@@ -304,6 +307,48 @@ LEARNER_COOKIE_SECURE=false
   建议把这两个变量从 env 文件中移除。
 - 时区统一使用 `Asia/Shanghai`（业务日口径），JDBC 连接串已带
   `serverTimezone=Asia/Shanghai`。
+
+### 6.1 题干图片目录（`QUESTION_IMAGE_DIR`）
+
+正式 Question 可以绑定一张 immutable 题干图片（[`PROJECT_RULES.md`](./PROJECT_RULES.md) §6.2）。
+图片字节**不在数据库里**，只保存 asset 元数据；文件落在 `QUESTION_IMAGE_DIR`：
+
+```text
+QUESTION_IMAGE_DIR=/usr/local/wanjingqiuzhi/data/question-images
+```
+
+要求：
+
+```text
+目录必须位于应用可写的持久化位置，不能放在每次发布都会被覆盖的代码目录内
+只允许应用账号读写：chown -R wanjingqiuzhi:wanjingqiuzhi "$QUESTION_IMAGE_DIR"（按实际运行账号）
+启动前目录可以不存在，服务首次上传时创建
+不要在发布脚本里清空、覆盖或 rsync --delete 该目录
+不要把该目录放进 jar、静态资源目录或 Nginx 的 root 下
+```
+
+故障排查：
+
+```text
+上传返回 500 且日志出现“图片保存失败”：先检查目录是否存在、属主与写权限
+健康检查通过但 <img> 404：确认 QUESTION_IMAGE_DIR 没有在重启时被换成空目录
+```
+
+**完整备份 = MySQL 数据库 + `QUESTION_IMAGE_DIR`。** 只备份数据库会得到一批
+`stem_image_id` 存在但文件缺失的题目；只备份目录则无法恢复绑定关系。两者必须成对备份、成对恢复。
+
+```bash
+# 1. 数据库（沿用 §5.4 mysqldump 模板）
+mysqldump ... tihaishitu > tihaishitu-$(date +%F).sql
+
+# 2. 题干图片目录（与数据库同一次发布前采集）
+tar czf question-images-$(date +%F).tar.gz -C "$(dirname "$QUESTION_IMAGE_DIR")" "$(basename "$QUESTION_IMAGE_DIR")"
+```
+
+恢复顺序：先恢复 MySQL，再把 `QUESTION_IMAGE_DIR` 还原到同一路径。asset 是 immutable 的，
+历史文件不会因为题目换图或移除图片而失效，因此旧备份中的图片与旧 Attempt 的
+`question_snapshot_json` 仍然一致；本 PR **不做图片垃圾回收**，备份里存在
+“已不再被任何 Question 引用”的图片是正常现象，不要手工删除。
 
 ---
 

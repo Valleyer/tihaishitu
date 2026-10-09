@@ -354,6 +354,54 @@ true_false 的 correct option key 必须显式是 true 或 false；
 Learning Browse、Catalog Formal projection、Learner Practice / World Formal path 与
 `global-question-batch/v4` 都不得再读写 Formal Parent 的 `standard_answer_json`。
 
+### 6.2 题干图片（Stem Image）
+
+正式 Question 可以**可选绑定 1 张 immutable 题干图片**。第一版固定就是 0 或 1 张。
+
+```text
+配置图片：题干 Markdown / LaTeX → 题目图片 → 选项 / 后续作答内容
+未配置图片：完全不渲染图片，不产生空容器，不产生空白占位
+```
+
+数据模型：
+
+```text
+question_image_asset            图片资产本体（id / storage_name / content_type / byte_size / sha256 / ...）
+question_resource.stem_image_id 当前 Question 绑定的 asset id（可为 NULL）
+```
+
+长期规则：
+
+```text
+Question 当前绑定只保存 image asset ID；URL 一律由 asset id 现场生成，不落库。
+正式 Question / Attempt snapshot 暴露 stable stemImageUrl（/api/v1/question-images/{assetId}）。
+图片必须 immutable：替换或移除当前 Question 的图片不得改变任何历史 Attempt。
+  新上传产生新 asset；旧 asset 保留，供 frozen snapshot 继续读取。
+Question 移除图片只清空绑定，不物理删除旧 asset（本 PR 不做图片垃圾回收）。
+```
+
+本 PR 明确不做，且不得在后续 PR 顺手扩展进本条规则：
+
+```text
+多图 / 解析图片 / 选项图片 / OCR / 图片编辑裁剪
+CDN / OSS 外链 / base64 塞进 Markdown
+批量 ZIP 图片导入 / 图片垃圾回收 / 自动物理删除旧图片
+```
+
+图片资产与当前绑定属于不同生命周期：删除 / 归档 Question 也不清理 asset 文件。
+因此**完整备份必须同时覆盖 MySQL 与 `QUESTION_IMAGE_DIR`**，见
+[`deployment.md`](./deployment.md)。
+
+题干图片类型与大小限制：
+
+```text
+只允许 PNG / JPEG，按 magic bytes 判定，不信任扩展名与 Content-Type
+单张最大 5MB（multipart 上限与 Service 校验双防线，超限 413）
+```
+
+`global-question-batch/v4` 等 JSON 批量导入**仍然只处理文本题**：
+有图片的题导入后由管理后台手工上传绑定，不在导入格式里引入 base64 或 asset id。
+
 ---
 
 ## 7. Mastery V3
@@ -1471,6 +1519,20 @@ Attempt 创建与轮换更新处于同一事务，失败一并回滚；Learner �
 World 状态在同一 Learner 行锁和事务内更新。V24 不回填：升级前历史只有唯一最大时间记录时
 兼容使用；最大秒内并列时视为顺序未知。V23 已执行的开发库直接顺序升级 V24，不修改 V23
 checksum；Learner 或所指 Attempt 删除时指针级联清理。
+
+`V25__question_stem_image.sql` 新增 immutable 题干图片资产：
+
+```text
+新建 question_image_asset(id, storage_name, original_name, content_type,
+                          byte_size, sha256, created_by, created_at)
+question_resource 增加 stem_image_id CHAR(36) NULL
+FK question_resource.stem_image_id → question_image_asset(id)
+索引 idx_question_resource_stem_image
+```
+
+V25 只做加法：既有 Question 的 `stem_image_id` 保持 NULL，不回填、不猜图片。
+`question_resource` 与 `question_image_asset` 都必须兼容 MySQL 5.7。
+业务语义见 §6.2。
 
 正式训练支持独立服务端动作“我没思路”：objective 与 solution 都直接 graded wrong，
 submitted answer 保存 JSON `null`，正常写 Wrong Book、Question Mastery 与 Evidence，并推进
