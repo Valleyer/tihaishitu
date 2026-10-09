@@ -1834,14 +1834,28 @@ forced landscape 下非 shell 的滚动容器不再滚动，Hub 路由切换后�
 phone-only media query（约 560 / 680 / 700 / 720 / 767）在 active 时不进入 cascade，
   做法是在原 CSS 文件把这些块包进 :where(html:not(.mobile-landscape-active))，
   不复制桌面 CSS 去硬覆盖 mobile CSS；
-窄桌面 / tablet 横屏规则（约 900 / 1000 / 1024 / 1050 / 1100 / 1180 / 1190）继续保留；
-真实 @media (max-height: 740 / 760 / 570 / 580) 在 forced landscape 下不会自动触发，
-  必须在 mobile-landscape.css 中按同一组数值复用现有 low-height compact 规则，
-  不得另起一套数值长期漂移；
+窄桌面 / tablet 横屏规则（约 900 / 1000 / 1024 / 1050 / 1100 / 1180 / 1190）继续保留，
+  同样**不要**隔离 1050 这类分档：forced landscape 的逻辑宽度约 812 / 844 / 932，
+  本来就应该命中它们；
+low-height compact 规则（源文件里的 @media max-height 740 / 760 / 570 / 580）在 forced
+  landscape 下**永远不会自动触发**：真实 portrait height 是 800+，而旋转后的逻辑高度
+  只有约 390，media query 看到的是前者。因此 mobile-landscape.css 中这些规则必须
+  **直接以 html.mobile-landscape-active 选择器无条件生效**，不能继续包在
+  @media (max-height: …) 里；`mobile-landscape-active` 成立本身已蕴含
+  「手机 portrait + max-width:600px + 触摸」，而真实 portrait width 恰好等于旋转后的
+  逻辑高度。数值仍复用源文件那一组，不得另起一套长期漂移。
+  若将来确实要按逻辑高度分档，用真实 portrait width 表达（如 @media (max-width:430px)），
+  但当前固定行为是目标机型 375 / 390 / 430 统一使用同一套 compact 规则；
 100vw / 100vh / 100dvh 之类引用真实 viewport 的几何，只在 forced landscape 下按逻辑
   width / height 修正真正受影响的根高度、Hub 内容宽度、World 题面高度、Manage
-  sidebar / 列表 / drawer / toast 与原生 <dialog> 弹窗，不做机械全局替换。
+  sidebar / 列表 / drawer / toast、以及 manage-loading / hub-loading 这类 min-height:100vh
+  满屏容器与原生 <dialog> 弹窗，不做机械全局替换。
 ```
+
+注意：`getComputedStyle(el).width/height` 给的是 transform **之前**的 layout size，
+`getBoundingClientRect()` 给的是 transform **之后**落在真实 viewport 上的 visual box。
+在 forced landscape 里两者必然互换（844/390 ↔ 390/844），这是预期现象，不是 bug；
+断言布局尺寸时必须读 computed style。这条对自动化验收同样长期有效。
 
 `<dialog showModal()>` 进入 top layer，其 `position: fixed` 的 containing block 是真实
 viewport，不受 shell transform 影响，因此弹窗需要自己按逻辑 viewport 尺寸旋转；这条

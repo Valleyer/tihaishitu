@@ -86,294 +86,302 @@ html.mobile-landscape-active .world-shell .game-app.in-world {
 }
 
 /* ------------------------------------------------------------------ *
- * 3. 复用已有 low-height compact 规则
+ * 3. 复用已有 low-height compact 规则（必须无条件生效）
  *
- * 真实 viewport height 800+，因此 screen-fit.css 的 @media(max-height:740px) 与
- * @media(max-height:570px)、adventure.css 的 @media(max-height:760px) 与
- * @media(max-height:580px) 都不会自动触发。这里不复制数值，只把同一组 low-height
- * compact 规则按「forced landscape 的逻辑高度」重新暴露一次，避免两套数值长期漂移。
+ * screen-fit.css 的 @media(max-height:740px) / (max-height:570px) 与 adventure.css 的
+ * @media(max-height:760px) / (max-height:580px) 在 forced landscape 下**永远不会触发**：
+ * 真实 portrait height 是 800+，而旋转后的逻辑高度只有约 390，media query 看到的是前者。
+ *
+ * 这里把源文件同一组数值的 compact 规则以 html.mobile-landscape-active 无条件暴露一次，
+ * 不新增第二套数值。mobile-landscape-active 成立本身已经蕴含「手机 portrait +
+ * max-width:600px + 触摸」，而真实 portrait width 恰好等于旋转后的逻辑高度，
+ * 所以不存在需要再按高度分档的场景。
  * ------------------------------------------------------------------ */
 
 /*
  * 对应 screen-fit.css 的 @media (max-height: 740px) and (min-width: 721px)：
- * 逻辑宽度恒为 844/932，宽度条件在 forced landscape 下恒真，只需高度条件。
  * 这里只保留该 tier 中与「低高度横屏」直接相关、且没有被第 2 节基础几何覆盖的部分。
  */
-@media (max-height: 700px) {
-  html.mobile-landscape-active .world-layout {
-    padding: 12px 18px;
-    gap: 18px;
-  }
+html.mobile-landscape-active .world-layout {
+  padding: 12px 18px;
+  gap: 18px;
 }
 
-
 /* 对应 adventure.css 的 @media (max-height: 760px)。 */
-@media (max-height: 760px) {
-  html.mobile-landscape-active .world-scene {
-    min-height: 140px;
-    padding: 18px 22px;
-  }
-  html.mobile-landscape-active .scene-heading h1 {
-    font-size: 29px;
-    margin: 8px 0;
-  }
-  html.mobile-landscape-active .scene-heading p {
-    font-size: 11px;
-    margin-bottom: 10px;
-  }
-  html.mobile-landscape-active .resident-face {
-    height: 32px;
-    width: 26px;
-  }
-  html.mobile-landscape-active .world-choices {
-    padding: 12px 16px;
-  }
-  html.mobile-landscape-active .opportunity {
-    padding: 10px 12px;
-  }
-  html.mobile-landscape-active .opportunity h3 {
-    font-size: 16px;
-    margin: 7px 0;
-  }
-  html.mobile-landscape-active .opportunity p {
-    font-size: 10px;
-    margin-bottom: 7px;
-  }
-  html.mobile-landscape-active .world-shortcuts {
-    margin-top: 10px;
-    padding-top: 9px;
-  }
-  html.mobile-landscape-active .world-shortcuts small {
-    display: none;
-  }
-  html.mobile-landscape-active .activity-outcome {
-    padding: 18px;
-    gap: 6px;
-  }
-  html.mobile-landscape-active .outcome-score {
-    font-size: 54px;
-  }
+html.mobile-landscape-active .world-scene {
+  min-height: 140px;
+  padding: 18px 22px;
+}
+html.mobile-landscape-active .scene-heading h1 {
+  font-size: 29px;
+  margin: 8px 0;
+}
+html.mobile-landscape-active .scene-heading p {
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+html.mobile-landscape-active .resident-face {
+  height: 32px;
+  width: 26px;
+}
+html.mobile-landscape-active .world-choices {
+  padding: 12px 16px;
+}
+html.mobile-landscape-active .opportunity {
+  padding: 10px 12px;
+}
+html.mobile-landscape-active .opportunity h3 {
+  font-size: 16px;
+  margin: 7px 0;
+}
+html.mobile-landscape-active .opportunity p {
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+html.mobile-landscape-active .world-shortcuts {
+  margin-top: 10px;
+  padding-top: 9px;
+}
+html.mobile-landscape-active .world-shortcuts small {
+  display: none;
+}
+html.mobile-landscape-active .activity-outcome {
+  padding: 18px;
+  gap: 6px;
+}
+html.mobile-landscape-active .outcome-score {
+  font-size: 54px;
 }
 
 /* 对应 adventure.css 的 @media (max-height: 580px)。 */
-@media (max-height: 580px) {
-  html.mobile-landscape-active .scene-heading p,
-  html.mobile-landscape-active .resident-row,
-  html.mobile-landscape-active .world-shortcuts {
-    display: none;
-  }
-  html.mobile-landscape-active .world-scene {
-    min-height: 70px;
-    padding: 10px 16px;
-  }
-  html.mobile-landscape-active .scene-heading h1 {
-    font-size: 24px;
-    margin: 5px 0;
-  }
-  html.mobile-landscape-active .scene-heading small {
-    font-size: 8px;
-  }
-  html.mobile-landscape-active .world-choices {
-    padding: 9px 12px;
-  }
-  html.mobile-landscape-active .opportunity p {
-    display: none;
-  }
-  html.mobile-landscape-active .opportunity h3 {
-    margin: 5px 0;
-  }
-  html.mobile-landscape-active .world-section-title {
-    margin-bottom: 6px;
-  }
-  html.mobile-landscape-active .world-section-title small {
-    display: none;
-  }
-  html.mobile-landscape-active .challenge-toolbar {
-    padding: 6px 2px;
-  }
-  html.mobile-landscape-active .activity-outcome {
-    gap: 4px;
-  }
-  html.mobile-landscape-active .activity-outcome .outcome-score {
-    font-size: 36px;
-  }
-  html.mobile-landscape-active .activity-outcome h2 {
-    font-size: 20px;
-  }
-  html.mobile-landscape-active .loot-list span {
-    padding: 6px;
-  }
-  html.mobile-landscape-active .activity-outcome > .gold-button {
-    margin-top: 3px;
-  }
+html.mobile-landscape-active .scene-heading p,
+html.mobile-landscape-active .resident-row,
+html.mobile-landscape-active .world-shortcuts {
+  display: none;
+}
+html.mobile-landscape-active .world-scene {
+  min-height: 70px;
+  padding: 10px 16px;
+}
+html.mobile-landscape-active .scene-heading h1 {
+  font-size: 24px;
+  margin: 5px 0;
+}
+html.mobile-landscape-active .scene-heading small {
+  font-size: 8px;
+}
+html.mobile-landscape-active .world-choices {
+  padding: 9px 12px;
+}
+html.mobile-landscape-active .opportunity p {
+  display: none;
+}
+html.mobile-landscape-active .opportunity h3 {
+  margin: 5px 0;
+}
+html.mobile-landscape-active .world-section-title {
+  margin-bottom: 6px;
+}
+html.mobile-landscape-active .world-section-title small {
+  display: none;
+}
+html.mobile-landscape-active .challenge-toolbar {
+  padding: 6px 2px;
+}
+html.mobile-landscape-active .activity-outcome {
+  gap: 4px;
+}
+html.mobile-landscape-active .activity-outcome .outcome-score {
+  font-size: 36px;
+}
+html.mobile-landscape-active .activity-outcome h2 {
+  font-size: 20px;
+}
+html.mobile-landscape-active .loot-list span {
+  padding: 6px;
+}
+html.mobile-landscape-active .activity-outcome > .gold-button {
+  margin-top: 3px;
 }
 
 /*
  * 对应 screen-fit.css 的 @media (max-height: 570px)：标题页 / 城门 / 题面 / 脚注的
  * 低高度紧凑排版。forced landscape 下逻辑高度 390–430，正是这组规则的目标区间。
  */
-@media (max-height: 700px) {
-  html.mobile-landscape-active .title-top {
-    padding-top: 12px;
-    padding-bottom: 8px;
-  }
-  html.mobile-landscape-active .title-content {
-    padding-top: 6px;
-  }
-  html.mobile-landscape-active .title-content .eyebrow {
-    font-size: 9px;
-    margin-bottom: 10px;
-  }
-  html.mobile-landscape-active .title-content h1 {
-    font-size: 47px;
-    margin: 10px 0;
-  }
-  html.mobile-landscape-active .title-rule {
-    margin: 12px 0;
-  }
-  html.mobile-landscape-active .title-poem {
-    font-size: 17px;
-    line-height: 1.7;
-    margin-bottom: 10px;
-  }
-  html.mobile-landscape-active .title-description {
-    font-size: 10px;
-    margin: 10px 0 15px;
-  }
-  html.mobile-landscape-active .title-actions .gold-button,
-  html.mobile-landscape-active .title-actions .outline-button {
-    padding: 10px 20px;
-  }
-  html.mobile-landscape-active .title-actions {
-    gap: 7px;
-  }
-  html.mobile-landscape-active .title-footer {
-    padding: 10px 4vw;
-  }
-  html.mobile-landscape-active .gate-content > h1 {
-    font-size: 38px;
-    margin: 12px 0;
-  }
-  html.mobile-landscape-active .gate-location {
-    font-size: 10px;
-  }
-  html.mobile-landscape-active .gate-dialogue {
-    margin: 15px 0;
-    padding: 12px 16px;
-  }
-  html.mobile-landscape-active .gate-dialogue p {
-    font-size: 17px;
-    line-height: 1.8;
-    margin: 8px 0;
-  }
-  html.mobile-landscape-active .gate-objective {
-    margin: 13px 0;
-  }
-  html.mobile-landscape-active .gate-objective p {
-    font-size: 11px;
-  }
-  html.mobile-landscape-active .gate-content .gold-button {
-    padding: 10px 20px;
-  }
-  html.mobile-landscape-active .chapter-heading {
-    height: 30px;
-    min-height: 30px;
-  }
-  html.mobile-landscape-active .story-dialogue {
-    min-height: 51px;
-    max-height: 60px;
-    padding: 6px 0;
-  }
-  html.mobile-landscape-active .speaker-medallion {
-    height: 40px;
-    width: 29px;
-  }
-  html.mobile-landscape-active .spoken-line {
-    font-size: 12px;
-    line-height: 1.6;
-    -webkit-line-clamp: 1;
-  }
-  html.mobile-landscape-active .speaker-name {
-    font-size: 12px;
-  }
-  html.mobile-landscape-active .scroll-paper {
-    padding: 14px 16px 10px;
-  }
-  html.mobile-landscape-active .paper-heading {
-    font-size: 11px;
-  }
-  html.mobile-landscape-active .question-chapter {
-    display: none;
-  }
-  html.mobile-landscape-active .question-text {
-    font-size: 18px;
-    line-height: 1.5;
-  }
-  html.mobile-landscape-active .question-prompt-area {
-    margin: 10px 0;
-  }
-  html.mobile-landscape-active .answer-option {
-    min-height: 34px;
-    font-size: 13px;
-    padding: 6px 10px;
-  }
-  html.mobile-landscape-active .answer-letter {
-    font-size: 14px;
-  }
-  html.mobile-landscape-active .answers {
-    gap: 7px;
-  }
-  html.mobile-landscape-active .choice-hint {
-    display: none;
-  }
-  html.mobile-landscape-active .paper-footer {
-    padding-top: 8px;
-    margin-top: 8px;
-  }
-  html.mobile-landscape-active .ink-button {
-    padding: 8px 14px;
-  }
-  html.mobile-landscape-active .result-heading {
-    font-size: 20px;
-    margin-bottom: 7px;
-  }
-  html.mobile-landscape-active .result-heading > small {
-    display: none;
-  }
-  html.mobile-landscape-active .answer-summary {
-    margin: 7px 0;
-    padding: 6px 10px;
-  }
-  html.mobile-landscape-active .answer-summary p {
-    font-size: 12px;
-    margin: 3px 0;
-    -webkit-line-clamp: 2;
-  }
-  html.mobile-landscape-active .explanation-block p {
-    font-size: 13px;
-    line-height: 1.7;
-  }
-  html.mobile-landscape-active .result-stage .changes {
-    margin: 9px 0;
-  }
-  html.mobile-landscape-active .review-switch {
-    font-size: 8px;
-  }
-  html.mobile-landscape-active .attributes > div {
-    margin: 7px 0;
-  }
-  html.mobile-landscape-active .character-sheet .mini-road {
-    display: none;
-  }
-  html.mobile-landscape-active .modal-header {
-    padding: 12px 18px;
-  }
-  html.mobile-landscape-active .modal-header h2 {
-    font-size: 20px;
-  }
-  html.mobile-landscape-active .modal-body {
-    max-height: calc(var(--mobile-landscape-height, 100dvw) - 110px);
-  }
+html.mobile-landscape-active .title-top {
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+html.mobile-landscape-active .title-content {
+  padding-top: 6px;
+}
+html.mobile-landscape-active .title-content .eyebrow {
+  font-size: 9px;
+  margin-bottom: 10px;
+}
+html.mobile-landscape-active .title-content h1 {
+  font-size: 47px;
+  margin: 10px 0;
+}
+html.mobile-landscape-active .title-rule {
+  margin: 12px 0;
+}
+html.mobile-landscape-active .title-poem {
+  font-size: 17px;
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+html.mobile-landscape-active .title-description {
+  font-size: 10px;
+  margin: 10px 0 15px;
+}
+html.mobile-landscape-active .title-actions .gold-button,
+html.mobile-landscape-active .title-actions .outline-button {
+  padding: 10px 20px;
+}
+html.mobile-landscape-active .title-actions {
+  gap: 7px;
+}
+html.mobile-landscape-active .title-footer {
+  padding: 10px 4vw;
+}
+html.mobile-landscape-active .gate-content > h1 {
+  font-size: 38px;
+  margin: 12px 0;
+}
+html.mobile-landscape-active .gate-location {
+  font-size: 10px;
+}
+html.mobile-landscape-active .gate-dialogue {
+  margin: 15px 0;
+  padding: 12px 16px;
+}
+html.mobile-landscape-active .gate-dialogue p {
+  font-size: 17px;
+  line-height: 1.8;
+  margin: 8px 0;
+}
+html.mobile-landscape-active .gate-objective {
+  margin: 13px 0;
+}
+html.mobile-landscape-active .gate-objective p {
+  font-size: 11px;
+}
+html.mobile-landscape-active .gate-content .gold-button {
+  padding: 10px 20px;
+}
+html.mobile-landscape-active .chapter-heading {
+  height: 30px;
+  min-height: 30px;
+}
+html.mobile-landscape-active .story-dialogue {
+  min-height: 51px;
+  max-height: 60px;
+  padding: 6px 0;
+}
+html.mobile-landscape-active .speaker-medallion {
+  height: 40px;
+  width: 29px;
+}
+html.mobile-landscape-active .spoken-line {
+  font-size: 12px;
+  line-height: 1.6;
+  -webkit-line-clamp: 1;
+}
+html.mobile-landscape-active .speaker-name {
+  font-size: 12px;
+}
+html.mobile-landscape-active .scroll-paper {
+  padding: 14px 16px 10px;
+}
+html.mobile-landscape-active .paper-heading {
+  font-size: 11px;
+}
+html.mobile-landscape-active .question-chapter {
+  display: none;
+}
+html.mobile-landscape-active .question-text {
+  font-size: 18px;
+  line-height: 1.5;
+}
+html.mobile-landscape-active .question-prompt-area {
+  margin: 10px 0;
+}
+html.mobile-landscape-active .answer-option {
+  min-height: 34px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+html.mobile-landscape-active .answer-letter {
+  font-size: 14px;
+}
+html.mobile-landscape-active .answers {
+  gap: 7px;
+}
+html.mobile-landscape-active .choice-hint {
+  display: none;
+}
+html.mobile-landscape-active .paper-footer {
+  padding-top: 8px;
+  margin-top: 8px;
+}
+html.mobile-landscape-active .ink-button {
+  padding: 8px 14px;
+}
+html.mobile-landscape-active .result-heading {
+  font-size: 20px;
+  margin-bottom: 7px;
+}
+html.mobile-landscape-active .result-heading > small {
+  display: none;
+}
+html.mobile-landscape-active .answer-summary {
+  margin: 7px 0;
+  padding: 6px 10px;
+}
+html.mobile-landscape-active .answer-summary p {
+  font-size: 12px;
+  margin: 3px 0;
+  -webkit-line-clamp: 2;
+}
+html.mobile-landscape-active .explanation-block p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+html.mobile-landscape-active .result-stage .changes {
+  margin: 9px 0;
+}
+html.mobile-landscape-active .review-switch {
+  font-size: 8px;
+}
+html.mobile-landscape-active .attributes > div {
+  margin: 7px 0;
+}
+html.mobile-landscape-active .character-sheet .mini-road {
+  display: none;
+}
+html.mobile-landscape-active .modal-header {
+  padding: 12px 18px;
+}
+html.mobile-landscape-active .modal-header h2 {
+  font-size: 20px;
+}
+html.mobile-landscape-active .modal-body {
+  max-height: calc(var(--mobile-landscape-height, 100dvw) - 110px);
+}
+
+/* ------------------------------------------------------------------ *
+ * 3b. 加载态 / 访问受限态必须占满「逻辑 viewport」而不是真实 portrait viewport
+ *
+ * .manage-loading、.manage-login、.hub-loading 都是 min-height:100vh 的满屏容器。
+ * forced landscape 下 100vh 解析成真实 portrait height（800+），比逻辑高度（约 390）
+ * 高出一倍多，内容只占一侧、另一侧露出根节点背景。这里按逻辑高度收口。
+ * ------------------------------------------------------------------ */
+
+html.mobile-landscape-active .manage-loading,
+html.mobile-landscape-active .manage-login,
+html.mobile-landscape-active .hub-loading {
+  min-height: var(--mobile-landscape-height, 100dvw);
 }
 
 /* ------------------------------------------------------------------ *
@@ -384,12 +392,12 @@ html.mobile-landscape-active .world-shell .game-app.in-world {
  * ------------------------------------------------------------------ */
 
 html.mobile-landscape-active :is(#root) .question-prompt-area {
-  /* 逻辑 34vh = 真实 34dvw。不依赖新式 CSS 乘法语法。 */
-  max-height: 34dvw;
+/* 逻辑 34vh = 真实 34dvw。不依赖新式 CSS 乘法语法。 */
+max-height: 34dvw;
 }
 
 html.mobile-landscape-active :is(#root) .self-assessment-reference {
-  max-height: min(42dvw, 430px);
+max-height: min(42dvw, 430px);
 }
 
 /* Hub：内容宽度跟随 shell 的逻辑宽度，不再引用真实 390px 的 100vw。 */
@@ -397,43 +405,43 @@ html.mobile-landscape-active :is(#root) .hub-main,
 html.mobile-landscape-active :is(#root) .hub-main.narrow,
 html.mobile-landscape-active :is(#root) .hub-main.narrow.practice-page,
 html.mobile-landscape-active :is(#root) .hub-header-inner {
-  width: min(1200px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
+width: min(1200px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
 }
 
 html.mobile-landscape-active :is(#root) .hub-main.narrow {
-  width: min(900px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
+width: min(900px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
 }
 
 html.mobile-landscape-active :is(#root) .hub-main.narrow.practice-page {
-  width: min(820px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
+width: min(820px, calc(var(--mobile-landscape-width, 100dvh) - 32px));
 }
 
 /* Manage：sidebar / 列表 / 分栏 / toast 全部按逻辑高度计算。 */
 html.mobile-landscape-active :is(#root) .manage-shell,
 html.mobile-landscape-active :is(#root) .manage-sidebar {
-  height: var(--mobile-landscape-height, 100dvw);
+height: var(--mobile-landscape-height, 100dvw);
 }
 
 html.mobile-landscape-active :is(#root) .split-workspace {
-  grid-template-rows: minmax(0, calc(var(--mobile-landscape-height, 100dvw) - 155px));
+grid-template-rows: minmax(0, calc(var(--mobile-landscape-height, 100dvw) - 155px));
 }
 
 html.mobile-landscape-active :is(#root) .manage-question-list {
-  max-height: calc(var(--mobile-landscape-height, 100dvw) - 260px);
+max-height: calc(var(--mobile-landscape-height, 100dvw) - 260px);
 }
 
 html.mobile-landscape-active :is(#root) .manage-toast-host {
-  width: min(380px, calc(var(--mobile-landscape-width, 100dvh) - 48px));
+width: min(380px, calc(var(--mobile-landscape-width, 100dvh) - 48px));
 }
 
 html.mobile-landscape-active :is(#root) .manage-main:has(.question-editor-drawer) .manage-toast-host {
-  right: calc(min(760px, 92dvw) + 24px);
+right: calc(min(760px, 92dvw) + 24px);
 }
 
 /* question editor drawer：逻辑宽度 844/932 下仍取 min(760px, 92dvw)。 */
 html.mobile-landscape-active :is(#root) .question-editor-drawer > aside {
-  width: min(760px, 92dvw);
-  height: var(--mobile-landscape-height, 100dvw);
+width: min(760px, 92dvw);
+height: var(--mobile-landscape-height, 100dvw);
 }
 
 /* ------------------------------------------------------------------ *
@@ -446,42 +454,42 @@ html.mobile-landscape-active :is(#root) .question-editor-drawer > aside {
  * ------------------------------------------------------------------ */
 
 html.mobile-landscape-active .modal {
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  inset: auto;
-  top: 0;
-  left: 0;
-  margin: 0;
+display: flex;
+flex-direction: column;
+position: fixed;
+inset: auto;
+top: 0;
+left: 0;
+margin: 0;
 
-  width: 100vh;
-  height: 100vw;
-  width: 100dvh;
-  height: 100dvw;
-  max-width: 100dvh;
-  max-height: 100dvw;
+width: 100vh;
+height: 100vw;
+width: 100dvh;
+height: 100dvw;
+max-width: 100dvh;
+max-height: 100dvw;
 
-  transform-origin: top left;
-  transform: rotate(90deg) translateY(-100%);
-  overflow: hidden;
+transform-origin: top left;
+transform: rotate(90deg) translateY(-100%);
+overflow: hidden;
 }
 
 html.mobile-landscape-active .modal.wide {
-  width: 100dvh;
-  max-width: 100dvh;
+width: 100dvh;
+max-width: 100dvh;
 }
 
 /* 长正文 / 长表单在弹窗内部滚动，桌面原有的 88vh 上限在 forced landscape 下不适用。 */
 html.mobile-landscape-active .modal .modal-body {
-  max-height: none;
-  min-height: 0;
-  flex: 1;
+max-height: none;
+min-height: 0;
+flex: 1;
 }
 
 html.mobile-landscape-active .title-content {
-  padding: clamp(12px, 4dvw, 55px) 8vw 20px;
+padding: clamp(12px, 4dvw, 55px) 8vw 20px;
 }
 
 html.mobile-landscape-active .title-content h1 {
-  font-size: clamp(45px, 6dvw, 90px);
+font-size: clamp(45px, 6dvw, 90px);
 }

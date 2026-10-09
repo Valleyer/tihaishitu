@@ -71,19 +71,20 @@ export function MobileLandscapeShell({ children }: { children: ReactNode }) {
   }, [location, activeKey]);
 
   /**
-   * 根节点 class 在 render 阶段同步写入，而不是等 useEffect。
+   * 根节点 class 在 useLayoutEffect 中同步切换。
    *
-   * <p>产品要求「登录成功后不要先竖屏一秒再突然旋转」。useEffect 在 paint 之后才执行，
-   * 会出现一帧的 portrait + 横屏画布并存；render 阶段同步设置可以让第一次 paint
-   * 就是最终几何。副作用仍然可重入：activeKey 命中时幂等 add，否则 remove，
-   * unmount 时清理（见下方 useEffect）。</p>
+   * <p>不放在 render 阶段：render 里改 document.documentElement 属于 render side effect，
+   * 会在 StrictMode 双渲染下重复执行，也破坏 render 的可中断/可丢弃语义。</p>
+   *
+   * <p>useLayoutEffect 在 DOM 变更后、浏览器 paint 前同步执行，因此第一次 paint 拿到的
+   * 就已经是最终几何，不会出现「先竖屏再旋转」的闪烁。cleanup 只负责移除 class，
+   * 与下一次 effect 的 toggle 幂等，不会让 class 残留。</p>
    */
-  const root = document.documentElement;
-  if (activeKey === "1") root.classList.add(MOBILE_LANDSCAPE_CLASS);
-  else root.classList.remove(MOBILE_LANDSCAPE_CLASS);
-
-  // 退出旋转 / 卸载时必须清理根节点 class，避免登录页等继续吃 forced landscape 样式。
-  useEffect(() => () => root.classList.remove(MOBILE_LANDSCAPE_CLASS), [root]);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle(MOBILE_LANDSCAPE_CLASS, activeKey === "1");
+    return () => root.classList.remove(MOBILE_LANDSCAPE_CLASS);
+  }, [activeKey]);
 
   return (
     <div className="mobile-landscape-frame" ref={frameRef}>
