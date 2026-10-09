@@ -16,6 +16,7 @@ HEALTH_URL=http://172.17.0.1:12345/actuator/health
 SITE_URL=http://127.0.0.1/
 LOCK=/run/lock/wanjingqiuzhi-release.lock
 RELEASE_MARKER="$APP_ROOT/current-release.sha"
+ENV_FILE=/etc/wanjingqiuzhi/backend.env
 PHASE=preflight
 NEW_SERVICE_STARTED=0
 
@@ -43,9 +44,40 @@ on_error() {
 }
 trap 'on_error "$LINENO"' ERR
 
+read_env_value() {
+  local key="$1"
+  local value
+  value="$(awk -v key="$key" '
+    /^[[:space:]]*#/ { next }
+    {
+      line=$0
+      sub(/\r$/, "", line)
+      if (line ~ "^[[:space:]]*" key "[[:space:]]*=") {
+        sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", line)
+        print line
+        exit
+      }
+    }
+  ' "$ENV_FILE")"
+  if [[ ${#value} -ge 2 ]]; then
+    local first="${value:0:1}"
+    local last="${value: -1}"
+    if [[ ( "$first" == '"' && "$last" == '"' ) || ( "$first" == "'" && "$last" == "'" ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+  fi
+  printf '%s' "$value"
+}
+
+path_is_same_or_below() {
+  local path="$1"
+  local parent="$2"
+  [[ "$path" == "$parent" || "$path" == "$parent/"* ]]
+}
+
 [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail 'Run with root/sudo.'
 [[ -t 0 ]] || fail 'Interactive terminal required to confirm DB backup.'
-for cmd in flock systemctl docker curl sha256sum unzip tar grep awk tr df install mv cp cmp date seq sleep; do
+for cmd in flock systemctl docker curl sha256sum unzip tar grep awk tr df install mv cp cmp date seq sleep runuser readlink; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Missing required command: $cmd"
 done
 
@@ -80,11 +112,40 @@ AVAILABLE_MB="$(df -Pm "$APP_ROOT" | awk 'NR==2 {print $4}')"
 [[ "$AVAILABLE_MB" =~ ^[0-9]+$ ]] || fail 'Unable to read free disk capacity.'
 (( AVAILABLE_MB >= 600 )) || fail "Not enough free space ($AVAILABLE_MB MB; require >=600 MB)."
 
+[[ -f "$ENV_FILE" ]] || fail "Production environment file missing: $ENV_FILE"
+IMAGE_ENV_COUNT="$(awk '
+  /^[[:space:]]*#/ { next }
+  /^[[:space:]]*QUESTION_IMAGE_DIR[[:space:]]*=/ { count++ }
+  END { print count + 0 }
+' "$ENV_FILE")"
+[[ "$IMAGE_ENV_COUNT" == 1 ]] || fail "Expected exactly one QUESTION_IMAGE_DIR entry in $ENV_FILE; found $IMAGE_ENV_COUNT."
+QUESTION_IMAGE_DIR_CONFIGURED="$(read_env_value QUESTION_IMAGE_DIR)"
+[[ -n "$QUESTION_IMAGE_DIR_CONFIGURED" ]] || fail "QUESTION_IMAGE_DIR is empty in $ENV_FILE. Configure an explicit persistent absolute path before deployment."
+[[ "$QUESTION_IMAGE_DIR_CONFIGURED" == /* ]] || fail "QUESTION_IMAGE_DIR must be an absolute path: $QUESTION_IMAGE_DIR_CONFIGURED"
+[[ -d "$QUESTION_IMAGE_DIR_CONFIGURED" ]] || fail "QUESTION_IMAGE_DIR does not exist: $QUESTION_IMAGE_DIR_CONFIGURED. Create it deliberately with the systemd service user before deployment."
+QUESTION_IMAGE_DIR="$(readlink -f -- "$QUESTION_IMAGE_DIR_CONFIGURED")"
+[[ -n "$QUESTION_IMAGE_DIR" && -d "$QUESTION_IMAGE_DIR" ]] || fail "Unable to resolve QUESTION_IMAGE_DIR: $QUESTION_IMAGE_DIR_CONFIGURED"
+[[ "$QUESTION_IMAGE_DIR" != "/" ]] || fail 'QUESTION_IMAGE_DIR must not be /.'
+for protected in "$WEB_ROOT" "$UPLOAD" "$RELEASE_ROOT" "$BACKUP_ROOT"; do
+  if path_is_same_or_below "$QUESTION_IMAGE_DIR" "$protected"; then
+    fail "Unsafe QUESTION_IMAGE_DIR ($QUESTION_IMAGE_DIR): it must not be the same as or below $protected"
+  fi
+done
+
+SERVICE_USER="$(systemctl show "$SERVICE" -p User --value)"
+[[ -n "$SERVICE_USER" ]] || SERVICE_USER=root
+runuser -u "$SERVICE_USER" -- test -r "$QUESTION_IMAGE_DIR"   || fail "QUESTION_IMAGE_DIR is not readable by systemd service user $SERVICE_USER: $QUESTION_IMAGE_DIR"
+runuser -u "$SERVICE_USER" -- test -w "$QUESTION_IMAGE_DIR"   || fail "QUESTION_IMAGE_DIR is not writable by systemd service user $SERVICE_USER: $QUESTION_IMAGE_DIR"
+runuser -u "$SERVICE_USER" -- test -x "$QUESTION_IMAGE_DIR"   || fail "QUESTION_IMAGE_DIR is not traversable by systemd service user $SERVICE_USER: $QUESTION_IMAGE_DIR"
+
 printf '\nRelease: %s\n' "$SHA"
 printf 'Backend: %s\nFrontend: %s\n' "$JAR_LIVE" "$WEB_ROOT"
-printf '\nBEFORE CONTINUING: have you manually exported the entire LIVE tihaishitu DB\n'
-printf '(schema + data + flyway_schema_history), checked the backup file, and confirmed\n'
-printf 'that you accept a maintenance window and that DB migration is NOT auto-reversible?\n'
+printf '\nBEFORE CONTINUING:\n'
+printf '1. Have you manually exported the entire LIVE tihaishitu DB\n'
+printf '   (schema + data + flyway_schema_history) and verified the backup?\n'
+printf '2. QUESTION_IMAGE_DIR is configured and writable. After YES this script will\n'
+printf '   snapshot the complete immutable image directory before stopping the old backend.\n'
+printf '3. Do you accept the maintenance window and non-auto-reversible DB migration?\n'
 read -r -p 'Type YES to proceed: ' CONFIRM
 [[ "$CONFIRM" == YES ]] || fail 'User did not confirm a production DB backup.'
 
@@ -110,10 +171,18 @@ printf '\n[INFO] Backing up old backend, frontend and systemd/nginx config...\n'
 tar -czf "$BACKUP_DIR/frontend-old.tar.gz" -C "$WEB_ROOT" .
 tar -czf "$BACKUP_DIR/nginx-conf-old.tar.gz" -C /usr/local/docker/nginx conf
 /bin/cp -a /etc/systemd/system/wanjingqiuzhi.service "$BACKUP_DIR/wanjingqiuzhi.service"
-if [[ -f /etc/wanjingqiuzhi/backend.env ]]; then
-  /bin/cp -p /etc/wanjingqiuzhi/backend.env "$BACKUP_DIR/backend.env"
+if [[ -f "$ENV_FILE" ]]; then
+  /bin/cp -p "$ENV_FILE" "$BACKUP_DIR/backend.env"
   chmod 0600 "$BACKUP_DIR/backend.env"
 fi
+
+printf '[INFO] Snapshotting immutable question images before stopping the backend...\n'
+tar -czf "$BACKUP_DIR/question-images-old.tar.gz" -C "$QUESTION_IMAGE_DIR" .
+printf 'QUESTION_IMAGE_DIR=%s\n' "$QUESTION_IMAGE_DIR_CONFIGURED" > "$BACKUP_DIR/question-images.info"
+printf 'RESOLVED_QUESTION_IMAGE_DIR=%s\n' "$QUESTION_IMAGE_DIR" >> "$BACKUP_DIR/question-images.info"
+[[ -s "$BACKUP_DIR/question-images-old.tar.gz" && -s "$BACKUP_DIR/question-images.info" ]]   || fail 'Question image backup is incomplete.'
+tar -tzf "$BACKUP_DIR/question-images-old.tar.gz" >/dev/null   || fail 'Question image backup archive is unreadable.'
+
 [[ -s "$BACKUP_DIR/tihaishitu-backend.jar" && -s "$BACKUP_DIR/frontend-old.tar.gz" ]] || fail 'Program backup is incomplete.'
 tar -tzf "$BACKUP_DIR/frontend-old.tar.gz" | grep '^\./index.html$' >/dev/null || fail 'Frontend backup is missing index.html.'
 printf '[INFO] Backup saved: %s\n' "$BACKUP_DIR"
@@ -162,6 +231,8 @@ printf '%s\n' "$SHA" > "$RELEASE_MARKER"
 chmod 0644 "$RELEASE_MARKER"
 printf '\n[SUCCESS] Wanjing Academy release deployed.\n'
 printf 'Commit: %s\nStaging: %s\nBackup: %s\n' "$SHA" "$RELEASE_DIR" "$BACKUP_DIR"
+printf 'Question images: %s\n' "$QUESTION_IMAGE_DIR"
+printf 'Image backup: %s\n' "$BACKUP_DIR/question-images-old.tar.gz"
 printf 'Backend health: %s\n' "$FINAL_HEALTH"
 printf 'DB migration verification: inspect flyway_schema_history and compare business counts if this release contains migrations.\n'
 printf 'Now verify login, study, questions, World and management features in browser.\n'

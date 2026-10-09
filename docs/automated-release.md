@@ -9,7 +9,7 @@
 - Linux 收件目录：`/usr/local/deploy/`，其中预先放置 `deploy-release.sh`；
 - systemd：`wanjingqiuzhi`；JAR：`/usr/local/wanjingqiuzhi/backend/tihaishitu-backend.jar`；
 - Nginx Docker 静态目录（宿主）：`/usr/local/docker/nginx/html`；Java Health：`http://172.17.0.1:12345/actuator/health`；
-- MySQL 5.7 Docker `mysql57`；正式数据库 `tihaishitu`，Flyway 目前 V22，新的 schema 变更必须 V23+。
+- MySQL 5.7 Docker `mysql57`；正式数据库 `tihaishitu`。2026-10-08 最后明确的生产记录为 V22；当前 main 已包含 V23 / V24 / V25，实际发布前必须以生产 `flyway_schema_history` 为准。
 
 ## 第一次使用：安装两个脚本
 
@@ -17,6 +17,7 @@
 2. 将 `deploy-release.sh` 通过 SFTP 上传到 Linux **`/usr/local/deploy/deploy-release.sh`**，不必 `chmod +x`，以后每次都用 `bash /usr/local/deploy/deploy-release.sh` 调用。
 3. 确认 Windows 已能使用 git、npm、Java 17、PowerShell 与仓库的 Maven Wrapper；Linux 有 curl、sha256sum、unzip、tar、systemctl、Docker、flock，且服务已经正常运行。
 4. **发布前人工确认 GitHub CI 已通过**；为了速度，后端打包使用 `-DskipTests`，不是跳过必要的 CI 或业务验收。
+5. **PR11 / V25 首次上线前只做一次题干图片目录准备**：先执行 `systemctl show wanjingqiuzhi -p User -p Group --no-pager` 核实真实服务用户 / 组，在 `/etc/wanjingqiuzhi/backend.env` 中显式配置 `QUESTION_IMAGE_DIR=/usr/local/wanjingqiuzhi/data/question-images`（或其他持久化绝对路径），再按真实用户创建并授权目录。最新版 Linux 发布脚本不会自动 `mkdir/chown/chmod`，目录缺失或权限不正确会在停服务之前失败。
 
 ## 首次运行的 Git 仓库位置配置（只需一次）
 
@@ -31,16 +32,17 @@
 
 ## 以后每次仅三步
 
-1. **Navicat 手动备份**京东云 `tihaishitu` 整库（`结构和数据`，含 `flyway_schema_history`），保存服务器之外，并核实导出成功。存在重要写入时应停写后再制作一致性备份；高风险迁移建议先在隔离库做一次恢复演练。
+1. **Navicat 手动备份**京东云 `tihaishitu` 整库（`结构和数据`，含 `flyway_schema_history`），保存服务器之外，并核实导出成功。存在重要写入时应停写后再制作一致性备份；高风险迁移建议先在隔离库做一次恢复演练。题干图片目录不需要在标准自动流程中另手工 tar：第 3 步的 Linux 脚本会在停旧后端之前自动 snapshot `QUESTION_IMAGE_DIR`。
 2. **Windows 双击** `build-release.bat`：自动同步最新 `main`、执行 `npm ci`、构建前端、Maven 打包后端、生成 ZIP + SHA-256 清单，放到 **`D:\Deploy\release-<sha>-<时间>\`**。失败立即停止。**不要使用之前的旧 release 目录冒充成功的新版本。**
-3. 手动把上述 release 子文件夹里的 **四个文件**（`tihaishitu-backend.jar`、`frontend-dist.zip`、`release.sha256`、`release.info`）上传至 Linux **`/usr/local/deploy/`** 覆盖同名旧发布包；然后 SSH 执行 `bash /usr/local/deploy/deploy-release.sh`，输入 **`YES`** 确认已手动备份数据库。脚本完成旧程序备份、JAR 切换、等待健康、前端发布及基本验证。
+3. 手动把上述 release 子文件夹里的 **四个文件**（`tihaishitu-backend.jar`、`frontend-dist.zip`、`release.sha256`、`release.info`）上传至 Linux **`/usr/local/deploy/`** 覆盖同名旧发布包；然后 SSH 执行 `bash /usr/local/deploy/deploy-release.sh`，输入 **`YES`** 确认已手动备份数据库。脚本先验证 `QUESTION_IMAGE_DIR` 与 systemd 服务用户的读写权限，并在停止旧后端之前自动把完整图片目录备份到本次 `pre-release-*` 目录；随后完成旧程序备份、JAR 切换、等待健康、前端发布及基本验证。
 
 **说明**：你所说的“三步”中第 3 步仍包含“手动上传四个文件 + 执行一个 Linux 命令”。上传本身不能由离线 Windows 构建脚本自动完成，因为你明确希望自己上传。
 
 ## 自动保护边界
 
 - 运行前要校验 SHA-256、`main` 提交身份、旧后端健康、Nginx 和 MySQL 容器、足够磁盘空间、已手动确认数据库备份；否则不切换。
-- 每次备份旧 JAR、旧前端全目录、Nginx 配置、systemd unit、如存在则备份环境文件（权限严格设置 0600），备份目录仅 root 可访问。
+- 每次备份旧 JAR、旧前端全目录、Nginx 配置、systemd unit、如存在则备份环境文件（权限严格设置 0600），并自动把 `QUESTION_IMAGE_DIR` 保存为 `question-images-old.tar.gz` + `question-images.info`；备份目录仅 root 可访问。图片目录配置缺失、路径危险、目录不存在、服务用户不可读写或 tar 校验失败时，脚本会在停止旧后端之前终止。
+- 发布脚本不会自动创建 / chown / chmod 图片目录，也不会自动恢复、删除或 `rsync --delete` 生产图片；失败后保留备份与现场，由人工结合数据库状态判断恢复。
 - 带新 Flyway migration 的版本通过 **新 JAR 启动自动执行**，**脚本不会直接操作 MySQL 表和 `flyway_schema_history`**。新服务不健康就不发布前端。
 - 新前端静态资源先复制，`index.html` 最后单文件切换；旧 hashed assets 暂不删除，避免已打开的浏览器标签加载失败。
 - 出错即停止，保留错误现场；**不自动 `repair`、不清理迁移记录、不恢复旧 JAR、不自动回滚 DB**。数据库新结构可能与旧 JAR 不兼容，需要人工判断。

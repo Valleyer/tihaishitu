@@ -90,9 +90,15 @@ tar -tzf "$BACKUP/frontend-old.tar.gz" | grep -m1 '^\./index.html$'
 tar -tzf "$BACKUP/question-images-$STAMP.tar.gz" | head -3
 ```
 
-数据库备份片段与图片目录备份必须来自同一次停写窗口；`tar` 只读采集，**不得**在发布脚本里
+数据库备份片段与图片目录备份必须来自同一次发布前备份窗口；`tar` 只读采集，**不得**在发布脚本里
 清空、覆盖或 `rsync --delete` 该图片目录。本 PR 不做图片垃圾回收，备份中“已不被任何题目引用”
 的图片属于正常保留，禁止手工清理。
+
+> **标准自动发布流程**：使用仓库最新版 `scripts/deploy/deploy-release.sh` 时，上面的手工
+> `tar question-images...` 只作为人工发布、故障处理或脚本不可用时的 fallback。日常发布仍先
+> 由用户人工完成 MySQL 备份并确认；输入 `YES` 后，脚本会在 `systemctl stop` 之前自动把
+> `QUESTION_IMAGE_DIR` 打包为同一 `pre-release-*` 目录中的 `question-images-old.tar.gz`
+> 并写入 `question-images.info`。图片备份失败时旧后端不会被停止。
 
 如果将来采用 `mysqldump`：使用与生产兼容的客户端、`--single-transaction`（仅能为事务表提供一致快照）、`--routines --triggers --events`，导出期间不要并行 DDL；密码交互输入，不放进命令历史和仓库。**数据库备份优先保留一份不在服务器上的副本。**
 
@@ -312,6 +318,7 @@ question_resource.source_id 列不存在
 - **未迁移数据库**：可以先用备份 JAR + 前端恢复，再健康检查（仍须注意会话中的变更）。
 - **已执行结构/数据迁移**：**不保证**旧 JAR 能在新 DB 上运行。先停写并评估迁移向后兼容性；不兼容时恢复**同一时间点**的数据库、JAR、前端备份，优先在隔离库演练；恢复生产 DB 属高危操作，须用户单独批准。不要手写逆向 `DROP/ALTER`，不要仅回滚 Java。
 - 恢复旧前端可在确认目标目录后将 `frontend-old.tar.gz` 展开回 Nginx root；这不会主动删除新版本的额外 hash 资源，旧 index 引用旧资源时通常可继续工作。恢复旧服务需与 DB 兼容性一并判断。
+- `question-images-old.tar.gz` 只用于用户明确批准的数据灾备恢复；常规代码 rollback **不得自动覆盖 `QUESTION_IMAGE_DIR`**。图片 asset 是 immutable，自动恢复 / 删除可能破坏发布窗口内新增数据，必须和对应 MySQL 备份时点一起判断。
 - 数据库恢复会丢失备份时点之后的新答题记录，必须先向用户明确说明。
 
 ## 10. PR5 已验证的历史发布记录

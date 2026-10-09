@@ -327,6 +327,12 @@ QUESTION_IMAGE_DIR=/usr/local/wanjingqiuzhi/data/question-images
 不要把该目录放进 jar、静态资源目录或 Nginx 的 root 下
 ```
 
+现役自动发布脚本 `scripts/deploy/deploy-release.sh` 会从
+`/etc/wanjingqiuzhi/backend.env` **只解析** `QUESTION_IMAGE_DIR`（不会 `source/eval`
+整个环境文件），验证路径与 systemd 服务用户的读 / 写 / traverse 权限，并在切换 JAR、
+停止旧服务之前把目录自动 snapshot 到本次 `pre-release-*` 备份。脚本不会自动创建目录、
+修改属主 / 权限，也不会自动恢复或删除生产图片；首次部署仍按上面的规则人工准备持久化目录。
+
 故障排查：
 
 ```text
