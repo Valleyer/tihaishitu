@@ -44,11 +44,12 @@ export function RichText({
         throwOnError: false,
         output: "htmlAndMathml",
         // KaTeX 默认的 \ne / \neq 在当前字体组合下视觉上接近 "/="。
-        // 用真正的单字符“≠”作为关系运算符渲染，保留数学环境和关系符间距，
-        // 不再拆公式、不转 HTML entity，因此嵌套公式也不会被破坏。
+        // 不把 Unicode 字符直接塞进 \\text{}（KaTeX 会把它判成无效输入）；
+        // 改用 KaTeX 官方支持的 \\char 十六进制字符写法，再声明为关系运算符，
+        // 因此既得到单字符“≠”，也保留数学关系符应有的左右间距。
         macros: {
-          "\\ne": "\\mathrel{\\text{≠}}",
-          "\\neq": "\\mathrel{\\text{≠}}",
+          "\\ne": "\\mathrel{\\char\"2260}",
+          "\\neq": "\\mathrel{\\char\"2260}",
         },
       }]]}
       components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
