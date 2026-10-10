@@ -39,7 +39,18 @@ export function RichText({
   const content = (
     <Markdown
       remarkPlugins={[remarkMath]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, output: "htmlAndMathml" }]]}
+      rehypePlugins={[[rehypeKatex, {
+        strict: false,
+        throwOnError: false,
+        output: "htmlAndMathml",
+        // KaTeX 默认的 \ne / \neq 在当前字体组合下视觉上接近 "/="。
+        // 用真正的单字符“≠”作为关系运算符渲染，保留数学环境和关系符间距，
+        // 不再拆公式、不转 HTML entity，因此嵌套公式也不会被破坏。
+        macros: {
+          "\\ne": "\\mathrel{\\text{≠}}",
+          "\\neq": "\\mathrel{\\text{≠}}",
+        },
+      }]]}
       components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
     >
       {normalizeMarkdownSource(children)}
