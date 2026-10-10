@@ -9,6 +9,63 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
+type MarkdownMathNode = {
+  type?: string;
+  value?: string;
+  children?: MarkdownMathNode[];
+};
+
+const SIMPLE_DIVISION_ATOM =
+  String.raw`(?:\\[A-Za-z]+(?:\{[^{}]*\})?|(?:\d+(?:\.\d+)?|[A-Za-z]+)(?:[_^](?:\{[^{}]*\}|[A-Za-z0-9]+))*|\([^()]*\)|\{[^{}]*\})`;
+const SIMPLE_DIVISION_RE = new RegExp(
+  `(${SIMPLE_DIVISION_ATOM})\\s*\\/\\s*(${SIMPLE_DIVISION_ATOM})`,
+  "g",
+);
+const PROTECTED_MATH_TEXT_RE = /\\(?:text|mathrm|operatorname)\{[^{}]*\}/g;
+
+function normalizeSimpleMathDivisions(value: string) {
+  const protectedSegments: string[] = [];
+  const masked = value.replace(PROTECTED_MATH_TEXT_RE, (segment) => {
+    const index = protectedSegments.push(segment) - 1;
+    return `@@RICH_TEXT_PROTECTED_${index}@@`;
+  });
+
+  const normalized = masked.replace(
+    SIMPLE_DIVISION_RE,
+    (_, numerator: string, denominator: string) =>
+      `\\dfrac{${numerator}}{${denominator}}`,
+  );
+
+  return normalized.replace(
+    /@@RICH_TEXT_PROTECTED_(\d+)@@/g,
+    (_, index: string) => protectedSegments[Number(index)] ?? "",
+  );
+}
+
+/**
+ * 只在 remark-math 已识别出的数学节点中，把“简单除法语法”转成上下分式：
+ *   $\\pi/4$     -> $\\dfrac{\\pi}{4}$
+ *   $a_n/b_n$     -> $\\dfrac{a_n}{b_n}$
+ *   $12144/1285.6$ -> $\\dfrac{12144}{1285.6}$
+ *
+ * 普通 Markdown 文本不会处理；\\text{m/s}、\\mathrm{m/s}、
+ * \\operatorname{...} 内的斜杠也保持原样，避免把单位或说明文字误当成除法。
+ */
+function remarkNormalizeMathDivisions() {
+  return (tree: MarkdownMathNode) => {
+    const visit = (node: MarkdownMathNode) => {
+      if (
+        (node.type === "math" || node.type === "inlineMath") &&
+        typeof node.value === "string"
+      ) {
+        node.value = normalizeSimpleMathDivisions(node.value);
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+
 function normalizeMarkdownSource(value: string) {
   return value
     // 统一使用 display-style 分式，但只影响渲染，不修改数据库原文。
@@ -30,7 +87,7 @@ function normalizeMarkdownSource(value: string) {
  *
  * 标准 LaTeX（包括 \\ne / \\neq、嵌套公式、operatorname、上下标等）保持原样交给
  * remark-math + KaTeX，不再把数学公式拆成 HTML entity，避免破坏嵌套公式。
- * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、根号顶部留白、微秒 \\mu s -> us。
+ * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、简单 a/b 除法 -> 上下分式、根号顶部留白、微秒 \\mu s -> us。
  * 数据库原文和编辑框内容都不修改。
  */
 
@@ -45,7 +102,7 @@ export function RichText({
 }) {
   const content = (
     <Markdown
-      remarkPlugins={[remarkMath]}
+      remarkPlugins={[remarkMath, remarkNormalizeMathDivisions]}
       rehypePlugins={[[rehypeKatex, {
         strict: false,
         throwOnError: false,
