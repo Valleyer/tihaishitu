@@ -13,6 +13,13 @@ function normalizeMarkdownSource(value: string) {
   return value
     // 统一使用 display-style 分式，但只影响渲染，不修改数据库原文。
     .replace(/\\frac(?![A-Za-z])/g, "\\dfrac")
+    // 给根式增加一个仅影响高度、不占宽度的 invisible strut。
+    // KaTeX 会据此选择稍高的根号，使 x^2 这类上标与根号横线保持更舒服的留白。
+    // 同时兼容 \\sqrt{...} 与 \\sqrt[n]{...}，不改变数据库原文。
+    .replace(
+      /\\sqrt(?:\s*\[[^\]\n]*\])?\s*\{/g,
+      (match) => `${match}\\vphantom{\\rule{0pt}{1.15em}}`,
+    )
     // 历史解析里常见 \\text{ \\mu s} / \\mu s 写法；产品约定最终显示为 us。
     .replace(/\\text\{\s*\\mu\s+s\s*\}/g, "\\text{us}")
     .replace(/\\mu\s+s(?![A-Za-z])/g, "\\mathrm{us}");
@@ -23,7 +30,7 @@ function normalizeMarkdownSource(value: string) {
  *
  * 标准 LaTeX（包括 \\ne / \\neq、嵌套公式、operatorname、上下标等）保持原样交给
  * remark-math + KaTeX，不再把数学公式拆成 HTML entity，避免破坏嵌套公式。
- * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、微秒 \\mu s -> us。
+ * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、根号顶部留白、微秒 \\mu s -> us。
  * 数据库原文和编辑框内容都不修改。
  */
 
