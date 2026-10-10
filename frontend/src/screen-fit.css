@@ -372,6 +372,10 @@
   padding: 8px 15px;
   margin: 6px 0 12px;
 }
+.result-answer-summary {
+  margin-top: 0;
+  padding-right: 72px;
+}
 .answer-summary p {
   font-size: 15px;
   color: #4f6649;

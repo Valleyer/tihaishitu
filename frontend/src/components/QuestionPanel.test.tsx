@@ -19,7 +19,7 @@ const attempt = (): Attempt => ({
     id: "q1", subject: "数学一", category: "real_exam", chapter: "2022年全国硕士研究生招生考试数学一",
     type: "true_false", presentationType: "true_false", gradingMode: "auto",
     question: "题干", options: { true: "正确", false: "错误" },
-    difficulty: 2, frequency: 3, tags: [], enabled: true,
+    difficulty: 2, frequency: 3, tags: [], revision: 4, enabled: true,
     knowledgePointIds: ["k1", "k2"],
     knowledgePoints: [point("k1", "数列极限计算"), point("k2", "函数奇偶性、周期性与单调性")],
     // 后端在发题时冻结进 attempt snapshot 的题面 metadata（Hub 与 World 共用同一结构）。
@@ -56,6 +56,7 @@ describe("World question panel exam metadata", () => {
         setReview={noop} onEvent={noop} />,
     );
     expect(screen.getByText("2022年考研数学一真题")).toBeTruthy();
+    expect(screen.getByText("已修订 3 次")).toBeTruthy();
     expect(screen.getByText("第3题")).toBeTruthy();
     // displayQuestionNumber 已剥离年份前缀，不能再出现 `第2022-3题`。
     expect(screen.queryByText(/第2022-3题/)).toBeNull();
@@ -122,9 +123,10 @@ describe("World question panel exam metadata", () => {
     expect(screen.queryByText("解题分析")).toBeNull();
     const scroll = view.container.querySelector(".self-assessment-scroll");
     expect(scroll).toBeTruthy();
-    expect(scroll?.querySelector(".question-prompt-area")).toBeTruthy();
+    expect(scroll?.querySelector(".question-prompt-area")).toBeNull();
     expect(scroll?.querySelector(".self-assessment-reference")).toBeTruthy();
-    expect(scroll?.querySelectorAll(".question-prompt-area, .self-assessment-reference")).toHaveLength(2);
+    expect(scroll?.querySelector(".knowledge-explanation")).toBeNull();
+    expect(screen.queryByText("查看知识点解析")).toBeNull();
   });
 
   it("omits the standard-answer bar from a graded solution result", () => {

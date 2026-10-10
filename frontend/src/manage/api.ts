@@ -198,7 +198,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new ManageHttpError(response.status, data?.message || `请求失败（${response.status}）`);
+  if (!response.ok) {
+    const fallback = response.status === 413
+      ? "上传内容超过服务器限制（413）。题目图片请检查 Nginx client_max_body_size 与 Spring multipart 限制。"
+      : `请求失败（${response.status}）`;
+    throw new ManageHttpError(response.status, data?.message || fallback);
+  }
   return data as T;
 }
 

@@ -49,6 +49,8 @@ export interface Question {
   /** Markdown + LaTeX；后端按原文返回，前端负责安全渲染。 */
   question: string;
   stemImageUrl?: string | null;
+  /** Formal Question revision frozen into the attempt snapshot; old snapshots may omit it. */
+  revision?: number;
   options: Record<string, string>;
   answer: Answer;
   aliases: string[];

@@ -209,7 +209,7 @@ public class CatalogStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.question_type,
                        q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.analysis_markdown, q.difficulty, q.stem_image_id
+                       q.analysis_markdown, q.difficulty, q.stem_image_id, q.revision
                   FROM question_bank_item bi
                   JOIN question_resource q ON q.id = bi.question_id
                   LEFT JOIN question_source s ON s.id=q.source_id
@@ -229,7 +229,8 @@ public class CatalogStore {
                                     optionFacts.getOrDefault(id, List.of())), result.getString("analysis_markdown"),
                             List.of(), List.of(), result.getInt("difficulty"), 3, List.of(),
                             pointIds.getOrDefault(id, List.of()),
-                            cn.tihaishitu.questionimage.QuestionImageUrls.url(result.getString("stem_image_id")), true
+                            cn.tihaishitu.questionimage.QuestionImageUrls.url(result.getString("stem_image_id")),
+                            result.getLong("revision"), true
                     );
                 },
                 bankId
@@ -287,7 +288,7 @@ public class CatalogStore {
                     readStringList(result.getString("aliases_json")),
                     readStringList(result.getString("keywords_json")), result.getInt("difficulty"),
                     result.getInt("frequency_value"), readStringList(result.getString("tags_json")),
-                    pointIds.getOrDefault(id, List.of()), null, result.getBoolean("enabled"));
+                    pointIds.getOrDefault(id, List.of()), null, 0L, result.getBoolean("enabled"));
         }, bankId);
     }
 
