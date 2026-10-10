@@ -340,7 +340,7 @@ QUESTION_IMAGE_DIR=/usr/local/wanjingqiuzhi/data/question-images
 若 unit 使用 ProtectSystem=full/strict，而 QUESTION_IMAGE_DIR 位于 /usr/local，
 即使 runuser -u <service-user> touch 能成功，Java 服务自己的 mount namespace 仍可能把 /usr 视为只读。
 应在 systemd unit（推荐 drop-in）加入：
-  ReadWritePaths=/usr/local/wanjingqiuzhi/data/question-images
+  ReadWriteDirectories=/usr/local/wanjingqiuzhi/data/question-images
 然后 daemon-reload + restart。不要为了省事关闭 ProtectSystem。
 健康检查通过但 <img> 404：确认 QUESTION_IMAGE_DIR 没有在重启时被换成空目录
 ```

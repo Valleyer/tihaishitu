@@ -287,7 +287,7 @@ SPA 路由返回 200 只证明 Nginx 提供了 `index.html`，**不证明所有�
 | `Error Code: 1142` / `CREATE command denied` | `SHOW GRANTS FOR 'wanjing_app'@'172.17.0.1'` | 只补 migration 确实需要的权限 |
 | Flyway migration 执行到一半失败 | `information_schema.TABLES/COLUMNS`、外键、索引和 history | **MySQL 5.7 DDL 不是整段自动回滚**，检查半成品 |
 | Nginx 返回 502 | `systemctl status`、`ss -lntp`、`proxy_pass` | 不能无故把 `172.17.0.1:12345` 改为 `127.0.0.1:12345` |
-| 题目图片上传 500 且响应“图片保存失败” | `QUESTION_IMAGE_DIR`、目录权限、`systemctl show ... -p ProtectSystem -p ReadWritePaths` | 若 `ProtectSystem=full/strict` 且目录在 `/usr/local`，用 systemd `ReadWritePaths=<QUESTION_IMAGE_DIR>` 精确放行；不要关闭整个 ProtectSystem |
+| 题目图片上传 500 且响应“图片保存失败” | `QUESTION_IMAGE_DIR`、目录权限、`systemctl show ... -p ProtectSystem -p ReadWriteDirectories` | 若 `ProtectSystem=full/strict` 且目录在 `/usr/local`，用 systemd `ReadWriteDirectories=<QUESTION_IMAGE_DIR>` 精确放行；不要关闭整个 ProtectSystem |
 | `cp: overwrite?` 连续出现 | shell `alias cp` | `Ctrl+C`，确认目标路径后使用 `\cp -a` |
 | 新版本打不开、仍看到旧界面 | HTML title、hash JS/CSS、浏览器缓存 | 检查是否复制到 **`/usr/local/docker/nginx/html`** |
 | ZIP 解压提示 backslashes | 实际文件树与 `index.html` / `assets` | 检查解压产物，不能仅凭 warning 判断失败 |

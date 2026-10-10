@@ -142,12 +142,17 @@ runuser -u "$SERVICE_USER" -- test -x "$QUESTION_IMAGE_DIR"   || fail "QUESTION_
 
 # Unix file permissions are not enough when systemd gives the service a read-only /usr mount.
 # The production image directory currently lives under /usr/local, so ProtectSystem=full/strict
-# must be paired with a ReadWritePaths allow-list that covers QUESTION_IMAGE_DIR.
+# must be paired with a writable-path allow-list that covers QUESTION_IMAGE_DIR.
+# CentOS 7 / systemd 219 uses the legacy property/directive ReadWriteDirectories;
+# newer systemd uses ReadWritePaths. Support either so preflight matches the live host.
 PROTECT_SYSTEM="$(systemctl show "$SERVICE" -p ProtectSystem | awk -F= '$1 == "ProtectSystem" { print $2; exit }')"
-READ_WRITE_PATHS="$(systemctl show "$SERVICE" -p ReadWritePaths | awk -F= '$1 == "ReadWritePaths" { sub(/^[^=]*=/, ""); print; exit }')"
+READ_WRITE_ALLOWLIST="$(systemctl show "$SERVICE" -p ReadWriteDirectories | awk -F= '$1 == "ReadWriteDirectories" { print $2; exit }')"
+if [[ -z "$READ_WRITE_ALLOWLIST" ]]; then
+  READ_WRITE_ALLOWLIST="$(systemctl show "$SERVICE" -p ReadWritePaths | awk -F= '$1 == "ReadWritePaths" { print $2; exit }')"
+fi
 if [[ "$PROTECT_SYSTEM" == full || "$PROTECT_SYSTEM" == strict ]] && path_is_same_or_below "$QUESTION_IMAGE_DIR" "/usr"; then
   IMAGE_DIR_ALLOWED=false
-  for allowed in $READ_WRITE_PATHS; do
+  for allowed in $READ_WRITE_ALLOWLIST; do
     allowed="${allowed#-}"
     allowed="${allowed#+}"
     [[ "$allowed" == /* ]] || continue
@@ -156,7 +161,7 @@ if [[ "$PROTECT_SYSTEM" == full || "$PROTECT_SYSTEM" == strict ]] && path_is_sam
       break
     fi
   done
-  [[ "$IMAGE_DIR_ALLOWED" == true ]] || fail "systemd ProtectSystem=$PROTECT_SYSTEM makes /usr read-only for $SERVICE, but ReadWritePaths does not allow QUESTION_IMAGE_DIR: $QUESTION_IMAGE_DIR"
+  [[ "$IMAGE_DIR_ALLOWED" == true ]] || fail "systemd ProtectSystem=$PROTECT_SYSTEM makes /usr read-only for $SERVICE, but neither ReadWriteDirectories/ReadWritePaths allows QUESTION_IMAGE_DIR: $QUESTION_IMAGE_DIR"
 fi
 
 printf '\nRelease: %s\n' "$SHA"
