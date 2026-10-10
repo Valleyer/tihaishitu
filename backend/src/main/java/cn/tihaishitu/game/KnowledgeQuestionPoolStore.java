@@ -97,7 +97,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT DISTINCT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.analysis_markdown, q.difficulty, q.stem_image_id
+                       q.analysis_markdown, q.difficulty, q.stem_image_id, q.revision
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge qk ON qk.question_id = q.id
@@ -125,7 +125,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.analysis_markdown, q.difficulty, q.stem_image_id
+                       q.analysis_markdown, q.difficulty, q.stem_image_id, q.revision
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                  WHERE q.id IN (%s)
@@ -214,7 +214,7 @@ public class KnowledgeQuestionPoolStore {
                 SELECT q.id, q.subject_name, COALESCE(s.source_type,q.source_type) source_type,
                        COALESCE(s.display_name,q.source_name) source_name, q.exam_year, q.question_number,
                        q.question_type, q.presentation_type, q.grading_mode, q.content_markdown,
-                       q.analysis_markdown, q.difficulty, q.stem_image_id
+                       q.analysis_markdown, q.difficulty, q.stem_image_id, q.revision
                   FROM question_resource q
                   LEFT JOIN question_source s ON s.id=q.source_id
                   JOIN question_resource_knowledge current_rel ON current_rel.question_id = q.id
@@ -334,7 +334,7 @@ public class KnowledgeQuestionPoolStore {
                 List.of(), List.of(), row.difficulty(), 3, List.of(),
                 knowledge.getOrDefault(row.id(), List.of()).stream().map(QuestionKnowledge::knowledgePointId).toList(),
                 cn.tihaishitu.questionimage.QuestionImageUrls.url(row.stemImageId()),
-                true
+                row.revision(), true
         )).toList();
     }
 
@@ -353,7 +353,8 @@ public class KnowledgeQuestionPoolStore {
                 result.getString("question_number"), result.getString("question_type"),
                 result.getString("presentation_type"), result.getString("grading_mode"),
                 result.getString("content_markdown"),
-                result.getString("analysis_markdown"), result.getInt("difficulty"), result.getString("stem_image_id"));
+                result.getString("analysis_markdown"), result.getInt("difficulty"),
+                result.getString("stem_image_id"), result.getLong("revision"));
     }
 
     private static String placeholders(int count) {
@@ -368,5 +369,5 @@ public class KnowledgeQuestionPoolStore {
             String id, String subject, String sourceType, String sourceName, Integer examYear,
             String questionNumber, String questionType,
             String presentationType, String gradingMode, String content,
-            String analysis, int difficulty, String stemImageId) {}
+            String analysis, int difficulty, String stemImageId, long revision) {}
 }

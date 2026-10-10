@@ -39,6 +39,12 @@ SuccessExitStatus=143
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
+# ProtectSystem=full 会把 /usr 以只读方式暴露给服务。若 QUESTION_IMAGE_DIR
+# 位于 /usr/local（现役生产即如此），必须显式放行这个持久化图片目录。
+# 首次部署请把下方路径改成 backend.env 中 QUESTION_IMAGE_DIR 的实际绝对路径。
+# 兼容现役 CentOS 7 / systemd 219：使用旧名 ReadWriteDirectories。
+# 新版 systemd 仍兼容这个别名。
+ReadWriteDirectories=/usr/local/wanjingqiuzhi/data/question-images
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
