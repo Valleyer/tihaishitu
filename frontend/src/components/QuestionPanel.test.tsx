@@ -152,6 +152,10 @@ describe("World question panel exam metadata", () => {
         setReview={noop} onEvent={noop} />,
     );
     expect(view.container.querySelector(".answer-summary")).toBeNull();
+    expect(view.container.querySelector(".result-heading")).toBeNull();
+    expect(screen.queryByText("留待复核")).toBeNull();
+    expect(screen.queryByText("此卷已明")).toBeNull();
+    expect(screen.queryByText("部分明白")).toBeNull();
     expect(screen.getByText("完整解析")).toBeTruthy();
   });
 

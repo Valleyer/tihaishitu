@@ -73,12 +73,6 @@ export function QuestionPanel({
     perPage = small ? 3 : 6,
     optionPages = Math.ceil(entries.length / perPage);
   const resultView = !!result && !recheck;
-  const assessmentTitle =
-    result?.assessment === "partial"
-      ? "部分明白"
-      : result?.correct
-        ? "此卷已明"
-        : "留待复核";
   /**
    * 题面来源 metadata（后端在发题时冻结进 attempt snapshot，Hub 与 World 共用同一结构）。
    * 来源 / 真题标签 / 显示题号作为明确 metadata 展示，不塞进剧情文字；
@@ -112,18 +106,7 @@ export function QuestionPanel({
           aria-live="polite"
         >
           <div className="result-seal">{result!.correct ? "可" : "思"}</div>
-          {isSelfAssessment ? (
-            <div className="result-heading">
-              <span>{assessmentTitle}</span>
-              <small>
-                {result!.assessment === "partial"
-                  ? "思路已有根基，补全步骤后再试。"
-                  : result!.correct
-                    ? "一页读通，前路又明一分。"
-                    : "错处留卷，来日再审。"}
-              </small>
-            </div>
-          ) : (
+          {!isSelfAssessment && (
             <div className="answer-summary result-answer-summary">
               <p>
                 <b>标准答案</b>
