@@ -9,94 +9,8 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-const SIMPLE_DIVISION_ATOM =
-  String.raw`(?:\\[A-Za-z]+(?:\{[^{}]*\})?|(?:\d+(?:\.\d+)?|[A-Za-z]+)(?:[_^](?:\{[^{}]*\}|[A-Za-z0-9]+))*|\([^()]*\)|\{[^{}]*\})`;
-const SIMPLE_DIVISION_RE = new RegExp(
-  `(${SIMPLE_DIVISION_ATOM})\\s*\\/\\s*(${SIMPLE_DIVISION_ATOM})`,
-  "g",
-);
-const PROTECTED_MATH_TEXT_RE = /\\(?:text|mathrm|operatorname)\{[^{}]*\}/g;
-
-function normalizeSimpleMathDivisions(value: string) {
-  const protectedSegments: string[] = [];
-  const masked = value.replace(PROTECTED_MATH_TEXT_RE, (segment) => {
-    const index = protectedSegments.push(segment) - 1;
-    return `@@RICH_TEXT_PROTECTED_${index}@@`;
-  });
-
-  const normalized = masked.replace(
-    SIMPLE_DIVISION_RE,
-    (_, numerator: string, denominator: string) =>
-      `\\dfrac{${numerator}}{${denominator}}`,
-  );
-
-  return normalized.replace(
-    /@@RICH_TEXT_PROTECTED_(\d+)@@/g,
-    (_, index: string) => protectedSegments[Number(index)] ?? "",
-  );
-}
-
-/**
- * 只在 $...$ / $...$ 数学片段内部，把“简单除法语法”转成上下分式：
- *   $\\pi/4$      -> $\\dfrac{\\pi}{4}$
- *   $a_n/b_n$      -> $\\dfrac{a_n}{b_n}$
- *   $12144/1285.6$ -> $\\dfrac{12144}{1285.6}$
- *
- * 这里在 Markdown 解析前做，是为了让 remark-math / KaTeX 一开始拿到的就是
- * 真正的 \\dfrac；普通 Markdown 文本完全不处理。
- * \\text{m/s}、\\mathrm{m/s}、\\operatorname{...} 内的斜杠保持原样。
- */
-function normalizeMathSegmentDivisions(value: string) {
-  return value.replace(
-    /\$\$([\s\S]*?)\$\$|\$([^$\n]+?)\$/g,
-    (segment, displayMath: string | undefined, inlineMath: string | undefined) => {
-      const body = displayMath ?? inlineMath ?? "";
-      const normalized = normalizeSimpleMathDivisions(body);
-      return displayMath !== undefined ? `$${normalized}$` : `${normalized}/**
- * 统一卷面富文本渲染器。
- *
- * 题库与后端只保存 Markdown + LaTeX 文本；这里负责展示。react-markdown
- * 默认不执行原始 HTML，因此用户导入的题目不能借题干注入脚本。
- */
-import Markdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
-
-const SIMPLE_DIVISION_ATOM =
-  String.raw`(?:\\[A-Za-z]+(?:\{[^{}]*\})?|(?:\d+(?:\.\d+)?|[A-Za-z]+)(?:[_^](?:\{[^{}]*\}|[A-Za-z0-9]+))*|\([^()]*\)|\{[^{}]*\})`;
-const SIMPLE_DIVISION_RE = new RegExp(
-  `(${SIMPLE_DIVISION_ATOM})\\s*\\/\\s*(${SIMPLE_DIVISION_ATOM})`,
-  "g",
-);
-const PROTECTED_MATH_TEXT_RE = /\\(?:text|mathrm|operatorname)\{[^{}]*\}/g;
-
-function normalizeSimpleMathDivisions(value: string) {
-  const protectedSegments: string[] = [];
-  const masked = value.replace(PROTECTED_MATH_TEXT_RE, (segment) => {
-    const index = protectedSegments.push(segment) - 1;
-    return `@@RICH_TEXT_PROTECTED_${index}@@`;
-  });
-
-  const normalized = masked.replace(
-    SIMPLE_DIVISION_RE,
-    (_, numerator: string, denominator: string) =>
-      `\\dfrac{${numerator}}{${denominator}}`,
-  );
-
-  return normalized.replace(
-    /@@RICH_TEXT_PROTECTED_(\d+)@@/g,
-    (_, index: string) => protectedSegments[Number(index)] ?? "",
-  );
-}
-
-;
-    },
-  );
-}
-
 function normalizeMarkdownSource(value: string) {
-  return normalizeMathSegmentDivisions(value)
+  return value
     // 统一使用 display-style 分式，但只影响渲染，不修改数据库原文。
     .replace(/\\frac(?![A-Za-z])/g, "\\dfrac")
     // 给根式增加一个仅影响高度、不占宽度的 invisible strut。
@@ -116,7 +30,7 @@ function normalizeMarkdownSource(value: string) {
  *
  * 标准 LaTeX（包括 \\ne / \\neq、嵌套公式、operatorname、上下标等）保持原样交给
  * remark-math + KaTeX，不再把数学公式拆成 HTML entity，避免破坏嵌套公式。
- * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、简单 a/b 除法 -> 上下分式、根号顶部留白、微秒 \\mu s -> us。
+ * 仅保留产品明确要求的展示规范：\\frac -> \\dfrac、根号顶部留白、微秒 \\mu s -> us。
  * 数据库原文和编辑框内容都不修改。
  */
 

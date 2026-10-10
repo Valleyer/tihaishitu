@@ -177,14 +177,13 @@ describe("World question panel exam metadata", () => {
 
   it("renders markdown and latex standard answers through RichText with a real inequality glyph", () => {
     const graded=attempt(); graded.question.type="single_choice"; graded.question.presentationType="single_choice";
-    graded.question.options={A:"$a\\neq b$、$\\frac{1}{2}$ 与 $\\pi/4$",B:"1"}; graded.result={correct:false,answer:"B",standard:"A",explanation:"解析",aliases:[],story:"",changes:[]};
+    graded.question.options={A:"$a\\neq b$ 与 $\\frac{1}{2}$",B:"1"}; graded.result={correct:false,answer:"B",standard:"A",explanation:"解析",aliases:[],story:"",changes:[]};
     const view=render(<QuestionPanel attempt={graded} busy={false} submit={noop} reveal={noop} assess={noop}
       next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop}/>);
     const katexHtml = view.container.querySelector(".answer-summary .katex-html");
     expect(katexHtml).toBeTruthy();
     expect(katexHtml?.textContent).toContain("≠");
     expect(katexHtml?.textContent).not.toContain("/=");
-    expect(view.container.querySelectorAll(".answer-summary .mfrac").length).toBeGreaterThanOrEqual(2);
   });
 
   it("builds the title from displayQuestionNumber instead of the raw value", () => {
