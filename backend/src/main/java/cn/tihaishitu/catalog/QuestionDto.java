@@ -26,6 +26,7 @@ public record QuestionDto(
         List<String> tags,
         List<String> knowledgePointIds,
         String stemImageUrl,
+        long revision,
         boolean enabled
 ) {
     public QuestionDto {
