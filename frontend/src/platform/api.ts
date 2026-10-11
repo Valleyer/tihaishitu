@@ -78,7 +78,7 @@ export interface ActivityDaily {
   date: string; effectiveAttempts: number; distinctKnowledgePoints: number;
   correct: number; partial: number; wrong: number; revealedOnly: number;
   /** 文集归属统计：允许同一次 Attempt / 同一知识点同时计入多本文集；同一本书内去重。 */
-  books: ActivityBookDaily[];
+  books?: ActivityBookDaily[];
 }
 export interface LearnerActivity {
   windowDays: number; generatedAt: string;
