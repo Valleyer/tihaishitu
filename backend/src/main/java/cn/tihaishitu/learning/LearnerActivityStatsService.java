@@ -72,7 +72,8 @@ public class LearnerActivityStatsService {
      */
     public ActivityView activityAt(String learnerId, Instant now, int windowDays) {
         Set<String> scope = scopedKnowledgePointIds(learnerId);
-        return activityView(store.effectiveActions(learnerId, scope), scope, now, windowDays);
+        List<LearnerActivityStore.EffectiveAction> actions = store.effectiveActions(learnerId, scope);
+        return activityView(actions, scope, now, windowDays, attribution(learnerId, actions));
     }
 
     /** 指定 Learner 在当前学习范围内的最近接触知识点，按最近有效接触时间倒序。 */
@@ -93,7 +94,7 @@ public class LearnerActivityStatsService {
     public Views views(String learnerId, Instant now, int trendDays) {
         Set<String> scope = scopedKnowledgePointIds(learnerId);
         List<LearnerActivityStore.EffectiveAction> actions = store.effectiveActions(learnerId, scope);
-        return new Views(activityView(actions, scope, now, trendDays),
+        return new Views(activityView(actions, scope, now, trendDays, attribution(learnerId, actions)),
                 gradedRecentView(actions, now), buildContacts(actions));
     }
 
@@ -102,6 +103,32 @@ public class LearnerActivityStatsService {
         Map<String, LearnerProgressStore.MembershipRow> pointById = new LinkedHashMap<>();
         progress.selectedMemberships(learnerId).forEach(row -> pointById.putIfAbsent(row.knowledgePointId(), row));
         return pointById.keySet();
+    }
+
+    /**
+     * 趋势柱状图的「文集归属」投影。
+     *
+     * <p>全局统计仍按 Attempt / KnowledgePoint 去重；这里只为图表把同一次学习事实投影到
+     * 当前学习范围中的所有相关文集。题目本身属于多本文集，或目标知识点属于多本文集时，
+     * 每本文集都计入；同一 Attempt 在同一本书内最多计一次。</p>
+     */
+    private BookAttribution attribution(String learnerId, List<LearnerActivityStore.EffectiveAction> actions) {
+        List<LearnerProgressStore.BookRow> books = progress.selectedBooks(learnerId);
+        Map<String, Set<String>> pointBooks = new LinkedHashMap<>();
+        progress.selectedMemberships(learnerId).forEach(row ->
+                pointBooks.computeIfAbsent(row.knowledgePointId(), ignored -> new LinkedHashSet<>()).add(row.bookId()));
+        Set<String> questionIds = new LinkedHashSet<>();
+        actions.forEach(action -> questionIds.add(action.questionId()));
+        Map<String, Set<String>> questionBooks = store.selectedQuestionBooks(learnerId, questionIds);
+
+        Map<String, Set<String>> attemptBooks = new LinkedHashMap<>();
+        for (LearnerActivityStore.EffectiveAction action : actions) {
+            Set<String> attributed = new LinkedHashSet<>();
+            attributed.addAll(pointBooks.getOrDefault(action.knowledgePointId(), Set.of()));
+            attributed.addAll(questionBooks.getOrDefault(action.questionId(), Set.of()));
+            attemptBooks.put(action.attemptId(), attributed);
+        }
+        return new BookAttribution(books, attemptBooks);
     }
 
     /**
@@ -115,7 +142,7 @@ public class LearnerActivityStatsService {
      * 重复扫描历史。</p>
      */
     private ActivityView activityView(List<LearnerActivityStore.EffectiveAction> actions, Set<String> scope,
-                                      Instant now, int trendDays) {
+                                      Instant now, int trendDays, BookAttribution attribution) {
         LocalDate today = now.atZone(PracticeBusinessDay.ZONE).toLocalDate();
         LocalDate metricStart = today.minusDays(WINDOW_DAYS - 1L);
         LocalDate trendStart = today.minusDays(trendDays - 1L);
@@ -150,7 +177,7 @@ public class LearnerActivityStatsService {
 
         List<DailyActivity> daily = new ArrayList<>();
         for (LocalDate date = trendStart; !date.isAfter(today); date = date.plusDays(1)) {
-            daily.add(dailyActivity(date, actions, byDate.getOrDefault(date, List.of())));
+            daily.add(dailyActivity(date, actions, byDate.getOrDefault(date, List.of()), attribution));
         }
 
         Metrics metrics = new Metrics(activeStudyDaysDate.size(), todayAttempts, scope.size(), touchedPoints.size(),
@@ -161,7 +188,8 @@ public class LearnerActivityStatsService {
 
     private static DailyActivity dailyActivity(LocalDate date,
                                                List<LearnerActivityStore.EffectiveAction> actions,
-                                               List<LearnerActivityStore.Outcome> outcomes) {
+                                               List<LearnerActivityStore.Outcome> outcomes,
+                                               BookAttribution attribution) {
         int correct = 0, partial = 0, wrong = 0, revealedOnly = 0;
         for (LearnerActivityStore.Outcome outcome : outcomes) {
             switch (outcome) {
@@ -173,10 +201,24 @@ public class LearnerActivityStatsService {
             }
         }
         Set<String> points = new LinkedHashSet<>();
+        Map<String, Integer> attemptsByBook = new LinkedHashMap<>();
+        Map<String, Set<String>> pointsByBook = new LinkedHashMap<>();
         for (LearnerActivityStore.EffectiveAction action : actions) {
-            if (action.actionDate().equals(date)) points.add(action.knowledgePointId());
+            if (!action.actionDate().equals(date)) continue;
+            points.add(action.knowledgePointId());
+            if (action.outcome() == LearnerActivityStore.Outcome.OTHER) continue;
+            for (String bookId : attribution.attemptBooks().getOrDefault(action.attemptId(), Set.of())) {
+                attemptsByBook.merge(bookId, 1, Integer::sum);
+                pointsByBook.computeIfAbsent(bookId, ignored -> new LinkedHashSet<>())
+                        .add(action.knowledgePointId());
+            }
         }
-        return new DailyActivity(date, outcomes.size(), points.size(), correct, partial, wrong, revealedOnly);
+        List<DailyBookActivity> books = attribution.books().stream()
+                .map(book -> new DailyBookActivity(book.id(), book.name(),
+                        attemptsByBook.getOrDefault(book.id(), 0),
+                        pointsByBook.getOrDefault(book.id(), Set.of()).size()))
+                .toList();
+        return new DailyActivity(date, outcomes.size(), points.size(), correct, partial, wrong, revealedOnly, books);
     }
 
     /**
@@ -248,8 +290,12 @@ public class LearnerActivityStatsService {
     /** 结果分布；四类之和等于有效答题总数（assessment 非标准的记录不计入任一类）。 */
     public record OutcomeSummary(int correct, int partial, int wrong, int revealedOnly) {}
 
+    public record DailyBookActivity(String bookId, String bookName, int effectiveAttempts,
+                                    int distinctKnowledgePoints) {}
+
     public record DailyActivity(LocalDate date, int effectiveAttempts, int distinctKnowledgePoints,
-                                int correct, int partial, int wrong, int revealedOnly) {}
+                                int correct, int partial, int wrong, int revealedOnly,
+                                List<DailyBookActivity> books) {}
 
     public record ActivityView(int windowDays, Instant generatedAt, Metrics metrics, OutcomeSummary outcomes,
                                List<DailyActivity> daily) {}
@@ -273,6 +319,9 @@ public class LearnerActivityStatsService {
                                    List<DailyProgress> daily) {}
 
     public record DailyProgress(LocalDate date, int gradedAttempts, int distinctKnowledgePoints) {}
+
+    private record BookAttribution(List<LearnerProgressStore.BookRow> books,
+                                   Map<String, Set<String>> attemptBooks) {}
 
     /** 一次只读的三个视图。调用方必须复用，不得再次查询统计事实。 */
     public record Views(ActivityView activity, GradedRecentView recent, List<RecentContact> contacts) {}
