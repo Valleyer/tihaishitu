@@ -47,7 +47,7 @@ public class LearnerActivityStore {
         for (List<String> batch : batches(scope)) {
             for (AttemptRow row : attemptRows(learnerId, batch)) {
                 Instant actionAt = actionAt(row);
-                actions.putIfAbsent(row.attemptId(), new EffectiveAction(row.attemptId(), row.knowledgePointId(),
+                actions.putIfAbsent(row.attemptId(), new EffectiveAction(row.attemptId(), row.questionId(), row.knowledgePointId(),
                         outcome(row), actionAt, actionAt.atZone(PracticeBusinessDay.ZONE).toLocalDate(),
                         row.assessment(), row.answeredAt()));
             }
@@ -90,7 +90,7 @@ public class LearnerActivityStore {
 
     private List<AttemptRow> attemptRows(String learnerId, List<String> scope) {
         String sql = """
-                SELECT a.id,a.target_knowledge_point_id,a.status,a.assessment,a.answered_at,a.answer_revealed_at
+                SELECT a.id,a.question_id,a.target_knowledge_point_id,a.status,a.assessment,a.answered_at,a.answer_revealed_at
                   FROM study_attempt a
                   JOIN question_resource q ON q.id=a.question_id
                  WHERE a.learner_id=? AND a.status IN ('graded','revealed')
@@ -103,10 +103,38 @@ public class LearnerActivityStore {
         List<Object> args = new ArrayList<>();
         args.add(learnerId);
         args.addAll(scope);
-        return jdbc.query(sql, (rs, index) -> new AttemptRow(rs.getString("id"),
+        return jdbc.query(sql, (rs, index) -> new AttemptRow(rs.getString("id"), rs.getString("question_id"),
                 rs.getString("target_knowledge_point_id"), rs.getString("status"), rs.getString("assessment"),
                 instant(rs.getTimestamp("answered_at")), instant(rs.getTimestamp("answer_revealed_at"))),
                 args.toArray());
+    }
+
+    /**
+     * 当前 Learner 已选文集里，题目本身所属的文集归属。
+     *
+     * <p>用于进度页按文集堆叠展示。这里只返回归属事实，不改变全局有效 Attempt 的去重口径；
+     * 同一道题属于多本文集时会返回多个 bank_id，同一文集只返回一次。</p>
+     */
+    public Map<String, Set<String>> selectedQuestionBooks(String learnerId, Set<String> questionIds) {
+        Map<String, Set<String>> byQuestion = new LinkedHashMap<>();
+        if (questionIds == null || questionIds.isEmpty()) return byQuestion;
+        for (List<String> batch : batches(questionIds)) {
+            String sql = """
+                    SELECT DISTINCT item.question_id,item.bank_id
+                      FROM question_bank_item item
+                      JOIN learner_selected_book selected ON selected.bank_id=item.bank_id AND selected.learner_id=?
+                      JOIN question_bank bank ON bank.id=item.bank_id AND bank.enabled=TRUE
+                     WHERE item.question_id IN (%s)
+                    """.formatted(placeholders(batch.size()));
+            List<Object> args = new ArrayList<>();
+            args.add(learnerId);
+            args.addAll(batch);
+            jdbc.query(sql, rs -> {
+                byQuestion.computeIfAbsent(rs.getString("question_id"), ignored -> new java.util.LinkedHashSet<>())
+                        .add(rs.getString("bank_id"));
+            }, args.toArray());
+        }
+        return byQuestion;
     }
 
     private static List<List<String>> batches(Set<String> values) {
@@ -140,10 +168,10 @@ public class LearnerActivityStore {
      * {@code answeredAt} 是评分时刻（仅 graded 有值），保留给需要按<b>评分日</b>归属的历史兼容
      * 字段使用；{@code assessment} 保留原始结果值供 UI 描述真实行为。</p>
      */
-    public record EffectiveAction(String attemptId, String knowledgePointId, Outcome outcome,
+    public record EffectiveAction(String attemptId, String questionId, String knowledgePointId, Outcome outcome,
                                   Instant actionAt, LocalDate actionDate,
                                   String assessment, Instant answeredAt) {}
 
-    private record AttemptRow(String attemptId, String knowledgePointId, String status, String assessment,
+    private record AttemptRow(String attemptId, String questionId, String knowledgePointId, String status, String assessment,
                               Instant answeredAt, Instant revealedAt) {}
 }
