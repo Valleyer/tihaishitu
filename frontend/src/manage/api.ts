@@ -320,6 +320,20 @@ export const manageApi = {
         comment,
       }),
     }),
+  bulkDisableQuestions: (questions: QuestionView[]) =>
+    request<{ changed: number; status: string }>("/questions/bulk-disable", {
+      method: "POST",
+      body: JSON.stringify({
+        items: questions.map(question => ({ id: question.id, expectedRevision: question.revision })),
+      }),
+    }),
+  bulkRestoreQuestions: (questions: QuestionView[]) =>
+    request<{ changed: number; status: string }>("/questions/bulk-restore", {
+      method: "POST",
+      body: JSON.stringify({
+        items: questions.map(question => ({ id: question.id, expectedRevision: question.revision })),
+      }),
+    }),
   bulkDeleteQuestions: (ids: string[]) =>
     request<{ deleted: number }>("/questions/bulk-delete", {
       method: "POST", body: JSON.stringify({ ids }),

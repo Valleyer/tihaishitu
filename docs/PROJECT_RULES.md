@@ -1045,16 +1045,34 @@ Management 题目列表与审核列表展示 `displayQuestionNumber`（由
 `examYear + "-" + questionNumber`（会把历史写法显示成 `2020-2020-7`）。编辑器输入框
 继续使用并保存原始 `questionNumber`，display 值不回写数据库。
 
-#### 10.6.3 Management 题目列表筛选
+#### 10.6.3 Management 题目列表筛选与临时禁用
 
-普通题目管理页（`reviewOnly=false`）按**题型**筛选，请求参数是 `questionType`，
-不再发送 `status`。审核中心（`reviewOnly=true`）继续固定：
+普通题目管理页（`reviewOnly=false`）同时支持**题型**与**状态**筛选，请求参数分别是
+`questionType` / `status`；空状态表示全部状态。审核中心（`reviewOnly=true`）继续固定：
 
 ```text
 status = pending_review
 ```
 
-因此后端 `status` filter 必须保留，不能因为普通页取消状态筛选而删除。
+题目临时禁用复用既有 `archived` 状态，不新增第二套 enabled/disabled 字段：
+
+```text
+published -> archived  = 批量禁用
+archived  -> published = 批量恢复发布
+```
+
+长期约束：
+
+- 批量禁用 / 恢复只允许 REVIEWER / ADMIN，一次最多 100 道，并携带每题
+  `expectedRevision` 做乐观锁；
+- 整批必须先校验，再在同一事务中执行；任一题状态或 revision 不符时整批失败，不能半批成功；
+- 「禁用」只接受当前 `published` 题，「恢复发布」只接受当前 `archived` 题；
+- archived 题立即退出新的全局浏览、Practice / World 抽题与 Mastery 正式题集合，但历史
+  Attempt、错题记录和题目实体必须保留；
+- 恢复发布前重新校验 Formal Question Contract；不允许把已经不满足正式契约的 archived 题
+  直接恢复为 published；
+- Management 中文展示将 `archived` 表述为「已禁用」，数据库状态码仍保持 `archived`；
+- 单题原有 archive 能力继续兼容，批量操作必须写审计记录并推进题目 revision。
 
 ---
 

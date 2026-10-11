@@ -73,4 +73,34 @@ describe("manageApi request headers", () => {
     const [, init] = fetchMock().mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ stemImageId: "asset-b" });
   });
+
+  it("sends optimistic revisions for bulk disable and restore", async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ changed: 2, status: "archived" }));
+    const questions = [
+      { id: "question-a", revision: 4 },
+      { id: "question-b", revision: 7 },
+    ] as Parameters<typeof manageApi.bulkDisableQuestions>[0];
+
+    await manageApi.bulkDisableQuestions(questions);
+    let [url, init] = fetchMock().mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/manage/questions/bulk-disable");
+    expect(JSON.parse(String(init.body))).toEqual({
+      items: [
+        { id: "question-a", expectedRevision: 4 },
+        { id: "question-b", expectedRevision: 7 },
+      ],
+    });
+
+    fetchMock().mockClear();
+    fetchMock().mockResolvedValue(jsonResponse({ changed: 2, status: "published" }));
+    await manageApi.bulkRestoreQuestions(questions);
+    [url, init] = fetchMock().mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/manage/questions/bulk-restore");
+    expect(JSON.parse(String(init.body))).toEqual({
+      items: [
+        { id: "question-a", expectedRevision: 4 },
+        { id: "question-b", expectedRevision: 7 },
+      ],
+    });
+  });
 });

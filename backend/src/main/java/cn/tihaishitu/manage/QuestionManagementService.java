@@ -19,6 +19,8 @@ import java.util.Set;
 public class QuestionManagementService {
     public record BulkReviewItem(String id, long expectedRevision) {}
     public record BulkReviewResult(int reviewed, int approved, int rejected) {}
+    public record BulkStatusItem(String id, long expectedRevision) {}
+    public record BulkStatusResult(int changed, String status) {}
     private static final Set<String> SOURCE_TYPES = Set.of("real_exam", "mock", "custom");
     private static final Set<String> QUESTION_TYPES = Set.of(
             "single_choice", "multiple_choice", "true_false", "solution");
@@ -123,6 +125,52 @@ public class QuestionManagementService {
         if ("archived".equals(current.status())) return current;
         return store.transition(id, revision, current.status(), "archived", actorId(auth),
                 "QUESTION_ARCHIVED", "");
+    }
+
+    /**
+     * 批量临时下架 / 恢复正式题。
+     *
+     * <p>只允许 published -> archived 与 archived -> published。先完整校验整批，再在同一事务中
+     * 逐题 transition，避免半批成功。历史 Attempt、错题与题目实体均保留。</p>
+     */
+    @Transactional
+    public BulkStatusResult bulkStatus(List<BulkStatusItem> requestedItems, boolean restore, Authentication auth) {
+        if (requestedItems == null || requestedItems.isEmpty()) bad("请至少选择一道题。");
+        if (requestedItems.size() > 100) bad("一次最多处理 100 道题。");
+        String expectedStatus = restore ? "archived" : "published";
+        String targetStatus = restore ? "published" : "archived";
+        String action = restore ? "QUESTION_RESTORED" : "QUESTION_ARCHIVED";
+        Set<String> ids = new LinkedHashSet<>();
+        List<QuestionManagementStore.QuestionView> questions = new ArrayList<>();
+        for (BulkStatusItem item : requestedItems) {
+            if (item == null || item.id() == null || item.id().isBlank()) bad("题目 ID 不能为空。");
+            if (!ids.add(item.id())) bad("批量处理中不能重复选择同一道题。");
+            QuestionManagementStore.QuestionView current = require(item.id());
+            String prefix = questionLabel(current) + "：";
+            if (!expectedStatus.equals(current.status())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        prefix + (restore ? "只有已禁用题目可以恢复发布。" : "只有已发布题目可以批量禁用。"));
+            }
+            if (current.revision() != item.expectedRevision()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        prefix + "题目已被其他人修改，请刷新列表后重试。");
+            }
+            if (restore) {
+                try { validateStored(current); }
+                catch (ResponseStatusException error) {
+                    throw new ResponseStatusException(error.getStatusCode(), prefix + value(error.getReason()), error);
+                }
+            }
+            questions.add(current);
+        }
+        String actor = actorId(auth);
+        for (int index = 0; index < questions.size(); index++) {
+            QuestionManagementStore.QuestionView question = questions.get(index);
+            store.transition(question.id(), requestedItems.get(index).expectedRevision(),
+                    expectedStatus, targetStatus, actor, action,
+                    restore ? "批量恢复发布" : "问题题目临时禁用");
+        }
+        return new BulkStatusResult(questions.size(), targetStatus);
     }
 
     private QuestionManagementStore.QuestionView require(String id) {

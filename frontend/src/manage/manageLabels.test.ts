@@ -4,6 +4,7 @@ import { manageLabel, manageOptions, questionTypeContract } from "./manageLabels
 describe("management Chinese labels", () => {
   it("keeps machine codes stable while presenting Chinese labels", () => {
     expect(manageLabel("questionStatus", "pending_review")).toBe("待审核");
+    expect(manageLabel("questionStatus", "archived")).toBe("已禁用");
     expect(manageLabel("questionType", "single_choice")).toBe("单选题");
     expect(manageLabel("questionType", "solution")).toBe("综合题");
     expect(manageOptions("questionType").map(option => option.value)).toEqual([

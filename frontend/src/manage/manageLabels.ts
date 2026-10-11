@@ -1,7 +1,7 @@
 const maps = {
   questionStatus: {
     draft: "草稿", pending_review: "待审核", published: "已发布",
-    rejected: "已退回", archived: "已归档",
+    rejected: "已退回", archived: "已禁用",
   },
   questionType: {
     single_choice: "单选题", multiple_choice: "多选题", true_false: "判断题",
