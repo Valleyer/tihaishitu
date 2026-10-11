@@ -163,7 +163,8 @@ class QuestionReviewWorkflowIntegrationTest {
     }
     private String knowledge() {
         String id=UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,'REVIEW-K','审核知识','测试','节','章','core','active','','',0,1)",id);
+        String code="REVIEW-K-" + id.substring(0, 8);
+        jdbc.update("INSERT INTO global_knowledge_point(id,code,name,subject_name,section_name,chapter_name,default_role,status,description,explanation,sort_order,revision) VALUES (?,?,?,'测试','节','章','core','active','','',0,1)",id,code,"审核知识-" + id.substring(0, 8));
         return id;
     }
     private String source() {
