@@ -74,9 +74,12 @@ class LearnerProgressSingleReadIntegrationTest {
                 .andExpect(jsonPath("$.recent.gradedAttempts7d").value(2))
                 .andExpect(jsonPath("$.recent.daily.length()").value(7));
 
-        // 一次请求只能触发一次全历史有效 Attempt 读取。
+        // 一次请求只能触发一次全历史有效 Attempt 读取；文集堆叠允许额外读取一次
+        // “题目 -> 当前已选文集”静态归属，但不能再扫描第二遍 Attempt。
         Mockito.verify(activityStore, Mockito.times(1))
                 .effectiveActions(anyString(), any());
+        Mockito.verify(activityStore, Mockito.times(1))
+                .selectedQuestionBooks(anyString(), any());
         Mockito.verifyNoMoreInteractions(activityStore);
     }
 
