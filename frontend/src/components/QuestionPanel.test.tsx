@@ -230,3 +230,34 @@ describe("World question panel stem image", () => {
     expect(prompt!.children).toHaveLength(1);
   });
 });
+
+
+describe("World question panel unified question review entry", () => {
+  it("uses the footer 查看题目 entry and removes the duplicate result-page recheck link", () => {
+    const graded = attempt();
+    graded.result = {
+      correct: true, answer: "A", standard: "A", explanation: "解析正文",
+      aliases: [], story: "", changes: [],
+    };
+    const view = render(<QuestionPanel attempt={graded} busy={false} submit={noop} reveal={noop} assess={noop}
+      next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop} />);
+    expect(screen.queryByText("重看题面与选项")).toBeNull();
+    const review = screen.getByText("查看题目");
+    expect((review as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(review);
+    expect(screen.getByText("题干")).toBeTruthy();
+    expect(screen.getByText("返回批卷")).toBeTruthy();
+    expect(view.container.querySelector(".knowledge-ribbon")).toBeTruthy();
+  });
+
+  it("does not reserve the old paper-completion hint for self-assessment questions", () => {
+    const solution = attempt();
+    solution.question.type = "self_assessment";
+    solution.question.presentationType = "self_assessment";
+    solution.question.gradingMode = "self_assessment";
+    solution.question.options = {};
+    render(<QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
+      next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop} />);
+    expect(screen.queryByText(/请先在纸上完成/)).toBeNull();
+  });
+});
