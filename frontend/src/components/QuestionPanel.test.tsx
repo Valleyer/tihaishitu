@@ -52,7 +52,7 @@ describe("World question panel exam metadata", () => {
   it("renders the exam label and the display question number", () => {
     const view = render(
       <QuestionPanel attempt={attempt()} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     expect(screen.getByText("2022年考研数学一真题")).toBeTruthy();
@@ -70,7 +70,7 @@ describe("World question panel exam metadata", () => {
     duplicate.question.examMetadata!.sourceName = " 2022年考研数学一真题 ";
     const view = render(
       <QuestionPanel attempt={duplicate} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     expect(screen.getAllByText("2022年考研数学一真题")).toHaveLength(1);
@@ -81,7 +81,7 @@ describe("World question panel exam metadata", () => {
   it("renders every knowledge point tag with its role", () => {
     const view = render(
       <QuestionPanel attempt={attempt()} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     const tags = view.container.querySelectorAll(".knowledge-ribbon button.knowledge-tag");
@@ -97,7 +97,7 @@ describe("World question panel exam metadata", () => {
     delete (bare.question as { examMetadata?: unknown }).examMetadata;
     const view = render(
       <QuestionPanel attempt={bare} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     expect(view.container.querySelector(".exam-source-row")).toBeNull();
@@ -115,7 +115,7 @@ describe("World question panel exam metadata", () => {
     solution.reveal = { explanation: "## 答案与解析\n\n完整过程", knowledgePoints: solution.question.knowledgePoints };
     const view = render(
       <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     expect(screen.getByText("参考解析")).toBeTruthy();
@@ -148,7 +148,7 @@ describe("World question panel exam metadata", () => {
     };
     const view = render(
       <QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
-        next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+        next={noop} eventPending={false} reviewOnly={false}
         setReview={noop} onEvent={noop} />,
     );
     expect(view.container.querySelector(".answer-summary")).toBeNull();
@@ -164,7 +164,7 @@ describe("World question panel exam metadata", () => {
     HTMLDialogElement.prototype.close = function () { this.open = false; };
     const noIdea = vi.fn(); const report = vi.fn().mockResolvedValue(undefined);
     render(<QuestionPanel attempt={attempt()} busy={false} submit={noop} reveal={noop} assess={noop}
-      noIdea={noIdea} report={report} next={noop} note="" showNote={noop} eventPending={false}
+      noIdea={noIdea} report={report} next={noop} eventPending={false}
       reviewOnly={false} setReview={noop} onEvent={noop} />);
     fireEvent.click(screen.getByText("我没思路")); expect(noIdea).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByText("题目有误？"));
@@ -179,7 +179,7 @@ describe("World question panel exam metadata", () => {
     const graded=attempt(); graded.question.type="single_choice"; graded.question.presentationType="single_choice";
     graded.question.options={A:"$a\\neq b$ 与 $\\frac{1}{2}$",B:"1"}; graded.result={correct:false,answer:"B",standard:"A",explanation:"解析",aliases:[],story:"",changes:[]};
     const view=render(<QuestionPanel attempt={graded} busy={false} submit={noop} reveal={noop} assess={noop}
-      next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop}/>);
+      next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop}/>);
     const katexHtml = view.container.querySelector(".answer-summary .katex-html");
     expect(katexHtml).toBeTruthy();
     expect(katexHtml?.textContent).toContain("≠");
@@ -201,7 +201,7 @@ describe("World question panel exam metadata", () => {
 describe("World question panel stem image", () => {
   const panel = (value: Attempt) => render(
     <QuestionPanel attempt={value} busy={false} submit={noop} reveal={noop} assess={noop}
-      next={noop} note="" showNote={noop} eventPending={false} reviewOnly={false}
+      next={noop} eventPending={false} reviewOnly={false}
       setReview={noop} onEvent={noop} />,
   );
 
