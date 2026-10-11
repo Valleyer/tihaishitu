@@ -487,8 +487,6 @@ function App() {
                             : "展开下一页 →"
                         }
                         allowReview={false}
-                        note={game.notes[attempt.question.id] || ""}
-                        showNote={() => show("notes")}
                         eventPending={false}
                         reviewOnly={reviewOnly}
                         setReview={setReview}
