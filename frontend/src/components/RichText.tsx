@@ -101,20 +101,18 @@ function normalizeMarkdownSource(value: string) {
  * 数据库原文和编辑框内容都不修改。
  */
 
-const katexPlugin = [rehypeKatex, {
-  strict: false,
-  throwOnError: false,
-  output: "htmlAndMathml",
-  macros: {
-    "\\ne": "\\mathrel{\\char\"2260}",
-    "\\neq": "\\mathrel{\\char\"2260}",
-  },
-}] as const;
-
 function MarkdownFragment({ value, inline = false }: { value: string; inline?: boolean }) {
   return <Markdown
     remarkPlugins={[remarkMath]}
-    rehypePlugins={[katexPlugin]}
+    rehypePlugins={[[rehypeKatex, {
+      strict: false,
+      throwOnError: false,
+      output: "htmlAndMathml",
+      macros: {
+        "\\ne": "\\mathrel{\\char\"2260}",
+        "\\neq": "\\mathrel{\\char\"2260}",
+      },
+    }]]}
     components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
   >{value}</Markdown>;
 }
