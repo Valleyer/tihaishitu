@@ -9,6 +9,73 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
+type RichSegment =
+  | { type: "markdown"; value: string }
+  | { type: "table"; header: string[]; rows: string[][] };
+
+function splitTableRow(line: string) {
+  const text = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  const cells: string[] = [];
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "|" && text[index - 1] !== "\\") {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function isTableDivider(line: string) {
+  if (!line.includes("|")) return false;
+  const cells = splitTableRow(line);
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
+}
+
+/**
+ * 解析最常用的 GFM pipe table。只识别“表头 + --- 分隔行 + 数据行”，
+ * 其它 Markdown 原样交给 react-markdown；单元格仍继续支持 Markdown + LaTeX。
+ */
+function markdownSegments(value: string): RichSegment[] {
+  const lines = value.split("\n");
+  const segments: RichSegment[] = [];
+  let markdown: string[] = [];
+  const flush = () => {
+    if (markdown.length) {
+      segments.push({ type: "markdown", value: markdown.join("\n") });
+      markdown = [];
+    }
+  };
+  for (let index = 0; index < lines.length;) {
+    const headerLine = lines[index] ?? "";
+    const dividerLine = lines[index + 1] ?? "";
+    if (headerLine.includes("|") && isTableDivider(dividerLine)) {
+      const header = splitTableRow(headerLine);
+      const divider = splitTableRow(dividerLine);
+      if (header.length === divider.length) {
+        flush();
+        const rows: string[][] = [];
+        index += 2;
+        while (index < lines.length && lines[index].trim() && lines[index].includes("|")) {
+          const row = splitTableRow(lines[index]);
+          rows.push([...row, ...Array(Math.max(0, header.length - row.length)).fill("")].slice(0, header.length));
+          index += 1;
+        }
+        segments.push({ type: "table", header, rows });
+        continue;
+      }
+    }
+    markdown.push(headerLine);
+    index += 1;
+  }
+  flush();
+  return segments;
+}
+
 function normalizeMarkdownSource(value: string) {
   return value
     // 统一使用 display-style 分式，但只影响渲染，不修改数据库原文。
@@ -34,6 +101,24 @@ function normalizeMarkdownSource(value: string) {
  * 数据库原文和编辑框内容都不修改。
  */
 
+const katexPlugin = [rehypeKatex, {
+  strict: false,
+  throwOnError: false,
+  output: "htmlAndMathml",
+  macros: {
+    "\\ne": "\\mathrel{\\char\"2260}",
+    "\\neq": "\\mathrel{\\char\"2260}",
+  },
+}] as const;
+
+function MarkdownFragment({ value, inline = false }: { value: string; inline?: boolean }) {
+  return <Markdown
+    remarkPlugins={[remarkMath]}
+    rehypePlugins={[katexPlugin]}
+    components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
+  >{value}</Markdown>;
+}
+
 export function RichText({
   children,
   className = "",
@@ -43,29 +128,16 @@ export function RichText({
   className?: string;
   inline?: boolean;
 }) {
-  const content = (
-    <Markdown
-      remarkPlugins={[remarkMath]}
-      rehypePlugins={[[rehypeKatex, {
-        strict: false,
-        throwOnError: false,
-        output: "htmlAndMathml",
-        // KaTeX 默认的 \ne / \neq 在当前字体组合下视觉上接近 "/="。
-        // 不把 Unicode 字符直接塞进 \\text{}（KaTeX 会把它判成无效输入）；
-        // 改用 KaTeX 官方支持的 \\char 十六进制字符写法，再声明为关系运算符，
-        // 因此既得到单字符“≠”，也保留数学关系符应有的左右间距。
-        macros: {
-          "\\ne": "\\mathrel{\\char\"2260}",
-          "\\neq": "\\mathrel{\\char\"2260}",
-        },
-      }]]}
-      components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
-    >
-      {normalizeMarkdownSource(children)}
-    </Markdown>
-  );
-  if (inline) return <span className={`rich-text rich-inline ${className}`}>{content}</span>;
-  return (
-    <div className={`rich-text ${className}`}>{content}</div>
-  );
+  const normalized = normalizeMarkdownSource(children);
+  if (inline) {
+    return <span className={`rich-text rich-inline ${className}`}><MarkdownFragment value={normalized} inline /></span>;
+  }
+  return <div className={`rich-text ${className}`}>{markdownSegments(normalized).map((segment, index) =>
+    segment.type === "markdown"
+      ? <MarkdownFragment key={`markdown-${index}`} value={segment.value} />
+      : <div className="rich-table-scroll" key={`table-${index}`}><table>
+          <thead><tr>{segment.header.map((cell, cellIndex) => <th key={cellIndex}><MarkdownFragment value={cell} inline /></th>)}</tr></thead>
+          <tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MarkdownFragment value={cell} inline /></td>)}</tr>)}</tbody>
+        </table></div>
+  )}</div>;
 }
