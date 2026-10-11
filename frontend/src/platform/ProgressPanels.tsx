@@ -36,25 +36,47 @@ export function progressMetrics(metrics: ActivityMetrics): MetricSpec[] {
  * 7/30/90 日期标签密度（`every = 1 / 5 / 14`）、同样的空态位置。改动仅限标题、单位与传入的
  * 真实数据序列。</p>
  */
+const BOOK_BAR_COLORS = ["#4f46e5", "#0891b2", "#16a34a", "#d97706", "#db2777", "#7c3aed", "#475569"];
+
+export interface ActivityChartValue {
+  date: string;
+  /** 全局去重值，仅用于兼容与空态；柱体高度按文集归属分段之和计算。 */
+  value: number;
+  segments: { bookId: string; bookName: string; value: number; colorIndex: number }[];
+}
+
 export function ActivityBarChart({ title, days, values, unit }: {
-  title: string; days: number; values: { date: string; value: number }[]; unit: string;
+  title: string; days: number; values: ActivityChartValue[]; unit: string;
 }) {
-  const max = Math.max(1, ...values.map(item => item.value));
+  // 旧缓存 / 测试夹具可能还没有 books 字段：此时必须退回原单色柱，
+  // 不能把已有的全局统计渲染成 0。新接口返回 books 后才启用文集堆叠。
+  const stackTotal = (item: ActivityChartValue) =>
+    item.segments.length ? item.segments.reduce((sum, segment) => sum + segment.value, 0) : item.value;
+  const max = Math.max(1, ...values.map(item => Math.max(item.value, stackTotal(item))));
   const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
   const ticks = [ceiling, Math.round(ceiling / 2), 0];
   const every = days === 7 ? 1 : days === 30 ? 5 : 14;
-  const empty = values.every(item => item.value === 0);
+  const empty = values.every(item => item.value === 0 && stackTotal(item) === 0);
   return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
     <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
-    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=><div className="chart-column" title={`${item.date}：${item.value} ${unit}`} key={item.date}><i style={{height:`${item.value/ceiling*100}%`}}/><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>)}</div><div className="chart-x-title">日期</div></div>
+    <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=>{
+      const total=stackTotal(item);
+      const segments=item.segments.filter(segment=>segment.value>0);
+      const titleText=segments.length
+        ? [`${item.date}：文集归属合计 ${total} ${unit}`,...segments.map(segment=>`${segment.bookName}：${segment.value} ${unit}`)].join("\n")
+        : `${item.date}：${item.value} ${unit}`;
+      return <div className="chart-column" title={titleText} key={item.date}><i className="chart-stack" style={{height:`${total/ceiling*100}%`}}>{segments.length
+        ? segments.map(segment=><b aria-label={`${segment.bookName} ${segment.value} ${unit}`} title={`${segment.bookName}：${segment.value} ${unit}`} key={segment.bookId} style={{flexGrow:segment.value,background:BOOK_BAR_COLORS[segment.colorIndex%BOOK_BAR_COLORS.length]}}/>)
+        : item.value>0?<b aria-label={`${item.value} ${unit}`} style={{flexGrow:item.value,background:BOOK_BAR_COLORS[0]}}/>:null}</i><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>;
+    })}</div><div className="chart-x-title">日期</div></div>
   </div></section>;
 }
 
-/** 两张趋势图共用的数据投影：每日有效答题次数 / 每日接触知识点数。 */
+/** 两张趋势图共用的数据投影：全局值继续去重，柱体按当前学习范围内的文集归属上下堆叠。 */
 export function trendSeries(daily: ActivityDaily[]) {
   return {
-    attempts: daily.map(day => ({ date: day.date, value: day.effectiveAttempts })),
-    knowledgePoints: daily.map(day => ({ date: day.date, value: day.distinctKnowledgePoints })),
+    attempts: daily.map(day => ({ date: day.date, value: day.effectiveAttempts, segments: (day.books || []).map((book, colorIndex) => ({ bookId: book.bookId, bookName: book.bookName, value: book.effectiveAttempts, colorIndex })) })),
+    knowledgePoints: daily.map(day => ({ date: day.date, value: day.distinctKnowledgePoints, segments: (day.books || []).map((book, colorIndex) => ({ bookId: book.bookId, bookName: book.bookName, value: book.distinctKnowledgePoints, colorIndex })) })),
   };
 }
 

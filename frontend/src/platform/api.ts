@@ -71,9 +71,14 @@ export interface ActivityMetrics {
 }
 /** 四类结果之和等于 `totalEffectiveAttempts`；`revealedOnly` 是仅查看答案，不是错误。 */
 export interface ActivityOutcomes { correct: number; partial: number; wrong: number; revealedOnly: number }
+export interface ActivityBookDaily {
+  bookId: string; bookName: string; effectiveAttempts: number; distinctKnowledgePoints: number;
+}
 export interface ActivityDaily {
   date: string; effectiveAttempts: number; distinctKnowledgePoints: number;
   correct: number; partial: number; wrong: number; revealedOnly: number;
+  /** 文集归属统计：允许同一次 Attempt / 同一知识点同时计入多本文集；同一本书内去重。 */
+  books?: ActivityBookDaily[];
 }
 export interface LearnerActivity {
   windowDays: number; generatedAt: string;

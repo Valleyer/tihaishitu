@@ -21,8 +21,6 @@ export function QuestionPanel({
   noIdea = () => {},
   report = async () => {},
   next,
-  note,
-  showNote,
   eventPending,
   reviewOnly,
   setReview,
@@ -38,8 +36,6 @@ export function QuestionPanel({
   noIdea?: () => void;
   report?: (reason: string, comment: string) => Promise<void>;
   next: () => void;
-  note: string;
-  showNote: () => void;
   eventPending: boolean;
   reviewOnly: boolean;
   setReview: (value: boolean) => void;
@@ -93,6 +89,27 @@ export function QuestionPanel({
           {attempt.review && <span className="review-tag">旧案重审</span>}
         </div>
       </div>
+      {!resultView && (
+        <div className="knowledge-ribbon">
+          <span>本题考查</span>
+          {q.knowledgePoints.map((point) => (
+            <button
+              type="button"
+              key={point.id}
+              className={"knowledge-tag " + (roleByPointId.get(point.id) ?? "core")}
+              onClick={() =>
+                setExpanded(
+                  `### ${point.name}\n\n${point.explanation || point.description}`,
+                )
+              }
+            >
+              {point.name}
+            </button>
+          ))}
+          {exam?.examLabel && <span className="exam-label">{exam.examLabel}</span>}
+          {exam?.displayQuestionNumber && <span className="exam-question-number">第{exam.displayQuestionNumber}题</span>}
+        </div>
+      )}
       {resultView ? (
         <section
           className={
@@ -134,33 +151,9 @@ export function QuestionPanel({
               </span>
             ))}
           </div>
-          <button className="text-button" onClick={() => setRecheck(true)}>
-            重看题面与选项
-          </button>
         </section>
       ) : (
         <div className="question-body">
-          <div className="knowledge-ribbon">
-            <span>本题考查</span>
-            {q.knowledgePoints.map((point) => (
-              <button
-                type="button"
-                key={point.id}
-                className={
-                  "knowledge-tag " + (roleByPointId.get(point.id) ?? "core")
-                }
-                onClick={() =>
-                  setExpanded(
-                    `### ${point.name}\n\n${point.explanation || point.description}`,
-                  )
-                }
-              >
-                {point.name}
-              </button>
-            ))}
-            {exam?.examLabel && <span className="exam-label">{exam.examLabel}</span>}
-            {exam?.displayQuestionNumber && <span className="exam-question-number">第{exam.displayQuestionNumber}题</span>}
-          </div>
           {isSelfAssessment && attempt.reveal ? (
             <div className="self-assessment-scroll">
               <section className="self-assessment-reference" aria-live="polite">
@@ -174,13 +167,7 @@ export function QuestionPanel({
               <QuestionStemImage src={q.stemImageUrl} />
             </div>
           )}
-          {isSelfAssessment ? (
-            attempt.reveal ? null : (
-              <p className="choice-hint self-assessment-hint">
-                请先在纸上完成推导或作答，再查看参考解析并如实自评。
-              </p>
-            )
-          ) : (
+          {isSelfAssessment ? null : (
           <fieldset
             className={"answers " + (entries.length > 2 ? "two-columns" : "")}
           >
@@ -269,8 +256,8 @@ export function QuestionPanel({
       )}
       <div className="paper-footer">
         <div>
-          <button className="text-button" onClick={showNote}>
-            ✎ {note ? "查看批注" : "卷边批注"}
+          <button className="text-button" disabled={!resultView} onClick={() => setRecheck(true)}>
+            查看题目
           </button>
           {allowReview && (
             <label className="review-switch">

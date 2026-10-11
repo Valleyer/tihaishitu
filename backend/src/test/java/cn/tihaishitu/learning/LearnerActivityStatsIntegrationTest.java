@@ -230,15 +230,28 @@ class LearnerActivityStatsIntegrationTest {
         String question = question();
         jdbc.update("INSERT INTO question_resource_knowledge(question_id,knowledge_point_id,relation_role,sort_order) VALUES (?,?,'auxiliary',1)",
                 question, other);
+        // 同一道题也显式同时属于两本文集：文集归属要双计，但同一本书不能因“题目归属 + 知识点归属”重复计。
+        jdbc.update("INSERT INTO question_bank_item(bank_id,question_id,sort_order) VALUES (?,?,0)", first.id(), question);
+        jdbc.update("INSERT INTO question_bank_item(bank_id,question_id,sort_order) VALUES (?,?,0)", second.id(), question);
         attempt(learner, null, null, question, shared, "graded", at(9, 0), "correct");
 
         LearnerActivityStatsService.ActivityView view = activity.activityAt(learner, now,
                 LearnerActivityStatsService.WINDOW_DAYS);
 
-        // 多本文集共享同一知识点不翻倍；另一知识点没有冻结 target，不获得接触记录。
+        // 全局事实仍去重；另一知识点没有冻结 target，不获得接触记录。
         assertThat(view.metrics().totalKnowledgePoints()).isEqualTo(2);
         assertThat(view.metrics().touchedKnowledgePoints()).isEqualTo(1);
         assertThat(view.metrics().totalEffectiveAttempts()).isEqualTo(1);
+        LearnerActivityStatsService.DailyActivity todayActivity = view.daily().stream()
+                .filter(day -> day.date().equals(today)).findFirst().orElseThrow();
+        assertThat(todayActivity.effectiveAttempts()).isEqualTo(1);
+        assertThat(todayActivity.distinctKnowledgePoints()).isEqualTo(1);
+        assertThat(todayActivity.books()).extracting(LearnerActivityStatsService.DailyBookActivity::bookName)
+                .containsExactly("共享文集甲", "共享文集乙");
+        assertThat(todayActivity.books()).allSatisfy(book -> {
+            assertThat(book.effectiveAttempts()).isEqualTo(1);
+            assertThat(book.distinctKnowledgePoints()).isEqualTo(1);
+        });
     }
 
     @Test
