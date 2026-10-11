@@ -11,6 +11,8 @@ vi.mock("./api", () => ({
     questions: vi.fn(),
     question: vi.fn(),
     reviewQuestion: vi.fn(),
+    bulkDisableQuestions: vi.fn(),
+    bulkRestoreQuestions: vi.fn(),
     saveQuestion: vi.fn(),
     createQuestion: vi.fn(),
     submitQuestion: vi.fn(),
@@ -38,6 +40,8 @@ const reviewer: ManageUser = {
 const questionsMock = vi.mocked(manageApi.questions);
 const questionMock = vi.mocked(manageApi.question);
 const reviewMock = vi.mocked(manageApi.reviewQuestion);
+const bulkDisableMock = vi.mocked(manageApi.bulkDisableQuestions);
+const bulkRestoreMock = vi.mocked(manageApi.bulkRestoreQuestions);
 const sourcesMock = vi.mocked(manageApi.sources);
 const saveSourceMock = vi.mocked(manageApi.saveSource);
 const importBatchMock = vi.mocked(manageApi.importQuestionBatch);
@@ -111,6 +115,8 @@ beforeEach(() => {
   questionsMock.mockReset();
   questionMock.mockReset();
   reviewMock.mockReset();
+  bulkDisableMock.mockReset();
+  bulkRestoreMock.mockReset();
   sourcesMock.mockReset();
   saveSourceMock.mockReset();
   importBatchMock.mockReset();
@@ -428,24 +434,64 @@ describe("QuestionPage pagination", () => {
       .every(([filters]) => filters.status === "pending_review")).toBe(true);
   });
 
-  it("replaces the status filter with the question type filter and never sends status", async () => {
+  it("supports question type and status filters for temporary disable management", async () => {
     render(<QuestionPage user={reviewer} fail={vi.fn()} />);
     await screen.findByText("共 22 道");
 
-    // 普通题目管理页不再提供“全部状态”筛选。
-    expect(screen.queryByLabelText("题目状态")).toBeNull();
     const typeFilter = screen.getByLabelText("题型") as HTMLSelectElement;
+    const statusFilter = screen.getByLabelText("题目状态") as HTMLSelectElement;
     expect(typeFilter.value).toBe("");
-    expect(screen.getByRole("option", { name: "全部题型" })).toBeTruthy();
+    expect(statusFilter.value).toBe("");
+    expect(screen.getByRole("option", { name: "已禁用" })).toBeTruthy();
 
     fireEvent.change(typeFilter, { target: { value: "multiple_choice" } });
     await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
-      questionType: "multiple_choice",
-      status: undefined,
-      page: 0,
+      questionType: "multiple_choice", status: undefined, page: 0,
     })));
-    // 普通页的任何一次请求都不能带上 status。
-    expect(questionsMock.mock.calls.every(([filters]) => filters.status === undefined)).toBe(true);
+
+    fireEvent.change(statusFilter, { target: { value: "archived" } });
+    await waitFor(() => expect(questionsMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionType: "multiple_choice", status: "archived", page: 0,
+    })));
+  });
+
+  it("bulk-disables selected published questions and preserves the existing list workflow", async () => {
+    const published = [question(1, "published"), question(2, "published")];
+    questionsMock.mockResolvedValue(result(published, 0, 2, 1));
+    bulkDisableMock.mockResolvedValue({ changed: 2, status: "archived" });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    try {
+      render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+      await screen.findByText("共 2 道");
+      for (const item of published) fireEvent.click(screen.getByLabelText(`选择 ${item.id}`));
+      fireEvent.click(screen.getByRole("button", { name: "批量禁用（2）" }));
+      await waitFor(() => expect(bulkDisableMock).toHaveBeenCalledWith(published));
+      expect(confirm).toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledWith("已临时禁用 2 道题。");
+    } finally {
+      confirm.mockRestore();
+      alert.mockRestore();
+    }
+  });
+
+  it("offers bulk restore when all selected questions are disabled", async () => {
+    const archived = [question(1, "archived"), question(2, "archived")];
+    questionsMock.mockResolvedValue(result(archived, 0, 2, 1));
+    bulkRestoreMock.mockResolvedValue({ changed: 2, status: "published" });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => undefined);
+    try {
+      render(<QuestionPage user={reviewer} fail={vi.fn()} />);
+      await screen.findByText("共 2 道");
+      for (const item of archived) fireEvent.click(screen.getByLabelText(`选择 ${item.id}`));
+      fireEvent.click(screen.getByRole("button", { name: "批量恢复发布（2）" }));
+      await waitFor(() => expect(bulkRestoreMock).toHaveBeenCalledWith(archived));
+      expect(alert).toHaveBeenCalledWith("已恢复发布 2 道题。");
+    } finally {
+      confirm.mockRestore();
+      alert.mockRestore();
+    }
   });
 
   it("passes the structured 2020-7 query straight to the backend", async () => {
