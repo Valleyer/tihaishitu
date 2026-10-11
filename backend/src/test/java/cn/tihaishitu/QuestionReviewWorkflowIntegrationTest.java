@@ -168,7 +168,8 @@ class QuestionReviewWorkflowIntegrationTest {
     }
     private String source() {
         String id=UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'custom','审核题','审核题','active',1)",id);
+        String name="审核题-" + id.substring(0, 8);
+        jdbc.update("INSERT INTO question_source(id,source_type,canonical_name,display_name,status,revision) VALUES (?,'custom',?,?,'active',1)",id,name,name);
         return id;
     }
     private JsonNode json(String value)throws Exception{return mapper.readTree(value);}
