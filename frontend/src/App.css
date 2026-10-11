@@ -748,6 +748,7 @@
 .knowledge-ribbon {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 7px;
   flex-wrap: wrap;
   margin: 4px 0 10px;
