@@ -367,7 +367,7 @@ function AuditPage({ fail }: { fail: (value: string) => void }) {
   useEffect(() => { void load(); }, [load]);
   return <section><PageTitle title="审计记录" detail={`共 ${total} 条；只读展示全服内容与权限变更`} />
     <div className="manage-toolbar audit-filters"><input placeholder="操作者账号 / 名称 / UUID" value={actor} onChange={(event) => {setActor(event.target.value);setPage(0)}} />
-      <select value={action} onChange={(event) => {setAction(event.target.value);setPage(0)}}><option value="">全部动作</option><option value="SOURCE_CREATED">来源创建</option><option value="SOURCE_UPDATED">来源修改</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="BOOK_UPDATED">文集修改</option><option value="BOOK_CHAPTER_UPDATED">章节修改</option><option value="BOOK_DELETED">文集删除</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目归档</option><option value="USER_ROLE_UPDATED">用户权限修改</option><option value="USER_DELETED">用户删除</option></select>
+      <select value={action} onChange={(event) => {setAction(event.target.value);setPage(0)}}><option value="">全部动作</option><option value="SOURCE_CREATED">来源创建</option><option value="SOURCE_UPDATED">来源修改</option><option value="KNOWLEDGE_UPDATED">知识点修改</option><option value="KNOWLEDGE_ALIASES_UPDATED">别名修改</option><option value="KNOWLEDGE_MERGED">知识点合并</option><option value="BOOK_UPDATED">文集修改</option><option value="BOOK_CHAPTER_UPDATED">章节修改</option><option value="BOOK_DELETED">文集删除</option><option value="QUESTION_CREATED">题目创建</option><option value="QUESTION_UPDATED">题目修改</option><option value="QUESTION_SUBMITTED">提交审核</option><option value="QUESTION_REVIEW_APPROVED">审核通过</option><option value="QUESTION_REVIEW_REJECTED">审核退回</option><option value="QUESTION_ARCHIVED">题目禁用</option><option value="QUESTION_RESTORED">题目恢复发布</option><option value="USER_ROLE_UPDATED">用户权限修改</option><option value="USER_DELETED">用户删除</option></select>
       <select value={entityType} onChange={(event) => {setEntityType(event.target.value);setPage(0)}}><option value="">全部实体</option><option value="question_source">题目来源</option><option value="knowledge_point">知识点</option><option value="question">题目</option><option value="learner_account">用户</option><option value="question_bank">文集</option></select>
       <button onClick={load}>查询</button></div>
     <div className="audit-list">{items.map((item) => <article key={item.id} className="audit-row"><header><b>{auditAction(item.action)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false })}</time></header>
@@ -383,7 +383,7 @@ function auditAction(action: string) {
     KNOWLEDGE_UPDATED: "知识点修改", KNOWLEDGE_ALIASES_UPDATED: "知识点别名修改", KNOWLEDGE_MERGED: "知识点合并",
     BOOK_UPDATED: "文集修改", BOOK_CHAPTER_UPDATED: "章节修改", BOOK_DELETED: "文集删除",
     QUESTION_CREATED: "题目创建", QUESTION_UPDATED: "题目修改", QUESTION_SUBMITTED: "题目提交审核",
-    QUESTION_REVIEW_APPROVED: "题目审核通过", QUESTION_REVIEW_REJECTED: "题目审核退回", QUESTION_ARCHIVED: "题目归档",
+    QUESTION_REVIEW_APPROVED: "题目审核通过", QUESTION_REVIEW_REJECTED: "题目审核退回", QUESTION_ARCHIVED: "题目禁用", QUESTION_RESTORED: "题目恢复发布",
     USER_CREATED: "用户创建", USER_ROLE_UPDATED: "用户权限修改", USER_DELETED: "用户删除", QUESTION_BANK_IMPORTED: "题库导入",
   };
   return labels[action] || action;
