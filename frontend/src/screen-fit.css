@@ -214,7 +214,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .question-chapter {
   font-size: 10px;
