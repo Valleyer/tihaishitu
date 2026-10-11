@@ -710,6 +710,10 @@
   margin: 10px 0;
   padding-left: 24px;
 }
+.rich-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
 .rich-text table {
   width: 100%;
   border-collapse: collapse;
