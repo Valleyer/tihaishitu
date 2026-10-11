@@ -81,6 +81,78 @@ class QuestionReviewWorkflowIntegrationTest {
                 """, Integer.class, adminQuestionId)).isEqualTo(1);
     }
 
+    @Test void reviewerCanBulkDisablePublishedQuestionsAndRestoreThemAtomically() throws Exception {
+        String point = knowledge();
+        Cookie creator = account("bulk-disable-creator-" + UUID.randomUUID(), "CONTRIBUTOR");
+        Cookie reviewer = account("bulk-disable-reviewer-" + UUID.randomUUID(), "REVIEWER");
+        String source = source();
+        String body = """
+                {"subject":"测试","sourceId":"%s","sourceType":"custom","sourceName":"批量禁用题",
+                 "questionType":"true_false","presentationType":"true_false","gradingMode":"auto",
+                 "content":"%s","analysis":"解析","difficulty":2,"options":[
+                   {"key":"true","text":"正确","correct":true,"sortOrder":0},
+                   {"key":"false","text":"错误","correct":false,"sortOrder":1}],
+                 "knowledgePoints":[{"knowledgePointId":"%s","role":"core","sortOrder":0}]}
+                """;
+
+        JsonNode first = createPublished(creator, reviewer, body.formatted(source, "第一题", point));
+        JsonNode second = createPublished(creator, reviewer, body.formatted(source, "第二题", point));
+        String disable = """
+                {"items":[
+                  {"id":"%s","expectedRevision":%d},
+                  {"id":"%s","expectedRevision":%d}
+                ]}
+                """.formatted(first.path("id").asText(), first.path("revision").asLong(),
+                second.path("id").asText(), second.path("revision").asLong());
+
+        mvc.perform(post("/api/v1/manage/questions/bulk-disable").with(csrf()).cookie(creator)
+                        .contentType(MediaType.APPLICATION_JSON).content(disable))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/v1/manage/questions/bulk-disable").with(csrf()).cookie(reviewer)
+                        .contentType(MediaType.APPLICATION_JSON).content(disable))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changed").value(2))
+                .andExpect(jsonPath("$.status").value("archived"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM question_resource WHERE id IN (?,?) AND status='archived'",
+                Integer.class, first.path("id").asText(), second.path("id").asText())).isEqualTo(2);
+
+        String restore = """
+                {"items":[
+                  {"id":"%s","expectedRevision":%d},
+                  {"id":"%s","expectedRevision":%d}
+                ]}
+                """.formatted(first.path("id").asText(), first.path("revision").asLong() + 1,
+                second.path("id").asText(), second.path("revision").asLong() + 1);
+        mvc.perform(post("/api/v1/manage/questions/bulk-restore").with(csrf()).cookie(reviewer)
+                        .contentType(MediaType.APPLICATION_JSON).content(restore))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changed").value(2))
+                .andExpect(jsonPath("$.status").value("published"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM question_resource WHERE id IN (?,?) AND status='published'",
+                Integer.class, first.path("id").asText(), second.path("id").asText())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM content_audit_log
+                 WHERE entity_id IN (?,?) AND action_name='QUESTION_RESTORED'
+                """, Integer.class, first.path("id").asText(), second.path("id").asText())).isEqualTo(2);
+    }
+
+    private JsonNode createPublished(Cookie creator, Cookie reviewer, String body) throws Exception {
+        JsonNode created = json(mvc.perform(post("/api/v1/manage/questions").with(csrf()).cookie(creator)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String id = created.path("id").asText();
+        JsonNode pending = json(mvc.perform(post("/api/v1/manage/questions/{id}/submit", id).with(csrf()).cookie(creator)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":%d}".formatted(created.path("revision").asLong())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        return json(mvc.perform(post("/api/v1/manage/questions/{id}/review", id).with(csrf()).cookie(reviewer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":%d,\"approve\":true,\"comment\":\"发布\"}"
+                                .formatted(pending.path("revision").asLong())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
     private Cookie account(String username,String...roles) throws Exception {
         Cookie cookie=mvc.perform(post("/api/v1/learner/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"%s\",\"displayName\":\"%s\",\"password\":\"password-123\"}".formatted(username,username)))
