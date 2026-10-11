@@ -48,7 +48,10 @@ export interface ActivityChartValue {
 export function ActivityBarChart({ title, days, values, unit }: {
   title: string; days: number; values: ActivityChartValue[]; unit: string;
 }) {
-  const stackTotal = (item: ActivityChartValue) => item.segments.reduce((sum, segment) => sum + segment.value, 0);
+  // 旧缓存 / 测试夹具可能还没有 books 字段：此时必须退回原单色柱，
+  // 不能把已有的全局统计渲染成 0。新接口返回 books 后才启用文集堆叠。
+  const stackTotal = (item: ActivityChartValue) =>
+    item.segments.length ? item.segments.reduce((sum, segment) => sum + segment.value, 0) : item.value;
   const max = Math.max(1, ...values.map(item => Math.max(item.value, stackTotal(item))));
   const ceiling = Math.max(1, Math.ceil(max / 5) * 5);
   const ticks = [ceiling, Math.round(ceiling / 2), 0];
@@ -58,8 +61,13 @@ export function ActivityBarChart({ title, days, values, unit }: {
     <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
     <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=>{
       const total=stackTotal(item);
-      const titleText=[`${item.date}：文集归属合计 ${total} ${unit}`,...item.segments.filter(segment=>segment.value>0).map(segment=>`${segment.bookName}：${segment.value} ${unit}`)].join("\n");
-      return <div className="chart-column" title={titleText} key={item.date}><i className="chart-stack" style={{height:`${total/ceiling*100}%`}}>{item.segments.filter(segment=>segment.value>0).map(segment=><b aria-label={`${segment.bookName} ${segment.value} ${unit}`} title={`${segment.bookName}：${segment.value} ${unit}`} key={segment.bookId} style={{flexGrow:segment.value,background:BOOK_BAR_COLORS[segment.colorIndex%BOOK_BAR_COLORS.length]}}/>)}</i><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>;
+      const segments=item.segments.filter(segment=>segment.value>0);
+      const titleText=segments.length
+        ? [`${item.date}：文集归属合计 ${total} ${unit}`,...segments.map(segment=>`${segment.bookName}：${segment.value} ${unit}`)].join("\n")
+        : `${item.date}：${item.value} ${unit}`;
+      return <div className="chart-column" title={titleText} key={item.date}><i className="chart-stack" style={{height:`${total/ceiling*100}%`}}>{segments.length
+        ? segments.map(segment=><b aria-label={`${segment.bookName} ${segment.value} ${unit}`} title={`${segment.bookName}：${segment.value} ${unit}`} key={segment.bookId} style={{flexGrow:segment.value,background:BOOK_BAR_COLORS[segment.colorIndex%BOOK_BAR_COLORS.length]}}/>)
+        : item.value>0?<b aria-label={`${item.value} ${unit}`} style={{flexGrow:item.value,background:BOOK_BAR_COLORS[0]}}/>:null}</i><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>;
     })}</div><div className="chart-x-title">日期</div></div>
   </div></section>;
 }
