@@ -101,6 +101,24 @@ public class QuestionManagementController {
         return service.archive(id, request.expectedRevision(), authentication);
     }
 
+    @PostMapping("/bulk-disable")
+    @PreAuthorize("hasAnyRole('REVIEWER','ADMIN')")
+    QuestionManagementService.BulkStatusResult bulkDisable(
+            @Valid @RequestBody BulkStatusRequest request, Authentication authentication) {
+        return service.bulkStatus(request.items().stream()
+                .map(item -> new QuestionManagementService.BulkStatusItem(item.id(), item.expectedRevision()))
+                .toList(), false, authentication);
+    }
+
+    @PostMapping("/bulk-restore")
+    @PreAuthorize("hasAnyRole('REVIEWER','ADMIN')")
+    QuestionManagementService.BulkStatusResult bulkRestore(
+            @Valid @RequestBody BulkStatusRequest request, Authentication authentication) {
+        return service.bulkStatus(request.items().stream()
+                .map(item -> new QuestionManagementService.BulkStatusItem(item.id(), item.expectedRevision()))
+                .toList(), true, authentication);
+    }
+
     @PostMapping("/bulk-delete")
     @PreAuthorize("hasAnyRole('CONTRIBUTOR','REVIEWER','ADMIN')")
     BulkDeleteResult bulkDelete(@Valid @RequestBody BulkDeleteRequest request, Authentication authentication) {
@@ -131,6 +149,9 @@ public class QuestionManagementController {
     public record BulkReviewRequest(
             @NotNull @Size(min = 1, max = 100) List<@Valid BulkReviewItemRequest> items,
             boolean approve, String comment) {}
+    public record BulkStatusItemRequest(@NotBlank String id, @NotNull Long expectedRevision) {}
+    public record BulkStatusRequest(
+            @NotNull @Size(min = 1, max = 100) List<@Valid BulkStatusItemRequest> items) {}
     public record BulkDeleteRequest(@NotNull List<@NotBlank String> ids) {}
     public record BulkDeleteResult(int deleted) {}
 }
