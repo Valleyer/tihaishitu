@@ -23,6 +23,10 @@ import { manageLabel, manageOptions, questionTypeContract } from "./manageLabels
 import "./manage.css";
 
 type Page = "dashboard" | "questions" | "reports" | "sources" | "knowledge" | "books" | "reviews" | "imports" | "users" | "audit";
+const SPECIAL_ADMIN_USERNAME = "admin";
+export function isSpecialAdmin(user: Pick<ManageUser, "username" | "roles">) {
+  return user.username.toLowerCase() === SPECIAL_ADMIN_USERNAME && user.roles.includes("ADMIN");
+}
 const downloadJson=(name:string,value:unknown)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download=name;link.click();URL.revokeObjectURL(url)};
 
 export default function ManagementApp() {
@@ -46,6 +50,7 @@ export default function ManagementApp() {
   if (loading) return <div className="manage-loading">正在核验管理会话…</div>;
   if (!user) return <div className="manage-loading"><div className="manage-access-denied"><h1>无法进入管理后台</h1><p>{accessError || "当前账号没有管理后台权限。"}</p><a href="/">返回万境中枢</a></div></div>;
   const admin = user.roles.includes("ADMIN");
+  const specialAdmin = isSpecialAdmin(user);
   const reviewer = user.roles.some(role=>role==="REVIEWER"||role==="ADMIN");
   return (
     <div className="manage-shell">
@@ -60,8 +65,8 @@ export default function ManagementApp() {
           {admin && <Nav active={page === "books"} onClick={() => setPage("books")}>文集管理</Nav>}
           <Nav active={page === "reviews"} onClick={() => setPage("reviews")}>审核中心</Nav>
           {admin && <Nav active={page === "imports"} onClick={() => setPage("imports")}>批量导入</Nav>}
-          {admin && <Nav active={page === "users"} onClick={() => setPage("users")}>用户权限</Nav>}
-          {admin && <Nav active={page === "audit"} onClick={() => setPage("audit")}>审计记录</Nav>}
+          {specialAdmin && <Nav active={page === "users"} onClick={() => setPage("users")}>用户权限</Nav>}
+          {specialAdmin && <Nav active={page === "audit"} onClick={() => setPage("audit")}>审计记录</Nav>}
         </nav>
         <footer>
           <span>{user.displayName}</span><small>{user.roles.map(role => manageLabel("role", role)).join(" · ") || "普通学习者"}</small>
@@ -79,8 +84,8 @@ export default function ManagementApp() {
         {page === "sources" && admin && <SourcePage fail={setError} />}
         {page === "reviews" && <QuestionPage user={user} fail={setError} reviewOnly />}
         {page === "imports" && admin && <ImportPage fail={setError} />}
-        {page === "users" && admin && <UsersPage currentUser={user} fail={setError} />}
-        {page === "audit" && admin && <AuditPage fail={setError} />}
+        {page === "users" && specialAdmin && <UsersPage currentUser={user} fail={setError} />}
+        {page === "audit" && specialAdmin && <AuditPage fail={setError} />}
       </main>
     </div>
   );
