@@ -207,8 +207,9 @@ describe("ProgressPage layout and content", () => {
     expect(headings).toEqual(["每日答题次数", "每日接触知识点"]);
     expect(screen.getByText("近 7 天 · 单位：次")).toBeTruthy();
     expect(screen.getByText("近 7 天 · 单位：个")).toBeTruthy();
-    expect(screen.getByText("数量（次）")).toBeTruthy();
-    expect(screen.getByText("数量（个）")).toBeTruthy();
+    expect(screen.queryByText("数量（次）")).toBeNull();
+    expect(screen.queryByText("数量（个）")).toBeNull();
+    expect(screen.queryByText("日期")).toBeNull();
     // 单系列旧结构：每个日期一列一根柱，保留零值日。
     const charts = view.container.querySelectorAll(".statistics-activity-chart");
     expect(charts).toHaveLength(2);
