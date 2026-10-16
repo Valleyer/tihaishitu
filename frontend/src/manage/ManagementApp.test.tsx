@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { QuestionPage, QuestionReportsPage, SourcePage, ImportPage, KnowledgePage } from "./ManagementApp";
+import { QuestionPage, QuestionReportsPage, SourcePage, ImportPage, KnowledgePage, isSpecialAdmin } from "./ManagementApp";
 import { manageApi, type ManageUser, type PageResult, type QuestionSourceView, type QuestionView } from "./api";
 
 vi.mock("./api", () => ({
@@ -36,6 +36,14 @@ const reviewer: ManageUser = {
   roles: ["REVIEWER"],
   revision: 1,
 };
+
+describe("sensitive management visibility", () => {
+  it("reserves user permissions and audit records for the named admin account", () => {
+    expect(isSpecialAdmin({ username: "admin", roles: ["ADMIN"] })).toBe(true);
+    expect(isSpecialAdmin({ username: "ordinary-admin", roles: ["ADMIN"] })).toBe(false);
+    expect(isSpecialAdmin({ username: "admin", roles: ["REVIEWER"] })).toBe(false);
+  });
+});
 
 const questionsMock = vi.mocked(manageApi.questions);
 const questionMock = vi.mocked(manageApi.question);
