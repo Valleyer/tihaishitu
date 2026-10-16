@@ -31,8 +31,8 @@ class UserDeletionIntegrationTest {
     @Autowired ManageUserDeletionService deletion;
 
     @Test void deleteRemovesLearnerDataAndAnonymizesSharedResources() throws Exception {
-        Cookie admin = account("delete-admin", "ADMIN");
-        String adminId = id("delete-admin");
+        Cookie admin = account("admin", "ADMIN");
+        String adminId = id("admin");
         account("delete-target");
         String targetId = id("delete-target");
         String legacyId = UUID.randomUUID().toString();
@@ -91,8 +91,8 @@ class UserDeletionIntegrationTest {
     }
 
     @Test void deleteGuardsCurrentAccountAndLastActiveAdmin() throws Exception {
-        Cookie admin = account("guard-admin", "ADMIN");
-        String adminId = id("guard-admin");
+        Cookie admin = account("admin", "ADMIN");
+        String adminId = id("admin");
         mvc.perform(delete("/api/v1/manage/users/{id}", adminId).with(csrf()).cookie(admin))
                 .andExpect(status().isBadRequest());
         account("guard-actor");
@@ -105,12 +105,22 @@ class UserDeletionIntegrationTest {
     }
 
     private Cookie account(String username, String... roles) throws Exception {
-        Cookie cookie = mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"%s\",\"displayName\":\"%s\",\"password\":\"password-123\"}"
-                                .formatted(username, username)))
-                .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+        Integer existing = jdbc.queryForObject("SELECT COUNT(*) FROM learner_account WHERE username=?", Integer.class, username);
+        Cookie cookie;
+        if (existing != null && existing > 0) {
+            cookie = mvc.perform(post("/api/v1/learner/auth/login").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"%s\",\"password\":\"password-123\"}".formatted(username)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+        } else {
+            cookie = mvc.perform(post("/api/v1/learner/auth/register").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"%s\",\"displayName\":\"%s\",\"password\":\"password-123\"}"
+                                    .formatted(username, username)))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getCookie(LearnerAuthService.COOKIE);
+        }
         String id = id(username);
+        jdbc.update("DELETE FROM learner_account_role WHERE learner_id=?", id);
         for (String role : roles) jdbc.update("INSERT INTO learner_account_role(learner_id,role_name) VALUES (?,?)", id, role);
         return cookie;
     }
