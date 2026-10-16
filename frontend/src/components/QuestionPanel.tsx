@@ -141,16 +141,18 @@ export function QuestionPanel({
             {isSelfAssessment && <h3>完整解析</h3>}
             <RichText>{result!.explanation}</RichText>
           </div>
-          <div className="changes">
-            {result!.changes.map((change) => (
-              <span key={change.label}>
-                {change.label}
-                <b>
-                  {change.before} → {change.after}
-                </b>
-              </span>
-            ))}
-          </div>
+          {result!.changes.length > 0 && (
+            <div className="changes">
+              {result!.changes.map((change) => (
+                <span key={change.label}>
+                  {change.label}
+                  <b>
+                    {change.before} → {change.after}
+                  </b>
+                </span>
+              ))}
+            </div>
+          )}
         </section>
       ) : (
         <div className="question-body">
