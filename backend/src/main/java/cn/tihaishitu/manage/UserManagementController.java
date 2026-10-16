@@ -24,7 +24,7 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/manage/users")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('ADMIN') and authentication.name == 'admin'")
 public class UserManagementController {
     private static final Set<String> ALLOWED_ROLES = Set.of("CONTRIBUTOR", "REVIEWER", "ADMIN");
     private static final Set<String> ALLOWED_STATUSES = Set.of("active", "disabled");
