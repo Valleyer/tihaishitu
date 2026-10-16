@@ -747,7 +747,8 @@
   max-height: 34vh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 10px 4px 0;
+  /* 首行内联 KaTeX 的上标会贴到滚动容器顶部；多留少量上边距，避免 x^2 等上标被裁切。 */
+  padding: 8px 10px 4px 0;
 }
 .knowledge-ribbon {
   display: flex;

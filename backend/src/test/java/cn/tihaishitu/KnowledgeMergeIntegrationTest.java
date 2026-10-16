@@ -120,13 +120,9 @@ class KnowledgeMergeIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(targetId));
         mvc.perform(get("/api/v1/manage/audit-logs").cookie(reviewer))
                 .andExpect(status().isForbidden());
+        // merge-admin 仍可执行知识合并，但审计记录只允许用户名 admin 的特殊管理员查看。
         mvc.perform(get("/api/v1/manage/audit-logs").cookie(admin).param("action", "KNOWLEDGE_MERGED"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].entityId").value(sourceId))
-                .andExpect(jsonPath("$.content[0].metadata.targetId").value(targetId))
-                .andExpect(jsonPath("$.content[0].metadata.migratedBookMemberships").value(1))
-                .andExpect(jsonPath("$.content[0].metadata.collapsedBookMemberships").value(1));
+                .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/manage/knowledge-points/{id}/merge", sourceId)
                         .cookie(admin).with(csrf()).contentType("application/json").content(request))

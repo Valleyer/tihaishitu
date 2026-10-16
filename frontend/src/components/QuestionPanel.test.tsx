@@ -157,6 +157,8 @@ describe("World question panel exam metadata", () => {
     expect(screen.queryByText("此卷已明")).toBeNull();
     expect(screen.queryByText("部分明白")).toBeNull();
     expect(screen.getByText("完整解析")).toBeTruthy();
+    // changes 为空时不能留下固定占位，解析区应吃满剩余可用高度。
+    expect(view.container.querySelector(".result-stage .changes")).toBeNull();
   });
 
   it("offers no-idea and submits a question report", async () => {

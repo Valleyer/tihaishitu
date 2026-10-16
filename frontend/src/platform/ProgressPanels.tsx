@@ -58,7 +58,7 @@ export function ActivityBarChart({ title, days, values, unit }: {
   const every = days === 7 ? 1 : days === 30 ? 5 : 14;
   const empty = values.every(item => item.value === 0 && stackTotal(item) === 0);
   return <section className="hub-panel statistics-activity-chart"><div className="activity-chart-heading"><h2>{title}</h2><span>近 {days} 天 · 单位：{unit}</span></div><div className="activity-chart-body">
-    <div className="chart-y-title">数量（{unit}）</div><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
+    <div className="chart-y-title" aria-hidden="true" /><div className="chart-y-axis">{ticks.map(tick=><span key={tick}>{tick}</span>)}</div>
     <div className="chart-plot">{empty&&<strong className="chart-empty">暂无学习记录</strong>}<div className="chart-bars">{values.map((item,index)=>{
       const total=stackTotal(item);
       const segments=item.segments.filter(segment=>segment.value>0);
@@ -68,7 +68,7 @@ export function ActivityBarChart({ title, days, values, unit }: {
       return <div className="chart-column" title={titleText} key={item.date}><i className="chart-stack" style={{height:`${total/ceiling*100}%`}}>{segments.length
         ? segments.map(segment=><b aria-label={`${segment.bookName} ${segment.value} ${unit}`} title={`${segment.bookName}：${segment.value} ${unit}`} key={segment.bookId} style={{flexGrow:segment.value,background:BOOK_BAR_COLORS[segment.colorIndex%BOOK_BAR_COLORS.length]}}/>)
         : item.value>0?<b aria-label={`${item.value} ${unit}`} style={{flexGrow:item.value,background:BOOK_BAR_COLORS[0]}}/>:null}</i><span>{index%every===0||index===values.length-1?item.date.slice(5):""}</span></div>;
-    })}</div><div className="chart-x-title">日期</div></div>
+    })}</div><div className="chart-x-title" aria-hidden="true" /></div>
   </div></section>;
 }
 

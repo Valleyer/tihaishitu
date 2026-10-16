@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/manage/audit-logs")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('ADMIN') and authentication.name == 'admin'")
 public class AuditLogController {
     private final AuditLogStore store;
 

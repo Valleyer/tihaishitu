@@ -68,8 +68,9 @@ class KnowledgeManagementFilteringIntegrationTest {
                 .andExpect(jsonPath("$.size").value(20));
         mvc.perform(get("/api/v1/manage/questions").cookie(admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(20));
+        // 普通 ADMIN 仍可管理知识内容，但审计记录只允许用户名 admin 的特殊管理员查看。
         mvc.perform(get("/api/v1/manage/audit-logs").cookie(admin))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(20));
+                .andExpect(status().isForbidden());
 
         for (int index = 0; index < 51; index++) point("分页测试", "分页知识点" + index);
         mvc.perform(get("/api/v1/manage/knowledge-points").cookie(admin)
