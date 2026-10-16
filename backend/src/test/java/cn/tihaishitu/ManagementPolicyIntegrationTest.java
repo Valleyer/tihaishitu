@@ -45,6 +45,7 @@ class ManagementPolicyIntegrationTest {
         ensureUser("policy-contributor", "贡献者", Set.of("CONTRIBUTOR"));
         ensureUser("policy-reviewer", "审核者", Set.of("REVIEWER"));
         ensureUser("policy-reviewer-two", "第二审核者", Set.of("REVIEWER"));
+        ensureUser("admin", "特殊管理员", Set.of("CONTRIBUTOR", "REVIEWER", "ADMIN"));
     }
 
     @Test
@@ -149,14 +150,24 @@ class ManagementPolicyIntegrationTest {
     }
 
     @Test
-    void onlyAdminsManageRolesAndDisablingAnAccountRevokesExistingSessions() throws Exception {
+    void onlyNamedAdminAccountManagesUsersAndAuditWhileDisablingStillRevokesSessions() throws Exception {
         Cookie contributor = login("policy-contributor");
         mvc.perform(get("/api/v1/manage/users").cookie(contributor))
                 .andExpect(status().isForbidden());
 
-        Cookie admin = login("policy-admin");
+        // 普通 ADMIN 仍可管理内容，但不能查看用户权限或审计记录。
+        Cookie ordinaryAdmin = login("policy-admin");
+        mvc.perform(get("/api/v1/manage/users").cookie(ordinaryAdmin))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/manage/audit-logs").cookie(ordinaryAdmin))
+                .andExpect(status().isForbidden());
+
+        Cookie admin = login("admin");
         String users = mvc.perform(get("/api/v1/manage/users").cookie(admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(get("/api/v1/manage/audit-logs").cookie(admin))
+                .andExpect(status().isOk());
+
         JsonNode target = null;
         for (JsonNode user : mapper.readTree(users)) {
             if ("policy-contributor".equals(user.path("username").asText())) target = user;
