@@ -874,6 +874,8 @@
 .answers {
   display: grid;
   gap: 10px;
+  /* fieldset 保留浏览器原有占位尺寸，但边框透明，避免默认 fieldset 横线穿过选项。 */
+  border-color: transparent;
 }
 .answer-option {
   display: flex;
