@@ -823,8 +823,16 @@
 .map-destination button {
   font-size: 12px;
 }
+/* 山河地图弹窗：移除两行说明后收紧对应留白，只影响地图弹窗内的上下间距。 */
+.modal .map-region-tabs {
+  margin-top: 0;
+}
+.modal .map-destination {
+  margin-top: 8px;
+}
 .modal .map-destination h3 {
   color: #6f572b;
+  margin-top: 0;
 }
 .modal .map-destination p {
   color: #4f5d49;

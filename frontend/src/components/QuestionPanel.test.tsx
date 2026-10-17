@@ -234,6 +234,22 @@ describe("World question panel stem image", () => {
 });
 
 
+describe("World question panel choice hint", () => {
+  it("removes the redundant single-choice prompt while preserving its layout slot", () => {
+    const single = attempt();
+    single.question.type = "single_choice";
+    single.question.presentationType = "single_choice";
+    single.question.options = { A: "甲", B: "乙" };
+    const view = render(<QuestionPanel attempt={single} busy={false} submit={noop} reveal={noop} assess={noop}
+      next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop} />);
+
+    expect(screen.queryByText("单选题 · 请选择一个最合适的答案")).toBeNull();
+    const hint = view.container.querySelector(".choice-hint");
+    expect(hint).toBeTruthy();
+    expect(hint?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
 describe("World question panel unified question review entry", () => {
   it("uses the footer 查看题目 entry and removes the duplicate result-page recheck link", () => {
     const graded = attempt();
@@ -258,8 +274,9 @@ describe("World question panel unified question review entry", () => {
     solution.question.presentationType = "self_assessment";
     solution.question.gradingMode = "self_assessment";
     solution.question.options = {};
-    render(<QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
+    const view = render(<QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
       next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop} />);
     expect(screen.queryByText(/请先在纸上完成/)).toBeNull();
+    expect(view.container.querySelector(".question-body.self-assessment-question-body")).toBeTruthy();
   });
 });
