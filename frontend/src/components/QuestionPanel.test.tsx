@@ -258,8 +258,9 @@ describe("World question panel unified question review entry", () => {
     solution.question.presentationType = "self_assessment";
     solution.question.gradingMode = "self_assessment";
     solution.question.options = {};
-    render(<QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
+    const view = render(<QuestionPanel attempt={solution} busy={false} submit={noop} reveal={noop} assess={noop}
       next={noop} eventPending={false} reviewOnly={false} setReview={noop} onEvent={noop} />);
     expect(screen.queryByText(/请先在纸上完成/)).toBeNull();
+    expect(view.container.querySelector(".question-body.self-assessment-question-body")).toBeTruthy();
   });
 });
