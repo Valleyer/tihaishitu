@@ -31,9 +31,7 @@ export function WorldMap({
     state = game.adventure!;
   return (
     <>
-      <p className="hint">
-        山河可行，故人可访。随着学识、声望与行旅推进，远处的门会逐一打开。
-      </p>
+      <p className="hint" aria-hidden="true">&nbsp;</p>
       <nav className="map-region-tabs" aria-label="大地图选择">
         {mapDesign.regions.map((item) => {
           const locked = requirementIssues(game, item.requirements).length > 0;
@@ -92,7 +90,7 @@ export function WorldMap({
       </div>
       <section className="map-destination">
         <div>
-          <small>此地风物</small>
+          <small aria-hidden="true">&nbsp;</small>
           <h3>{location.name}</h3>
           <p>{location.ambience}</p>
           <small>
