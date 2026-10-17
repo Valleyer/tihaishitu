@@ -247,13 +247,15 @@ export function QuestionPanel({
               </button>
             </div>
           )}
-          {!isSelfAssessment && <p className="choice-hint">
-            {q.type === "multiple_choice"
-              ? "多选题 · 请选择全部符合条件的选项"
-              : q.type === "true_false"
-                ? "判断题 · 辨明此言真伪"
-                : "单选题 · 请选择一个最合适的答案"}
-          </p>}
+          {!isSelfAssessment && (
+            q.type === "single_choice"
+              ? <p className="choice-hint" aria-hidden="true">&nbsp;</p>
+              : <p className="choice-hint">
+                  {q.type === "multiple_choice"
+                    ? "多选题 · 请选择全部符合条件的选项"
+                    : "判断题 · 辨明此言真伪"}
+                </p>
+          )}
         </div>
       )}
       <div className="paper-footer">
