@@ -155,7 +155,7 @@ export function QuestionPanel({
           )}
         </section>
       ) : (
-        <div className="question-body">
+        <div className={"question-body" + (isSelfAssessment ? " self-assessment-question-body" : "")}>
           {isSelfAssessment && attempt.reveal ? (
             <div className="self-assessment-scroll">
               <section className="self-assessment-reference" aria-live="polite">
